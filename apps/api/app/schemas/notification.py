@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.domain.notification import EmailCadence
 from app.models.notification import NotificationChannel, NotificationEvent
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 # The longest push endpoint a request may carry: far above any real one (a few hundred bytes) and
 # safely below 2704, the btree index key limit this bound exists to stay under.
@@ -67,9 +68,8 @@ class NotificationResponse(BaseModel):
 
 # Response for GET /notifications. `total` counts what the caller can actually see, so it agrees with
 # the rows rather than with the table.
-class NotificationFeedResponse(BaseModel):
+class NotificationFeedResponse(PaginatedResponse):
     items: list[NotificationResponse] = Field(description="One page of notifications, newest first.")
-    total: int = Field(description="How many notifications the caller has in total.")
     unread: int = Field(description="How many of them are unread.")
 
 

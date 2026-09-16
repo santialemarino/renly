@@ -10,6 +10,7 @@ from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ens
 from app.models.expense_entry import ExpenseCategory
 from app.models.group_money_settings import SplitMethod
 from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
+from app.schemas.pagination import PaginatedResponse
 
 
 # One participant's line in a split. `figure` is the figure the chosen method needs and nothing else:
@@ -122,3 +123,8 @@ class SharedExpenseResponse(BaseModel):
     splits: list[SharedExpenseSplitResponse] = Field(description="Every member's position in this expense.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
+
+
+# Response for GET /groups/{group_id}/expenses.
+class SharedExpenseListResponse(PaginatedResponse):
+    items: list[SharedExpenseResponse] = Field(description="Expenses on this page, newest first.")

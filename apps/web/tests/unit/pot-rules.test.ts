@@ -134,7 +134,7 @@ describe('hasLedger vs isDivided', () => {
    */
   it('separates a pot with a history from a pot with units outstanding', () => {
     const boughtOut = pot({ totalUnits: '0.000000', shares: [] });
-    expect(hasLedger([event()])).toBe(true);
+    expect(hasLedger({ total: 1 })).toBe(true);
     expect(isDivided(boughtOut)).toBe(false);
   });
 
@@ -161,19 +161,19 @@ describe('isPriceable', () => {
 
 describe('write predicates', () => {
   it('offers the opening exactly once, and on the ledger rather than the units', () => {
-    expect(canRecordOpening(pot(), [])).toBe(true);
-    expect(canRecordOpening(pot(), [event()])).toBe(false);
+    expect(canRecordOpening(pot(), { total: 0 })).toBe(true);
+    expect(canRecordOpening(pot(), { total: 1 })).toBe(false);
     // The case that separates the two rules: no units left, but a history that already exists.
-    expect(canRecordOpening(pot({ totalUnits: '0.000000', shares: [] }), [event()])).toBe(false);
+    expect(canRecordOpening(pot({ totalUnits: '0.000000', shares: [] }), { total: 1 })).toBe(false);
   });
 
   it('never offers a write to a read-only member, in any pot state', () => {
     const readOnly = pot({ canWrite: false });
-    expect(canRecordOpening(readOnly, [])).toBe(false);
+    expect(canRecordOpening(readOnly, { total: 0 })).toBe(false);
     expect(canRecordMovement(readOnly)).toBe(false);
     expect(canRecordReagreement(readOnly, 3)).toBe(false);
-    expect(canMoveHoldingsIn(readOnly, [])).toBe(false);
-    expect(canMoveHoldingsOut(readOnly, [])).toBe(false);
+    expect(canMoveHoldingsIn(readOnly, { total: 0 })).toBe(false);
+    expect(canMoveHoldingsOut(readOnly, { total: 0 })).toBe(false);
   });
 
   it('needs a price before a movement', () => {
@@ -199,10 +199,12 @@ describe('write predicates', () => {
      * This predicate asked only about write access until the audit-trail unit, which is why the button
      * was reachable in two clicks on a divided pot.
      */
-    expect(canMoveHoldingsIn(pot(), [])).toBe(true);
-    expect(canMoveHoldingsIn(pot(), [event()])).toBe(false);
+    expect(canMoveHoldingsIn(pot(), { total: 0 })).toBe(true);
+    expect(canMoveHoldingsIn(pot(), { total: 1 })).toBe(false);
     // On the ledger, not the units: a fully bought-out pot must still refuse it.
-    expect(canMoveHoldingsIn(pot({ totalUnits: '0.000000', shares: [] }), [event()])).toBe(false);
+    expect(canMoveHoldingsIn(pot({ totalUnits: '0.000000', shares: [] }), { total: 1 })).toBe(
+      false,
+    );
   });
 
   it('lets holdings out only before anything has been divided', () => {
@@ -211,10 +213,12 @@ describe('write predicates', () => {
      * the pot's value by the whole of it while nobody's units change — every co-owner's share falling
      * pro-rata so one person's private scope gains it, with no cap on the amount.
      */
-    expect(canMoveHoldingsOut(pot(), [])).toBe(true);
-    expect(canMoveHoldingsOut(pot(), [event()])).toBe(false);
+    expect(canMoveHoldingsOut(pot(), { total: 0 })).toBe(true);
+    expect(canMoveHoldingsOut(pot(), { total: 1 })).toBe(false);
     // On the ledger, not the units: a fully bought-out pot must still refuse it.
-    expect(canMoveHoldingsOut(pot({ totalUnits: '0.000000', shares: [] }), [event()])).toBe(false);
+    expect(canMoveHoldingsOut(pot({ totalUnits: '0.000000', shares: [] }), { total: 1 })).toBe(
+      false,
+    );
   });
 
   it('only lets an admin delete an empty pot', () => {
@@ -255,10 +259,10 @@ describe('canContributeHolding', () => {
     // The counterweight: the two controls never both appear, and never both vanish on a pot the
     // caller may write. An undivided pot has no price, so the plain move is what is available.
     const fresh = pot({ totalUnits: '0', nav: null, shares: [] });
-    expect(canMoveHoldingsIn(fresh, [])).toBe(true);
+    expect(canMoveHoldingsIn(fresh, { total: 0 })).toBe(true);
     expect(canContributeHolding(fresh)).toBe(false);
 
-    expect(canMoveHoldingsIn(pot(), [event()])).toBe(false);
+    expect(canMoveHoldingsIn(pot(), { total: 1 })).toBe(false);
     expect(canContributeHolding(pot())).toBe(true);
   });
 });
@@ -445,25 +449,23 @@ describe('shareWizardEntry', () => {
   it('starts at the beginning when the pot exists but holds nothing', () => {
     // The pot was created and the move failed, or the tab was closed between them. Re-entering has to
     // offer the selection again rather than a value step for a pot with nothing in it.
-    expect(shareWizardEntry({ holdings: NO_HOLDINGS, events: [] })).toBe('pick');
+    expect(shareWizardEntry({ holdings: NO_HOLDINGS, events: { total: 0 } })).toBe('pick');
   });
 
   it('resumes at the value step for EITHER kind of holding', () => {
     // The recovery case the whole design exists for: two of the three writes landed. Both kinds are
     // asserted because a pot holding only a cash account is an ordinary case, and a check that looked
     // at investments alone would send it back to the picker — which a mutation sweep caught.
-    expect(shareWizardEntry({ holdings: holdsInvestment, events: [] })).toBe('value');
-    expect(shareWizardEntry({ holdings: holdsAccount, events: [] })).toBe('value');
+    expect(shareWizardEntry({ holdings: holdsInvestment, events: { total: 0 } })).toBe('value');
+    expect(shareWizardEntry({ holdings: holdsAccount, events: { total: 0 } })).toBe('value');
   });
 
   it('refuses outright once ANY ownership history exists', () => {
     // Not just an opening. A pot can reach this with movements and no baseline (deleting a baseline
     // keeps them), and the API refuses a second baseline on the LEDGER being non-empty
     // (409 pot_already_opened), not on an opening existing.
-    expect(
-      shareWizardEntry({ holdings: holdsInvestment, events: [event({ type: 'contribution' })] }),
-    ).toBe('divided');
-    expect(shareWizardEntry({ holdings: NO_HOLDINGS, events: [event()] })).toBe('divided');
+    expect(shareWizardEntry({ holdings: holdsInvestment, events: { total: 1 } })).toBe('divided');
+    expect(shareWizardEntry({ holdings: NO_HOLDINGS, events: { total: 1 } })).toBe('divided');
   });
 });
 

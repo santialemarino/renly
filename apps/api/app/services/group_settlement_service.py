@@ -70,6 +70,7 @@ from app.schemas.group_settlement import (
     GroupBalancesResponse,
     GroupCurrencyBalanceResponse,
     GroupMemberBalanceResponse,
+    GroupSettlementListResponse,
     GroupSettlementPlanBucketResponse,
     GroupSettlementPlanResponse,
     GroupSettlementResponse,
@@ -77,6 +78,7 @@ from app.schemas.group_settlement import (
 )
 from app.services import exchange_rate_service, group_service, notification_service, shared_audit_service
 from app.utils.metrics import convert_optional
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
 
@@ -147,11 +149,23 @@ async def get_balances(session: AsyncSession, group_id: int, user: User, *, curr
 # Lists a group's settlements, newest first, with both parties named and the two per-row permissions
 # resolved for the caller. Resolved here rather than by the client because they follow from who the
 # caller is, and a client deriving them would be a second copy of a rule the service already enforces.
-async def list_settlements(session: AsyncSession, group_id: int, user: User) -> list[GroupSettlementResponse]:
+async def list_settlements(
+    session: AsyncSession,
+    group_id: int,
+    user: User,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> GroupSettlementListResponse:
     _, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
-    settlements = await group_settlement_repository.list_by_group(session, group_id)
-    return [_build_response(settlement, members_by_id, viewer.id) for settlement in settlements]
+    settlements, total = await group_settlement_repository.list_by_group(session, group_id, page=page, page_size=page_size)
+    return GroupSettlementListResponse(
+        items=[_build_response(settlement, members_by_id, viewer.id) for settlement in settlements],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Tells the OTHER party a payment between the two of them was recorded.

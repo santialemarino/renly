@@ -10,6 +10,7 @@ from app.models.group_money_settings import SplitMethod
 from app.models.income_entry import IncomeCategory
 from app.models.shared_income import IncomeDestination
 from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_income_category
+from app.schemas.pagination import PaginatedResponse
 
 
 # One participant's line in a split. `figure` is the figure the chosen method needs and nothing else:
@@ -122,3 +123,8 @@ class SharedIncomeResponse(BaseModel):
     splits: list[SharedIncomeSplitResponse] = Field(description="Every member's position in this income.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
+
+
+# Response for GET /groups/{group_id}/income.
+class SharedIncomeListResponse(PaginatedResponse):
+    items: list[SharedIncomeResponse] = Field(description="Income rows on this page, newest first.")

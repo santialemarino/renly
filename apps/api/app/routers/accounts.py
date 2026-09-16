@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.domain.account_movement import MovementKind
 from app.domain.list_scope import ListScope
 from app.schemas.account import AccountCreate, AccountListResponse, AccountResponse, AccountUpdate
@@ -11,6 +12,7 @@ from app.schemas.account_movement import AccountMovementListResponse
 from app.schemas.account_reconciliation import (
     AccountComputedBalanceResponse,
     AccountReconciliationCreate,
+    AccountReconciliationListResponse,
     AccountReconciliationResponse,
 )
 from app.services import account_movement_service, account_reconciliation_service, account_service
@@ -132,17 +134,16 @@ async def list_movements(
     account_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     kind: MovementKind | None = Query(default=None, description="Filter by movement kind."),
-    page: int = Query(default=1, ge=1, description="Page number; clamped to the last page that has rows."),
-    page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> AccountMovementListResponse:
     return await account_movement_service.list_account_movements(
         session,
         account_id,
         current_user,
         kind=kind,
-        page=page,
-        page_size=page_size,
+        page=page_query.page,
+        page_size=page_query.page_size,
     )
 
 
@@ -162,19 +163,17 @@ async def get_computed_balance(
     return AccountComputedBalanceResponse(account_id=account_id, as_of_date=as_of_date, balance=balance, bearers=bearers)
 
 
-# List an account's reconciliations, newest first.
-@router.get("/{account_id}/reconciliations", response_model=list[AccountReconciliationResponse])
+# List one page of an account's reconciliations, newest first.
+@router.get("/{account_id}/reconciliations", response_model=AccountReconciliationListResponse)
 async def list_reconciliations(
     account_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-) -> list[AccountReconciliationResponse]:
-    account = await account_service.get_account_in_scope(session, account_id, current_user)
-    rows = await account_reconciliation_service.list_reconciliations(session, account_id, current_user)
-    # Resolved once for the page rather than per row: a shared history names its author the way the
-    # group does, and every row of one account's history draws from the same roster.
-    names = await account_reconciliation_service.get_reconciler_names(session, account)
-    return [account_reconciliation_service.to_response(row, names) for row in rows]
+    page_query: PageQuery,
+) -> AccountReconciliationListResponse:
+    return await account_reconciliation_service.list_reconciliations(
+        session, account_id, current_user, page=page_query.page, page_size=page_query.page_size
+    )
 
 
 # Reconcile an account: record the real balance as of a date and post the adjustment that closes the gap.

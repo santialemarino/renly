@@ -3,12 +3,14 @@ from fastapi import APIRouter, status
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.schemas.group_settlement import (
     GroupBalancesResponse,
     GroupMoneySettingsResponse,
     GroupMoneySettingsUpdate,
     GroupSettlementCreate,
     GroupSettlementLegUpdate,
+    GroupSettlementListResponse,
     GroupSettlementPlanCreate,
     GroupSettlementPlanResponse,
     GroupSettlementResponse,
@@ -34,14 +36,15 @@ async def get_group_balances(
     return await group_settlement_service.get_balances(session, group_id, current_user, currency=currency)
 
 
-# Lists the group's recorded settlements and write-offs, newest first.
-@router.get("/settlements", response_model=list[GroupSettlementResponse])
+# Lists one page of the group's recorded settlements and write-offs, newest first.
+@router.get("/settlements", response_model=GroupSettlementListResponse)
 async def list_group_settlements(
     group_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-) -> list[GroupSettlementResponse]:
-    return await group_settlement_service.list_settlements(session, group_id, current_user)
+    page_query: PageQuery,
+) -> GroupSettlementListResponse:
+    return await group_settlement_service.list_settlements(session, group_id, current_user, page=page_query.page, page_size=page_query.page_size)
 
 
 # Records a payment one member made to another. Lands pending unless the group has opted into

@@ -583,13 +583,13 @@ class TestSettlementResponseNamesTheAccount:
             CardSettlement(id=2, credit_card_id=5, user_id=1, date=date(2026, 7, 1), amount=Decimal("300"), currency="ARS", account_id=None),
         ]
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card()))
-        monkeypatch.setattr(credit_card_service.card_settlement_repository, "list_by_card", AsyncMock(return_value=settlements))
+        monkeypatch.setattr(credit_card_service.card_settlement_repository, "list_by_card", AsyncMock(return_value=(settlements, len(settlements))))
         get_by_ids = AsyncMock(return_value=[_account(id=7, name="Caja de ahorro $")])
         monkeypatch.setattr(credit_card_service.account_repository, "get_by_ids", get_by_ids)
 
         result = await credit_card_service.list_settlements(AsyncMock(), 5, USER)
 
-        assert [(r.id, r.account_name) for r in result] == [(1, "Caja de ahorro $"), (2, None)]
+        assert [(r.id, r.account_name) for r in result.items] == [(1, "Caja de ahorro $"), (2, None)]
         get_by_ids.assert_awaited_once()  # one batch query for the whole list, never one per row
 
     @pytest.mark.asyncio
@@ -598,14 +598,14 @@ class TestSettlementResponseNamesTheAccount:
         # own active-accounts list would render a blank cell here.
         settlements = [CardSettlement(id=1, credit_card_id=5, user_id=1, date=date(2026, 8, 1), amount=Decimal("700"), currency="ARS", account_id=7)]
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card()))
-        monkeypatch.setattr(credit_card_service.card_settlement_repository, "list_by_card", AsyncMock(return_value=settlements))
+        monkeypatch.setattr(credit_card_service.card_settlement_repository, "list_by_card", AsyncMock(return_value=(settlements, len(settlements))))
         monkeypatch.setattr(
             credit_card_service.account_repository, "get_by_ids", AsyncMock(return_value=[_account(id=7, name="Old savings", is_active=False)])
         )
 
         result = await credit_card_service.list_settlements(AsyncMock(), 5, USER)
 
-        assert result[0].account_name == "Old savings"
+        assert result.items[0].account_name == "Old savings"
 
     @pytest.mark.asyncio
     async def test_create_names_the_account_without_a_second_fetch(self, monkeypatch):

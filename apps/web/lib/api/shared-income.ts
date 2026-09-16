@@ -21,6 +21,7 @@
 
 import 'server-only';
 
+import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
 import type { IncomeDestination } from '@/lib/constants/shared-income';
@@ -154,13 +155,20 @@ function mapSharedIncome(raw: SharedIncomeRaw): SharedIncome {
  * A group's shared income, newest first, each row with every member's position in it.
  *
  * Returns null for a group that does not exist OR that the caller is not a member of — the API
- * answers 404 for both, so the hub renders notFound() either way and an id cannot be probed. The whole
- * list comes back unpaginated, which is what the API offers; the hub pages it client-side.
+ * answers 404 for both, so the hub renders notFound() either way and an id cannot be probed. One page
+ * comes back, with the total across every page — the API does the paging since SEC-11, and the hub
+ * reads its page number from `?incomePage=` rather than slicing.
  */
-export async function getSharedIncome(groupId: number): Promise<SharedIncome[] | null> {
-  const res = await authenticatedFetch(`/groups/${groupId}/income`, { method: 'GET' });
+export async function getSharedIncome(
+  groupId: number,
+  page = 1,
+  pageSize?: number,
+): Promise<Page<SharedIncome> | null> {
+  const qs = new URLSearchParams({ page: String(page) });
+  if (pageSize !== undefined) qs.set('page_size', String(pageSize));
+  const res = await authenticatedFetch(`/groups/${groupId}/income?${qs}`, { method: 'GET' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch shared income');
-  const raw: SharedIncomeRaw[] = await res.json();
-  return raw.map(mapSharedIncome);
+  const raw: PageRaw<SharedIncomeRaw> = await res.json();
+  return { items: raw.items.map(mapSharedIncome), total: raw.total, pageSize: raw.page_size };
 }

@@ -29,6 +29,7 @@ from app.models.utils import utcnow
 from app.repositories import group_invite_repository, group_repository
 from app.schemas.group import GroupMemberResponse, GroupResponse
 from app.services import shared_audit_service
+from app.utils.pagination import MAX_LIST_ROWS
 
 
 # Whether an invite is still usable: minted, never claimed, and not past its window. Expiry is derived
@@ -128,7 +129,7 @@ async def list_notifiable_user_ids(session: AsyncSession, group_id: int, *, excl
 # Lists the groups the user belongs to, each with its full roster. Members and invites are batch-loaded
 # for every group at once, so the response costs three queries regardless of how many groups there are.
 async def list_groups(session: AsyncSession, user: User) -> list[GroupResponse]:
-    groups = await group_repository.list_visible(session)
+    groups = await group_repository.list_visible(session, limit=MAX_LIST_ROWS)
     group_ids = [g.id for g in groups if g.id is not None]
     members_by_group = await group_repository.list_members_by_groups(session, group_ids)
     invites_by_group = await group_invite_repository.list_by_groups(session, group_ids)

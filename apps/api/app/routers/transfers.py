@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.schemas.transfer import TransferCreate, TransferListResponse, TransferResponse, TransferUpdate
 from app.services import transfer_service
 
@@ -13,9 +14,10 @@ router = APIRouter(prefix="/transfers", tags=["transfers"])
 async def list_transfers(
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     account_id: int | None = Query(default=None, description="Only transfers touching this account, on either leg."),
 ) -> TransferListResponse:
-    return await transfer_service.list_transfers(session, current_user, account_id=account_id)
+    return await transfer_service.list_transfers(session, current_user, account_id=account_id, page=page_query.page, page_size=page_query.page_size)
 
 
 # Get a single transfer by id. Returns 404 when it isn't the user's.

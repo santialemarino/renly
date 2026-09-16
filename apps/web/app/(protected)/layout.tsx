@@ -40,7 +40,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     getSettings().catch(() => null),
     getSignupContext(),
     getSupportedCurrencies().catch(() => undefined),
-    getNotifications(NOTIFICATION_POPOVER_SIZE).catch(() => null),
+    getNotifications(1, NOTIFICATION_POPOVER_SIZE).catch(() => null),
   ]);
   const cookieStore = await cookies();
 

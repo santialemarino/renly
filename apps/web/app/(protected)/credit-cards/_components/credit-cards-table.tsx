@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Archive,
@@ -38,10 +38,12 @@ import {
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
+import { TablePagination } from '@/components/table-pagination';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -71,36 +73,57 @@ function SettlementsSection({
   const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
+  // Monotonic ticket per fetch; only the newest one may commit its result.
+  const requestRef = useRef(0);
+  // Whether anything has loaded yet — the display floor is for the first paint only.
+  const fetchedPageRef = useRef<number | null>(null);
   const [settlements, setSettlements] = useState<CardSettlement[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteSettlementState, setDeleteSettlementState] = useState<CardSettlement | null>(null);
 
+  /*
+   * A monotonic ticket so the LAST REQUESTED page wins rather than the last response to arrive, and a
+   * display floor that applies to the first load only — on a page change the rows are already on
+   * screen, so padding the swap manufactures the layout jump the delay was added to prevent.
+   */
   const loadSettlements = useCallback(async () => {
+    const ticket = ++requestRef.current;
+    const isFirstLoad = fetchedPageRef.current === null;
     setLoading(true);
     const start = Date.now();
     try {
-      const data = await fetchSettlements(cardId);
+      const data = await fetchSettlements(cardId, page);
       const elapsed = Date.now() - start;
-      if (elapsed < SETTLEMENTS_DISPLAY_DELAY_MS) {
+      if (isFirstLoad && elapsed < SETTLEMENTS_DISPLAY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, SETTLEMENTS_DISPLAY_DELAY_MS - elapsed));
       }
-      setSettlements(data);
+      if (ticket !== requestRef.current) return;
+      fetchedPageRef.current = page;
+      setSettlements(data.items);
+      setTotal(data.total);
+      setPageSize(data.pageSize);
     } catch {
+      if (ticket !== requestRef.current) return;
       setSettlements([]);
+      setTotal(0);
     } finally {
-      setLoading(false);
+      if (ticket === requestRef.current) setLoading(false);
     }
-  }, [cardId]);
+  }, [cardId, page]);
 
-  // Fetch on first expand. Re-expand shows cached data instantly.
-  const [fetched, setFetched] = useState(false);
+  // Fetch on first expand. Re-expand shows cached data instantly; a page change asks for different
+  // rows, so it re-fetches rather than reading that cache.
+  const [fetchedPage, setFetchedPage] = useState<number | null>(null);
   useEffect(() => {
-    if (expanded && !fetched) {
-      setFetched(true);
+    if (expanded && fetchedPage !== page) {
+      setFetchedPage(page);
       loadSettlements();
     }
-  }, [expanded, fetched, loadSettlements]);
+  }, [expanded, fetchedPage, page, loadSettlements]);
 
   return (
     <AnimatePresence>
@@ -135,7 +158,7 @@ function SettlementsSection({
                     >
                       {t('settlements.loading')}
                     </motion.p>
-                  ) : settlements.length === 0 ? (
+                  ) : total === 0 ? (
                     <motion.p
                       key="empty"
                       initial={{ opacity: 0 }}
@@ -217,6 +240,12 @@ function SettlementsSection({
                           ))}
                         </TableBody>
                       </Table>
+                      <TablePagination
+                        page={page}
+                        totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                        totalLabel={t('settlements.table.total', { total })}
+                        onPageChange={setPage}
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -231,7 +260,15 @@ function SettlementsSection({
                   oficialRate={oficialRate}
                   oficialRateDate={oficialRateDate}
                   onSuccess={() => {
-                    loadSettlements();
+                    // Back to page 1: the list is newest-first, so the row just recorded is there and
+                    // nowhere else. Staying put redraws the current page identically and the user is
+                    // told it saved while seeing no sign of it.
+                    //
+                    // The cache marker is cleared rather than load() being called here, because this
+                    // callback closes over the page that is being left — invoking it would fetch the
+                    // OLD page and could land after the effect's fetch of the new one.
+                    setPage(1);
+                    setFetchedPage(null);
                     router.refresh();
                   }}
                 />
@@ -244,7 +281,8 @@ function SettlementsSection({
                   cardId={cardId}
                   settlement={deleteSettlementState}
                   onSuccess={() => {
-                    loadSettlements();
+                    // A delete stays on the page the reader is looking at; only the rows change.
+                    setFetchedPage(null);
                     router.refresh();
                   }}
                 />

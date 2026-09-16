@@ -7,6 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /credit-cards/{id}/settlements. `amount`/`currency` are the CARD leg — what the payment
@@ -60,3 +61,8 @@ class CardSettlementResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /credit-cards/{id}/settlements.
+class CardSettlementListResponse(PaginatedResponse):
+    items: list[CardSettlementResponse] = Field(description="Settlements on this page, newest first.")

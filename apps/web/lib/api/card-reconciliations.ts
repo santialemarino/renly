@@ -5,7 +5,7 @@ import 'server-only';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
-interface CardReconciliationRaw {
+export interface CardReconciliationRaw {
   id: number;
   card_id: number;
   currency: string;

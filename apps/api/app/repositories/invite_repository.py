@@ -1,16 +1,22 @@
 # Data access for admin invites (invite-only access gate).
 
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.invite import Invite
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
-# Lists every invite, newest first (admin invite management view).
-async def list_all(session: AsyncSession) -> list[Invite]:
-    result = await session.execute(select(Invite).order_by(Invite.created_at.desc()))
-    return list(result.scalars().all())
+# Lists one page of invites, newest first, with the total across every page (admin invite management
+# view). The id tiebreak makes the order total: two invites created in the same transaction share a
+# timestamp, and without it Postgres may repeat one across pages or skip it.
+async def list_all(session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> tuple[list[Invite], int]:
+    count_result = await session.execute(select(func.count()).select_from(Invite))
+    stmt = apply_page(select(Invite).order_by(Invite.created_at.desc(), Invite.id.desc()), page, page_size)
+    result = await session.execute(stmt)
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Fetches an invite by id. Returns None when no invite matches.

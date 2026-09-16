@@ -21,8 +21,10 @@ from app.repositories import (
     credit_card_repository,
     expense_repository,
 )
+from app.schemas.card_reconciliation import CardReconciliationListResponse, CardReconciliationResponse
 from app.services import settings_service
 from app.utils.dates import compute_statement_period, resolve_day_in_month
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 # Number of recent statement periods to surface per bucket in the Reconciliations sub-section.
 RECENT_STATEMENTS_LIMIT = 12
@@ -167,9 +169,17 @@ async def list_reconciliations(
     user: User,
     *,
     currency: str | None = None,
-) -> list[CardReconciliation]:
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> CardReconciliationListResponse:
     await _get_card_or_404(session, card_id, user)
-    return await card_reconciliation_repository.list_by_card(session, card_id, currency=currency)
+    rows, total = await card_reconciliation_repository.list_page_by_card(session, card_id, currency=currency, page=page, page_size=page_size)
+    return CardReconciliationListResponse(
+        items=[CardReconciliationResponse.model_validate(row) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Get a single reconciliation by id (verifies card ownership).

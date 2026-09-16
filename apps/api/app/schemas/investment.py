@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.investment import InvestmentCategory
 from app.schemas.base import RequestBase, validate_supported_currency
 from app.schemas.list_scope import ListSectionResponse
+from app.schemas.pagination import PaginatedResponse
 
 
 # Minimal collection info embedded in investment responses.
@@ -75,11 +76,8 @@ class InvestmentResponse(BaseModel):
 
 
 # Response for GET /investments (paginated list with filters).
-class InvestmentListResponse(BaseModel):
+class InvestmentListResponse(PaginatedResponse):
     items: list[InvestmentResponse] = Field(description="Investments on this page.")
-    total: int = Field(description="Total matching investments (across all pages).")
-    page: int = Field(description="Current page number (1-based).")
-    page_size: int = Field(description="Number of items per page.")
     sections: list[ListSectionResponse] = Field(
         default_factory=list,
         description=(

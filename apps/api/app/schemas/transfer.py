@@ -7,6 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /transfers.
@@ -65,6 +66,5 @@ class TransferResponse(BaseModel):
 
 
 # Response for GET /transfers.
-class TransferListResponse(BaseModel):
-    items: list[TransferResponse] = Field(description="Transfers, newest first.")
-    total: int = Field(description="Total transfers returned.")
+class TransferListResponse(PaginatedResponse):
+    items: list[TransferResponse] = Field(description="Transfers on this page, newest first.")

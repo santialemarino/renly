@@ -285,15 +285,20 @@ describe('hasAnySharedFlow', () => {
   // piece of income everyone has been paid their share of is square, not empty, and telling them to
   // add their first expense would be wrong about a ledger they can see right above.
   it('counts either flow, and says nothing shared only when both are empty', () => {
-    expect(hasAnySharedFlow([], [])).toBe(false);
-    expect(hasAnySharedFlow([{}], [])).toBe(true);
-    expect(hasAnySharedFlow([], [{}])).toBe(true);
-    expect(hasAnySharedFlow([{}], [{}])).toBe(true);
+    expect(hasAnySharedFlow({ total: 0 }, { total: 0 })).toBe(false);
+    expect(hasAnySharedFlow({ total: 1 }, { total: 0 })).toBe(true);
+    expect(hasAnySharedFlow({ total: 0 }, { total: 1 })).toBe(true);
+    expect(hasAnySharedFlow({ total: 1 }, { total: 1 })).toBe(true);
+    // A failed read reads as no flow, which is the PRE-SEC-11 behaviour (`expenses ?? []`) kept
+    // deliberately rather than a considered choice about outages: `balancesEmptyState(false)` is
+    // 'nothingShared', so a group whose money reads fail is told nothing has been shared. Worth
+    // knowing, and stated here so the next reader does not have to derive it from two files.
+    expect(hasAnySharedFlow(null, null)).toBe(false);
   });
 
   it('feeds the empty-state sentence, so income alone reads as all square', () => {
-    expect(balancesEmptyState(hasAnySharedFlow([], [{}]))).toBe('allSquare');
-    expect(balancesEmptyState(hasAnySharedFlow([], []))).toBe('nothingShared');
+    expect(balancesEmptyState(hasAnySharedFlow({ total: 0 }, { total: 1 }))).toBe('allSquare');
+    expect(balancesEmptyState(hasAnySharedFlow({ total: 0 }, { total: 0 }))).toBe('nothingShared');
   });
 });
 

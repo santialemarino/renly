@@ -13,6 +13,36 @@ export type SortOrder = 'asc' | 'desc';
  */
 export type ListScope = 'all' | 'private' | 'shared';
 
+/*
+ * One page of a list read (SEC-11). Every paginated endpoint answers with the same three fields, so
+ * this is stated once rather than per entity — a client that can read a page of expenses can read a
+ * page of anything.
+ *
+ * `total` counts the WHOLE matching set rather than the page, which is what lets a caller draw a pager
+ * at all, and `pageSize` is echoed rather than assumed: it is what the server actually used, so a page
+ * count derived from it cannot disagree with the rows on screen.
+ */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  pageSize: number;
+}
+
+/*
+ * The wire shape every paginated endpoint answers with, before mapping. One generic rather than the
+ * same four-field interface restated per entity.
+ *
+ * `page` is declared because the API sends it, and deliberately not carried into `Page<T>`: the caller
+ * already knows which page it asked for — it is the value it put in the URL — so mapping it back would
+ * be a second source of truth for the same number.
+ */
+export interface PageRaw<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 // --- Raw types (API JSON shape, snake_case) ---
 
 interface SectionTotalRaw {

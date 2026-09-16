@@ -8,6 +8,7 @@ from app.domain import NotFoundError
 from app.models.investment_collection import InvestmentCollection
 from app.models.user import User
 from app.repositories import collection_repository, investment_repository
+from app.utils.pagination import MAX_LIST_ROWS
 
 
 # Lists collections for the user with optional search and sorting. Returns each with its investment ids.
@@ -19,7 +20,9 @@ async def list_collections(
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> list[tuple[InvestmentCollection, list[int]]]:
-    collections = await collection_repository.list_by_user(session, user.id, search=search, sort_by=sort_by, sort_order=sort_order)
+    collections = await collection_repository.list_by_user(
+        session, user.id, search=search, sort_by=sort_by, sort_order=sort_order, limit=MAX_LIST_ROWS
+    )
     # Batch-load membership for all collections in one query.
     collection_ids = [c.id for c in collections if c.id is not None]
     ids_by_collection = await collection_repository.get_investment_ids_by_collections(session, collection_ids)

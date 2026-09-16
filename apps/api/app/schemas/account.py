@@ -68,7 +68,9 @@ class AccountResponse(BaseModel):
 # Response for GET /accounts. An envelope rather than a bare array, because a grouped list has to say
 # what its sections are called and what each one totals — facts about the list, not about any row.
 class AccountListResponse(BaseModel):
-    items: list[AccountResponse] = Field(description="Every matching account, unpaginated, in scope-major order.")
+    items: list[AccountResponse] = Field(
+        description="Every matching account in scope-major order. Not paginated; capped at 500 rows, far above any real holding."
+    )
     sections: list[ListSectionResponse] = Field(
         default_factory=list,
         description="The list's scope sections in row order, each with its per-currency balance total.",

@@ -18,6 +18,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 # Every status whose amount moves a balance. All of them, today — a pending settlement counts because
 # the money really moved, and confirming it is an acknowledgement rather than a gate on arithmetic;
@@ -39,12 +40,19 @@ COUNTING_STATUSES = (GroupSettlementStatus.pending, GroupSettlementStatus.confir
 _CASH_STATUSES = (GroupSettlementStatus.pending, GroupSettlementStatus.confirmed)
 
 
-# Lists a group's settlements, newest first.
-async def list_by_group(session: AsyncSession, group_id: int) -> list[GroupSettlement]:
-    result = await session.execute(
-        select(GroupSettlement).where(GroupSettlement.group_id == group_id).order_by(GroupSettlement.date.desc(), GroupSettlement.id.desc())
-    )
-    return list(result.scalars().all())
+# Lists one page of a group's settlements, newest first, with the total across every page.
+async def list_by_group(
+    session: AsyncSession,
+    group_id: int,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[GroupSettlement], int]:
+    where = GroupSettlement.group_id == group_id
+    count_result = await session.execute(select(func.count()).select_from(GroupSettlement).where(where))
+    ordered = select(GroupSettlement).where(where).order_by(GroupSettlement.date.desc(), GroupSettlement.id.desc())
+    result = await session.execute(apply_page(ordered, page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Fetches one settlement by id; RLS decides whether the caller may see it.

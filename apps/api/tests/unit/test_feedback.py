@@ -56,8 +56,9 @@ class FakeFeedbackRepo:
         self.rows = rows or []
         self._next_id = 1
 
-    async def list_all_with_email(self, session):
-        return self.rows
+    async def list_all_with_email(self, session, *, page=1, page_size=25):
+        self.page_args = (page, page_size)
+        return self.rows, len(self.rows)
 
     async def create(self, session, feedback):
         feedback.id = self._next_id
@@ -177,7 +178,8 @@ class TestListFeedback:
 
         result = await feedback_service.list_feedback(FakeSession())
 
-        assert [(r.id, r.email, r.message) for r in result] == [
+        assert [(r.id, r.email, r.message) for r in result.items] == [
             (2, "b@example.com", "second"),
             (1, "c@example.com", "first"),
         ]
+        assert (result.total, result.page, result.page_size) == (2, 1, 25)

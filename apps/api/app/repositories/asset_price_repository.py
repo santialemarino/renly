@@ -9,6 +9,7 @@ from sqlmodel import select
 
 from app.models.asset_price import AssetPrice
 from app.models.utils import utcnow
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
 # Returns the latest price for a ticker. Returns None if not found.
@@ -51,21 +52,28 @@ async def get_by_ticker_and_date(
     return result.scalar_one_or_none()
 
 
-# Returns price history for a ticker, optionally filtered by date range.
+# Returns one page of a ticker's price history, newest first, with the total across every page.
+# Optionally filtered by date range, and the total describes the filtered set rather than the ticker.
+#
+# `date` alone is a total order here: (ticker, date) is unique, which is what the bulk upsert's
+# ON CONFLICT target relies on.
 async def get_history(
     session: AsyncSession,
     ticker: str,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
-) -> list[AssetPrice]:
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[AssetPrice], int]:
     stmt = select(AssetPrice).where(AssetPrice.ticker == ticker)
     if start_date:
         stmt = stmt.where(AssetPrice.date >= start_date)
     if end_date:
         stmt = stmt.where(AssetPrice.date <= end_date)
-    stmt = stmt.order_by(AssetPrice.date.desc())
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
+    count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+    result = await session.execute(apply_page(stmt.order_by(AssetPrice.date.desc()), page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Bulk upserts multiple prices in a single statement. Returns the number of rows affected.

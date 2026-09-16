@@ -416,27 +416,35 @@ class TestFeed:
         # the exclusion is asserted on all three calls rather than on the response alone.
         overrides = [_preference(USER.id, NotificationEvent.pot_movement, NotificationChannel.in_app, enabled=False)]
         mocks = self._arrange(monkeypatch, overrides=overrides)
-        await svc.get_feed(AsyncMock(), USER, limit=10)
+        await svc.get_feed(AsyncMock(), USER, page_size=10)
         for name in ("list", "count", "unread"):
             assert mocks[name].await_args.kwargs["exclude_events"] == [NotificationEvent.pot_movement]
 
     @pytest.mark.asyncio
     async def test_nothing_is_excluded_when_the_user_has_expressed_no_preference(self, monkeypatch):
         mocks = self._arrange(monkeypatch)
-        await svc.get_feed(AsyncMock(), USER, limit=10)
+        await svc.get_feed(AsyncMock(), USER, page_size=10)
         assert mocks["list"].await_args.kwargs["exclude_events"] == []
 
     @pytest.mark.asyncio
-    async def test_a_page_larger_than_the_cap_is_clamped(self, monkeypatch):
+    async def test_the_page_number_is_translated_into_an_offset(self, monkeypatch):
+        # The feed reads limit/offset while every endpoint speaks page/page_size, so this translation is
+        # the one place the two meet — and page 1 must ask for offset 0, not offset page_size.
         mocks = self._arrange(monkeypatch)
-        await svc.get_feed(AsyncMock(), USER, limit=10_000)
-        assert mocks["list"].await_args.kwargs["limit"] == svc.MAX_FEED_PAGE_SIZE
+        await svc.get_feed(AsyncMock(), USER, page=3, page_size=10)
+        assert (mocks["list"].await_args.kwargs["limit"], mocks["list"].await_args.kwargs["offset"]) == (10, 20)
+
+    @pytest.mark.asyncio
+    async def test_the_first_page_starts_at_the_beginning(self, monkeypatch):
+        mocks = self._arrange(monkeypatch)
+        await svc.get_feed(AsyncMock(), USER, page=1, page_size=10)
+        assert mocks["list"].await_args.kwargs["offset"] == 0
 
     @pytest.mark.asyncio
     async def test_the_response_carries_the_rows_and_both_counts(self, monkeypatch):
         row = Notification(id=9, user_id=USER.id, event=NotificationEvent.member_joined, payload={"group": "Casa"})
         self._arrange(monkeypatch, items=[row], total=5, unread=1)
-        feed = await svc.get_feed(AsyncMock(), USER, limit=10)
+        feed = await svc.get_feed(AsyncMock(), USER, page_size=10)
         assert (feed.total, feed.unread, [item.id for item in feed.items]) == (5, 1, [9])
         assert feed.items[0].payload == {"group": "Casa"}
 

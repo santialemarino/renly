@@ -27,8 +27,10 @@ import { getPots } from '@/lib/api/pots';
 import { getPageSettings } from '@/lib/api/settings';
 import { getSharedExpenses } from '@/lib/api/shared-expenses';
 import { getSharedIncome } from '@/lib/api/shared-income';
+import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVITY_PAGE_SIZE } from '@/lib/constants/shared-activity';
+import { resolvePageParam } from '@/lib/list-scope';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -37,13 +39,20 @@ export async function generateMetadata() {
   return await generatePageMetadata('shared.hub');
 }
 
+/*
+ * Three paginated lists share this route, so each reads its OWN page param rather than a bare `page`:
+ * one key would move all three at once, and paging the expenses would silently reset the income table
+ * somebody had scrolled to. Named per section for the same reason the sections are.
+ */
 interface GroupHubPageProps {
   params: Promise<{ groupId: string }>;
+  searchParams: Promise<{ expensesPage?: string; incomePage?: string; settlementsPage?: string }>;
 }
 
-export default async function GroupHubPage({ params }: GroupHubPageProps) {
+export default async function GroupHubPage({ params, searchParams }: GroupHubPageProps) {
   const t = await getTranslations('shared');
   const { groupId } = await params;
+  const query = await searchParams;
   const cookieStore = await cookies();
 
   // A non-numeric segment never reaches the API — `/shared/nonsense` is a 404, not a 422.
@@ -93,10 +102,10 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
     activity,
   ] = await Promise.all([
     getPots(group.id),
-    getSharedExpenses(group.id),
-    getSharedIncome(group.id),
+    getSharedExpenses(group.id, resolvePageParam(query.expensesPage)),
+    getSharedIncome(group.id, resolvePageParam(query.incomePage)),
     getGroupBalances(group.id, displayCurrency),
-    getGroupSettlements(group.id),
+    getGroupSettlements(group.id, resolvePageParam(query.settlementsPage)),
     getGroupMoneySettings(group.id).catch(() => null),
     getAccounts({ showArchived: true }),
     // The currency picker degrades to the full ISO list on a fetch error, and the API's 422 guards.
@@ -106,9 +115,6 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
     // section says only that nothing is being shown — which is true of a failed read.
     getGroupActivity(group.id, ACTIVITY_PAGE_SIZE).catch(() => []),
   ]);
-
-  const groupExpenses = expenses ?? [];
-  const groupIncome = income ?? [];
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-6">
@@ -126,7 +132,7 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
         <GroupBalancesSection
           group={group}
           balances={balances}
-          hasAnyFlow={hasAnySharedFlow(groupExpenses, groupIncome)}
+          hasAnyFlow={hasAnySharedFlow(expenses, income)}
           moneySettings={moneySettings}
           accounts={accounts}
           timeZone={settings?.timezone ?? undefined}
@@ -134,7 +140,10 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
       )}
       <GroupExpensesSection
         group={group}
-        expenses={groupExpenses}
+        expenses={expenses?.items ?? []}
+        total={expenses?.total ?? 0}
+        page={resolvePageParam(query.expensesPage)}
+        pageSize={expenses?.pageSize ?? API_DEFAULT_PAGE_SIZE}
         accounts={accounts}
         creditCards={creditCards}
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
@@ -143,13 +152,23 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
       />
       <GroupIncomeSection
         group={group}
-        income={groupIncome}
+        income={income?.items ?? []}
+        total={income?.total ?? 0}
+        page={resolvePageParam(query.incomePage)}
+        pageSize={income?.pageSize ?? API_DEFAULT_PAGE_SIZE}
         accounts={accounts}
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
         supportedCurrencies={supportedCurrencies}
         timeZone={settings?.timezone ?? undefined}
       />
-      <GroupSettlementsSection group={group} settlements={settlements ?? []} accounts={accounts} />
+      <GroupSettlementsSection
+        group={group}
+        settlements={settlements?.items ?? []}
+        total={settlements?.total ?? 0}
+        page={resolvePageParam(query.settlementsPage)}
+        pageSize={settlements?.pageSize ?? API_DEFAULT_PAGE_SIZE}
+        accounts={accounts}
+      />
       <GroupPotsSection
         group={group}
         pots={pots}

@@ -9,6 +9,7 @@ import { getGroupMoneySettings } from '@/lib/api/group-settlements';
 import { getPotHoldings, getPots } from '@/lib/api/pots';
 import { getSharedIncome, type SharedIncome } from '@/lib/api/shared-income';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { DEFAULT_SPLIT_METHOD, type SplitMethod } from '@/lib/constants/shared-expenses';
 
 /*
@@ -163,7 +164,14 @@ export async function getGroupIncomeContext(groupId: number): Promise<GroupIncom
   const [pots, settings, history] = await Promise.all([
     getPots(groupId),
     getGroupMoneySettings(groupId).catch(() => null),
-    getSharedIncome(groupId).catch(() => null),
+    /*
+     * The widest page the API will serve, because this read is not a list — it is the input to F2's
+     * remembered per-source destination, which finds the newest income naming a given source. Since
+     * SEC-11 the endpoint pages, so asking for the default 25 would quietly stop remembering a source
+     * whose last entry has scrolled past that; the cap makes the convenience degrade only for a source
+     * unused across a group's last hundred entries, rather than its last twenty-five.
+     */
+    getSharedIncome(groupId, 1, API_MAX_PAGE_SIZE).catch(() => null),
   ]);
   const holdings = await Promise.all(pots.map((pot) => getPotHoldings(pot.id)));
   return {
@@ -191,6 +199,6 @@ export async function getGroupIncomeContext(groupId: number): Promise<GroupIncom
         })),
     ),
     defaultSplitMethod: settings?.defaultSplitMethod ?? DEFAULT_SPLIT_METHOD,
-    history: history ?? [],
+    history: history?.items ?? [],
   };
 }

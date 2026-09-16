@@ -7,6 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /accounts/{id}/reconciliations. Records the real balance as of a date; the service
@@ -70,3 +71,17 @@ class AccountReconciliationResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /accounts/{id}/reconciliations.
+#
+# `latest_as_of_date` is carried because only the account's MOST RECENT reconciliation may be deleted,
+# and that fact is a property of the whole history rather than of a page: derived from the first row of
+# whatever page is on screen, it names page 2's newest row as deletable and the API then refuses it.
+# It is the same value delete_reconciliation checks, so the offer and the refusal cannot disagree.
+class AccountReconciliationListResponse(PaginatedResponse):
+    items: list[AccountReconciliationResponse] = Field(description="Reconciliations on this page, newest first.")
+    latest_as_of_date: date_type | None = Field(
+        default=None,
+        description="as_of_date of the account's newest reconciliation across every page; null when it has never been reconciled.",
+    )

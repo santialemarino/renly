@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.models.investment import Currency
 from app.models.transaction import TransactionType
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /investments/{id}/transactions.
@@ -45,3 +46,8 @@ class TransactionResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /investments/{id}/transactions.
+class TransactionListResponse(PaginatedResponse):
+    items: list[TransactionResponse] = Field(description="Transactions on this page, newest first.")

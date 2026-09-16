@@ -71,7 +71,11 @@ from app.repositories import (
     shared_income_repository,
     transfer_repository,
 )
-from app.schemas.account_reconciliation import AccountReconciliationResponse, ReconciliationBearerResponse
+from app.schemas.account_reconciliation import (
+    AccountReconciliationListResponse,
+    AccountReconciliationResponse,
+    ReconciliationBearerResponse,
+)
 from app.services import (
     account_service,
     notification_service,
@@ -80,6 +84,7 @@ from app.services import (
     settings_service,
     shared_audit_service,
 )
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
 
@@ -347,9 +352,26 @@ async def get_latest_reconciled_date(session: AsyncSession, account_id: int, use
 
 # List an account's reconciliations, newest first, in EITHER scope — a pot's account has a history its
 # co-owners are meant to read. Reachability is get_account_in_scope's answer plus RLS's.
-async def list_reconciliations(session: AsyncSession, account_id: int, user: User) -> list[AccountReconciliation]:
-    await account_service.get_account_in_scope(session, account_id, user)
-    return await account_reconciliation_repository.list_by_account(session, account_id)
+async def list_reconciliations(
+    session: AsyncSession,
+    account_id: int,
+    user: User,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> AccountReconciliationListResponse:
+    account = await account_service.get_account_in_scope(session, account_id, user)
+    rows, total = await account_reconciliation_repository.list_by_account(session, account_id, page=page, page_size=page_size)
+    # Resolved once for the page rather than per row: a shared history names its author the way the
+    # group does, and every row of one account's history draws from the same roster.
+    names = await get_reconciler_names(session, account)
+    return AccountReconciliationListResponse(
+        items=[to_response(row, names) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+        latest_as_of_date=await get_latest_reconciled_date(session, account_id, user.id),
+    )
 
 
 # Who ran each of the given reconciliations, as the group names them — `{user_id: display_name}` for one

@@ -7,16 +7,26 @@ from sqlmodel import select
 from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
 from app.repositories.utils import account_scope_matches
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
-# List all reconciliations for an account, newest first.
-async def list_by_account(session: AsyncSession, account_id: int) -> list[AccountReconciliation]:
-    result = await session.execute(
-        select(AccountReconciliation)
-        .where(AccountReconciliation.account_id == account_id)
-        .order_by(AccountReconciliation.as_of_date.desc(), AccountReconciliation.id.desc())
+# List one page of an account's reconciliations, newest first, with the total across every page.
+async def list_by_account(
+    session: AsyncSession,
+    account_id: int,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[AccountReconciliation], int]:
+    where = AccountReconciliation.account_id == account_id
+    count_result = await session.execute(select(func.count()).select_from(AccountReconciliation).where(where))
+    stmt = apply_page(
+        select(AccountReconciliation).where(where).order_by(AccountReconciliation.as_of_date.desc(), AccountReconciliation.id.desc()),
+        page,
+        page_size,
     )
-    return list(result.scalars().all())
+    result = await session.execute(stmt)
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Get a single reconciliation by id and account.

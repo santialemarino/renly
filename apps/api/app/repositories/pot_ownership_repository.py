@@ -12,14 +12,15 @@ from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import case, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy import delete as delete_stmt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from sqlmodel import func, select
+from sqlmodel import select
 
 from app.models.account import Account
 from app.models.pot import OwnershipEventType, PotOwnershipEvent
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
 # Every event for a pot in replay order, optionally bounded to those on or before a date so a
@@ -30,6 +31,26 @@ async def list_by_pot(session: AsyncSession, pot_id: int, *, as_of_date: date_ty
         stmt = stmt.where(PotOwnershipEvent.date <= as_of_date)
     result = await session.execute(stmt.order_by(PotOwnershipEvent.date, PotOwnershipEvent.id))
     return list(result.scalars().all())
+
+
+# One page of a pot's ledger, NEWEST first, with the total across every page — the reading order, where
+# list_by_pot's is the replay order.
+#
+# Its own function rather than page parameters on list_by_pot for the reason the two orders differ: that
+# one is read by seven callers that REPLAY the ledger to derive an ownership split, and a replay over one
+# page (or in reverse) is a wrong split rather than a short list.
+async def list_page_by_pot(
+    session: AsyncSession,
+    pot_id: int,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[PotOwnershipEvent], int]:
+    where = PotOwnershipEvent.pot_id == pot_id
+    count_result = await session.execute(select(func.count()).select_from(PotOwnershipEvent).where(where))
+    ordered = select(PotOwnershipEvent).where(where).order_by(PotOwnershipEvent.date.desc(), PotOwnershipEvent.id.desc())
+    result = await session.execute(apply_page(ordered, page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Events for several pots at once in replay order, keyed by pot id, so a list page showing each pot's
@@ -233,6 +254,7 @@ class PotOwnershipRepository:
     linked_account_ids = staticmethod(linked_account_ids)
     list_by_pot = staticmethod(list_by_pot)
     list_by_pots = staticmethod(list_by_pots)
+    list_page_by_pot = staticmethod(list_page_by_pot)
     save = staticmethod(save)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
     sum_in_by_account_ids_dated = staticmethod(sum_in_by_account_ids_dated)

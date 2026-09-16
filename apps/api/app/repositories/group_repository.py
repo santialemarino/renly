@@ -15,12 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from app.models.group import Group, GroupMember, GroupMemberRole
+from app.utils.pagination import apply_limit, capped
 
 
 # Lists the groups visible to the session, newest first. RLS restricts this to the user's own groups.
-async def list_visible(session: AsyncSession) -> list[Group]:
-    result = await session.execute(select(Group).order_by(Group.created_at.desc(), Group.id.desc()))
-    return list(result.scalars().all())
+async def list_visible(session: AsyncSession, *, limit: int | None = None) -> list[Group]:
+    stmt = select(Group).order_by(Group.created_at.desc(), Group.id.desc())
+    result = await session.execute(apply_limit(stmt, limit))
+    return capped(list(result.scalars().all()), limit, "groups")
 
 
 # Fetches a group by id. Returns None when it does not exist or is not visible to the session.

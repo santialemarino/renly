@@ -7,6 +7,7 @@ import {
   hasVisibleSections,
   resolveGridInterval,
   resolveListScope,
+  resolvePageParam,
   sectionedRows,
 } from '@/lib/list-scope';
 
@@ -199,5 +200,76 @@ describe('sectionedRows', () => {
 
   it('returns nothing for no rows', () => {
     expect(sectionedRows([], [OWN, section()], potAccessors)).toEqual([]);
+  });
+});
+
+describe('resolvePageParam', () => {
+  /*
+   * SEC-11's page parameter, read off the URL. The five pages that read one had three different
+   * answers before this existed, and the loosest of them — `page ? Number(page) : 1` — sent the
+   * literal string `NaN` to an API whose `ge=1` then answered 422. `apps/web` has no `error.tsx`, so a
+   * rejected fetch in a server component is Next's crash screen: a hand-edited URL took the page down.
+   */
+  it('reads a real page number', () => {
+    expect(resolvePageParam('2')).toBe(2);
+    expect(resolvePageParam('1')).toBe(1);
+    expect(resolvePageParam('999')).toBe(999);
+  });
+
+  it('falls back to page 1 for anything unusable', () => {
+    // Each of these reached the API as a query parameter before: `undefined` from a first visit,
+    // `abc` and `''` from a hand-edited URL, `0` and `-1` from one edited arithmetically.
+    expect(resolvePageParam(undefined)).toBe(1);
+    expect(resolvePageParam('')).toBe(1);
+    expect(resolvePageParam('abc')).toBe(1);
+    expect(resolvePageParam('0')).toBe(1);
+    expect(resolvePageParam('-1')).toBe(1);
+    expect(resolvePageParam('-5')).toBe(1);
+    expect(resolvePageParam('Infinity')).toBe(1);
+    expect(resolvePageParam('NaN')).toBe(1);
+  });
+
+  it('floors a fractional page rather than forwarding it', () => {
+    // `?page=2.7` would compute a fractional OFFSET, which Postgres rejects — a 500 rather than a page.
+    expect(resolvePageParam('2.7')).toBe(2);
+    expect(resolvePageParam('1.999')).toBe(1);
+  });
+
+  it('refuses a page that would stringify into exponent notation', () => {
+    /*
+     * The escape a finiteness check could not see, and the one that produced the exact failure this
+     * function exists to prevent: 1e30 is finite and greater than 1, so it passed — and `String(1e30)`
+     * is "1e+30", which the API's integer parse rejects with a 422. With no error.tsx in apps/web a
+     * rejected fetch in a server component is Next's crash screen.
+     */
+    expect(resolvePageParam('1e30')).toBe(1);
+    expect(resolvePageParam('1e21')).toBe(1);
+    // `2e3` is 2000 — a perfectly good page that stringifies to plain digits, so it is ACCEPTED. The
+    // rule is about what comes out, not how it was written: exponent input is fine, an exponent in
+    // the query string is not.
+    expect(resolvePageParam('2e3')).toBe(2000);
+    // The invariant stated directly: whatever this returns must survive String() as plain digits,
+    // because six fetchers interpolate it into a URL rather than going through URLSearchParams.
+    for (const raw of ['1e30', '1e21', '2e3', '99999999999999999999', '1000000', 'abc', '0']) {
+      expect(String(resolvePageParam(raw))).toMatch(/^\d+$/);
+    }
+  });
+
+  it('refuses a page whose OFFSET would leave bigint range', () => {
+    // The other escape: this one stringifies to plain digits the API accepts, and then overflows the
+    // bigint OFFSET it becomes — `SELECT 1 OFFSET 2500000000000000000000` is `bigint out of range`,
+    // i.e. a 500 on every paginated endpoint from a hand-typed URL.
+    expect(resolvePageParam('99999999999999999999')).toBe(1);
+    expect(resolvePageParam(String(Number.MAX_SAFE_INTEGER))).toBe(1);
+    expect(resolvePageParam('1000001')).toBe(1);
+    // The ceiling itself is still served, so the bound refuses nothing a real list could reach.
+    expect(resolvePageParam('1000000')).toBe(1000000);
+  });
+
+  it('does not treat a value below one as a small page', () => {
+    // The case the fallback exists for, stated as the failure rather than the input: page 0 computes
+    // offset -25, and a negative OFFSET is a runtime error on every one of these endpoints.
+    expect(resolvePageParam('0.5')).toBe(1);
+    expect(resolvePageParam('-0')).toBe(1);
   });
 });

@@ -3,22 +3,30 @@
 from datetime import date as date_type
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.investment import Currency
 from app.models.transaction import Transaction, TransactionType
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
-# Lists transactions for an investment, most recent first (by date desc, then id desc).
+# Lists one page of an investment's transactions, most recent first, with the total across every page.
+# The id tiebreak is what makes the order total: several transactions may share a date, and without it
+# Postgres may repeat one across pages or skip it.
 async def list_by_investment(
     session: AsyncSession,
     investment_id: int,
-) -> list[Transaction]:
-    result = await session.execute(
-        select(Transaction).where(Transaction.investment_id == investment_id).order_by(Transaction.date.desc(), Transaction.id.desc())
-    )
-    return list(result.scalars().all())
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[Transaction], int]:
+    where = Transaction.investment_id == investment_id
+    count_result = await session.execute(select(func.count()).select_from(Transaction).where(where))
+    stmt = apply_page(select(Transaction).where(where).order_by(Transaction.date.desc(), Transaction.id.desc()), page, page_size)
+    result = await session.execute(stmt)
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Returns dedup-key tuples (investment_id, date, type, amount, currency, quantity) for the user's transactions.

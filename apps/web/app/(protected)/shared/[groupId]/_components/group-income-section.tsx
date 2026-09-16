@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CircleDollarSign, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -24,22 +24,22 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { SharedIncome } from '@/lib/api/shared-income';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { isReconciliationOwned } from '@/lib/reconciliation';
 
-/*
- * Rows per page. The API returns a group's whole history in one response — a shared income list has no
- * server-side paging — so this is what keeps a household's second year from rendering as one very long
- * table. Deliberately the same 25 the expenses section beside it uses.
- */
-const PAGE_SIZE = 25;
-
 interface GroupIncomeSectionProps {
   group: Group;
+  // One page of the group's income, with the total across every page and the size the server used.
+  // The section renders what it is given and never slices: since SEC-11 the API does the paging.
   income: SharedIncome[];
+  total: number;
+  page: number;
+  pageSize: number;
   accounts: Account[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
@@ -60,6 +60,9 @@ interface GroupIncomeSectionProps {
 export function GroupIncomeSection({
   group,
   income,
+  total,
+  page,
+  pageSize,
   accounts,
   preferredCurrencies,
   supportedCurrencies,
@@ -67,22 +70,13 @@ export function GroupIncomeSection({
 }: GroupIncomeSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
-  const [page, setPage] = useState(1);
+  const { navigate, isPending } = useSearchParamsNavigation(sharedGroupPath(group.id));
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<SharedIncome | null>(null);
   const [removing, setRemoving] = useState<SharedIncome | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const totalPages = Math.max(1, Math.ceil(income.length / PAGE_SIZE));
-  /*
-   * Clamped rather than reset by an effect: deleting the last row of the last page shortens the list
-   * under a page number that no longer exists, and an effect would render one empty frame first.
-   */
-  const safePage = Math.min(page, totalPages);
-  const visible = useMemo(
-    () => income.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [income, safePage],
-  );
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   /*
    * The row being edited, retained through the dialog's close. Nulling it on close would drop any
@@ -124,7 +118,14 @@ export function GroupIncomeSection({
         </Button>
       </div>
 
-      {income.length === 0 ? (
+      {/*
+       * `total`, not the page's own length. The two differ on a page PAST THE END — reachable by a
+       * hand-typed URL and by deleting the last row of the last page — and answering "this page holds
+       * nothing" with "nobody has ever shared anything" is both false and a dead end, because the
+       * pager lives in the other branch. Gating on the total keeps the table (empty) and its pager on
+       * screen, and TablePagination clamps the number so one click returns to real rows.
+       */}
+      {total === 0 ? (
         <EmptyState
           icon={CircleDollarSign}
           title={t('income.emptyTitle')}
@@ -132,34 +133,36 @@ export function GroupIncomeSection({
         />
       ) : (
         <div className="flex flex-col gap-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-32">{t('income.table.date')}</TableHead>
-                <TableHead className="w-44 text-right">{t('income.table.amount')}</TableHead>
-                <TableHead>{t('income.table.source')}</TableHead>
-                <TableHead>{t('income.table.wentTo')}</TableHead>
-                <TableHead>{t('income.table.notes')}</TableHead>
-                <TableHead className="w-20 text-center">{t('income.table.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((row) => (
-                <IncomeRow
-                  key={row.id}
-                  income={row}
-                  onEdit={() => setEditing(row)}
-                  onRemove={() => setRemoving(row)}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-32">{t('income.table.date')}</TableHead>
+                  <TableHead className="w-44 text-right">{t('income.table.amount')}</TableHead>
+                  <TableHead>{t('income.table.source')}</TableHead>
+                  <TableHead>{t('income.table.wentTo')}</TableHead>
+                  <TableHead>{t('income.table.notes')}</TableHead>
+                  <TableHead className="w-20 text-center">{t('income.table.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {income.map((row) => (
+                  <IncomeRow
+                    key={row.id}
+                    income={row}
+                    onEdit={() => setEditing(row)}
+                    onRemove={() => setRemoving(row)}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
           <TablePagination
-            page={safePage}
+            page={page}
             totalPages={totalPages}
-            totalLabel={t('income.table.total', { total: income.length })}
-            onPageChange={setPage}
+            totalLabel={t('income.table.total', { total })}
+            onPageChange={(next) => navigate({ incomePage: next === 1 ? null : String(next) })}
           />
         </div>
       )}

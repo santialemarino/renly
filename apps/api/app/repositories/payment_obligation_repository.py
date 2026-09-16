@@ -6,6 +6,7 @@ from sqlmodel import select
 
 from app.models.payment_obligation import PaymentObligation
 from app.repositories.utils import apply_listing_filters
+from app.utils.pagination import apply_limit, capped
 
 _SORT_COLUMNS = {
     "name": PaymentObligation.name,
@@ -31,6 +32,7 @@ async def list_by_user(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
+    limit: int | None = None,
 ) -> list[PaymentObligation]:
     stmt = apply_listing_filters(
         select(PaymentObligation),
@@ -44,8 +46,8 @@ async def list_by_user(
         sort_columns=_SORT_COLUMNS,
         default_order=PaymentObligation.next_due_date,
     )
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
+    result = await session.execute(apply_limit(stmt, limit))
+    return capped(list(result.scalars().all()), limit, "payment obligations")
 
 
 # List every active payment obligation (cluster-wide) whose next_due_date is at or before `cutoff`

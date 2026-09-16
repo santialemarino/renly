@@ -31,14 +31,22 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
+import { TablePagination } from '@/components/table-pagination';
+import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { GroupSettlement } from '@/lib/api/group-settlements';
 import type { Group } from '@/lib/api/groups';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface GroupSettlementsSectionProps {
   group: Group;
+  // One page of the group's settlements, with the total across every page and the size the server
+  // used. Paginated since SEC-11: a settle-up history grows for as long as the household shares money.
   settlements: GroupSettlement[];
+  total: number;
+  page: number;
+  pageSize: number;
   accounts: Account[];
 }
 
@@ -58,10 +66,14 @@ interface GroupSettlementsSectionProps {
 export function GroupSettlementsSection({
   group,
   settlements,
+  total,
+  page,
+  pageSize,
   accounts,
 }: GroupSettlementsSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
+  const { navigate, isPending } = useSearchParamsNavigation(sharedGroupPath(group.id));
   const [pendingAction, setPendingAction] = useState(false);
   const [removing, setRemoving] = useState<GroupSettlement | null>(null);
   const [attaching, setAttaching] = useState<GroupSettlement | null>(null);
@@ -103,52 +115,66 @@ export function GroupSettlementsSection({
     <div className="flex flex-col gap-y-4">
       <SectionHeader title={t('settlements.title')} description={t('settlements.description')} />
 
-      {settlements.length === 0 ? (
+      {/*
+       * `total`, not the page's own length — see the note in group-expenses-section: the two differ
+       * on a page past the end, and the pager lives in the other branch.
+       */}
+      {total === 0 ? (
         <EmptyState
           icon={Handshake}
           title={t('settlements.emptyTitle')}
           description={t('settlements.emptyDescription')}
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-32">{t('settlements.table.date')}</TableHead>
-              <TableHead>{t('settlements.table.between')}</TableHead>
-              <TableHead className="w-40 text-right">{t('settlements.table.amount')}</TableHead>
-              <TableHead className="w-32">{t('settlements.table.status')}</TableHead>
-              <TableHead>{t('settlements.table.notes')}</TableHead>
-              <TableHead className="w-32 text-center">{t('settlements.table.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {settlements.map((settlement) => (
-              <SettlementRow
-                key={settlement.id}
-                settlement={settlement}
-                mySeatId={mySeatId}
-                accounts={accounts}
-                disabled={pendingAction}
-                onConfirm={() =>
-                  run(
-                    () => confirmSettlement(group.id, settlement.id),
-                    t('settlements.confirmSuccess'),
-                    t('settlements.actionError'),
-                  )
-                }
-                onUnconfirm={() =>
-                  run(
-                    () => unconfirmSettlement(group.id, settlement.id),
-                    t('settlements.unconfirmSuccess'),
-                    t('settlements.actionError'),
-                  )
-                }
-                onAttach={() => setAttaching(settlement)}
-                onRemove={() => setRemoving(settlement)}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-32">{t('settlements.table.date')}</TableHead>
+                <TableHead>{t('settlements.table.between')}</TableHead>
+                <TableHead className="w-40 text-right">{t('settlements.table.amount')}</TableHead>
+                <TableHead className="w-32">{t('settlements.table.status')}</TableHead>
+                <TableHead>{t('settlements.table.notes')}</TableHead>
+                <TableHead className="w-32 text-center">{t('settlements.table.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {settlements.map((settlement) => (
+                <SettlementRow
+                  key={settlement.id}
+                  settlement={settlement}
+                  mySeatId={mySeatId}
+                  accounts={accounts}
+                  disabled={pendingAction}
+                  onConfirm={() =>
+                    run(
+                      () => confirmSettlement(group.id, settlement.id),
+                      t('settlements.confirmSuccess'),
+                      t('settlements.actionError'),
+                    )
+                  }
+                  onUnconfirm={() =>
+                    run(
+                      () => unconfirmSettlement(group.id, settlement.id),
+                      t('settlements.unconfirmSuccess'),
+                      t('settlements.actionError'),
+                    )
+                  }
+                  onAttach={() => setAttaching(settlement)}
+                  onRemove={() => setRemoving(settlement)}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalLabel={t('settlements.table.total', { total })}
+          onPageChange={(next) => navigate({ settlementsPage: next === 1 ? null : String(next) })}
+        />
       )}
 
       <ConfirmDialog

@@ -18,7 +18,7 @@ import { getPageSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
-import { resolveListScope } from '@/lib/list-scope';
+import { resolveListScope, resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -84,7 +84,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         dateFrom: params.date_from,
         dateTo: params.date_to,
         currency,
-        page: params.page ? Number(params.page) : 1,
+        page: resolvePageParam(params.page),
         sortBy: params.sort_by as 'date' | 'amount' | 'category' | 'payment_method' | undefined,
         sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
       }),

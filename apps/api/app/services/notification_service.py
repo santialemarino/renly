@@ -52,6 +52,7 @@ from app.schemas.notification import (
 )
 from app.services import notification_templates, settings_service, web_push
 from app.services.email_service import get_email_service
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,6 @@ _PRIVATE_EVENT_PATHS = {
     NotificationEvent.obligation_due: "/payment-obligations",
     NotificationEvent.plan_charged: "/expenses",
 }
-
-# The most rows one feed request may return, whatever it asks for.
-MAX_FEED_PAGE_SIZE = 50
 
 
 # The absolute URL a notification points at, built from the ids its payload carries.
@@ -286,15 +284,16 @@ async def _deliver(
 
 # One page of the caller's feed, plus the totals the badge and the paging need — all three describing
 # the same set of rows, because they share one filter.
-async def get_feed(session: AsyncSession, user: User, *, limit: int, offset: int = 0) -> NotificationFeedResponse:
+async def get_feed(session: AsyncSession, user: User, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> NotificationFeedResponse:
     hidden = _hidden_events(await _overrides(session, user.id))
-    page = min(limit, MAX_FEED_PAGE_SIZE)
-    items = await notification_repository.list_by_user(session, user.id, limit=page, offset=offset, exclude_events=hidden)
+    items = await notification_repository.list_by_user(session, user.id, limit=page_size, offset=(page - 1) * page_size, exclude_events=hidden)
     total = await notification_repository.count_by_user(session, user.id, exclude_events=hidden)
     unread = await notification_repository.count_unread(session, user.id, exclude_events=hidden)
     return NotificationFeedResponse(
         items=[NotificationResponse.model_validate(item) for item in items],
         total=total,
+        page=page,
+        page_size=page_size,
         unread=unread,
     )
 

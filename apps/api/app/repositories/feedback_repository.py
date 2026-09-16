@@ -1,17 +1,31 @@
 # Data access for feedback.
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.feedback import Feedback
 from app.models.user import User
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
-# Returns all feedback (newest first) paired with the author's email, for the admin review list.
-# Reads across users, so it must run on the privileged session (RLS would otherwise hide other rows).
-async def list_all_with_email(session: AsyncSession) -> list[tuple[Feedback, str]]:
-    result = await session.execute(select(Feedback, User.email).join(User, User.id == Feedback.user_id).order_by(Feedback.created_at.desc()))
-    return [(feedback, email) for feedback, email in result.all()]
+# Returns one page of feedback (newest first) paired with the author's email, and the total across
+# every page, for the admin review list. Reads across users, so it must run on the privileged session
+# (RLS would otherwise hide other rows).
+#
+# The total counts the same JOIN the page reads rather than the table, so the two describe one set by
+# construction. Today they cannot disagree — `feedback.user_id` is ON DELETE CASCADE, so a row whose
+# author is gone does not exist — and a mutation sweep confirmed as much by counting the table instead
+# and killing nothing. It is written this way because the equivalence is the FK's to keep, not this
+# query's: relax that constraint and counting the table would page a set the query never returns.
+#
+# The id tiebreak makes the order total — several rows can share a created_at.
+async def list_all_with_email(session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> tuple[list[tuple[Feedback, str]], int]:
+    joined = select(Feedback, User.email).join(User, User.id == Feedback.user_id)
+    count_result = await session.execute(select(func.count()).select_from(joined.subquery()))
+    stmt = apply_page(joined.order_by(Feedback.created_at.desc(), Feedback.id.desc()), page, page_size)
+    result = await session.execute(stmt)
+    return [(feedback, email) for feedback, email in result.all()], count_result.scalar_one()
 
 
 # Persists a new feedback row and flushes to get the id (the service commits).

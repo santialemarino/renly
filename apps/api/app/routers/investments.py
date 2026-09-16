@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.domain.list_scope import ListScope
 from app.models.investment import InvestmentCategory
 from app.schemas.investment import (
@@ -11,18 +12,16 @@ from app.schemas.investment import (
     InvestmentSetCollectionsBody,
     InvestmentUpdate,
 )
-from app.schemas.snapshot import SnapshotCreate, SnapshotResponse
+from app.schemas.snapshot import SnapshotCreate, SnapshotListResponse, SnapshotResponse
 from app.schemas.transaction import (
     TransactionCreate,
+    TransactionListResponse,
     TransactionResponse,
     TransactionUpdate,
 )
 from app.services import investment_service
 
 router = APIRouter(prefix="/investments", tags=["investments"])
-
-DEFAULT_PAGE_SIZE = 20
-MAX_PAGE_SIZE = 100
 
 
 # Lists investments for the user with optional search, collection, category and scope filters and
@@ -31,6 +30,7 @@ MAX_PAGE_SIZE = 100
 async def list_investments(
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     scope: ListScope = Query(
         default=ListScope.private,
         description="Which scopes to return: private (own only, the default), shared (co-owned only) or all (both, grouped).",
@@ -39,8 +39,6 @@ async def list_investments(
     collection_ids: list[int] | None = Query(default=None, description="Filter by collection ids (union)."),
     category: InvestmentCategory | None = Query(default=None, description="Filter by category."),
     active_only: bool = Query(default=True, description="Return only active investments."),
-    page: int = Query(default=1, ge=1, description="Page number (1-based)."),
-    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     sort_by: str | None = Query(default=None, description="Sort field: name, category, base_currency, broker."),
     sort_order: str = Query(default="asc", pattern="^(asc|desc)$", description="Sort direction."),
 ) -> InvestmentListResponse:
@@ -52,8 +50,8 @@ async def list_investments(
         collection_ids=collection_ids,
         category=category,
         active_only=active_only,
-        page=page,
-        page_size=page_size,
+        page=page_query.page,
+        page_size=page_query.page_size,
         sort_by=sort_by,
         sort_order=sort_order,
     )
@@ -137,15 +135,15 @@ async def set_investment_collections(
 # --- Snapshots ---
 
 
-# Lists snapshots for an investment. Returns 404 if investment not found or not owned.
-@router.get("/{investment_id}/snapshots", response_model=list[SnapshotResponse])
+# Lists one page of an investment's snapshots. Returns 404 if investment not found or not owned.
+@router.get("/{investment_id}/snapshots", response_model=SnapshotListResponse)
 async def list_snapshots(
     investment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-) -> list[SnapshotResponse]:
-    snapshots = await investment_service.list_snapshots(session, investment_id, current_user)
-    return [SnapshotResponse.model_validate(s) for s in snapshots]
+    page_query: PageQuery,
+) -> SnapshotListResponse:
+    return await investment_service.list_snapshots(session, investment_id, current_user, page=page_query.page, page_size=page_query.page_size)
 
 
 # Creates or updates a snapshot for the investment and date. One per (investment, date).
@@ -176,18 +174,18 @@ async def create_snapshot(
 # --- Transactions ---
 
 
-# Lists transactions for an investment. Returns 404 if investment not found or not owned.
+# Lists one page of an investment's transactions. Returns 404 if investment not found or not owned.
 @router.get(
     "/{investment_id}/transactions",
-    response_model=list[TransactionResponse],
+    response_model=TransactionListResponse,
 )
 async def list_transactions(
     investment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-) -> list[TransactionResponse]:
-    transactions = await investment_service.list_transactions(session, investment_id, current_user)
-    return [TransactionResponse.model_validate(t) for t in transactions]
+    page_query: PageQuery,
+) -> TransactionListResponse:
+    return await investment_service.list_transactions(session, investment_id, current_user, page=page_query.page, page_size=page_query.page_size)
 
 
 # Returns a single transaction by id. Returns 404 if not found or not owned.

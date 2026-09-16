@@ -27,17 +27,28 @@ import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
+import { TablePagination } from '@/components/table-pagination';
+import { sharedPotPath } from '@/config/routes';
 import type { Pot, PotOwnershipEvent } from '@/lib/api/pots';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface PotLedgerSectionProps {
   pot: Pot;
+  // One page of the ledger, newest first, with the total across every page and the size the server
+  // used. Newest-first since SEC-11: page 1 shows what just happened rather than what happened first.
   events: PotOwnershipEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /*
- * Everything that has ever moved this pot's ownership, in replay order — oldest first, which is the
- * order the balances are derived in and therefore the only order the history reads correctly in.
+ * Everything that has ever moved this pot's ownership, NEWEST first — the reading order, which since
+ * SEC-11 is not the replay order. The two used to be one list: the balances are derived by replaying
+ * the ledger oldest-first, so that is how it was shown. Paginating separated them, and each end now
+ * gets the order it needs — the replay still walks forward, server-side, while page 1 here answers
+ * "what just happened" rather than "what happened first".
  *
  * No unit count appears anywhere: percentages go in and percentages come out, with units only in the
  * middle (U2). Each row's figure is the money that actually moved, except a re-agreement, which moves
@@ -61,9 +72,10 @@ interface PotLedgerSectionProps {
  * that rejected a pending gate in the first place. Silence is the honest default; the positive fact is
  * what gets marked.
  */
-export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
+export function PotLedgerSection({ pot, events, total, page, pageSize }: PotLedgerSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
+  const { navigate, isPending } = useSearchParamsNavigation(sharedPotPath(pot.id));
   const [pendingDelete, setPendingDelete] = useState<PotOwnershipEvent | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -115,50 +127,64 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
     <div className="flex flex-col gap-y-4">
       <SectionHeader title={t('pots.ledger.title')} description={t('pots.ledger.description')} />
 
-      {events.length === 0 ? (
+      {/*
+       * `total`, not the page's own length — the two differ on a page past the end, and answering
+       * "this page holds nothing" with "nothing has ever happened here" is false and a dead end.
+       */}
+      {total === 0 ? (
         <EmptyState
           icon={History}
           title={t('pots.ledger.emptyTitle')}
           description={t('pots.ledger.emptyDescription')}
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-32">{t('pots.ledger.table.date')}</TableHead>
-              <TableHead className="w-36">{t('pots.ledger.table.type')}</TableHead>
-              <TableHead>{t('pots.ledger.table.who')}</TableHead>
-              <TableHead className="w-44 text-right">{t('pots.ledger.table.amount')}</TableHead>
-              <TableHead className="w-28 text-center">{t('pots.ledger.table.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {events.map((event) => (
-              <LedgerRow
-                key={event.id}
-                pot={pot}
-                event={event}
-                disabled={pending}
-                onConfirm={() =>
-                  run(
-                    () => confirmPotOwnershipEvent(pot.id, event.id),
-                    t('pots.ledger.confirmSuccess'),
-                  )
-                }
-                onUnconfirm={() =>
-                  run(
-                    () => unconfirmPotOwnershipEvent(pot.id, event.id),
-                    t('pots.ledger.unconfirmSuccess'),
-                  )
-                }
-                onDelete={() => {
-                  setPendingDelete(event);
-                  setDeleteOpen(true);
-                }}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-32">{t('pots.ledger.table.date')}</TableHead>
+                <TableHead className="w-36">{t('pots.ledger.table.type')}</TableHead>
+                <TableHead>{t('pots.ledger.table.who')}</TableHead>
+                <TableHead className="w-44 text-right">{t('pots.ledger.table.amount')}</TableHead>
+                <TableHead className="w-28 text-center">{t('pots.ledger.table.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event) => (
+                <LedgerRow
+                  key={event.id}
+                  pot={pot}
+                  event={event}
+                  disabled={pending}
+                  onConfirm={() =>
+                    run(
+                      () => confirmPotOwnershipEvent(pot.id, event.id),
+                      t('pots.ledger.confirmSuccess'),
+                    )
+                  }
+                  onUnconfirm={() =>
+                    run(
+                      () => unconfirmPotOwnershipEvent(pot.id, event.id),
+                      t('pots.ledger.unconfirmSuccess'),
+                    )
+                  }
+                  onDelete={() => {
+                    setPendingDelete(event);
+                    setDeleteOpen(true);
+                  }}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalLabel={t('pots.ledger.table.total', { total })}
+          onPageChange={(next) => navigate({ page: next === 1 ? null : String(next) })}
+        />
       )}
 
       {/*

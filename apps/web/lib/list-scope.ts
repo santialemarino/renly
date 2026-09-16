@@ -3,6 +3,7 @@
 // the client bundle; turning it into a value import would break the build for every one of them.
 import type { SnapshotGridInterval } from '@/lib/api/snapshots';
 import type { ListScope, ListSection } from '@/lib/api/types';
+import { API_MAX_PAGE } from '@/lib/constants/api-constants';
 
 /*
  * The scope-grouped list, on the web side: reading the pill's selection out of the URL, and turning a
@@ -22,6 +23,36 @@ import type { ListScope, ListSection } from '@/lib/api/types';
  */
 export function resolveListScope(raw: string | undefined): ListScope {
   return raw === 'private' || raw === 'shared' ? raw : 'all';
+}
+
+/*
+ * A `?page=` value off the URL, as a page number the API will accept.
+ *
+ * Here rather than inline for the reason `resolveGridInterval` is, and because the hand-rolled copies
+ * had drifted into three different answers: the notifications page clamped correctly, the account
+ * ledger clamped `NaN` but not a fractional page, and `/expenses`, `/income` and `/investments` did
+ * `page ? Number(page) : 1` — which sends the literal string `NaN` for `?page=abc`. The API answers
+ * that with a 422, and since `apps/web` has no `error.tsx` a rejected fetch in a server component is
+ * Next's generic crash screen. A hand-edited URL should show page 1, not break the page.
+ *
+ * Anything unusable — absent, non-numeric, zero, negative, fractional, Infinity, or larger than the
+ * API will serve — reads as page 1.
+ *
+ * The upper bound and the SAFE-INTEGER test are both load-bearing, and a finiteness check alone missed
+ * each of them. `?page=1e30` is finite and greater than 1, so it survived — and `String(1e30)` is
+ * "1e+30", which the API's integer parse rejects with a 422, producing exactly the crash screen this
+ * function exists to prevent. `?page=99999999999999999999` stringifies to plain digits the API
+ * accepts, and then overflows the bigint OFFSET it becomes, answering 500. The API refuses both now;
+ * this stops the request being made at all.
+ *
+ * A page PAST the end (but within the bound) is deliberately still forwarded: the API returns an empty
+ * page with the true total, which is what the pager needs to draw itself and step back.
+ */
+export function resolvePageParam(raw: string | undefined): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  const page = Math.floor(parsed);
+  return Number.isSafeInteger(page) && page <= API_MAX_PAGE ? page : 1;
 }
 
 /*

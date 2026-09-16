@@ -32,7 +32,16 @@ export function TablePagination({
 }: TablePaginationProps) {
   const tCommon = useTranslations('common');
 
-  const items = visiblePages(page, totalPages);
+  /*
+   * A page past the end reads as the last real page, and that is what makes an out-of-range page
+   * RECOVERABLE rather than a trap. It is reachable two ways — a hand-typed or bookmarked `?page=50`,
+   * and deleting the last row of the last page, which shortens the list under a page number that no
+   * longer exists. Without the clamp the pager highlights nothing, `visiblePages` drops the current
+   * page (it keeps only `1 < p < totalPages`), and Previous decrements one nonexistent page per click.
+   */
+  const current = Math.min(Math.max(page, 1), totalPages);
+
+  const items = visiblePages(current, totalPages);
 
   return (
     <div className="flex items-center justify-between">
@@ -45,10 +54,10 @@ export function TablePagination({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (page > 1) onPageChange(page - 1);
+                  if (current > 1) onPageChange(current - 1);
                 }}
-                aria-disabled={page <= 1}
-                className={page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                aria-disabled={current <= 1}
+                className={current <= 1 ? 'pointer-events-none opacity-50' : ''}
                 text={tCommon('pagination.previous')}
               />
             </PaginationItem>
@@ -62,7 +71,7 @@ export function TablePagination({
                 <PaginationItem key={item}>
                   <PaginationLink
                     href="#"
-                    isActive={item === page}
+                    isActive={item === current}
                     onClick={(e) => {
                       e.preventDefault();
                       onPageChange(item);
@@ -79,10 +88,10 @@ export function TablePagination({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (page < totalPages) onPageChange(page + 1);
+                  if (current < totalPages) onPageChange(current + 1);
                 }}
-                aria-disabled={page >= totalPages}
-                className={page >= totalPages ? 'pointer-events-none opacity-50' : ''}
+                aria-disabled={current >= totalPages}
+                className={current >= totalPages ? 'pointer-events-none opacity-50' : ''}
                 text={tCommon('pagination.next')}
               />
             </PaginationItem>

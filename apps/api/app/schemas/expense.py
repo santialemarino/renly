@@ -10,6 +10,7 @@ from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ens
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
 from app.schemas.list_scope import ListSectionResponse
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /expenses.
@@ -277,11 +278,8 @@ class CycleAdvancePreviewResponse(BaseModel):
 
 
 # Paginated response for GET /expenses.
-class ExpenseListResponse(BaseModel):
+class ExpenseListResponse(PaginatedResponse):
     items: list[ExpenseResponse] = Field(description="Expenses on this page.")
-    total: int = Field(description="Total matching expenses.")
-    page: int = Field(description="Current page (1-based).")
-    page_size: int = Field(description="Items per page.")
     display_currency: str | None = Field(default=None, description="Target currency for converted amounts (None = original).")
     skipped_currencies: list[str] = Field(
         default_factory=list,

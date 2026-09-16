@@ -9,6 +9,7 @@ from app.models.card_reconciliation import CardReconciliation
 from app.models.card_settlement import CardSettlement
 from app.models.expense_entry import ExpenseEntry
 from app.models.shared_expense import SharedExpense
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
 # List all reconciliations for a card, optionally filtered to a single bucket. Ordered by period_end desc.
@@ -24,6 +25,28 @@ async def list_by_card(
     stmt = stmt.order_by(CardReconciliation.period_end.desc(), CardReconciliation.id.desc())
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+# List one page of a card's reconciliations, newest first, with the total across every page.
+#
+# Its own function rather than page parameters on list_by_card, because that one's other caller builds
+# the statement list and matches a reconciliation to each period it drew — it needs every row, and a
+# page of them would silently show periods as unreconciled.
+async def list_page_by_card(
+    session: AsyncSession,
+    card_id: int,
+    *,
+    currency: str | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[CardReconciliation], int]:
+    stmt = select(CardReconciliation).where(CardReconciliation.card_id == card_id)
+    if currency is not None:
+        stmt = stmt.where(CardReconciliation.currency == currency)
+    count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+    ordered = stmt.order_by(CardReconciliation.period_end.desc(), CardReconciliation.id.desc())
+    result = await session.execute(apply_page(ordered, page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Get a single reconciliation by id and card.
@@ -320,6 +343,7 @@ class CardReconciliationRepository:
     list_affected_by_date = staticmethod(list_affected_by_date)
     list_by_card = staticmethod(list_by_card)
     list_expense_daily_sums = staticmethod(list_expense_daily_sums)
+    list_page_by_card = staticmethod(list_page_by_card)
     list_settlement_daily_sums = staticmethod(list_settlement_daily_sums)
     mark_stale = staticmethod(mark_stale)
     save = staticmethod(save)

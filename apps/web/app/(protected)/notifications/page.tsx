@@ -6,7 +6,7 @@ import { NotificationChannelsSection } from '@/app/(protected)/notifications/_co
 import { NotificationFeedSection } from '@/app/(protected)/notifications/_components/notification-feed-section';
 import { PushSection } from '@/app/(protected)/notifications/_components/push-section';
 import { getNotificationPreferences, getNotifications } from '@/lib/api/notifications';
-import { NOTIFICATION_PAGE_SIZE } from '@/lib/constants/notifications';
+import { resolvePageParam } from '@/lib/list-scope';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -29,13 +29,10 @@ interface NotificationsPageProps {
 export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
   const t = await getTranslations('notifications');
   const { page: rawPage } = await searchParams;
-  // Clamped rather than trusted: `?page=0` would ask for a negative offset and `?page=abc` for NaN,
-  // and both are one hand-typed URL away.
-  const parsed = Number(rawPage);
-  const page = Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : 1;
+  const page = resolvePageParam(rawPage);
 
   const [feed, preferences] = await Promise.all([
-    getNotifications(NOTIFICATION_PAGE_SIZE, (page - 1) * NOTIFICATION_PAGE_SIZE).catch(() => null),
+    getNotifications(page).catch(() => null),
     getNotificationPreferences().catch(() => null),
   ]);
 

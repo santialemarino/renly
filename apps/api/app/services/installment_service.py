@@ -20,6 +20,7 @@ from app.repositories import credit_card_repository, installment_repository
 from app.schemas.installment import InstallmentResponse
 from app.services import account_service, exchange_rate_service
 from app.utils.metrics import RateLookup, convert_optional
+from app.utils.pagination import MAX_LIST_ROWS
 
 # Contractual fields locked once any installment has been charged (current_installment > 1).
 # Always editable: name, current_installment (manual correction), is_active (archive).
@@ -80,6 +81,7 @@ async def list_installments(
         sort_order=sort_order,
         active_only=active_only,
         include_ids=include_ids,
+        limit=MAX_LIST_ROWS,
     )
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
     # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
