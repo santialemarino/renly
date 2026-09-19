@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -113,6 +115,23 @@ async def integrity_error_handler(_request: Request, exc: IntegrityError):
     )
 
 
+# Answers a 422 without echoing what the caller submitted.
+#
+# FastAPI's default validation handler includes an `input` key per error holding the offending value
+# verbatim — so a refused password comes straight back in the response body, and from there into
+# browser devtools, any client-side error reporting, and any proxy or tool that records response
+# bodies. `POST /auth/register` has always done this for a too-short password; capping the length
+# added a second, unauthenticated trigger on `POST /auth/login`.
+#
+# `input` is stripped for EVERY field rather than for password-shaped names. A name filter is the
+# same mistake in a different spelling: it would leak the next field somebody calls `secret`,
+# `passphrase` or `pin`. Nothing needs the value echoed — the caller is the one who sent it — so the
+# loc/msg/type that say WHICH field was wrong and WHY are kept and the value is simply dropped.
+async def validation_error_handler(_request: Request, exc: RequestValidationError):
+    errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
+    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors}))
+
+
 # Catch-all for any unhandled exception (SEC-8). Logs the trace server-side and returns a
 # generic JSON body — never a stack trace — so production leaks nothing. Bypassed when debug
 # is on (non-production), where Starlette returns its own traceback for local debugging.
@@ -160,6 +179,8 @@ _ROUTERS = (
 _EXCEPTION_HANDLERS = {
     # One handler for the whole DomainError family (Starlette matches subclasses via the MRO).
     DomainError: domain_error_handler,
+    # Strips the echoed `input` from 422 bodies so a refused password never comes back in the response.
+    RequestValidationError: validation_error_handler,
     # Adds `code` to any CodedHTTPException while leaving plain HTTPExceptions as {detail}.
     StarletteHTTPException: http_exception_handler,
     IntegrityError: integrity_error_handler,

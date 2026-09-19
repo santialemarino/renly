@@ -215,3 +215,52 @@ class TestEveryPasswordFieldCarriesTheCeiling:
             if not any(isinstance(m, AfterValidator) and m.func is _within_bcrypt_limit for m in field.metadata)
         ]
         assert missing == [], f"password fields that can still reach bcrypt over its limit: {missing}"
+
+
+# --- The 422 body must not echo what was submitted ---
+
+
+class TestAValidationErrorNeverEchoesTheSubmittedValue:
+    # FastAPI's default validation handler puts the offending value in an `input` key, so a refused
+    # password came back in the response body — into browser devtools, any client-side error
+    # reporting, and anything that records response bodies. `POST /auth/register` has always done
+    # this for a too-short password; capping the length gave `POST /auth/login` the same trigger, and
+    # that one is unauthenticated.
+    #
+    # Driven through the real app rather than by calling the handler, because what is being asserted
+    # is the SHAPE OF THE RESPONSE a caller actually receives.
+
+    @staticmethod
+    def _client():
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        return TestClient(app, raise_server_exceptions=False)
+
+    def test_a_refused_password_does_not_come_back_in_the_response(self):
+        secret = "aaaaaaaaaaaaaaaaaaaa-THE-PASSWORD-" + "z" * 60  # over the byte ceiling
+        response = self._client().post("/auth/login", json={"email": "nobody@example.com", "password": secret})
+
+        assert response.status_code == 422
+        assert secret not in response.text, "the submitted password was echoed back in the 422 body"
+
+    def test_a_too_short_password_does_not_come_back_either(self):
+        # The pre-existing trigger, pinned in the same place so neither can regress alone.
+        secret = "shortpw1234"
+        response = self._client().post("/auth/register", json={"name": "X", "email": "nobody@example.com", "password": secret})
+
+        assert response.status_code == 422
+        assert secret not in response.text
+
+    def test_the_422_still_says_which_field_and_why(self):
+        # Stripping the value must not blind the caller: without loc/msg a client cannot tell the user
+        # which field to fix, and the fix would have traded one defect for another.
+        response = self._client().post("/auth/login", json={"email": "nobody@example.com", "password": "a" * 200})
+
+        body = response.json()
+        assert isinstance(body["detail"], list) and body["detail"], "the error list went missing"
+        first = body["detail"][0]
+        assert first["loc"][-1] == "password"
+        assert "72 bytes" in first["msg"]
+        assert "input" not in first
