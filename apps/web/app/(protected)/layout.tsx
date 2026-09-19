@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { LanguageAutoSync } from '@/app/(protected)/_components/language-auto-sync';
+import { MobileNavBar } from '@/app/(protected)/_components/mobile-nav-bar';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
@@ -96,10 +97,16 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         initialExpanded={initialExpanded}
         showDisclosureToggle={showDisclosureToggle}
       />
+      {/*
+       * `SidebarInset` is a plain column (see its definition) and this `<main>` is the page's only
+       * one — it used to be nested inside a second `<main>` that `SidebarInset` rendered itself,
+       * which is what `landmark-no-duplicate-main` and `landmark-main-is-top-level` fire on. The
+       * mobile header is its SIBLING rather than its child, because a `header` inside `main` maps to
+       * generic and would not be a banner at all.
+       */}
       <SidebarInset className="min-w-0">
-        <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
-          {children}
-        </main>
+        <MobileNavBar />
+        <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -39,6 +39,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
@@ -213,6 +214,7 @@ export function AppSidebar({
   const t = useTranslations('sidebar');
   const pathname = usePathname();
   const router = useRouter();
+  const { setOpenMobile } = useSidebar();
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -250,6 +252,34 @@ export function AppSidebar({
 
   useEffect(() => setMounted(true), []);
 
+  /*
+   * Closes the mobile sheet when a destination is CHOSEN, not when it arrives.
+   *
+   * On a phone the sheet is a full overlay, so while it is open the reader cannot see that anything
+   * happened. Keying only on `pathname` sounds sufficient and is not: the route does not change
+   * until the server responds, which on a cold dev server measured over two seconds and on cellular
+   * is worse — the whole time, the reader is looking at the menu they just tapped with the old item
+   * still highlighted. Closing on the click gives them the page back immediately.
+   *
+   * One delegated handler rather than a prop on each link: the links are spread across five sites
+   * (NavSubItem for the Finances / Commitments / Settings / Admin groups, the Dashboard link, and
+   * the help link), so per-link wiring is five chances to miss one and a sixth the next time
+   * somebody adds a destination.
+   */
+  const closeSheetOnDestinationClick = (event: React.MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('a[href]')) setOpenMobile(false);
+  };
+
+  /*
+   * And the catch-all: anything that changes the route WITHOUT a click in the sheet — a redirect, a
+   * programmatic push, the browser's back button — still has to leave the reader on the page rather
+   * than under the menu. A no-op on desktop, where the sidebar is never a sheet, and free when the
+   * sheet is already closed because React bails out on an unchanged state value.
+   */
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+
   async function handleLogout() {
     setLoggingOut(true);
     await userSignOut();
@@ -265,7 +295,7 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar className="border-sidebar-border shadow-lg">
+    <Sidebar className="border-sidebar-border shadow-lg" onClick={closeSheetOnDestinationClick}>
       <SidebarHeader className="flex-row items-center justify-between pl-4 pr-3 py-5 border-b border-sidebar-border">
         <Brand name={t('brand')} size="lg" />
         <NotificationBell notifications={notifications} unread={unreadNotifications} />
