@@ -46,6 +46,20 @@ class PriceProviderUnavailable(Exception):
     pass
 
 
+# How an httpx failure is described in a PriceProviderUnavailable message — and therefore in the log
+# line the refresh writes, and in Sentry when a DSN is configured.
+#
+# The exception's own `str()` is deliberately not used: httpx builds it from the FULL request URL, so
+# any credential a provider takes as a query parameter is reproduced verbatim in the message. That is
+# how the Finnhub key reached the logs. Keeping URLs out of these messages entirely means a provider
+# added later cannot reintroduce the leak by taking its key the same way — the class name and the
+# status code are what an operator actually needs ("the provider answered 401", not "the market is
+# quiet"), and they carry nothing that has to be redacted afterwards.
+def _describe_http_failure(exc: Exception) -> str:
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return f"{type(exc).__name__} (HTTP {status})" if status is not None else type(exc).__name__
+
+
 # Describes a price provider: its source name, fetch function, and capabilities.
 # is_configured answers whether the provider can run at all in this deployment — a provider needing a
 # credential that is unset is SKIPPED by the chain rather than counted as a failure, so an optional
@@ -113,7 +127,7 @@ async def fetch_yfinance(
     except Exception as exc:
         # The library breaking is the failure this chain most expects: yfinance scrapes an endpoint it
         # does not own, so it breaks independently of Yahoo being up.
-        raise PriceProviderUnavailable(f"yfinance fetch failed for {ticker}: {exc}") from exc
+        raise PriceProviderUnavailable(f"yfinance fetch failed for {ticker}: {_describe_http_failure(exc)}") from exc
 
 
 # Crypto symbol → CoinGecko coin id, for the assets a Renly user is realistically holding.
@@ -173,7 +187,7 @@ async def fetch_coingecko(
             response.raise_for_status()
             data = response.json()
     except httpx.HTTPError as exc:
-        raise PriceProviderUnavailable(f"CoinGecko fetch failed for {ticker}: {exc}") from exc
+        raise PriceProviderUnavailable(f"CoinGecko fetch failed for {ticker}: {_describe_http_failure(exc)}") from exc
 
     # CoinGecko reports a rate limit as HTTP 200 with the error in the BODY, so raise_for_status()
     # above does not fire and `prices` below is simply absent. Read as an empty answer that is exactly
@@ -196,6 +210,9 @@ async def fetch_coingecko(
 # Finnhub quote API. Free tier is 60 calls/minute and needs a key; unset means the chain skips it.
 FINNHUB_QUOTE_URL = "https://finnhub.io/api/v1/quote"
 FINNHUB_TIMEOUT = 15.0
+# Finnhub's documented header alternative to the `token` query parameter. See fetch_finnhub for why
+# this repo will only ever use the header form.
+FINNHUB_TOKEN_HEADER = "X-Finnhub-Token"
 
 # data912: free, keyless Argentine market data — one call returns every symbol on that board.
 DATA912_BASE = "https://data912.com/live"
@@ -231,11 +248,19 @@ async def fetch_finnhub(
 
     try:
         async with httpx.AsyncClient(timeout=FINNHUB_TIMEOUT) as client:
-            response = await client.get(FINNHUB_QUOTE_URL, params={"symbol": ticker, "token": settings.finnhub_api_key})
+            # The key goes in a HEADER, never a query parameter. Finnhub accepts both, but httpx builds
+            # an HTTPStatusError's message from the full request URL — so a `?token=` form puts the key
+            # into every "provider unavailable" log line the moment Finnhub answers 401 or 429, and from
+            # there into Sentry. A header is not part of that message.
+            response = await client.get(
+                FINNHUB_QUOTE_URL,
+                params={"symbol": ticker},
+                headers={FINNHUB_TOKEN_HEADER: settings.finnhub_api_key},
+            )
             response.raise_for_status()
             payload = response.json()
     except httpx.HTTPError as exc:
-        raise PriceProviderUnavailable(f"Finnhub fetch failed for {ticker}: {exc}") from exc
+        raise PriceProviderUnavailable(f"Finnhub fetch failed for {ticker}: {_describe_http_failure(exc)}") from exc
 
     # Finnhub answers an unknown symbol with a 200 and every field zeroed, so a zero current price is
     # "no such symbol" rather than a real quote — an empty answer, not a provider failure.
@@ -281,7 +306,7 @@ async def _load_data912_cache() -> None:
         boards = await asyncio.gather(*[_board(name) for name in DATA912_BOARDS])
     except (httpx.HTTPError, ValueError) as exc:
         _data912_load_failed = True
-        raise PriceProviderUnavailable(f"data912 board download failed: {exc}") from exc
+        raise PriceProviderUnavailable(f"data912 board download failed: {_describe_http_failure(exc)}") from exc
 
     prices: dict[str, Decimal] = {}
     for rows in boards:
@@ -353,7 +378,7 @@ async def fetch_coinbase(
             response.raise_for_status()
             payload = response.json()
     except httpx.HTTPError as exc:
-        raise PriceProviderUnavailable(f"Coinbase fetch failed for {symbol}: {exc}") from exc
+        raise PriceProviderUnavailable(f"Coinbase fetch failed for {symbol}: {_describe_http_failure(exc)}") from exc
 
     amount = (payload.get("data") or {}).get("amount")
     if not amount:
