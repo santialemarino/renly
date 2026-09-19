@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { LanguageAutoSync } from '@/app/(protected)/_components/language-auto-sync';
+import { MobileNavBar } from '@/app/(protected)/_components/mobile-nav-bar';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
@@ -97,9 +98,15 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         showDisclosureToggle={showDisclosureToggle}
       />
       <SidebarInset className="min-w-0">
-        <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
+        <MobileNavBar />
+        {/*
+         * A `div`, not a `main`: `SidebarInset` already renders the page's `<main>`, so the element
+         * that used to be here made a second one nested inside the first — three axe landmark
+         * violations on every protected route. The scroll container stays; only the tag changed.
+         */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
           {children}
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
