@@ -39,6 +39,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
@@ -213,6 +214,7 @@ export function AppSidebar({
   const t = useTranslations('sidebar');
   const pathname = usePathname();
   const router = useRouter();
+  const { setOpenMobile } = useSidebar();
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -249,6 +251,20 @@ export function AppSidebar({
     : 'overflow-hidden';
 
   useEffect(() => setMounted(true), []);
+
+  /*
+   * Closes the mobile sheet once a destination has been chosen. On a phone the sheet is a full
+   * overlay, so without this the reader taps a nav item, the page changes BEHIND the panel, and they
+   * are left looking at the menu they just used with no indication anything happened.
+   *
+   * Keyed on `pathname` rather than wired onto each link: the sheet has to close for every way of
+   * leaving the page, and there are three (a group's child link, the Dashboard link, and the brand),
+   * so a per-link handler is three chances to miss one. A no-op on desktop, where the sidebar is
+   * never a sheet — the same reason the quick-add trigger can call it unconditionally.
+   */
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
 
   async function handleLogout() {
     setLoggingOut(true);
