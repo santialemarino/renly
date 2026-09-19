@@ -5,55 +5,77 @@ from app.main import app
 
 # The first contract sentence `docs/public/api-reference.md` states is where the API lives, and it was
 # wrong: it said `Base URL: /api`, while every router is mounted at the root. An integrator following
-# the document built `https://host/api/investments` and got a 404 on every single call — total failure,
-# no partial success, and the document also describes API-key auth, so third-party integration is an
-# intended use rather than a hypothetical one.
+# the document built `https://host/api/investments` and got a 404 on every single call — total
+# failure, no partial success, and the document also describes API-key auth, so third-party
+# integration is an intended use rather than a hypothetical one.
 #
-# Nothing compared the claim to the app, which is why a wrong first line survived. This does: the
-# prefix the document promises is derived from the document, the prefix the app actually serves is
-# derived from the app, and the two are asserted against each other rather than against a literal.
+# This asserts the document's OWN endpoint table against the app's real routes, with the documented
+# prefix applied to each row. That shape is the second attempt, and the first one is worth recording
+# because it read as though it compared two sources while one side was a constant: it derived "the
+# prefix the app serves" from the common first path segment, which CANNOT work — `/health`, `/docs`,
+# `/redoc` and `/openapi.json` sit at the root beside the routers, so the set never collapses to one
+# member and the function could only ever return "". It was also inverted: it passed when the app
+# moved under a prefix and the document did not, and FAILED on a document correctly updated to match.
+#
+# Comparing the tables has no heuristic in it and is non-vacuous in both directions. Document says
+# `/api` while the app serves at the root: all 191 rows fail. App moves under a prefix while the
+# document is stale: all 191 rows fail. Both correct: green. It also survives the two shapes that
+# defeated the first version — a `root_path` deployment, and an app that adds a `/` route.
 
 _DOC = Path(__file__).resolve().parents[4] / "docs" / "public" / "api-reference.md"
+
+# A documented endpoint row: | `GET` | `/investments` | description |
+_ROW = re.compile(r"^\|\s*`(GET|POST|PUT|PATCH|DELETE)`\s*\|\s*`([^`]+)`", re.MULTILINE)
+
+
+# A path with every parameter reduced to a placeholder, so `/accounts/{id}` and `/accounts/{account_id}`
+# compare equal.
+#
+# Parameter NAMES are a documentation choice — the reference writes `{id}` and `{rid}` where the
+# routers write `{account_id}` and `{reconciliation_id}` — while the SHAPE is the contract an
+# integrator builds a URL from. Comparing the names produced 108 false mismatches out of 191 rows and
+# would have made this guard unusable; comparing shapes still catches a segment added, removed or
+# reordered, which is what actually breaks a caller.
+def _shape(path: str) -> str:
+    return re.sub(r"\{[^}]*\}", "{}", path)
 
 
 # The path prefix the document tells an integrator to put in front of every path, or "" for none.
 #
-# Parsed rather than restated so the assertion is about the sentence a reader actually gets. The
-# match is asserted to exist, so a reworded or deleted line fails loudly here instead of quietly
-# comparing two empty strings — which would agree perfectly.
+# Anchored to a backticked path IMMEDIATELY after "Base URL:", the only position that states a
+# prefix — a backticked path later in the sentence is an example, and the current wording ends with
+# one. The line is asserted to exist so a reworded heading fails loudly here rather than silently
+# yielding "" and agreeing with an app that happens to serve at the root.
 def _documented_prefix() -> str:
     line = re.search(r"^Base URL:.*$", _DOC.read_text(), re.MULTILINE)
     assert line is not None, f"no 'Base URL:' line in {_DOC} — reword the guard with the document"
-    # Anchored to a backticked path IMMEDIATELY after "Base URL:", which is the only position that
-    # states a prefix. Any backticked path later in the sentence is an EXAMPLE — the current wording
-    # ends with one — and reading that as the prefix would fail the guard for a document that is
-    # perfectly correct.
     claim = re.match(r"^Base URL:\s*`(/[^`]*)`", line.group(0))
     return claim.group(1).rstrip("/") if claim else ""
 
 
-# The prefix the app actually serves every route under, from the app rather than from a constant.
-def _served_prefix() -> str:
-    paths = [route.path for route in app.routes if getattr(route, "path", "").startswith("/")]
-    assert len(paths) > 50, f"route scan found only {len(paths)} paths — it is not seeing the app"
-    # The API mounts its routers with no prefix, so the common leading segment is nothing. Derived as
-    # "what every documented-style path shares" rather than assumed, so a future decision to mount
-    # under a prefix is picked up here instead of silently disagreeing with the document.
-    if app.root_path:
-        return app.root_path.rstrip("/")
-    first_segments = {path.split("/")[1] for path in paths if len(path.split("/")) > 1}
-    return "" if len(first_segments) > 1 else f"/{first_segments.pop()}"
+# Every (method, path) pair the document promises, as written.
+def _documented_routes() -> set[tuple[str, str]]:
+    rows = {(method, _shape(path)) for method, path in _ROW.findall(_DOC.read_text())}
+    assert len(rows) > 150, f"only {len(rows)} endpoint rows parsed out of the document — its table shape changed"
+    return rows
 
 
-class TestTheDocumentedBaseUrlIsWhereTheApiActuallyIs:
-    def test_the_document_promises_the_prefix_the_app_serves(self):
-        documented, served = _documented_prefix(), _served_prefix()
-        assert documented == served, (
-            f"api-reference.md tells integrators to use {documented!r} but the app serves routes under {served!r} — every documented path would 404"
-        )
+# Every (method, path) pair the app actually serves, including the prefix a root_path deployment adds.
+def _served_routes() -> set[tuple[str, str]]:
+    served = {
+        (method, _shape(f"{app.root_path.rstrip('/')}{route.path}")) for route in app.routes for method in (getattr(route, "methods", None) or ())
+    }
+    assert len(served) > 150, f"route scan found only {len(served)} method+path pairs — it is not seeing the app"
+    return served
 
-    def test_a_known_route_is_reachable_at_the_documented_prefix(self):
-        # The same fact from the other side, so the pair cannot agree on a prefix that is wrong for
-        # both. `/investments` is documented and real; under a `/api` claim this is the call that 404s.
+
+class TestTheDocumentedEndpointsAreWhereTheApiServesThem:
+    def test_every_documented_endpoint_exists_at_the_documented_base_url(self):
         prefix = _documented_prefix()
-        assert f"{prefix}/investments" in {route.path for route in app.routes}
+        served = _served_routes()
+        missing = sorted((method, path) for method, path in _documented_routes() if (method, _shape(f"{prefix}{path}")) not in served)
+        assert missing == [], (
+            f"{len(missing)} documented endpoints do not exist at the documented base URL "
+            f"{prefix or '(the host root)'!r} — an integrator following the document would get a 404. "
+            f"First few: {missing[:5]}"
+        )

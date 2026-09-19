@@ -9,6 +9,10 @@ on:
       - main
     paths:
       - 'apps/api/**'
+      # The API suite asserts the public API reference against the real route table, so a change to
+      # that document has to run it. Without this, a PR editing only the document — which is exactly
+      # the change the guard exists to police — triggers no workflow at all.
+      - 'docs/public/api-reference.md'
   workflow_dispatch:
 
 jobs:
