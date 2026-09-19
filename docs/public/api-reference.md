@@ -69,7 +69,7 @@ Authenticated; each sensitive action re-verifies the current password.
 | `GET`    | `/me/export`          | Download the user's full data set as a JSON file. Excludes password and API-key secrets.   |
 | `DELETE` | `/me`                 | Permanently delete the account. Body: `{ password, confirmation }` (confirmation = email). |
 
-Registration requires a valid email address and a password of at least 12 characters that has not appeared in a known public data breach. Emails are case-insensitive (`Foo@x.com` and `foo@x.com` are the same account). To protect privacy, registration, verification, password-reset, and email-change requests all return a **uniform response** that never reveals whether an email already has an account — the relevant message is emailed to the address instead. A new account must verify its email (via the emailed link) before it can log in.
+Registration requires a valid email address and a password of at least 12 characters, at most 72 bytes once UTF-8 encoded, that has not appeared in a known public data breach. The upper bound is the limit of the hashing algorithm and applies to every endpoint that takes a password, not just registration; note it is counted in BYTES, so an accented or emoji passphrase reaches it sooner than its character count suggests. Emails are case-insensitive (`Foo@x.com` and `foo@x.com` are the same account). To protect privacy, registration, verification, password-reset, and email-change requests all return a **uniform response** that never reveals whether an email already has an account — the relevant message is emailed to the address instead. A new account must verify its email (via the emailed link) before it can log in.
 
 ---
 

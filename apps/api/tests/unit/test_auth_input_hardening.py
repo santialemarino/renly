@@ -1,14 +1,16 @@
 import hashlib
+import importlib
+import pkgutil
+from typing import get_args
 
 import bcrypt
 import httpx
 import pytest
 from pydantic import AfterValidator, BaseModel, ValidationError
 
+from app.domain.password import MAX_PASSWORD_BYTES
 from app.repositories import user_repository
-from app.schemas import auth as auth_schemas
-from app.schemas import user_account as user_account_schemas
-from app.schemas.auth import MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, LoginRequest, RegisterRequest, _within_bcrypt_limit
+from app.schemas.auth import MIN_PASSWORD_LENGTH, LoginRequest, RegisterRequest, _within_bcrypt_limit
 from app.services import auth_service
 
 # Input-hardening coverage for AUTH-3 (password policy + HIBP breach check) and
@@ -187,24 +189,53 @@ class TestPasswordByteCeiling:
 
 
 class TestEveryPasswordFieldCarriesTheCeiling:
-    # Derived from the schema modules rather than listed, because the defect being guarded is a field
-    # that does not carry the rule — and a hand-written list is exactly how the seven existing fields
-    # all came to be missing it.
-    def _password_fields(self):
+    # Derived rather than listed, because the defect being guarded IS a field that does not carry the
+    # rule — a hand-written list is how all seven came to be missing it. Two earlier versions of this
+    # scan were themselves too narrow, and both are worth stating:
+    #
+    #   * it iterated two hard-coded modules, so the list had only moved up a level — a password field
+    #     in any third schema module would have sailed past it;
+    #   * it read `field.metadata`, which is EMPTY when the annotation is `PlainPassword | None`,
+    #     so an optional password field failed the guard while being perfectly correct. That is the
+    #     worse failure: a red test on right code is what teaches people to route around a guard.
+    #
+    # So: every module under `app.schemas` is walked, and the annotation is searched recursively for
+    # the validator rather than only at the top level.
+
+    @staticmethod
+    def _carries_the_cap(annotation) -> bool:
+        # Recursive because the validator can sit one level down — inside `Optional[...]`'s args, or
+        # inside a nested Annotated.
+        for meta in get_args(annotation):
+            if isinstance(meta, AfterValidator) and meta.func is _within_bcrypt_limit:
+                return True
+            if get_args(meta) and TestEveryPasswordFieldCarriesTheCeiling._carries_the_cap(meta):
+                return True
+        return False
+
+    @staticmethod
+    def _password_fields():
         found = []
-        for module in (auth_schemas, user_account_schemas):
+        package = importlib.import_module("app.schemas")
+        for module_info in pkgutil.iter_modules(package.__path__):
+            module = importlib.import_module(f"app.schemas.{module_info.name}")
             for name in dir(module):
                 model = getattr(module, name)
                 if not (isinstance(model, type) and issubclass(model, BaseModel)):
                     continue
                 for field_name, field in model.model_fields.items():
-                    if "password" in field_name and "token" not in field_name:
-                        found.append((model.__name__, field_name, field))
+                    # A credential, not a fact ABOUT one: `password_changed_at` is a timestamp and
+                    # `password_hash` is the stored digest — neither is ever handed to bcrypt raw.
+                    if "password" not in field_name or field_name.endswith(("_at", "_hash")) or "token" in field_name:
+                        continue
+                    found.append((model.__name__, field_name, field))
         return found
 
-    def test_the_scan_finds_every_known_password_field(self):
-        # Anti-vacuity: without this, a scan that stopped matching would make the assertion below pass
-        # over an empty list. Seven is what the codebase has today; a new one raises this number.
+    def test_the_scan_walks_every_schema_module_and_finds_the_known_fields(self):
+        # Anti-vacuity on both halves: a scan that stopped matching, or one that only reached a couple
+        # of modules, would make the assertion below pass over too small a set.
+        modules = list(pkgutil.iter_modules(importlib.import_module("app.schemas").__path__))
+        assert len(modules) > 20, f"only {len(modules)} schema modules walked — the scan is not seeing the package"
         fields = self._password_fields()
         assert len(fields) >= 7, f"scan found only {len(fields)} password fields: {fields}"
 
@@ -212,7 +243,10 @@ class TestEveryPasswordFieldCarriesTheCeiling:
         missing = [
             f"{model}.{field_name}"
             for model, field_name, field in self._password_fields()
-            if not any(isinstance(m, AfterValidator) and m.func is _within_bcrypt_limit for m in field.metadata)
+            if not (
+                any(isinstance(m, AfterValidator) and m.func is _within_bcrypt_limit for m in field.metadata)
+                or self._carries_the_cap(field.annotation)
+            )
         ]
         assert missing == [], f"password fields that can still reach bcrypt over its limit: {missing}"
 
@@ -264,3 +298,35 @@ class TestAValidationErrorNeverEchoesTheSubmittedValue:
         assert first["loc"][-1] == "password"
         assert "72 bytes" in first["msg"]
         assert "input" not in first
+
+
+# --- The other value this app hands to bcrypt: the raw API key ---
+
+
+class TestAnOverLongApiKeyIsRefusedRatherThanRaising:
+    # `verify_api_key` is the only bcrypt input that never passes through a request schema — it is the
+    # raw `Authorization: Bearer` credential — so capping the password FIELDS left this path able to
+    # turn any over-long Bearer value into an unhandled ValueError, i.e. an unauthenticated 500 plus a
+    # Sentry event. Refused rather than truncated: a real key is `secrets.token_urlsafe(32)`, always
+    # 43 characters, so anything past the ceiling cannot be one.
+
+    @pytest.mark.asyncio
+    async def test_a_bearer_value_over_the_ceiling_returns_none(self):
+        from app.services import api_key_service
+
+        # No session work should happen at all, so a session that explodes on use proves the guard
+        # returned before touching the database.
+        class _ExplodingSession:
+            async def execute(self, *_args, **_kwargs):
+                raise AssertionError("verify_api_key queried before rejecting an over-long key")
+
+            async def commit(self):
+                raise AssertionError("verify_api_key committed before rejecting an over-long key")
+
+        assert await api_key_service.verify_api_key(_ExplodingSession(), "k" * (MAX_PASSWORD_BYTES + 1)) is None
+
+    @pytest.mark.asyncio
+    async def test_the_refused_value_is_one_bcrypt_would_have_raised_on(self):
+        # Ties the guard to its reason rather than to a number restated here.
+        with pytest.raises(ValueError):
+            bcrypt.checkpw(("k" * (MAX_PASSWORD_BYTES + 1)).encode(), bcrypt.hashpw(b"x", bcrypt.gensalt(4)))
