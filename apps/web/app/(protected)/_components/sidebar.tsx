@@ -253,14 +253,28 @@ export function AppSidebar({
   useEffect(() => setMounted(true), []);
 
   /*
-   * Closes the mobile sheet once a destination has been chosen. On a phone the sheet is a full
-   * overlay, so without this the reader taps a nav item, the page changes BEHIND the panel, and they
-   * are left looking at the menu they just used with no indication anything happened.
+   * Closes the mobile sheet when a destination is CHOSEN, not when it arrives.
    *
-   * Keyed on `pathname` rather than wired onto each link: the sheet has to close for every way of
-   * leaving the page, and there are three (a group's child link, the Dashboard link, and the brand),
-   * so a per-link handler is three chances to miss one. A no-op on desktop, where the sidebar is
-   * never a sheet — the same reason the quick-add trigger can call it unconditionally.
+   * On a phone the sheet is a full overlay, so while it is open the reader cannot see that anything
+   * happened. Keying only on `pathname` sounds sufficient and is not: the route does not change
+   * until the server responds, which on a cold dev server measured over two seconds and on cellular
+   * is worse — the whole time, the reader is looking at the menu they just tapped with the old item
+   * still highlighted. Closing on the click gives them the page back immediately.
+   *
+   * One delegated handler rather than a prop on each link: the links are spread across five sites
+   * (NavSubItem for the Finances / Commitments / Settings / Admin groups, the Dashboard link, and
+   * the help link), so per-link wiring is five chances to miss one and a sixth the next time
+   * somebody adds a destination.
+   */
+  const closeSheetOnDestinationClick = (event: React.MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('a[href]')) setOpenMobile(false);
+  };
+
+  /*
+   * And the catch-all: anything that changes the route WITHOUT a click in the sheet — a redirect, a
+   * programmatic push, the browser's back button — still has to leave the reader on the page rather
+   * than under the menu. A no-op on desktop, where the sidebar is never a sheet, and free when the
+   * sheet is already closed because React bails out on an unchanged state value.
    */
   useEffect(() => {
     setOpenMobile(false);
@@ -281,7 +295,7 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar className="border-sidebar-border shadow-lg">
+    <Sidebar className="border-sidebar-border shadow-lg" onClick={closeSheetOnDestinationClick}>
       <SidebarHeader className="flex-row items-center justify-between pl-4 pr-3 py-5 border-b border-sidebar-border">
         <Brand name={t('brand')} size="lg" />
         <NotificationBell notifications={notifications} unread={unreadNotifications} />

@@ -97,16 +97,16 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         initialExpanded={initialExpanded}
         showDisclosureToggle={showDisclosureToggle}
       />
+      {/*
+       * `SidebarInset` is a plain column (see its definition) and this `<main>` is the page's only
+       * one — it used to be nested inside a second `<main>` that `SidebarInset` rendered itself,
+       * which is what `landmark-no-duplicate-main` and `landmark-main-is-top-level` fire on. The
+       * mobile header is its SIBLING rather than its child, because a `header` inside `main` maps to
+       * generic and would not be a banner at all.
+       */}
       <SidebarInset className="min-w-0">
         <MobileNavBar />
-        {/*
-         * A `div`, not a `main`: `SidebarInset` already renders the page's `<main>`, so the element
-         * that used to be here made a second one nested inside the first — three axe landmark
-         * violations on every protected route. The scroll container stays; only the tag changed.
-         */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
-          {children}
-        </div>
+        <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -2,31 +2,34 @@ import { getTranslations } from 'next-intl/server';
 
 import { SidebarTrigger } from '@repo/ui/components';
 import { Brand } from '@/components/brand';
+import { ROUTES } from '@/config/routes';
 
 /*
- * The small-screen navigation bar, and the only way into the nav below `md`.
+ * The small-screen top bar, and the only way into the navigation below `md`.
  *
- * Under `MOBILE_BREAKPOINT` (768px) the sidebar renders as a Radix Sheet, and a closed Sheet is
- * UNMOUNTED — so the whole nav is absent from the DOM until something calls `toggleSidebar()`.
- * `SidebarTrigger` has always existed for exactly this and was simply never rendered, which left
- * every route below 768px with no way to reach any other route, quick-add, the currency switcher,
- * settings, or sign-out.
+ * Under that width the sidebar renders as a Radix Sheet, and a closed Sheet is UNMOUNTED — so the
+ * whole nav is absent from the DOM until something calls `toggleSidebar()`. `SidebarTrigger` has
+ * always existed for exactly this and was simply never rendered, which left every route below the
+ * breakpoint with no way to reach any other route, quick-add, the currency switcher, settings, or
+ * sign-out.
  *
- * Hidden from `md` up, where the sidebar is permanently visible and a second trigger would be noise.
- * The breakpoint is the SAME number on both sides: Tailwind's `md` is 768px and `useIsMobile()`
- * matches `max-width: 767px`, so the bar appears exactly where the Sheet takes over, with no width
- * at which both or neither is shown.
+ * `md:hidden` is safe to pair with the Sheet because `useIsMobile()` now reads the same `48rem` media
+ * query Tailwind compiles `md:` to. That was NOT true before: the hook compared `window.innerWidth`
+ * against 768 pixels, so any reader whose browser font size moved Tailwind's `md` away from 768px got
+ * a band where the sidebar was hidden, this bar was shown, and the trigger was inert.
  *
- * A plain `div` rather than a `header`: the Sheet already carries the navigation landmark, so a
- * second landmark here would only add a region a screen reader has to step through on the way to it.
+ * `sticky` because this is the only route out of the page on a phone. Static, it scrolls off the top
+ * of a 2600px dashboard on the first flick and the reader has to scroll all the way back to leave.
  */
 export async function MobileNavBar() {
   const t = await getTranslations('sidebar');
 
   return (
-    <div className="flex md:hidden items-center shrink-0 px-4 py-3 gap-x-2 bg-background border-b border-sidebar-border">
+    <header className="sticky top-0 z-10 flex md:hidden items-center shrink-0 px-4 py-3 gap-x-2 bg-background border-b border-sidebar-border">
       <SidebarTrigger />
-      <Brand name={t('brand')} size="md" />
-    </div>
+      {/* The wordmark is the conventional "back to the start" target in a phone header, and it is the
+          only always-present one here — every other destination lives behind the trigger. */}
+      <Brand name={t('brand')} href={ROUTES.dashboard} size="md" />
+    </header>
   );
 }
