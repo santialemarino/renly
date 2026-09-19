@@ -2,7 +2,8 @@
 
 All endpoints require authentication via a Bearer token (JWT) in the `Authorization` header, except for the pre-auth endpoints under `/auth` (register, login, email verification, and password reset). Some endpoints also accept API key authentication (see API Keys section).
 
-Base URL: `/api` (all paths below are relative to this).
+Base URL: the API host root — there is no path prefix. Every path below is absolute, so
+`GET /investments` is `https://<your-api-host>/investments`.
 
 ---
 
