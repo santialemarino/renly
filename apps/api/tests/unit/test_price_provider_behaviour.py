@@ -16,17 +16,14 @@ from app.services.price_providers import PriceProviderUnavailable
 
 
 # A fake httpx.AsyncClient yielding a canned status + JSON, or raising.
+#
+# It returns a REAL httpx.Response built on a REAL httpx.Request, so `raise_for_status()` is httpx's
+# own and produces httpx's own message — which is built from the full request URL. That realism is
+# load-bearing rather than tidiness: a hand-rolled `HTTPStatusError("401", request=None)` stringifies
+# to "401", so every assertion about what an error message leaks would pass over a message that could
+# not contain a URL in the first place. Verified by mutation — with the simpler stub, two of the three
+# key-leak tests below passed against the leaking code.
 def _fake_client(*, json_body=None, status: int = 200, error: Exception | None = None, captured: list | None = None):
-    class _Response:
-        status_code = status
-
-        def raise_for_status(self):
-            if status >= 400:
-                raise httpx.HTTPStatusError(f"{status}", request=None, response=None)
-
-        def json(self):
-            return json_body
-
     class _Client:
         def __init__(self, *args, **kwargs):
             pass
@@ -39,10 +36,17 @@ def _fake_client(*, json_body=None, status: int = 200, error: Exception | None =
 
         async def get(self, url, params=None, headers=None):
             if captured is not None:
-                captured.append((url, params))
+                # Headers are captured too, because WHERE a credential travels is itself a thing tests
+                # assert on — see TestTheFinnhubKeyNeverReachesALogLine.
+                captured.append((url, params, headers))
             if error is not None:
                 raise error
-            return _Response()
+            request = httpx.Request("GET", url, params=params, headers=headers)
+            # `json=None` would serialise an EMPTY body, so a later `.json()` raises JSONDecodeError
+            # rather than returning None the way the old stub did. Only pass a body when there is one.
+            if json_body is None:
+                return httpx.Response(status, request=request)
+            return httpx.Response(status, request=request, json=json_body)
 
     return _Client
 
@@ -286,3 +290,113 @@ class TestACachedProviderRemembersThatItFailed:
 
         assert price_providers._data912_load_failed is False
         assert price_providers._cafci_load_failed is False
+
+
+# The secret used throughout this section. Distinctive on purpose: every assertion below is "this
+# string appears nowhere", so it has to be one that could not occur by accident.
+_SECRET = "FAKE-FINNHUB-KEY-a1b2c3-SECRET"
+
+
+class TestTheFinnhubKeyNeverReachesALogLine:
+    # Finnhub is the one provider taking a credential, and it accepts it either as a `token` query
+    # parameter or as a header. The two are NOT equivalent for anything downstream: httpx builds an
+    # HTTPStatusError's message from the full request URL, that message went into the
+    # PriceProviderUnavailable, and asset_price_service logs it on every failed refresh — so the query
+    # form put the key in stdout once per ticker per cycle, and into Sentry with a DSN configured.
+    #
+    # Pinned as three separate facts because they fail independently: where the key travels, what the
+    # error message says, and what actually reaches a log handler.
+
+    @pytest.mark.asyncio
+    async def test_the_key_travels_as_a_header_and_never_in_the_url_or_query(self, monkeypatch):
+        from app.config import settings
+
+        captured: list = []
+        monkeypatch.setattr(settings, "finnhub_api_key", _SECRET)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(json_body={"c": 1}, captured=captured))
+
+        await price_providers.fetch_finnhub("AAPL")
+
+        url, params, headers = captured[0]
+        assert headers[price_providers.FINNHUB_TOKEN_HEADER] == _SECRET
+        assert _SECRET not in url
+        assert _SECRET not in str(params), "the key must not be a query parameter — that is what put it in the logs"
+        assert "token" not in (params or {})
+
+    @pytest.mark.asyncio
+    async def test_a_rejected_key_produces_an_error_message_carrying_neither_the_key_nor_a_url(self, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "finnhub_api_key", _SECRET)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(status=401))
+
+        with pytest.raises(PriceProviderUnavailable) as raised:
+            await price_providers.fetch_finnhub("AAPL")
+
+        message = str(raised.value)
+        assert _SECRET not in message
+        # Not "no 'http' anywhere" — the class name is HTTPStatusError. What must never appear is a
+        # URL, which is the thing that carries the query string.
+        assert "://" not in message, f"a URL reached the message: {message}"
+        assert "token=" not in message, f"a query credential reached the message: {message}"
+        # It must still SAY something useful, or the fix would just have blinded the operator.
+        assert "Finnhub" in message and "AAPL" in message
+
+    @pytest.mark.asyncio
+    async def test_nothing_the_refresh_logs_contains_the_key(self, monkeypatch, caplog):
+        # The end-to-end shape of the leak: a provider failure travelling all the way to the log line
+        # the price refresh writes. Asserted on real captured log records rather than on the message
+        # string, because the logging call is where the two halves finally meet.
+        import logging
+
+        from app.config import settings
+        from app.models.investment import InvestmentCategory
+        from app.services import asset_price_service
+
+        monkeypatch.setattr(settings, "finnhub_api_key", _SECRET)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(status=401))
+        monkeypatch.setattr(
+            asset_price_service,
+            "_CATEGORY_PROVIDERS",
+            {InvestmentCategory.stocks: (asset_price_service._FINNHUB,)},
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            await asset_price_service._fetch_through_chain("AAPL", InvestmentCategory.stocks, None, None)
+
+        emitted = "\n".join(record.getMessage() for record in caplog.records)
+        assert emitted, "nothing was logged, so this assertion would pass over an empty string"
+        assert _SECRET not in emitted, f"the API key reached a log line:\n{emitted}"
+
+
+class TestRedactingTheUrlDoesNotBlindTheOperator:
+    # The first version of `_describe_http_failure` reduced EVERY provider failure to a class name,
+    # including ones that never carried a credential — so a yfinance rate limit logged "Exception",
+    # a schema drift logged "KeyError", and a bad JSON body logged "ValueError", each with no message
+    # and no traceback. That trades a real leak for a real loss: only HTTPStatusError builds its
+    # message from the request URL, and it is the only one that has to give anything up.
+
+    def test_the_url_bearing_failure_keeps_only_its_status(self):
+        request = httpx.Request("GET", "https://p.example/v1/q?symbol=AAPL&apikey=SUPER-SECRET")
+        exc = httpx.HTTPStatusError("boom", request=request, response=httpx.Response(401, request=request))
+
+        described = price_providers._describe_http_failure(exc)
+
+        assert "SUPER-SECRET" not in described
+        assert "://" not in described
+        assert "401" in described, "the status is the part an operator needs — 'the provider said 401', not 'no data'"
+
+    @pytest.mark.parametrize(
+        "exc,expected_fragment",
+        [
+            (httpx.ConnectError("[Errno 8] nodename nor servname provided"), "nodename"),
+            (httpx.ReadTimeout("timed out after 15s"), "timed out"),
+            (KeyError("Close"), "Close"),
+            (ValueError("Expecting value: line 1 column 1"), "Expecting value"),
+        ],
+    )
+    def test_every_other_failure_keeps_its_message(self, exc, expected_fragment):
+        described = price_providers._describe_http_failure(exc)
+
+        assert type(exc).__name__ in described
+        assert expected_fragment in described, f"the diagnostic was dropped: {described!r}"
