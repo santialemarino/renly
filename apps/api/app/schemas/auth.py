@@ -13,6 +13,28 @@ from app.schemas.settings import SUPPORTED_LANGUAGES
 # Minimum password length enforced at registration.
 MIN_PASSWORD_LENGTH = 12
 
+# bcrypt's own hard ceiling. It hashes at most 72 BYTES and, since 5.0, RAISES above that rather than
+# truncating the way 4.x did — so anything longer reaching `hash_password`/`verify_password` is an
+# unhandled ValueError, i.e. a 500. Every plain password the API accepts is capped here instead.
+MAX_PASSWORD_BYTES = 72
+
+
+# Rejects a password bcrypt could not hash, measured in ENCODED BYTES.
+#
+# Deliberately not `max_length`, which counts CHARACTERS: 'á' is two bytes in UTF-8 and an emoji is
+# four, so a 40-character accented passphrase is 80 bytes and a `max_length=72` field would pass it
+# straight through to the same 500. For an es-locale app that is the ordinary case, not the exotic one.
+def _within_bcrypt_limit(value: str) -> str:
+    if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes once UTF-8 encoded.")
+    return value
+
+
+# Every plain password the API accepts, on any endpoint. One type rather than the same constraint
+# written at each field, so a password field added later cannot be the one that forgets it — and so
+# `tests/unit/test_auth_input_hardening.py` has a single thing to assert against.
+PlainPassword = Annotated[str, AfterValidator(_within_bcrypt_limit)]
+
 # Validated email lowercased so case variants map to the same account.
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
 
@@ -31,7 +53,7 @@ SupportedLanguage = Annotated[str | None, AfterValidator(_supported_language_or_
 class RegisterRequest(RequestBase):
     name: str = Field(description="Full name of the user.")
     email: NormalizedEmail = Field(description="Email address (unique, normalized to lowercase).")
-    password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="Plain password (will be hashed); minimum 12 characters.")
+    password: PlainPassword = Field(min_length=MIN_PASSWORD_LENGTH, description="Plain password (will be hashed); minimum 12 characters.")
     invite_token: str | None = Field(default=None, description="Raw invite token from the emailed link; required in invite-only mode (SIGNUP_MODE).")
     language: SupportedLanguage = Field(
         default=None,
@@ -45,7 +67,7 @@ class RegisterRequest(RequestBase):
 # Body for POST /auth/login. Authenticates an existing user.
 class LoginRequest(RequestBase):
     email: NormalizedEmail = Field(description="User email (normalized to lowercase).")
-    password: str = Field(description="Plain password.")
+    password: PlainPassword = Field(description="Plain password.")
     remember_me: bool = Field(default=False, description="When true, the refresh token gets the long 'remember me' window so the session persists.")
 
 
@@ -87,7 +109,7 @@ class ConfirmEmailRequest(RequestBase):
 # Body for POST /auth/reset-password. Sets a new password from a reset token.
 class ResetPasswordRequest(RequestBase):
     token: str = Field(description="Raw token from the emailed reset link.")
-    password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="New plain password (will be hashed); minimum 12 characters.")
+    password: PlainPassword = Field(min_length=MIN_PASSWORD_LENGTH, description="New plain password (will be hashed); minimum 12 characters.")
 
 
 # Uniform response for register / verify-request / forgot-password / change-email. Carries no

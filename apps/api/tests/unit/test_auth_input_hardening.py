@@ -1,11 +1,14 @@
 import hashlib
 
+import bcrypt
 import httpx
 import pytest
-from pydantic import ValidationError
+from pydantic import AfterValidator, BaseModel, ValidationError
 
 from app.repositories import user_repository
-from app.schemas.auth import MIN_PASSWORD_LENGTH, LoginRequest, RegisterRequest
+from app.schemas import auth as auth_schemas
+from app.schemas import user_account as user_account_schemas
+from app.schemas.auth import MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, LoginRequest, RegisterRequest, _within_bcrypt_limit
 from app.services import auth_service
 
 # Input-hardening coverage for AUTH-3 (password policy + HIBP breach check) and
@@ -137,3 +140,78 @@ class TestIsPasswordBreached:
         monkeypatch.setattr(auth_service.httpx, "AsyncClient", _make_fake_client(error=httpx.ConnectError("simulated outage")))
 
         assert await auth_service.is_password_breached("password") is False
+
+
+# --- bcrypt's 72-byte ceiling (the cap that keeps an over-long password out of a 500) ---
+
+
+# A password bcrypt CAN hash, and three it cannot — each one a shape a real person would pick.
+#
+# The accented and emoji cases are the point of the whole section: they are 40 and 20 CHARACTERS, so a
+# `max_length=72` field would accept all three and hand them straight to bcrypt. This is an es-locale
+# app, so an accented passphrase is the ordinary case.
+_AT_LIMIT = "a" * MAX_PASSWORD_BYTES
+_OVER_BY_ONE = "a" * (MAX_PASSWORD_BYTES + 1)
+_ACCENTED_OVER = "á" * 40  # 40 characters, 80 bytes
+_EMOJI_OVER = "🙂" * 20  # 20 characters, 80 bytes
+
+
+class TestPasswordByteCeiling:
+    def test_a_password_at_the_limit_is_accepted(self):
+        body = RegisterRequest(name="Santi", email="user@example.com", password=_AT_LIMIT)
+        assert len(body.password.encode("utf-8")) == MAX_PASSWORD_BYTES
+
+    @pytest.mark.parametrize("password", [_OVER_BY_ONE, _ACCENTED_OVER, _EMOJI_OVER])
+    def test_an_over_long_password_is_refused_by_the_schema(self, password):
+        # 422 at the edge rather than a ValueError out of bcrypt, which the app answers as a 500.
+        with pytest.raises(ValidationError):
+            RegisterRequest(name="Santi", email="user@example.com", password=password)
+
+    @pytest.mark.parametrize("password", [_OVER_BY_ONE, _ACCENTED_OVER, _EMOJI_OVER])
+    def test_login_refuses_the_same_passwords(self, password):
+        # Login is the unauthenticated one, so it is the shape anybody can fire at the API. It reaches
+        # bcrypt even for an unknown email, via the timing-equalisation dummy verify.
+        with pytest.raises(ValidationError):
+            LoginRequest(email="user@example.com", password=password)
+
+    @pytest.mark.parametrize("password", [_OVER_BY_ONE, _ACCENTED_OVER, _EMOJI_OVER])
+    def test_the_refused_passwords_are_exactly_the_ones_bcrypt_cannot_hash(self, password):
+        # Ties the cap to its REASON rather than to a number restated here: if bcrypt's own limit ever
+        # moves, this fails and says so, instead of the constant quietly describing nothing.
+        with pytest.raises(ValueError):
+            bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(4))
+
+    def test_bcrypt_accepts_the_password_at_the_limit(self):
+        # The other half of the pair: the cap must not be stricter than bcrypt either.
+        assert bcrypt.hashpw(_AT_LIMIT.encode("utf-8"), bcrypt.gensalt(4))
+
+
+class TestEveryPasswordFieldCarriesTheCeiling:
+    # Derived from the schema modules rather than listed, because the defect being guarded is a field
+    # that does not carry the rule — and a hand-written list is exactly how the seven existing fields
+    # all came to be missing it.
+    def _password_fields(self):
+        found = []
+        for module in (auth_schemas, user_account_schemas):
+            for name in dir(module):
+                model = getattr(module, name)
+                if not (isinstance(model, type) and issubclass(model, BaseModel)):
+                    continue
+                for field_name, field in model.model_fields.items():
+                    if "password" in field_name and "token" not in field_name:
+                        found.append((model.__name__, field_name, field))
+        return found
+
+    def test_the_scan_finds_every_known_password_field(self):
+        # Anti-vacuity: without this, a scan that stopped matching would make the assertion below pass
+        # over an empty list. Seven is what the codebase has today; a new one raises this number.
+        fields = self._password_fields()
+        assert len(fields) >= 7, f"scan found only {len(fields)} password fields: {fields}"
+
+    def test_every_password_field_is_capped_at_bcrypts_limit(self):
+        missing = [
+            f"{model}.{field_name}"
+            for model, field_name, field in self._password_fields()
+            if not any(isinstance(m, AfterValidator) and m.func is _within_bcrypt_limit for m in field.metadata)
+        ]
+        assert missing == [], f"password fields that can still reach bcrypt over its limit: {missing}"
