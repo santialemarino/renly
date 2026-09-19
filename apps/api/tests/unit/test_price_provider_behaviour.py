@@ -42,6 +42,10 @@ def _fake_client(*, json_body=None, status: int = 200, error: Exception | None =
             if error is not None:
                 raise error
             request = httpx.Request("GET", url, params=params, headers=headers)
+            # `json=None` would serialise an EMPTY body, so a later `.json()` raises JSONDecodeError
+            # rather than returning None the way the old stub did. Only pass a body when there is one.
+            if json_body is None:
+                return httpx.Response(status, request=request)
             return httpx.Response(status, request=request, json=json_body)
 
     return _Client
@@ -363,3 +367,36 @@ class TestTheFinnhubKeyNeverReachesALogLine:
         emitted = "\n".join(record.getMessage() for record in caplog.records)
         assert emitted, "nothing was logged, so this assertion would pass over an empty string"
         assert _SECRET not in emitted, f"the API key reached a log line:\n{emitted}"
+
+
+class TestRedactingTheUrlDoesNotBlindTheOperator:
+    # The first version of `_describe_http_failure` reduced EVERY provider failure to a class name,
+    # including ones that never carried a credential — so a yfinance rate limit logged "Exception",
+    # a schema drift logged "KeyError", and a bad JSON body logged "ValueError", each with no message
+    # and no traceback. That trades a real leak for a real loss: only HTTPStatusError builds its
+    # message from the request URL, and it is the only one that has to give anything up.
+
+    def test_the_url_bearing_failure_keeps_only_its_status(self):
+        request = httpx.Request("GET", "https://p.example/v1/q?symbol=AAPL&apikey=SUPER-SECRET")
+        exc = httpx.HTTPStatusError("boom", request=request, response=httpx.Response(401, request=request))
+
+        described = price_providers._describe_http_failure(exc)
+
+        assert "SUPER-SECRET" not in described
+        assert "://" not in described
+        assert "401" in described, "the status is the part an operator needs — 'the provider said 401', not 'no data'"
+
+    @pytest.mark.parametrize(
+        "exc,expected_fragment",
+        [
+            (httpx.ConnectError("[Errno 8] nodename nor servname provided"), "nodename"),
+            (httpx.ReadTimeout("timed out after 15s"), "timed out"),
+            (KeyError("Close"), "Close"),
+            (ValueError("Expecting value: line 1 column 1"), "Expecting value"),
+        ],
+    )
+    def test_every_other_failure_keeps_its_message(self, exc, expected_fragment):
+        described = price_providers._describe_http_failure(exc)
+
+        assert type(exc).__name__ in described
+        assert expected_fragment in described, f"the diagnostic was dropped: {described!r}"

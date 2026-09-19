@@ -51,13 +51,25 @@ class PriceProviderUnavailable(Exception):
 #
 # The exception's own `str()` is deliberately not used: httpx builds it from the FULL request URL, so
 # any credential a provider takes as a query parameter is reproduced verbatim in the message. That is
-# how the Finnhub key reached the logs. Keeping URLs out of these messages entirely means a provider
-# added later cannot reintroduce the leak by taking its key the same way — the class name and the
-# status code are what an operator actually needs ("the provider answered 401", not "the market is
-# quiet"), and they carry nothing that has to be redacted afterwards.
+# how the Finnhub key reached the logs. The class name and the status code are what an operator
+# actually needs ("the provider answered 401", not "the market is quiet"), and they carry nothing
+# that has to be redacted afterwards.
+#
+# Scope worth being exact about: this sanitises the MESSAGE. `raise ... from exc` still chains the
+# original, so a handler that printed a full traceback would surface the URL again. None does today —
+# PriceProviderUnavailable is caught in exactly one place and formatted with %s — but that is a
+# property of the current callers, not something this helper can enforce.
 def _describe_http_failure(exc: Exception) -> str:
-    status = getattr(getattr(exc, "response", None), "status_code", None)
-    return f"{type(exc).__name__} (HTTP {status})" if status is not None else type(exc).__name__
+    # Only HTTPStatusError builds its message from the request URL — a ConnectError, a ReadTimeout or
+    # a KeyError out of a provider's own parsing all stringify to something that carries no URL and
+    # therefore no credential. Those keep their message: dropping it would trade a real leak for a
+    # real loss, and the yfinance path (a bare `except Exception` around Renly's own row mapping) is
+    # the one the chain's own comment calls the failure it most expects. "Exception" alone, with no
+    # message and no traceback, is not something anybody can debug from.
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code if exc.response is not None else None
+        return f"{type(exc).__name__} (HTTP {status})" if status is not None else type(exc).__name__
+    return f"{type(exc).__name__}: {exc}"
 
 
 # Describes a price provider: its source name, fetch function, and capabilities.
