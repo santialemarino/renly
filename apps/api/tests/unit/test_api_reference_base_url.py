@@ -24,9 +24,12 @@ _DOC = Path(__file__).resolve().parents[4] / "docs" / "public" / "api-reference.
 def _documented_prefix() -> str:
     line = re.search(r"^Base URL:.*$", _DOC.read_text(), re.MULTILINE)
     assert line is not None, f"no 'Base URL:' line in {_DOC} — reword the guard with the document"
-    quoted = re.findall(r"`(/[^`]*)`", line.group(0))
-    # A quoted path on that line is a prefix claim; naming the host root is not.
-    return quoted[0].rstrip("/") if quoted else ""
+    # Anchored to a backticked path IMMEDIATELY after "Base URL:", which is the only position that
+    # states a prefix. Any backticked path later in the sentence is an EXAMPLE — the current wording
+    # ends with one — and reading that as the prefix would fail the guard for a document that is
+    # perfectly correct.
+    claim = re.match(r"^Base URL:\s*`(/[^`]*)`", line.group(0))
+    return claim.group(1).rstrip("/") if claim else ""
 
 
 # The prefix the app actually serves every route under, from the app rather than from a constant.
