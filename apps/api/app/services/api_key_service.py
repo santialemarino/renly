@@ -5,6 +5,7 @@ from bcrypt import checkpw, gensalt, hashpw
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError
+from app.domain.password import MAX_PASSWORD_BYTES
 from app.models.api_key import ApiKey
 from app.models.user import User
 from app.models.utils import utcnow
@@ -52,6 +53,15 @@ async def revoke_key(session: AsyncSession, key_id: int, user: User) -> None:
 # Verify a raw API key. Uses prefix index to narrow candidates, then bcrypt (run in a worker
 # thread — each checkpw is ~250ms of CPU that must not block the event loop).
 async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
+    # The other arbitrary-length value this app hands to bcrypt, and the only one that does not arrive
+    # through a request schema — it is the raw `Authorization: Bearer` credential. bcrypt raises above
+    # 72 bytes rather than truncating, so without this a caller could turn any over-long Bearer value
+    # into an unhandled ValueError, i.e. a 500 plus a Sentry event, unauthenticated.
+    #
+    # Refused rather than truncated: a real key is `secrets.token_urlsafe(32)`, always 43 characters,
+    # so anything past the ceiling cannot be one and "no such key" is the honest answer.
+    if len(raw_key.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return None
     prefix = raw_key[:KEY_PREFIX_LENGTH]
     candidates = await api_key_repository.list_active_by_prefix(session, prefix)
     # Release the admin-pool connection before the ~250ms threaded bcrypt per candidate: this runs
