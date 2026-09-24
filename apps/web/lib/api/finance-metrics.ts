@@ -12,6 +12,7 @@ interface FinanceOverviewRaw {
   expense_change_pct: string | null;
   credit_card_balance: string;
   currency: string | null;
+  skipped_currencies: string[];
 }
 
 interface MonthlyPointRaw {
@@ -23,6 +24,7 @@ interface MonthlyPointRaw {
 interface FinanceMonthlyRaw {
   points: MonthlyPointRaw[];
   currency: string | null;
+  skipped_currencies: string[];
 }
 
 interface ExpenseCategoryItemRaw {
@@ -35,6 +37,7 @@ interface ExpenseBreakdownRaw {
   items: ExpenseCategoryItemRaw[];
   total_expenses: string;
   currency: string | null;
+  skipped_currencies: string[];
 }
 
 interface IncomeCategoryItemRaw {
@@ -47,6 +50,7 @@ interface IncomeBreakdownRaw {
   items: IncomeCategoryItemRaw[];
   total_income: string;
   currency: string | null;
+  skipped_currencies: string[];
 }
 
 // --- Frontend types (camelCase) ---
@@ -58,7 +62,13 @@ export interface FinanceOverview {
   incomeChangePct: number | null;
   expenseChangePct: number | null;
   creditCardBalance: number;
-  currency: string | null;
+  currency: string | null; /**
+   * Original-currency codes the API could not convert, because no rate is stored for them. They are
+   * EXCLUDED from the totals above rather than passed through, so a non-empty list means the figures
+   * under-report — which is why the page has to say so. Aggregates cannot fall back to the original
+   * currency the way a row can: there is one number and it can only be in one scale.
+   */
+  skippedCurrencies: string[];
 }
 
 export interface MonthlyPoint {
@@ -69,7 +79,13 @@ export interface MonthlyPoint {
 
 export interface FinanceMonthly {
   points: MonthlyPoint[];
-  currency: string | null;
+  currency: string | null; /**
+   * Original-currency codes the API could not convert, because no rate is stored for them. They are
+   * EXCLUDED from the totals above rather than passed through, so a non-empty list means the figures
+   * under-report — which is why the page has to say so. Aggregates cannot fall back to the original
+   * currency the way a row can: there is one number and it can only be in one scale.
+   */
+  skippedCurrencies: string[];
 }
 
 export interface ExpenseCategoryItem {
@@ -81,7 +97,13 @@ export interface ExpenseCategoryItem {
 export interface ExpenseBreakdown {
   items: ExpenseCategoryItem[];
   totalExpenses: number;
-  currency: string | null;
+  currency: string | null; /**
+   * Original-currency codes the API could not convert, because no rate is stored for them. They are
+   * EXCLUDED from the totals above rather than passed through, so a non-empty list means the figures
+   * under-report — which is why the page has to say so. Aggregates cannot fall back to the original
+   * currency the way a row can: there is one number and it can only be in one scale.
+   */
+  skippedCurrencies: string[];
 }
 
 export interface IncomeCategoryItem {
@@ -93,7 +115,13 @@ export interface IncomeCategoryItem {
 export interface IncomeBreakdown {
   items: IncomeCategoryItem[];
   totalIncome: number;
-  currency: string | null;
+  currency: string | null; /**
+   * Original-currency codes the API could not convert, because no rate is stored for them. They are
+   * EXCLUDED from the totals above rather than passed through, so a non-empty list means the figures
+   * under-report — which is why the page has to say so. Aggregates cannot fall back to the original
+   * currency the way a row can: there is one number and it can only be in one scale.
+   */
+  skippedCurrencies: string[];
 }
 
 // --- Mappers ---
@@ -107,6 +135,7 @@ function mapOverview(raw: FinanceOverviewRaw): FinanceOverview {
     expenseChangePct: raw.expense_change_pct !== null ? Number(raw.expense_change_pct) : null,
     creditCardBalance: Number(raw.credit_card_balance),
     currency: raw.currency,
+    skippedCurrencies: raw.skipped_currencies,
   };
 }
 
@@ -178,6 +207,7 @@ export async function getFinanceMonthly(
   return {
     points: raw.points.map(mapMonthlyPoint),
     currency: raw.currency,
+    skippedCurrencies: raw.skipped_currencies,
   };
 }
 
@@ -195,6 +225,7 @@ export async function getExpenseBreakdown(
     items: raw.items.map(mapExpenseCategoryItem),
     totalExpenses: Number(raw.total_expenses),
     currency: raw.currency,
+    skippedCurrencies: raw.skipped_currencies,
   };
 }
 
@@ -212,5 +243,6 @@ export async function getIncomeBreakdown(
     items: raw.items.map(mapIncomeCategoryItem),
     totalIncome: Number(raw.total_income),
     currency: raw.currency,
+    skippedCurrencies: raw.skipped_currencies,
   };
 }

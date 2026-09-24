@@ -26,6 +26,7 @@ interface PaymentsCalendarRaw {
   month: number;
   currency: string | null;
   items: PaymentsCalendarItemRaw[];
+  skipped_currencies: string[];
 }
 
 // --- Frontend types (camelCase) ---
@@ -54,6 +55,12 @@ export interface PaymentsCalendar {
   month: number;
   currency: string | null;
   items: PaymentsCalendarItem[];
+  /**
+   * Original-currency codes of items whose `convertedAmount` came back null because no rate is
+   * stored. The rows themselves fall back to their own currency and stay honest, so this is the
+   * same courtesy `/expenses` and `/income` render rather than a wrong-number warning.
+   */
+  skippedCurrencies: string[];
 }
 
 // --- Mappers ---
@@ -101,5 +108,6 @@ export async function getPaymentsCalendar(
     month: raw.month,
     currency: raw.currency,
     items: raw.items.map(mapItem),
+    skippedCurrencies: raw.skipped_currencies,
   };
 }
