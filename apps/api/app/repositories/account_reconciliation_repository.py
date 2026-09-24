@@ -40,6 +40,19 @@ async def get_by_id(session: AsyncSession, reconciliation_id: int, account_id: i
     return result.scalar_one_or_none()
 
 
+# Get the reconciliation an account already carries for a date, or None. Used by create-or-replace and
+# by the difference preview, which both have to know what a re-run on that date would supersede.
+# At most one row can match: (account_id, as_of_date) is UNIQUE.
+async def get_by_account_date(session: AsyncSession, account_id: int, as_of_date: date_type) -> AccountReconciliation | None:
+    result = await session.execute(
+        select(AccountReconciliation).where(
+            AccountReconciliation.account_id == account_id,
+            AccountReconciliation.as_of_date == as_of_date,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 # Latest reconciled date per account, in one grouped query. Returns {account_id: as_of_date}; accounts
 # never reconciled are simply absent. Backs the "last reconciled" column without an N+1.
 #
@@ -95,6 +108,7 @@ async def delete(session: AsyncSession, reconciliation: AccountReconciliation) -
 class AccountReconciliationRepository:
     list_by_account = staticmethod(list_by_account)
     get_by_id = staticmethod(get_by_id)
+    get_by_account_date = staticmethod(get_by_account_date)
     get_latest_dates_by_account_ids = staticmethod(get_latest_dates_by_account_ids)
     get_latest_dates_across_users = staticmethod(get_latest_dates_across_users)
     create = staticmethod(create)

@@ -1112,9 +1112,12 @@
         "differenceExpensePreview": "Renly va a agregar {amount} {currency} como gasto para cerrar la diferencia.",
         "differenceZeroPreview": "Ya coinciden: no se va a agregar nada.",
         "differenceBearers": "Se reparte entre {members}.",
+        "replaceBanner": "Esta fecha ya está conciliada — al guardar se reemplaza esa entrada y el ajuste que creó.",
         "saveLabel": "Conciliar",
         "saveLoading": "Conciliando...",
+        "replaceLabel": "Reemplazar conciliación",
         "success": "Cuenta conciliada.",
+        "replaceSuccess": "Conciliación reemplazada.",
         "saveError": "No se pudo conciliar la cuenta."
       },
       "delete": {

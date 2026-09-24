@@ -239,6 +239,14 @@ export function AccountReconciliationsSection({
                                    * disabled trigger, so notLatestTooltip could never actually explain
                                    * why an older reconciliation can't be deleted. Reconciliation is
                                    * forward-only — delete newest-first.
+                                   *
+                                   * Matching on the DATE names exactly one row, and that is the
+                                   * database's guarantee rather than this list's: an account holds one
+                                   * reconciliation per as_of_date (UNIQUE, since re-running a date
+                                   * replaces it). It also has to be the date rather than the first row,
+                                   * because the history is paginated and only page 1 starts at the
+                                   * newest — `latestDate` is the account's newest across every page, so
+                                   * later pages correctly offer no delete at all.
                                    */}
                                   {isLatest ? (
                                     <RowActionButton

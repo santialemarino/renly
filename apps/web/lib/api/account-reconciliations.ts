@@ -33,6 +33,7 @@ interface AccountComputedBalanceRaw {
   as_of_date: string;
   balance: string;
   bearers: ReconciliationBearerRaw[];
+  replaces_existing: boolean;
 }
 
 // --- Frontend types (camelCase) ---
@@ -65,9 +66,15 @@ export interface ReconciliationBearer {
 export interface AccountComputedBalance {
   accountId: number;
   asOfDate: string;
+  /**
+   * Derived balance at `asOfDate`, already excluding the adjustment of any reconciliation the account
+   * carries on that date — saving replaces that row, so this is what the difference is measured against.
+   */
   balance: string;
   /** Who the difference divides between on a pot's account, largest share first; empty on a private one. */
   bearers: ReconciliationBearer[];
+  /** True when this date already has a reconciliation, which saving would replace. */
+  replacesExisting: boolean;
 }
 
 // --- Mappers ---
@@ -82,6 +89,7 @@ export function mapAccountComputedBalance(raw: AccountComputedBalanceRaw): Accou
       displayName: bearer.display_name,
       percentage: bearer.percentage,
     })),
+    replacesExisting: raw.replaces_existing,
   };
 }
 

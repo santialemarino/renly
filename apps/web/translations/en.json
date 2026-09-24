@@ -1112,9 +1112,12 @@
         "differenceExpensePreview": "Renly will add {amount} {currency} as an expense to close the gap.",
         "differenceZeroPreview": "Already matching — nothing will be added.",
         "differenceBearers": "It divides between {members}.",
+        "replaceBanner": "This date is already reconciled — saving replaces that entry and the adjustment it created.",
         "saveLabel": "Reconcile",
         "saveLoading": "Reconciling...",
+        "replaceLabel": "Replace reconciliation",
         "success": "Account reconciled.",
+        "replaceSuccess": "Reconciliation replaced.",
         "saveError": "Failed to reconcile the account."
       },
       "delete": {

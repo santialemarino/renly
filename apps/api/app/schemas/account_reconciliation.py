@@ -36,6 +36,10 @@ class ReconciliationBearerResponse(BaseModel):
 # Response for GET /accounts/{id}/computed-balance. Backs the reconcile dialog's live difference
 # preview: the balance the user is about to true up depends on the date they pick, so the dialog
 # re-reads it whenever that date changes rather than assuming today's balance.
+#
+# `balance` already excludes the adjustment of any reconciliation the account carries on that date,
+# because saving REPLACES that row — and `replaces_existing` says so, so the dialog can warn before the
+# user overwrites a figure they entered earlier. The two come from one lookup and cannot disagree.
 class AccountComputedBalanceResponse(BaseModel):
     account_id: int = Field(description="Account id.")
     as_of_date: date_type = Field(description="Date the balance is computed at.")
@@ -43,6 +47,10 @@ class AccountComputedBalanceResponse(BaseModel):
     bearers: list[ReconciliationBearerResponse] = Field(
         default_factory=list,
         description="Who the difference would divide between on a pot's account, largest share first; empty on a private one.",
+    )
+    replaces_existing: bool = Field(
+        default=False,
+        description="True when the account already has a reconciliation on this date, which saving would replace.",
     )
 
 

@@ -68,6 +68,12 @@ export function AccountReconcileDialog({
   // Who the difference would divide between on a pot's account, largest share first. Always empty on a
   // private one, which is what keeps a solo user's dialog exactly as it was.
   const [bearers, setBearers] = useState<ReconciliationBearer[]>([]);
+  // Whether the picked date already carries a reconciliation. Saving replaces it, adjustment included,
+  // so the dialog says so before the user overwrites a figure they entered earlier. It travels with the
+  // balance rather than being derived from the history list: the balance above ALREADY excludes that
+  // row's adjustment, and the two coming from one response is what stops the warning and the figure it
+  // warns about from describing different states.
+  const [replacesExisting, setReplacesExisting] = useState(false);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -96,6 +102,7 @@ export function AccountReconcileDialog({
       form.reset({ asOfDate: today, statementBalance: '' });
       setComputedBalance(null);
       setBearers([]);
+      setReplacesExisting(false);
       setSubmitError(null);
     }
     // `today` is intentionally not a dep: it changes identity on every render but only matters at open.
@@ -118,11 +125,13 @@ export function AccountReconcileDialog({
         if (cancelled) return;
         setComputedBalance(preview.balance);
         setBearers(preview.bearers);
+        setReplacesExisting(preview.replacesExisting);
       })
       .catch(() => {
         if (cancelled) return;
         setComputedBalance(null);
         setBearers([]);
+        setReplacesExisting(false);
       })
       .finally(() => {
         if (!cancelled) setLoadingBalance(false);
@@ -153,7 +162,7 @@ export function AccountReconcileDialog({
       setSubmitError(result.error || t('form.saveError'));
       return;
     }
-    toast.success(t('form.success'));
+    toast.success(replacesExisting ? t('form.replaceSuccess') : t('form.success'));
     onSuccess();
     onOpenChange(false);
   }
@@ -170,6 +179,11 @@ export function AccountReconcileDialog({
             {t('form.description')}
           </DialogDescription>
           {submitError && <StyledHint variant="warning">{submitError}</StyledHint>}
+          {replacesExisting && !loadingBalance && (
+            <StyledHint variant="info" testId="account-reconcile-replace-banner">
+              {t('form.replaceBanner')}
+            </StyledHint>
+          )}
         </DialogHeader>
 
         <Form {...form}>
@@ -201,7 +215,10 @@ export function AccountReconcileDialog({
 
             <div className="flex flex-col gap-y-1">
               <span className="text-paragraph-sm-medium">{t('form.computedBalance')}</span>
-              <span className="text-paragraph tabular-nums">
+              <span
+                className="text-paragraph tabular-nums"
+                data-testid="account-reconcile-computed"
+              >
                 {loadingBalance || computedBalance === null ? (
                   <span className="text-muted-foreground">{t('form.computedBalanceLoading')}</span>
                 ) : (
@@ -299,7 +316,11 @@ export function AccountReconcileDialog({
             disabled={form.formState.isSubmitting || loadingBalance}
             data-testid="account-reconcile-submit"
           >
-            {form.formState.isSubmitting ? t('form.saveLoading') : t('form.saveLabel')}
+            {form.formState.isSubmitting
+              ? t('form.saveLoading')
+              : replacesExisting
+                ? t('form.replaceLabel')
+                : t('form.saveLabel')}
           </Button>
         </DialogFooter>
       </DialogContent>

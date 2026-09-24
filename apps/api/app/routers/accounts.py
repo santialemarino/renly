@@ -150,6 +150,7 @@ async def list_movements(
 # The account's derived balance at a date, plus who a difference would divide between. Drives the
 # reconcile dialog's difference preview, which has to follow the date the user picks rather than assume
 # today — and on a pot's account also has to say whose money it is about to move.
+# The balance excludes any reconciliation already on that date, because saving would replace it.
 @router.get("/{account_id}/computed-balance", response_model=AccountComputedBalanceResponse)
 async def get_computed_balance(
     account_id: int,
@@ -157,10 +158,7 @@ async def get_computed_balance(
     session: SessionDep,
     as_of_date: date_type = Query(description="Date to compute the balance at."),
 ) -> AccountComputedBalanceResponse:
-    account = await account_service.get_account_in_scope(session, account_id, current_user)
-    balance = await account_reconciliation_service.compute_account_balance_at(session, account, as_of_date)
-    bearers = await account_reconciliation_service.list_difference_bearers(session, account, current_user, as_of_date=as_of_date)
-    return AccountComputedBalanceResponse(account_id=account_id, as_of_date=as_of_date, balance=balance, bearers=bearers)
+    return await account_reconciliation_service.get_computed_balance(session, account_id, current_user, as_of_date=as_of_date)
 
 
 # List one page of an account's reconciliations, newest first.
@@ -177,14 +175,15 @@ async def list_reconciliations(
 
 
 # Reconcile an account: record the real balance as of a date and post the adjustment that closes the gap.
+# Reconciling a date the account already carries replaces that reconciliation, adjustment included.
 @router.post("/{account_id}/reconciliations", response_model=AccountReconciliationResponse, status_code=status.HTTP_201_CREATED)
-async def create_reconciliation(
+async def create_or_replace_reconciliation(
     account_id: int,
     body: AccountReconciliationCreate,
     current_user: CurrentUser,
     session: SessionDep,
 ) -> AccountReconciliationResponse:
-    reconciliation = await account_reconciliation_service.create_reconciliation(
+    reconciliation = await account_reconciliation_service.create_or_replace(
         session,
         account_id,
         current_user,
