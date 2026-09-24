@@ -7,6 +7,25 @@ Base URL: the API host root — there is no path prefix. Every path below is abs
 
 ---
 
+## How request bodies are bounded
+
+No free-text field a request body carries is unbounded. Every plain-string field on every request
+schema has a length ceiling, and going over it is a **422** at the request boundary rather than
+something the storage layer discovers later. The ceilings follow the shape of the thing rather than a
+guess: a `notes` field takes 500 characters, a name takes what its column holds, an ISO 4217 currency
+code takes three, and a token takes enough for one the API issued. A list of codes is bounded in both
+dimensions — the number of items and the length of each — since capping only the list still lets a
+single item carry the payload.
+
+A **password** is the one field capped in BYTES rather than characters, at bcrypt's own 72-byte limit:
+`á` is two bytes in UTF-8 and an emoji is four, so a character cap would be the wrong rule rather than
+a looser one.
+
+Fields that are not free text — dates, decimals, and the enum-valued fields listed per endpoint below
+— are bounded by their own parsers and carry no separate length limit.
+
+---
+
 ## How lists are bounded
 
 No endpoint returns an unbounded number of rows. A list is handled in one of two ways, depending on

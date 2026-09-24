@@ -3,6 +3,7 @@
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
+from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -59,7 +60,14 @@ class GroupSettlementPlanCreate(RequestBase):
     date: date_type = Field(description="Date the payment happened; the rate the spillover converts at.")
     amount: Decimal = Field(description="Total being paid, in the named currency.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency being paid in, and the bucket the payment names (ISO 4217).", max_length=3)
-    spillover_currencies: list[str] | None = Field(default=None, description="Buckets the payer kept ticked. Absent means all of them.")
+    # A list of ISO codes, so both dimensions are bounded: each item is a currency code and the list is
+    # at most the number of buckets a group can hold. Without the item cap the list cap alone would
+    # still let one request carry an arbitrary payload.
+    spillover_currencies: list[Annotated[str, Field(max_length=3)]] | None = Field(
+        default=None,
+        description="Buckets the payer kept ticked. Absent means all of them.",
+        max_length=32,
+    )
     from_account_id: int | None = Field(default=None, description="Account the payer drew from; must be their own.")
     from_amount: Decimal | None = Field(
         default=None,
@@ -72,7 +80,7 @@ class GroupSettlementPlanCreate(RequestBase):
     to_amount: Decimal | None = Field(
         default=None, description="TOTAL that arrived there, in its currency. Required only across currencies.", gt=0, max_digits=18, decimal_places=2
     )
-    notes: str | None = Field(default=None, description="Optional notes, copied onto every settlement the plan writes.")
+    notes: str | None = Field(default=None, description="Optional notes, copied onto every settlement the plan writes.", max_length=500)
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
 

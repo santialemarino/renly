@@ -29,6 +29,19 @@ def _within_bcrypt_limit(value: str) -> str:
 # `tests/unit/test_auth_input_hardening.py` has a single thing to assert against.
 PlainPassword = Annotated[str, AfterValidator(_within_bcrypt_limit)]
 
+# Ceilings for the two other free-text shapes the auth bodies carry.
+#
+# A TOKEN is never typed — every one this app issues is `secrets.token_urlsafe(32)`, which is always
+# 43 characters — so anything past this ceiling cannot be one and refusing it costs a legitimate
+# caller nothing. The same reasoning `api_key_service.verify_api_key` already applies to the raw
+# Bearer credential, and the same payoff: an unbounded credential is parsed, and for some of these
+# hashed, before the lookup can miss.
+#
+# A NAME is capped at the column it lands in. `users.name` is VARCHAR(255), so without this an
+# over-long name reached the INSERT and came back as a DataError — a 500 on signup rather than a 422.
+TOKEN_MAX_LENGTH = 128
+NAME_MAX_LENGTH = 255
+
 # Validated email lowercased so case variants map to the same account.
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
 
@@ -40,17 +53,21 @@ def _supported_language_or_none(value: str | None) -> str | None:
 
 
 # Optional supported UI language ('en' | 'es'); anything else becomes None.
-SupportedLanguage = Annotated[str | None, AfterValidator(_supported_language_or_none)]
+SupportedLanguage = Annotated[str | None, Field(max_length=32), AfterValidator(_supported_language_or_none)]
 
 
 # Body for POST /auth/register. Creates a new user.
 class RegisterRequest(RequestBase):
-    name: str = Field(description="Full name of the user.")
+    name: str = Field(description="Full name of the user.", max_length=NAME_MAX_LENGTH)
     email: NormalizedEmail = Field(description="Email address (unique, normalized to lowercase).")
     password: PlainPassword = Field(
         min_length=MIN_PASSWORD_LENGTH, description="Plain password (will be hashed); 12 characters minimum, 72 bytes UTF-8 maximum."
     )
-    invite_token: str | None = Field(default=None, description="Raw invite token from the emailed link; required in invite-only mode (SIGNUP_MODE).")
+    invite_token: str | None = Field(
+        default=None,
+        description="Raw invite token from the emailed link; required in invite-only mode (SIGNUP_MODE).",
+        max_length=TOKEN_MAX_LENGTH,
+    )
     language: SupportedLanguage = Field(
         default=None,
         description=(
@@ -69,7 +86,7 @@ class LoginRequest(RequestBase):
 
 # Body for POST /auth/refresh. Exchanges a refresh token for a new access token (AUTH-7).
 class RefreshRequest(RequestBase):
-    refresh_token: str = Field(description="The refresh token returned by login or a prior refresh.")
+    refresh_token: str = Field(description="The refresh token returned by login or a prior refresh.", max_length=TOKEN_MAX_LENGTH)
 
 
 # Response for login and refresh. Carries the access token plus the rotating refresh token (AUTH-7).
@@ -99,12 +116,12 @@ class EmailActionRequest(RequestBase):
 
 # Body for POST /auth/verify-email/confirm. Confirms an email-verification or email-change token.
 class ConfirmEmailRequest(RequestBase):
-    token: str = Field(description="Raw token from the emailed verification link.")
+    token: str = Field(description="Raw token from the emailed verification link.", max_length=TOKEN_MAX_LENGTH)
 
 
 # Body for POST /auth/reset-password. Sets a new password from a reset token.
 class ResetPasswordRequest(RequestBase):
-    token: str = Field(description="Raw token from the emailed reset link.")
+    token: str = Field(description="Raw token from the emailed reset link.", max_length=TOKEN_MAX_LENGTH)
     password: PlainPassword = Field(
         min_length=MIN_PASSWORD_LENGTH, description="New plain password (will be hashed); 12 characters minimum, 72 bytes UTF-8 maximum."
     )

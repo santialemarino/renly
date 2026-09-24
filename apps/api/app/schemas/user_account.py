@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from app.schemas.auth import MIN_PASSWORD_LENGTH, NormalizedEmail, PlainPassword
+from app.schemas.auth import MIN_PASSWORD_LENGTH, NAME_MAX_LENGTH, NormalizedEmail, PlainPassword
 from app.schemas.base import RequestBase
 
 
@@ -23,4 +23,4 @@ class ChangeEmailRequest(RequestBase):
 # Body for DELETE /me. Requires the password plus a typed confirmation matching the account email.
 class DeleteAccountRequest(RequestBase):
     password: PlainPassword = Field(description="Current plain password (re-authentication); 72 bytes UTF-8 maximum.")
-    confirmation: str = Field(description="Must equal the account email to confirm deletion.")
+    confirmation: str = Field(description="Must equal the account email to confirm deletion.", max_length=NAME_MAX_LENGTH)
