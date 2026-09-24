@@ -1,6 +1,7 @@
 # Request/response schemas for settings endpoints (HTTP contract).
 
 from decimal import Decimal
+from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
@@ -10,6 +11,27 @@ from app.schemas.base import RequestBase
 TIMEZONE_MODE_VALUES = ("auto", "manual")
 LANGUAGE_MODE_VALUES = ("auto", "manual")
 SUPPORTED_LANGUAGES = ("en", "es")
+
+# Length ceilings for the settings a PUT can carry. These are not guesses about what a user might
+# type: every one of these fields holds a code from a known set, so the ceiling is the shape of the
+# code plus room — an ISO 4217 currency is three characters, the longest IANA zone name is about
+# thirty, and the mode/preference keys are short words.
+#
+# They are caps rather than membership checks BY DECISION (Santi, 2026-09-24): `update_settings`
+# writes each value straight into the settings JSONB with no validation, and the readers sanitise on
+# the way out, so an unknown code is stored and then ignored. Refusing unknown codes at the boundary
+# would be more honest but would start 422-ing requests this endpoint has always swallowed — and a
+# request mixing one bad value with good ones would stop applying the good ones. The cap closes the
+# unbounded-write hole without changing which requests succeed.
+_CURRENCY_CODE_MAX = 3
+_SETTING_KEY_MAX = 32
+_TIMEZONE_MAX = 64
+# A list of codes, not a free-text list: enough room for every code the app has plus headroom, so the
+# item cap above is what bounds the payload rather than this.
+_CODE_LIST_MAX_ITEMS = 32
+
+CurrencyCode = Annotated[str, Field(max_length=_CURRENCY_CODE_MAX)]
+SettingCode = Annotated[str, Field(max_length=_SETTING_KEY_MAX)]
 
 
 # Response for GET /settings. User display preferences and app configuration.
@@ -86,21 +108,23 @@ class SettingsResponse(BaseModel):
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
 class SettingsUpdate(RequestBase):
-    primary_currency: str | None = Field(
+    primary_currency: CurrencyCode | None = Field(
         default=None,
         description="Primary display currency.",
     )
-    secondary_currency: str | None = Field(
+    secondary_currency: CurrencyCode | None = Field(
         default=None,
         description="Secondary display currency.",
     )
-    preferred_currencies: list[str] | None = Field(
+    preferred_currencies: list[CurrencyCode] | None = Field(
         default=None,
         description="Preferred currencies for combobox grouping.",
+        max_length=_CODE_LIST_MAX_ITEMS,
     )
-    period_presets: list[str] | None = Field(
+    period_presets: list[SettingCode] | None = Field(
         default=None,
         description="Dashboard period presets (up to 4 codes like '3M', '1Y', 'YTD').",
+        max_length=_CODE_LIST_MAX_ITEMS,
     )
     max_collections: int | None = Field(
         default=None,
@@ -110,27 +134,29 @@ class SettingsUpdate(RequestBase):
         default=None,
         description="Percentage of max collections for approaching-limit warning.",
     )
-    dollar_rate_preference: str | None = Field(
+    dollar_rate_preference: SettingCode | None = Field(
         default=None,
         description="Which USD/ARS rate to use: oficial, mep, or blue.",
     )
-    shortcut_currencies: list[str] | None = Field(
+    shortcut_currencies: list[CurrencyCode] | None = Field(
         default=None,
         description="Currencies shown in the iOS Shortcut currency picker.",
+        max_length=_CODE_LIST_MAX_ITEMS,
     )
     timezone: str | None = Field(
         default=None,
         description="User's IANA timezone (e.g. America/Argentina/Buenos_Aires).",
+        max_length=_TIMEZONE_MAX,
     )
-    timezone_mode: str | None = Field(
+    timezone_mode: SettingCode | None = Field(
         default=None,
         description="Timezone source: 'auto' or 'manual'.",
     )
-    language: str | None = Field(
+    language: SettingCode | None = Field(
         default=None,
         description="User's preferred language code ('en' or 'es').",
     )
-    language_mode: str | None = Field(
+    language_mode: SettingCode | None = Field(
         default=None,
         description="Language source: 'auto' or 'manual'.",
     )

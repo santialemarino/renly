@@ -177,7 +177,7 @@ class PotHoldingsMove(RequestBase):
 class PotHoldingContribute(RequestBase):
     investment_id: int | None = Field(default=None, description="Investment to contribute; exactly one of the two ids.")
     account_id: int | None = Field(default=None, description="Cash account to contribute; exactly one of the two ids.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
     # Exactly one. Neither names nothing to contribute; both names two things while the response can
     # only describe one, and silently preferring one would move a holding the caller never saw listed.
@@ -195,7 +195,7 @@ class PotOpeningCreate(RequestBase):
     date: date_type = Field(description="Date the baseline is measured at; nothing before it is in scope.")
     value: Decimal = Field(description="What the pot was worth on that date, in its base currency.", max_digits=18, decimal_places=2, gt=0)
     shares: dict[int, Decimal] = Field(description="Percentage per group member id; must total 100.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Body for POST /pots/{pot_id}/ownership/movements — a contribution or a withdrawal.
@@ -220,7 +220,7 @@ class PotMovementCreate(RequestBase):
         default=False,
         description="Withdrawal only: redeem exactly the member's whole balance instead of deriving units from the amount.",
     )
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
     _validate_currency = field_validator("amount_currency")(validate_supported_currency)
 
@@ -251,7 +251,7 @@ class PotReagreementCreate(RequestBase):
         default=None, description="How much of the whole pot moves, in percentage points.", max_digits=5, decimal_places=2, gt=0
     )
     whole_share: bool = Field(default=False, description="Move the giver's entire balance instead of a percentage of the pot.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
     # Exactly one of the two ways to state the share. Neither means nothing was said; both means two
     # answers to one question, and silently preferring one would discard a figure the caller typed.
