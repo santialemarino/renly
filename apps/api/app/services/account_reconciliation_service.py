@@ -2,8 +2,9 @@
 # Implements:
 #   - compute_account_balance_at(): the account's derived balance as of a date (the cash sibling of
 #     card_reconciliation_service.compute_bucket_balance_at).
-#   - create_reconciliation(): records the real balance the user read and posts the single adjustment
-#     entry that closes the gap, so the balance is true from that date forward.
+#   - create_or_replace(): records the real balance the user read and posts the single adjustment entry
+#     that closes the gap, so the balance is true from that date forward. One row per date: re-running a
+#     date drops the row it already carries, adjustment and all, and writes a fresh pair.
 #
 # Reconciliation is the keystone of the "approximate cash" model: linking every movement is optional,
 # so the derived balance drifts. Entering the real balance snaps it back with one dated true-up
@@ -72,6 +73,7 @@ from app.repositories import (
     transfer_repository,
 )
 from app.schemas.account_reconciliation import (
+    AccountComputedBalanceResponse,
     AccountReconciliationListResponse,
     AccountReconciliationResponse,
     ReconciliationBearerResponse,
@@ -258,6 +260,12 @@ async def _owner_split(session: AsyncSession, scope: _Scope, *, total: Decimal, 
 #
 # The audience is `pot_service.list_notifiable_user_ids`, which is the pot's own visibility rule — an
 # 'owners' pot must not announce itself to a member the policy hides it from.
+#
+# `notify=False` records the audit entry and sends nothing, and exists for exactly one caller: the row a
+# same-date re-run SUPERSEDES. Its removal belongs in the trail — without a `deleted` line between them
+# a reader sees two "reconciled the account" entries on one date and cannot tell the first was undone,
+# which is the very misreading a stacked pair used to produce — but it is half of a single act the user
+# experienced as one save, and two pushes per button press is how people learn to mute an event.
 async def _announce(
     session: AsyncSession,
     account: Account,
@@ -266,8 +274,9 @@ async def _announce(
     action: AuditAction,
     *,
     difference: Decimal,
+    notify: bool = True,
 ) -> None:
-    variant = _movement_variant(action, difference)
+    variant = _movement_variant(action, difference) if notify else None
     await shared_audit_service.record(
         session,
         group_id=scope.pot.group_id,
@@ -350,6 +359,48 @@ async def get_latest_reconciled_date(session: AsyncSession, account_id: int, use
     return latest.get(account_id)
 
 
+# The reconcile dialog's difference preview: the balance a reconciliation dated as_of_date would be
+# measured against, who would bear the difference, and whether saving would replace a row already on
+# that date.
+#
+# The balance is NOT compute_account_balance_at. Re-running a date REPLACES the reconciliation it
+# already carries, so the save drops that row's adjustment before taking its own balance — and a
+# preview that still counted it would name a difference the write never posts, and divide that wrong
+# figure between the pot's owners. An adjustment moves the balance by exactly `+difference` whichever
+# side it lands on (a surplus posts an income of `difference`, a shortfall an expense of `-difference`,
+# and the balance adds income and subtracts expenses), so subtracting `difference` removes it precisely;
+# a matched reconciliation wrote no adjustment and its zero subtracts nothing.
+#
+# ▸ That subtraction is a PROJECTION of what the write does, not the write's own arithmetic:
+# create_or_replace deletes the row and re-derives the balance from the ledger, which is ground truth.
+# Two derivations of one fact, and the unit suite cannot watch them disagree because it stubs every sum
+# — so the agreement is pinned against a real database in
+# tests/integration/test_account_reconciliation_replace.py, which reads the preview and then saves, in
+# both adjustment directions plus the matched case where no adjustment was written at all. It is pinned
+# on a PRIVATE account: the subtraction carries no scope term, and what does differ by scope — which
+# sums see a shared adjustment, and that its splits cascade with it — is pinned separately in
+# test_shared_account_reconciliation.py.
+async def get_computed_balance(
+    session: AsyncSession,
+    account_id: int,
+    user: User,
+    *,
+    as_of_date: date_type,
+) -> AccountComputedBalanceResponse:
+    account = await account_service.get_account_in_scope(session, account_id, user)
+    balance = await compute_account_balance_at(session, account, as_of_date)
+    superseded = await account_reconciliation_repository.get_by_account_date(session, account_id, as_of_date)
+    if superseded is not None:
+        balance -= superseded.difference
+    return AccountComputedBalanceResponse(
+        account_id=account_id,
+        as_of_date=as_of_date,
+        balance=balance,
+        bearers=await list_difference_bearers(session, account, user, as_of_date=as_of_date),
+        replaces_existing=superseded is not None,
+    )
+
+
 # List an account's reconciliations, newest first, in EITHER scope — a pot's account has a history its
 # co-owners are meant to read. Reachability is get_account_in_scope's answer plus RLS's.
 async def list_reconciliations(
@@ -417,21 +468,31 @@ async def get_reconciliation(
 
 
 # Record a point-in-time true-up of an account against its real balance. Atomic:
-#   1. Compute the derived balance at as_of_date.
-#   2. Compute the difference; write the reconciliation row.
-#   3. Create the matching adjustment entry (dated on as_of_date, linked to the account so it enters
+#   1. If the account already carries a reconciliation for as_of_date, drop it — which cascade-drops
+#      its adjustment — so the fresh balance below is taken against an untouched ledger.
+#   2. Compute the derived balance at as_of_date.
+#   3. Compute the difference; write the reconciliation row.
+#   4. Create the matching adjustment entry (dated on as_of_date, linked to the account so it enters
 #      the running balance, tagged source='reconciliation' and category account_adjustment so true-ups
 #      are identifiable and separable from real spending) when the difference is non-zero, and patch
 #      the back-pointer. NOTE: the category labels the row, it does not exclude it — adjustments still
 #      count toward income/expense totals and the category breakdown, exactly like the card
 #      reconciliation categories. That is deliberate: money the reconciliation accounts for really did
 #      move, it just was not itemised.
-# Unlike card reconciliation there is no replace step: a later reconciliation of the same account
-# simply appends. Re-running the same date is self-correcting — the earlier adjustment is already in
-# the computed balance, so the new difference is zero and no second adjustment is posted. That only
-# holds forward, which is why an out-of-order (older) date is rejected: its adjustment would land
-# underneath the newer reconciliation, whose date bound cannot see it, skewing the newer balance.
-async def create_reconciliation(
+#
+# Re-running a date REPLACES it, the way the card side replaces a period, and the DB holds that shape:
+# (account_id, as_of_date) is UNIQUE. Appending instead — which is what this did — left two rows a
+# delete guard that compares DATES both called the latest, so deleting the older dropped its adjustment
+# while the survivor's recorded computed_balance still counted it, and the account read wrong by that
+# whole adjustment with no row left to explain it. Replacing removes the case rather than tie-breaking
+# it: after any save there is exactly one row per date, so "the latest" is a single row by construction.
+#
+# It stays FORWARD-ONLY all the same: a STRICTLY older date is still refused, because its adjustment
+# would land underneath a newer reconciliation whose date bound cannot see it, skewing a figure the user
+# already attested to. Cards can take an older period because they are period-scoped and re-running the
+# affected periods in order converges; an account has no such repair path, so only the EQUAL date
+# replaces. Deleting the newer row first remains the way back, and the refusal says so.
+async def create_or_replace(
     session: AsyncSession,
     account_id: int,
     user: User,
@@ -449,6 +510,19 @@ async def create_reconciliation(
     last_reconciled = await get_latest_reconciled_date(session, account_id, user.id)
     if last_reconciled is not None and as_of_date < last_reconciled:
         raise AccountReconciliationBeforeLastError(last_reconciled)
+
+    # The superseded row's trail entry goes in BEFORE the delete, for the reason delete_reconciliation
+    # records its own first: the sentence interpolates the difference the row carries, and reading it
+    # back afterwards would read a detached object. It is audited and NOT notified — see _announce.
+    superseded = await account_reconciliation_repository.get_by_account_date(session, account_id, as_of_date)
+    if superseded is not None:
+        if scope is not None:
+            await _announce(session, account, scope, user, AuditAction.deleted, difference=superseded.difference, notify=False)
+        await account_reconciliation_repository.delete(session, superseded)
+        # Flushed so the DELETE and its cascades reach the database before the balance below is summed
+        # and before the INSERT tests the UNIQUE constraint. Without it the sums would still count the
+        # adjustment being dropped, and the fresh row would collide with the one it replaces.
+        await session.flush()
 
     computed = await compute_account_balance_at(session, account, as_of_date)
     difference = compute_reconciliation_difference(statement_balance, computed)
@@ -630,8 +704,11 @@ async def _post_shared_adjustment(
 #
 # Only the account's most recent reconciliation can be deleted: an older one's adjustment is already
 # inside every later reconciliation's recorded computed_balance, so removing it would silently skew
-# those. On a shared account that ordering guard is what the pot's lock protects — two members deleting
-# concurrently would otherwise each see the other's row as the latest and both succeed.
+# those. The comparison is on DATES, and it is exact because (account_id, as_of_date) is UNIQUE — one
+# row holds the latest date, so exactly one row passes. Before that constraint a same-date pair passed
+# it together, and deleting the older of the two left the survivor counting an adjustment that no
+# longer existed. On a shared account the ordering guard is what the pot's lock protects — two members
+# deleting concurrently would otherwise each see the other's row as the latest and both succeed.
 async def delete_reconciliation(
     session: AsyncSession,
     account_id: int,

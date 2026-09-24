@@ -507,6 +507,41 @@ class TestTheAdjustmentPair:
             assert await _count(admin, "shared_expense_splits", "shared_expense_id", expense) == 0
 
 
+class TestOneReconciliationPerDate:
+    @pytest.mark.asyncio
+    async def test_a_pots_account_cannot_hold_two_reconciliations_on_one_date_either(self, seeded):
+        # The UNIQUE constraint is on (account_id, as_of_date) and carries no scope term, which is what
+        # makes re-reconciling a date a REPLACE on both sides. A pot's account is the one that would hurt
+        # most if it did not: two rows on one date were both deletable by the date-comparing guard, and
+        # dropping the older one took a SHARED adjustment out of every co-owner's share while the
+        # survivor kept claiming a balance built on top of it.
+        #
+        # Asserted through the ADMIN session, so the refusal is the constraint's and not a policy's.
+        async with seeded["admin_sessionmaker"]() as admin:
+            insert = text(
+                "INSERT INTO account_reconciliations (account_id, pot_id, as_of_date, statement_balance, computed_balance, difference) "
+                "VALUES (:a, :p, '2026-06-01', 10, 10, 0) RETURNING id"
+            )
+            params = {"a": seeded["main"], "p": seeded["pot"]}
+            first = (await admin.execute(insert, params)).scalar_one()
+            with pytest.raises(IntegrityError) as exc:
+                await admin.execute(insert, params)
+            assert "account_reconciliations_account_date_key" in str(exc.value)
+            await admin.rollback()
+
+            # A different date is still free — the constraint is per date, not per account.
+            await admin.execute(
+                text(
+                    "INSERT INTO account_reconciliations (account_id, pot_id, as_of_date, statement_balance, computed_balance, difference) "
+                    "VALUES (:a, :p, '2026-06-02', 10, 10, 0)"
+                ),
+                params,
+            )
+            await admin.execute(text("DELETE FROM account_reconciliations WHERE account_id = :a"), {"a": seeded["main"]})
+            await admin.commit()
+            assert first is not None
+
+
 async def _count(session: AsyncSession, table: str, column: str, value: int) -> int:
     return (await session.execute(text(f"SELECT count(*) FROM {table} WHERE {column} = :v"), {"v": value})).scalar_one()
 

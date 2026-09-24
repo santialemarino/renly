@@ -206,10 +206,12 @@ async def get_reconciliation(
 #   5. Write the reconciliation row and patch its back-pointer to the adjustment id.
 #
 # Unlike account reconciliation, an out-of-order (older) period is ALLOWED here rather than rejected.
-# The account version has no repair path — reconciliations there simply append, so an older one can
-# only be undone by deleting every later one first, which is why it is forward-only. This one replaces:
-# re-running a period drops its old row and adjustment and recomputes from scratch, so re-running the
-# affected periods in ascending order always converges. Refusing would import a workaround for a
+# Both sides replace a re-run of the SAME slot, but only this one converges after an older one: a
+# period is a window, so re-running the affected periods in ascending order recomputes each from
+# scratch and lands them all right. An account reconciliation is a point-in-time figure with no window
+# to re-run, so an older one would sit underneath a newer row whose date bound cannot see it and skew a
+# balance the user already attested to — which is why that side stays forward-only and this one does
+# not. Deleting the later rows first remains its way back. Refusing would import a workaround for a
 # limitation cards do not have, and would have to withhold Reconcile on nearly every row of a surface
 # whose whole shape is a list of individually reconcilable statements. Staleness is the signal instead.
 # Returns the fresh reconciliation row.

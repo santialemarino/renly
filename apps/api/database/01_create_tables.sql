@@ -714,10 +714,19 @@ ALTER TABLE income_entries
 
 -- Point-in-time account true-up against the real balance (Bucket 3 #1, PR 4 — Option F, simplified).
 -- The cash/bank sibling of card_reconciliations, and deliberately simpler: an account is
--- single-currency and its balance is a point-in-time figure, so there is no statement PERIOD and no
--- currency bucket — just a balance as of a date. There is also no is_stale flag: re-reconciling
--- simply appends a newer row (a later true-up supersedes an earlier one by date), so no UNIQUE
--- constraint and no delete-and-replace.
+-- single-currency and its balance is a point-in-time figure, so there is no statement PERIOD, no
+-- currency bucket and no is_stale flag — just a balance as of a date.
+-- ONE ROW PER (account_id, as_of_date), enforced by the UNIQUE constraint below, and re-reconciling
+-- a date is delete-and-replace through it plus the cascades from expense_entries / income_entries /
+-- shared_expenses / shared_income.account_reconciliation_id. The constraint is what makes the
+-- service's "only the latest reconciliation may be deleted" guard exact: that guard compares DATES,
+-- so two rows sharing one date were BOTH the latest, and deleting the older dropped its adjustment
+-- while the survivor's recorded computed_balance still counted it — leaving the account wrong by
+-- that whole adjustment with no row left to explain it.
+-- Reconciliation stays FORWARD-ONLY despite the replace: a STRICTLY older date is still refused,
+-- because its adjustment would land underneath a newer reconciliation whose date bound cannot see
+-- it. Cards allow an older period because they are period-scoped and re-running them converges; an
+-- account has no such repair path, so only the EQUAL date replaces.
 -- difference = statement_balance - computed_balance. Positive means the account really holds more
 --   than Renly knew, so the adjustment is an INCOME; negative creates an expense; zero creates nothing.
 -- adjustment_expense_id / adjustment_income_id back-reference the adjustment row. SET NULL is only a
@@ -769,13 +778,15 @@ CREATE TABLE account_reconciliations (
   ),
   CONSTRAINT account_reconciliations_shared_adjustment CHECK (
     user_id IS NULL OR (adjustment_shared_expense_id IS NULL AND adjustment_shared_income_id IS NULL)
-  )
+  ),
+  CONSTRAINT account_reconciliations_account_date_key UNIQUE (account_id, as_of_date)
 );
 
 CREATE INDEX idx_account_reconciliations_user_id ON account_reconciliations(user_id);
 CREATE INDEX idx_account_reconciliations_pot_id ON account_reconciliations(pot_id) WHERE pot_id IS NOT NULL;
-CREATE INDEX idx_account_reconciliations_account_date
-  ON account_reconciliations(account_id, as_of_date DESC);
+-- No separate (account_id, as_of_date DESC) index: the UNIQUE constraint above already builds a btree
+-- on that exact pair, and Postgres scans a btree backwards, so it serves the newest-first history read
+-- and the max(as_of_date) lookup alike. A second copy would only cost writes.
 
 -- Forward FKs from expense_entries / income_entries to account_reconciliations, mirroring the
 -- card_reconciliations pair above. Declared via ALTER TABLE for the same circular-dependency reason.

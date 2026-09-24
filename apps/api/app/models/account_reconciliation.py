@@ -9,8 +9,11 @@ from app.models.utils import utcnow
 
 # Point-in-time true-up of a cash/bank account against its real balance (Bucket 3 #1 — Option F).
 # The cash/bank sibling of CardReconciliation, deliberately simpler: an account is single-currency and
-# its balance is a point-in-time figure, so there is no statement period, no currency bucket, and no
-# is_stale flag — re-reconciling just appends a newer row, which supersedes the earlier one by date.
+# its balance is a point-in-time figure, so there is no statement period, no currency bucket and no
+# is_stale flag — just a balance as of a date.
+# One row per (account_id, as_of_date), enforced at the DB, and re-reconciling a date is
+# delete-and-replace through it plus the cascades below. Reconciling a STRICTLY older date is still
+# refused: its adjustment would land underneath a newer reconciliation whose date bound cannot see it.
 # computed_balance is the account's derived balance at as_of_date at the time of reconciliation.
 # difference = statement_balance - computed_balance. A positive difference (the account really holds
 # more than Renly knew) creates an adjustment income; a negative one creates an adjustment expense;
