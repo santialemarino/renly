@@ -140,8 +140,8 @@
     },
     "currency": {
       "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
-      "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
-      "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon.",
+      "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Individual amounts will stay in the currency they were recorded in, but totals and charts will leave them out, so they will read as zero. Support coming soon.",
+      "unsupportedSwitch": "Conversion to {currency} is not available yet. Individual amounts stay in the currency they were recorded in, but totals and charts leave them out, so they will read as zero. Support coming soon.",
       "pinnedGroupLabel": "Common",
       "preferredGroupLabel": "Preferred",
       "otherGroupLabel": "Other currencies"
@@ -567,6 +567,7 @@
       "tooltipExpenses": "Expenses"
     },
     "currencyFallback": "The dashboard requires a common currency. <bold>Showing values in {currency}.</bold>",
+    "skippedCurrencies": "No stored rate for {currencies}, so those amounts are left out of the totals below.",
     "loadError": "Unable to load financial dashboard data. Please try again later.",
     "noData": "No data available yet. Add income or expense entries to see your financial overview.",
     "distribution": {
@@ -1454,6 +1455,7 @@
     },
     "title": "Payments Calendar",
     "subtitle": "All your upcoming payments in one timeline — subscriptions, installments, payment obligations and credit-card due dates.",
+    "skippedCurrencies": "No stored rate for {currencies}, so those amounts are shown as they were recorded.",
     "empty": "Nothing due in {month}.",
     "noBuckets": "No active cards.",
     "monthLabel": "{month} {year}",

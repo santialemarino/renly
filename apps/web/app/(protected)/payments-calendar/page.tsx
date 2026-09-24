@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { PaymentsCalendarHeader } from '@/app/(protected)/payments-calendar/_components/payments-calendar-header';
 import { PaymentsCalendarList } from '@/app/(protected)/payments-calendar/_components/payments-calendar-list';
+import { WarningHint } from '@/components/styled-hint';
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getInstallments } from '@/lib/api/installments';
@@ -12,6 +13,7 @@ import { getPaymentsCalendar } from '@/lib/api/payments-calendar';
 import { getPageSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { currentYearMonth } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -29,6 +31,7 @@ interface PaymentsCalendarPageProps {
 
 export default async function PaymentsCalendarPage({ searchParams }: PaymentsCalendarPageProps) {
   const t = await getTranslations('paymentsCalendar');
+  const fmt = await getFormatters();
   const params = await searchParams;
   const cookieStore = await cookies();
 
@@ -91,6 +94,12 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      {/* The same courtesy /expenses and /income render, and the reason it is worth rendering on a
+          page that shows no total: a row whose rate is missing falls back to its own currency, so the
+          column mixes two scales with nothing saying which cell is in which. */}
+      <WarningHint show={calendar.skippedCurrencies.length > 0} parentGap={16}>
+        {t('skippedCurrencies', { currencies: fmt.list(calendar.skippedCurrencies) })}
+      </WarningHint>
       <PaymentsCalendarHeader year={year} month={month} timeZone={timeZone} />
       <PaymentsCalendarList
         items={calendar.items}

@@ -18,6 +18,7 @@ import {
 } from '@/lib/api/finance-metrics';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -38,6 +39,7 @@ interface FinanceDashboardPageProps {
 export default async function FinanceDashboardPage({ searchParams }: FinanceDashboardPageProps) {
   const cookieStore = await cookies();
   const t = await getTranslations('financeDashboard');
+  const fmt = await getFormatters();
   const params = await searchParams;
 
   const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
@@ -97,6 +99,27 @@ export default async function FinanceDashboardPage({ searchParams }: FinanceDash
     );
   }
 
+  /*
+   * The UNION across all four responses, not any one of them. Each computes its own skip set over the
+   * rows it reads — the overview also folds in the previous period and the card buckets, the monthly
+   * chart only its own window — so a currency can be missing a rate for one and not another, and
+   * reading a single response would hide a figure that is under-reporting on this very page.
+   *
+   * Every one of these totals is an AGGREGATE, which is why the page has to say something at all: a
+   * row can fall back to its original currency and still be honest, but a total cannot. There is one
+   * number and it can only be in one scale, so an unconvertible source is simply left out of it.
+   * Measured before this was wired: income read 1,000.00 where the true figure was 1,974.53, with
+   * nothing on screen to say so.
+   */
+  const skippedCurrencies = [
+    ...new Set([
+      ...overview.skippedCurrencies,
+      ...monthly.skippedCurrencies,
+      ...expenseBreakdown.skippedCurrencies,
+      ...incomeBreakdown.skippedCurrencies,
+    ]),
+  ].sort();
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <div className="flex flex-col gap-y-4 sm:flex-row sm:items-start sm:justify-between">
@@ -115,6 +138,10 @@ export default async function FinanceDashboardPage({ searchParams }: FinanceDash
           currency,
           bold: (chunks) => <strong>{chunks}</strong>,
         })}
+      </WarningHint>
+
+      <WarningHint show={skippedCurrencies.length > 0} parentGap={16}>
+        {t('skippedCurrencies', { currencies: fmt.list(skippedCurrencies) })}
       </WarningHint>
 
       <FinanceDashboardMetricCards overview={overview} />
