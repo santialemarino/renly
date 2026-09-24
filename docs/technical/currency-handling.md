@@ -86,6 +86,7 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 **Fail-loud conversion.** `convert_value` returns `Decimal | None` — `None` when either currency's rate is missing from the map. A value is **never** summed unconverted. Callers handle `None` by skipping and reporting:
 
 - **Aggregates** (finance overview / monthly / breakdowns, dashboard overview / evolution / composition, expense & income lists, payments calendar) exclude the row and list its code in an additive `skipped_currencies: string[]` response field.
+  - ▸ **Returning the field is half the job; the surface has to RENDER it.** `/dashboard`, `/expenses`, `/income` and `/investor-dashboard` did from the start. `/finance-dashboard` did not — its four responses carried the codes and the web mapper dropped them, so the page showed a total that had silently left rows out and said nothing (measured: income read 1,000.00 where the figure was 1,974.53). It now renders the same `WarningHint` over the **union** of all four responses' skip sets, since each computes its own over the rows it reads and a currency can be missing a rate for one and not another.
 - **Liquidity** reuses `skipped_entities` (a new `income` entry type carries the currency code as its name).
 - **Metrics & snapshot grid** extend the data-presence-aware `skipped_investments` — an investment whose base or the display currency has no stored rates is excluded and surfaced.
 - **Per-row `converted_*` fields** (expense/income/plan/calendar rows, asset-price lookup) stay **null** on a missing rate, never the unconverted number.
@@ -186,15 +187,16 @@ Only USD, ARS, BRL, EUR, and GBP have exchange rate support. When a user selects
 
 - An animated `AlertTriangle` icon (amber, scale animation) appears next to the label of each combobox when its selected currency is unsupported.
 - When either currency is unsupported, a `WarningHint` block appears below both comboboxes (separated by a `Separator`) with the text: _"Currencies that don't have exchange rate support yet. Conversion will be available soon."_
-- On selection of an unsupported currency, a **warning toast** (amber) is shown: _"Exchange rate conversion for {CURRENCY} is not available yet. Values will be shown in their original currency."_
+- On selection of an unsupported currency, a **warning toast** (amber) is shown: _"Exchange rate conversion for {CURRENCY} is not available yet. Individual amounts will stay in the currency they were recorded in, but totals and charts will leave them out, so they will read as zero."_
 
 **Currency switcher (on switch):**
 
-- When the user switches to an unsupported currency via the sidebar, a **warning toast** (amber) is shown: _"Conversion to {CURRENCY} is not available yet. Showing values in original currency."_
+- When the user switches to an unsupported currency via the sidebar, a **warning toast** (amber) is shown: _"Conversion to {CURRENCY} is not available yet. Individual amounts stay in the currency they were recorded in, but totals and charts leave them out, so they will read as zero."_
 
 **Fallback behaviour:**
 
-- When conversion is not possible, all monetary values fall back to their `base_currency` (same as "Original" mode). No error — the page renders normally, just without conversion.
+- **A ROW falls back; a TOTAL does not, and this subsection used to claim otherwise.** It said "all monetary values fall back to their `base_currency` ... just without conversion", which contradicts the fail-loud rule above and was wrong in the direction that matters. A per-row `converted_*` field comes back null and the UI renders the original amount labelled with its own currency — that part was right. An **aggregate cannot fall back**: there is one number and it can only be in one scale, so every unconvertible row is EXCLUDED and the total reads **0**, with each source currency named in `skipped_currencies`. Measured: two rows worth 1,974.53 USD total 0 under an unsupported display currency.
+- No error either way — the page renders normally. Which is exactly why every surface showing a total has to render the skip hint: without it the page reports a number that is simply wrong, and looks no different from one that is right.
 
 **Supported check:** the frontend never hardcodes the supported set — it receives it from `GET /exchange-rates/currencies` (derived from the `Currency` enum, the single source of truth) as a `supportedCurrencies: string[]` prop, and each display/preference picker checks membership inline (`supportedCurrencies.includes(code)`; see the `isSupported` helper in `preferences-form.tsx` and the switch guard in `currency-switcher.tsx`). When the set is unavailable it fails open (treats every code as supported).
 
