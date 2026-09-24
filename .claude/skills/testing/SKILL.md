@@ -85,6 +85,13 @@ pnpm test:e2e        # Playwright E2E
     balance aggregation, and the settlement leg sums' `coalesce(<leg>_amount, amount)`. Seeded with
     one cross-currency settlement whose three figures all differ, so a query reading the wrong column
     shows up as two accounts moving by each other's amount.
+  - `test_account_reconciliation_replace.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Two
+    facts about re-reconciling a date, both of which a mocked session can only watch the ORDER of.
+    The `(account_id, as_of_date)` UNIQUE constraint, asserted as a refused INSERT rather than as
+    behaviour a code path chooses, because the point is that the two-row state is unreachable for
+    every caller. And the preview agreeing with the write: the dialog SUBTRACTS the superseded row's
+    difference while the save DELETES it and re-derives, so each case reads the preview, saves, and
+    asserts the recorded `computed_balance` is the figure the user was shown.
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against

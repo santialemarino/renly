@@ -13,10 +13,13 @@ import { accountRow, createAccount, deleteAccountByMarker, testMarker } from './
  * (this one, the re-agreement confirmation from PR 13 and the contribution flow from PR 12), which is
  * the case for building it as its own unit rather than a third time inside a feature PR.
  *
- * What makes the private path worth a spec anyway is that this unit MOVED it. Reconciling now resolves
- * its account through `get_account_in_scope` rather than the private-only lookup, takes a row lock
- * before reading the balance, and posts its adjustment through a branch that did not exist before. A
- * private account exercises every one of those and asserts the behaviour that must not have changed.
+ * What makes the private path worth a spec anyway is that reconciling keeps MOVING. It now replaces a
+ * same-date re-run instead of appending, and the dialog previews the balance that replace will measure
+ * against rather than the one the account currently holds — both of which only a browser shows. Before
+ * that, the unit that added shared accounts made reconciling resolve its account through
+ * `get_account_in_scope` rather than the private-only lookup, take a row lock before reading the
+ * balance, and post its adjustment through a branch that did not exist before. A private account
+ * exercises every one of those and asserts the behaviour that must not have changed.
  *
  * ONE test rather than several, and deliberately. The date guards — future, before the account opened,
  * before the latest reconciliation — are each an API refusal restated as a disabled day in the picker,
@@ -31,7 +34,7 @@ import { accountRow, createAccount, deleteAccountByMarker, testMarker } from './
  * source that can reach one — plus a two-account live walk in both locales.
  */
 test.describe('reconciling an account (signed in)', () => {
-  test('records the difference, shows it in the history, and undoes it on delete', async ({
+  test('records the difference, replaces a same-date re-run, and undoes it on delete', async ({
     page,
   }) => {
     /*
@@ -71,12 +74,44 @@ test.describe('reconciling an account (signed in)', () => {
        */
       await expect(row).toContainText('940');
 
+      /*
+       * Re-reconciling the SAME date REPLACES that reconciliation rather than adding a second one —
+       * the dialog reopens on today, which is the date just reconciled. Three assertions, each
+       * covering a different way this can break, and each verified to fail on its own regression by
+       * breaking that one thing in the service and re-running:
+       *
+       *   * The dialog SAYS it will replace, before the user commits to overwriting a figure they
+       *     entered earlier. Fails when the API stops reporting `replaces_existing`.
+       *   * "Renly's balance" reads the ORIGINAL 1,000, not the 940 the account holds right now. The
+       *     save drops the first adjustment before taking its balance, so a preview still counting it
+       *     would promise an adjustment the save never posts. Fails when the preview stops excluding
+       *     the superseded row.
+       *   * Saving leaves ONE history row. Two rows on one date were the defect: the delete guard
+       *     compares dates, so both were offered a Delete, and taking the older one dropped its
+       *     adjustment while the survivor kept claiming a balance built on top of it. Fails when the
+       *     write appends instead of replacing — which the first two assertions do NOT catch.
+       */
+      await row.getByTestId('account-reconcile').click();
+      await expect(balance).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByTestId('account-reconcile-replace-banner')).toBeVisible();
+      await expect(page.getByTestId('account-reconcile-submit')).toHaveText(
+        'Replace reconciliation',
+      );
+      await expect(page.getByTestId('account-reconcile-computed')).toHaveText(/^1,000\b/);
+
+      await balance.fill('1120');
+      await page.getByTestId('account-reconcile-submit').click();
+      await expect(balance).toBeHidden();
+      await expect(row).toContainText('1,120');
+
       // Expanding the row opens its reconciliation history, which is the surface this unit made
       // shared-readable and which a private account has always had.
       await row.click();
       const panel = page.getByRole('row').filter({ hasText: 'Never reconciled' });
       await expect(panel).toHaveCount(0);
-      await expect(page.getByTestId('reconciliation-delete')).toBeVisible();
+      // ONE, not "at least one": the replace is only correct if the superseded row is gone, and
+      // `toBeVisible` on the first match passes just as happily with two rows sitting there.
+      await expect(page.getByTestId('reconciliation-delete')).toHaveCount(1);
 
       /*
        * The escape hatch for a mistyped balance: deleting the reconciliation cascade-drops the

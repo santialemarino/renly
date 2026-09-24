@@ -120,7 +120,7 @@ def _account(**overrides) -> Account:
     return Account(**data)
 
 
-# Wires the whole create_reconciliation dependency set: a fixed account, a fixed "today", the five
+# Wires the whole create_or_replace dependency set: a fixed account, a fixed "today", the five
 # balance sums (income, expenses, settlements, and both transfer legs), and capture-and-assign-id fakes
 # for the rows the service writes.
 def _wire(
@@ -134,6 +134,7 @@ def _wire(
     transfers_out=None,
     today: date = TODAY,
     last_reconciled: date | None = None,
+    superseded: AccountReconciliation | None = None,
 ) -> dict:
     captured: dict = {}
     monkeypatch.setattr(svc.account_service, "get_account_in_scope", AsyncMock(return_value=account))
@@ -154,6 +155,15 @@ def _wire(
         "get_latest_dates_by_account_ids",
         AsyncMock(return_value={account.id: last_reconciled} if last_reconciled else {}),
     )
+    # The row a save on this date would REPLACE, or None. Stubbed on every path rather than only the
+    # replace ones: unstubbed it would answer a Mock off the AsyncMock session, which is truthy, so
+    # every test here would take the replace branch and none would say so.
+    monkeypatch.setattr(svc.account_reconciliation_repository, "get_by_account_date", AsyncMock(return_value=superseded))
+
+    async def fake_delete(_session, reconciliation):
+        captured["deleted"] = reconciliation
+
+    monkeypatch.setattr(svc.account_reconciliation_repository, "delete", fake_delete)
 
     async def fake_create_reconciliation(_session, reconciliation):
         reconciliation.id = 42
@@ -316,7 +326,7 @@ class TestCreateReconciliation:
         captured = _wire(monkeypatch, _account())
         session = AsyncMock()
 
-        reconciliation = await svc.create_reconciliation(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
+        reconciliation = await svc.create_or_replace(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
 
         assert reconciliation.difference == Decimal("-200")
         expense = captured["expense"]
@@ -338,7 +348,7 @@ class TestCreateReconciliation:
         captured = _wire(monkeypatch, _account())
         session = AsyncMock()
 
-        reconciliation = await svc.create_reconciliation(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
+        reconciliation = await svc.create_or_replace(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
 
         assert reconciliation.difference == Decimal("250")
         income = captured["income"]
@@ -355,7 +365,7 @@ class TestCreateReconciliation:
         captured = _wire(monkeypatch, _account())
         session = AsyncMock()
 
-        reconciliation = await svc.create_reconciliation(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1000"))
+        reconciliation = await svc.create_or_replace(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1000"))
 
         assert reconciliation.difference == Decimal(0)
         assert reconciliation.adjustment_expense_id is None
@@ -366,46 +376,37 @@ class TestCreateReconciliation:
     @pytest.mark.asyncio
     async def test_reconciling_today_is_allowed(self, monkeypatch):
         _wire(monkeypatch, _account())
-        reconciliation = await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
+        reconciliation = await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
         assert reconciliation.as_of_date == TODAY
 
     @pytest.mark.asyncio
     async def test_future_date_is_rejected(self, monkeypatch):
         _wire(monkeypatch, _account())
         with pytest.raises(AccountReconciliationFutureDateError):
-            await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 30), statement_balance=Decimal("1000"))
+            await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 30), statement_balance=Decimal("1000"))
 
     @pytest.mark.asyncio
     async def test_date_before_the_opening_date_is_rejected(self, monkeypatch):
         _wire(monkeypatch, _account(opening_date=date(2026, 3, 1)))
         with pytest.raises(AccountReconciliationBeforeOpeningError):
-            await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 2, 28), statement_balance=Decimal("1000"))
+            await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 2, 28), statement_balance=Decimal("1000"))
 
     @pytest.mark.asyncio
     async def test_adjustment_takes_the_accounts_currency(self, monkeypatch):
         captured = _wire(monkeypatch, _account(currency="USD"))
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1200"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1200"))
         assert captured["income"].currency == "USD"
-
-    @pytest.mark.asyncio
-    async def test_re_reconciling_the_same_date_is_self_correcting(self, monkeypatch):
-        # After the first true-up the adjustment is part of the derived balance, so a second
-        # reconciliation with the same real balance finds no gap and posts nothing.
-        captured = _wire(monkeypatch, _account(), income={7: Decimal("250")}, last_reconciled=date(2026, 7, 20))
-        reconciliation = await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
-        assert reconciliation.difference == Decimal(0)
-        assert "expense" not in captured and "income" not in captured
 
     @pytest.mark.asyncio
     async def test_every_written_row_carries_the_callers_user_id(self, monkeypatch):
         # The cross-tenant invariant: nothing is written under another user's id.
         captured = _wire(monkeypatch, _account())
-        reconciliation = await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
+        reconciliation = await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
         assert reconciliation.user_id == USER.id
         assert captured["income"].user_id == USER.id
 
         captured = _wire(monkeypatch, _account())
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
         assert captured["expense"].user_id == USER.id
 
     @pytest.mark.asyncio
@@ -415,10 +416,149 @@ class TestCreateReconciliation:
         session = AsyncMock()
 
         with pytest.raises(NotFoundError):
-            await svc.create_reconciliation(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
+            await svc.create_or_replace(session, 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
 
         assert captured == {}
         session.commit.assert_not_awaited()
+
+
+class TestComputedBalancePreview:
+    # What the reconcile dialog shows before the user types anything. It is NOT the plain derived
+    # balance: saving on a date the account already carries REPLACES that row, so the save drops its
+    # adjustment before taking its own balance — and a preview that still counted it would name a
+    # difference the write never posts, and divide that wrong figure between a pot's owners.
+    #
+    # An adjustment moves the balance by exactly `+difference` on either side (a surplus posts an income
+    # of `difference`, a shortfall an expense of `-difference`), so both directions are asserted: a
+    # preview that added instead of subtracting would be right about neither, and one that took an
+    # absolute value would be right about the surplus alone.
+
+    @pytest.mark.asyncio
+    async def test_a_surplus_already_posted_on_that_date_is_taken_back_out(self, monkeypatch):
+        # Opening 1000, no movements, and a reconciliation that already added 250 as income. The save
+        # will drop that income, so the balance it measures against is 750 — not the 1000 on screen now.
+        _wire(monkeypatch, _account(), superseded=_reconciliation(id=41, as_of_date=TODAY, difference=Decimal("250")))
+
+        preview = await svc.get_computed_balance(AsyncMock(), 7, USER, as_of_date=TODAY)
+
+        assert preview.balance == Decimal("750")
+        assert preview.replaces_existing is True
+
+    @pytest.mark.asyncio
+    async def test_a_shortfall_already_posted_on_that_date_is_added_back(self, monkeypatch):
+        # The other direction: an adjustment EXPENSE of 200 took the balance down, so removing it puts
+        # it back up. Subtracting a negative difference is what does that.
+        _wire(monkeypatch, _account(), superseded=_reconciliation(id=41, as_of_date=TODAY, difference=Decimal("-200")))
+
+        preview = await svc.get_computed_balance(AsyncMock(), 7, USER, as_of_date=TODAY)
+
+        assert preview.balance == Decimal("1200")
+
+    @pytest.mark.asyncio
+    async def test_a_free_date_previews_the_plain_balance(self, monkeypatch):
+        _wire(monkeypatch, _account())
+
+        preview = await svc.get_computed_balance(AsyncMock(), 7, USER, as_of_date=TODAY)
+
+        assert preview.balance == Decimal("1000")
+        assert preview.replaces_existing is False
+
+    @pytest.mark.asyncio
+    async def test_it_asks_about_this_accounts_row_on_the_picked_date(self, monkeypatch):
+        # Asserted on the ARGUMENTS: the lookup is stubbed and answers the same row whatever it is
+        # asked, so reading today's date instead of the picked one would pass every assertion above.
+        _wire(monkeypatch, _account(), superseded=_reconciliation(id=41, as_of_date=date(2026, 7, 20)))
+
+        await svc.get_computed_balance(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20))
+
+        assert svc.account_reconciliation_repository.get_by_account_date.await_args.args[1:] == (7, date(2026, 7, 20))
+
+    @pytest.mark.asyncio
+    async def test_it_verifies_account_scope_before_reading_anything(self, monkeypatch):
+        _wire(monkeypatch, _account())
+        monkeypatch.setattr(svc.account_service, "get_account_in_scope", AsyncMock(side_effect=NotFoundError("Account not found.")))
+
+        with pytest.raises(NotFoundError):
+            await svc.get_computed_balance(AsyncMock(), 7, USER, as_of_date=TODAY)
+
+
+class TestSameDateReplace:
+    # Re-running a date REPLACES the reconciliation it already carries. Appending instead left two rows
+    # that a delete guard comparing DATES both called the latest, so deleting the older dropped its
+    # adjustment while the survivor's recorded computed_balance still counted it.
+    #
+    # What a mocked session CANNOT show is the arithmetic: the balance sums are stubbed constants, so
+    # they answer the same figure whether or not the prior adjustment was dropped first, and any
+    # assertion about the resulting difference would pass on both the fix and the regression. The ORDER
+    # is the part that is real here — drop, flush, then read — and the figures are pinned against a live
+    # database in tests/integration/test_account_reconciliation_replace.py.
+
+    @pytest.mark.asyncio
+    async def test_the_prior_row_is_dropped_and_flushed_before_the_balance_is_read(self, monkeypatch):
+        # Each step in this sequence is load-bearing and fails differently. Without the DELETE the
+        # INSERT collides with the UNIQUE constraint; without the FLUSH the DELETE and its cascade have
+        # not reached the database, so the sums below still count the adjustment being dropped and the
+        # fresh difference comes out as the gap between two statements rather than the real one; and
+        # reading the balance FIRST would measure against the row that is about to disappear.
+        order: list[str] = []
+        _wire(monkeypatch, _account(), last_reconciled=TODAY, superseded=_reconciliation(id=41, as_of_date=TODAY))
+
+        async def traced_delete(_session, _reconciliation):
+            order.append("delete")
+
+        original_balance = svc.compute_account_balance_at
+
+        async def traced_balance(*args, **kwargs):
+            order.append("balance")
+            return await original_balance(*args, **kwargs)
+
+        monkeypatch.setattr(svc.account_reconciliation_repository, "delete", traced_delete)
+        monkeypatch.setattr(svc, "compute_account_balance_at", traced_balance)
+        session = AsyncMock()
+        session.flush = AsyncMock(side_effect=lambda: order.append("flush"))
+
+        await svc.create_or_replace(session, 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+
+        assert order == ["delete", "flush", "balance"]
+
+    @pytest.mark.asyncio
+    async def test_a_date_that_carries_nothing_drops_nothing(self, monkeypatch):
+        # The other side of the branch, so a mutation that deletes unconditionally fails here. Without
+        # it "drop the prior row" could be read as "drop whatever get_by_account_date answered", which
+        # on a free date is None.
+        captured = _wire(monkeypatch, _account())
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+
+        assert "deleted" not in captured
+
+    @pytest.mark.asyncio
+    async def test_the_row_looked_up_is_this_accounts_row_on_the_picked_date(self, monkeypatch):
+        # Asserted on the ARGUMENTS, because the lookup is stubbed and answers the same row whatever it
+        # is asked. Passing today's date, or another account's id, would pass every other test here and
+        # then replace a row the user never picked.
+        _wire(monkeypatch, _account(), last_reconciled=date(2026, 7, 20), superseded=_reconciliation(id=41, as_of_date=date(2026, 7, 20)))
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("800"))
+
+        assert svc.account_reconciliation_repository.get_by_account_date.await_args.args[1:] == (7, date(2026, 7, 20))
+
+    @pytest.mark.asyncio
+    async def test_an_older_date_is_still_refused_rather_than_replaced(self, monkeypatch):
+        # Replacing the EQUAL date does not make reconciliation two-way. An older row's adjustment would
+        # land underneath a newer reconciliation whose date bound cannot see it, skewing a figure the
+        # user already attested to — and unlike a card period there is no window to re-run afterwards.
+        captured = _wire(
+            monkeypatch,
+            _account(),
+            last_reconciled=date(2026, 7, 20),
+            superseded=_reconciliation(id=41, as_of_date=date(2026, 7, 10)),
+        )
+
+        with pytest.raises(AccountReconciliationBeforeLastError):
+            await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 10), statement_balance=Decimal("950"))
+
+        assert captured == {}
 
 
 class TestOutOfOrderGuard:
@@ -429,7 +569,7 @@ class TestOutOfOrderGuard:
     async def test_date_before_the_latest_reconciliation_is_rejected(self, monkeypatch):
         _wire(monkeypatch, _account(), last_reconciled=date(2026, 7, 20))
         with pytest.raises(AccountReconciliationBeforeLastError) as exc:
-            await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 10), statement_balance=Decimal("950"))
+            await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 10), statement_balance=Decimal("950"))
         assert exc.value.extra == {"last_reconciled_date": "2026-07-20"}
 
     @pytest.mark.asyncio
@@ -437,27 +577,31 @@ class TestOutOfOrderGuard:
         captured = _wire(monkeypatch, _account(), last_reconciled=date(2026, 7, 20))
         session = AsyncMock()
         with pytest.raises(AccountReconciliationBeforeLastError):
-            await svc.create_reconciliation(session, 7, USER, as_of_date=date(2026, 7, 10), statement_balance=Decimal("950"))
+            await svc.create_or_replace(session, 7, USER, as_of_date=date(2026, 7, 10), statement_balance=Decimal("950"))
         assert captured == {}
         session.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_the_same_date_as_the_latest_is_allowed(self, monkeypatch):
-        # The boundary — re-running the latest date is the self-correcting path, not an out-of-order one.
-        _wire(monkeypatch, _account(), last_reconciled=date(2026, 7, 20))
-        reconciliation = await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
+        # The boundary — re-running the latest date is the REPLACE path, not an out-of-order one. The
+        # fixture carries the row that date holds, because the database cannot produce the other shape:
+        # `last_reconciled` IS some row's as_of_date.
+        prior = _reconciliation(id=41, as_of_date=date(2026, 7, 20))
+        captured = _wire(monkeypatch, _account(), last_reconciled=date(2026, 7, 20), superseded=prior)
+        reconciliation = await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 20), statement_balance=Decimal("1250"))
         assert reconciliation.as_of_date == date(2026, 7, 20)
+        assert captured["deleted"] is prior
 
     @pytest.mark.asyncio
     async def test_a_later_date_is_allowed(self, monkeypatch):
         _wire(monkeypatch, _account(), last_reconciled=date(2026, 7, 20))
-        reconciliation = await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 25), statement_balance=Decimal("1250"))
+        reconciliation = await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 25), statement_balance=Decimal("1250"))
         assert reconciliation.as_of_date == date(2026, 7, 25)
 
     @pytest.mark.asyncio
     async def test_a_never_reconciled_account_accepts_any_valid_date(self, monkeypatch):
         _wire(monkeypatch, _account())
-        reconciliation = await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 1, 15), statement_balance=Decimal("1250"))
+        reconciliation = await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 1, 15), statement_balance=Decimal("1250"))
         assert reconciliation.as_of_date == date(2026, 1, 15)
 
 
@@ -557,13 +701,21 @@ def _shared_account(**overrides) -> Account:
     return _account(user_id=None, pot_id=4, **overrides)
 
 
-# Wires create_reconciliation for a POT's account: the scope resolution, the ownership split, and
+# Wires create_or_replace for a POT's account: the scope resolution, the ownership split, and
 # capture-and-assign-id fakes for the shared rows the service writes.
 #
 # `shares` is what owner_shares answers. Passing {} is the UNDIVIDED pot — the one refusal this flow
 # has — rather than a separate flag, because that is exactly how the service learns of it.
-def _wire_shared(monkeypatch, account: Account, *, shares=None, today: date = TODAY, last_reconciled: date | None = None) -> dict:
-    captured = _wire(monkeypatch, account, today=today, last_reconciled=last_reconciled)
+def _wire_shared(
+    monkeypatch,
+    account: Account,
+    *,
+    shares=None,
+    today: date = TODAY,
+    last_reconciled: date | None = None,
+    superseded: AccountReconciliation | None = None,
+) -> dict:
+    captured = _wire(monkeypatch, account, today=today, last_reconciled=last_reconciled, superseded=superseded)
     monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, None)))
     monkeypatch.setattr(svc.pot_repository, "lock", AsyncMock())
     monkeypatch.setattr(svc.group_repository, "get_by_id", AsyncMock(return_value=GROUP))
@@ -610,7 +762,7 @@ class TestSharedAccountScope:
         # downstream read: a pot's reconciliation is countable by each co-owner, a private one is not.
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         row = captured["reconciliation"]
         assert (row.user_id, row.pot_id, row.created_by) == (None, 4, USER.id)
@@ -620,7 +772,7 @@ class TestSharedAccountScope:
         # The other side of the same branch, so a mutation flipping the condition fails here too.
         captured = _wire(monkeypatch, _account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         row = captured["reconciliation"]
         assert (row.user_id, row.pot_id, row.created_by) == (USER.id, None, USER.id)
@@ -629,7 +781,7 @@ class TestSharedAccountScope:
     async def test_a_shortfall_posts_a_shared_expense_drawn_from_the_account(self, monkeypatch):
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         expense = captured["shared_expense"]
         assert expense.group_id == 2
@@ -647,7 +799,7 @@ class TestSharedAccountScope:
     async def test_a_surplus_posts_shared_income_into_the_account_as_joint(self, monkeypatch):
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1200"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1200"))
 
         income = captured["shared_income"]
         assert income.amount == Decimal("200")
@@ -668,7 +820,7 @@ class TestSharedAccountScope:
         # what each owner HOLDS, through the NAV, and creates no debt between them.
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         splits = captured["expense_splits"]
         assert [(s.member_id, s.amount, s.paid_amount) for s in splits] == [
@@ -683,7 +835,7 @@ class TestSharedAccountScope:
         # same, so asserting only the expense side would leave half the identity untested.
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1200"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1200"))
 
         splits = captured["income_splits"]
         assert [(s.member_id, s.amount, s.received_amount) for s in splits] == [
@@ -699,7 +851,7 @@ class TestSharedAccountScope:
         captured = _wire_shared(monkeypatch, _shared_account())
         earlier = date(2026, 7, 20)
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=earlier, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=earlier, statement_balance=Decimal("800"))
 
         assert svc.pot_ownership_service.owner_shares.await_args.kwargs == {"total": Decimal("200"), "date": earlier}
         assert captured["shared_expense"].date == earlier
@@ -708,7 +860,7 @@ class TestSharedAccountScope:
     async def test_a_matching_balance_writes_no_adjustment_at_all(self, monkeypatch):
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
 
         assert "shared_expense" not in captured and "shared_income" not in captured
         assert captured["reconciliation"].difference == ZERO
@@ -722,7 +874,7 @@ class TestSharedAccountRefusal:
         captured = _wire_shared(monkeypatch, _shared_account(), shares={})
 
         with pytest.raises(AccountReconciliationPotNotDividedError):
-            await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+            await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         # Refused BEFORE the reconciliation row is written, so a rejected request leaves nothing behind.
         assert "reconciliation" not in captured
@@ -735,7 +887,7 @@ class TestSharedAccountRefusal:
         captured = _wire_shared(monkeypatch, _shared_account(), shares={})
 
         with pytest.raises(AccountReconciliationPotNotDividedError):
-            await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 1), statement_balance=Decimal("800"))
+            await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=date(2026, 7, 1), statement_balance=Decimal("800"))
 
         assert svc.pot_ownership_service.owner_shares.await_args.kwargs["date"] == date(2026, 7, 1)
         assert "reconciliation" not in captured
@@ -759,7 +911,7 @@ class TestSharedAccountLocking:
         # at all, silently. pots_scope_write's USING admits a read-only seat on purpose.
         _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         svc.pot_repository.lock.assert_awaited_once()
         assert svc.pot_repository.lock.await_args.args[1] == 4
@@ -771,7 +923,7 @@ class TestSharedAccountLocking:
         _wire(monkeypatch, _account())
         monkeypatch.setattr(svc.pot_repository, "lock", AsyncMock())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         svc.account_repository.lock_private.assert_awaited_once()
         assert svc.account_repository.lock_private.await_args.args[1] == 7
@@ -795,7 +947,7 @@ class TestSharedAccountLocking:
         monkeypatch.setattr(svc, "compute_account_balance_at", traced)
         assert lock is not None
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         assert order == ["lock", "balance"]
 
@@ -805,7 +957,7 @@ class TestSharedAccountAnnouncement:
     async def test_it_audits_the_reconciliation_and_notifies_the_pot(self, monkeypatch):
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         audit = captured["audit"].await_args.kwargs
         assert audit["entity_type"] == AuditEntityType.account_reconciliation
@@ -831,7 +983,7 @@ class TestSharedAccountAnnouncement:
         # recipients whatever it is asked — PR 13's lesson, which a mutation sweep found by deleting it.
         _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         assert svc.pot_service.list_notifiable_user_ids.await_args.kwargs == {"exclude_user_id": USER.id}
 
@@ -839,7 +991,7 @@ class TestSharedAccountAnnouncement:
     async def test_a_surplus_announces_the_other_direction(self, monkeypatch):
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1200"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1200"))
 
         assert captured["audit"].await_args.kwargs["payload"]["variant"] == "surplus"
         assert captured["dispatch"].await_args.args[2]["variant"] == "reconciliation_surplus"
@@ -852,10 +1004,45 @@ class TestSharedAccountAnnouncement:
         # co-owner holds.
         captured = _wire_shared(monkeypatch, _shared_account())
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
 
         assert captured["audit"].await_args.kwargs["payload"]["variant"] == "matched"
         captured["dispatch"].assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_replace_audits_the_removal_it_performs_but_sends_one_message(self, monkeypatch):
+        # A replace really does two things to the pot's owners: the superseded adjustment comes out of
+        # every share, then the new one goes in. The TRAIL records both, because without the `deleted`
+        # line a reader sees two "reconciled the account" entries on one date and cannot tell the first
+        # was undone — the very misreading a stacked pair used to produce. The NOTIFICATION does not:
+        # it was one save, and two pushes per button press is how people learn to mute an event.
+        captured = _wire_shared(
+            monkeypatch,
+            _shared_account(),
+            last_reconciled=TODAY,
+            superseded=_reconciliation(id=41, user_id=None, pot_id=4, as_of_date=TODAY, difference=Decimal("-120")),
+        )
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+
+        removal, creation = (call.kwargs for call in captured["audit"].await_args_list)
+        assert (removal["action"], removal["payload"]["variant"], removal["payload"]["amount"]) == (AuditAction.deleted, "shortfall", "120")
+        assert (creation["action"], creation["payload"]["variant"], creation["payload"]["amount"]) == (AuditAction.created, "shortfall", "200")
+
+        captured["dispatch"].assert_awaited_once()
+        assert captured["dispatch"].await_args.args[2]["amount"] == "200"
+
+    @pytest.mark.asyncio
+    async def test_a_replace_on_a_PRIVATE_account_still_announces_nothing(self, monkeypatch):
+        # The removal is audited only where there is a group to audit it to. A private account has no
+        # trail and no audience, and the replace must not invent either.
+        _wire(monkeypatch, _account(), last_reconciled=TODAY, superseded=_reconciliation(id=41, as_of_date=TODAY))
+        audit = AsyncMock()
+        monkeypatch.setattr(svc.shared_audit_service, "record", audit)
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+
+        audit.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_private_reconciliation_announces_nothing(self, monkeypatch):
@@ -866,7 +1053,7 @@ class TestSharedAccountAnnouncement:
         monkeypatch.setattr(svc.shared_audit_service, "record", audit)
         monkeypatch.setattr(svc.notification_service, "dispatch", dispatch)
 
-        await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
         audit.assert_not_awaited()
         dispatch.assert_not_awaited()
