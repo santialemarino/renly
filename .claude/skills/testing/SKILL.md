@@ -92,6 +92,18 @@ pnpm test:e2e        # Playwright E2E
     every caller. And the preview agreeing with the write: the dialog SUBTRACTS the superseded row's
     difference while the save DELETES it and re-derives, so each case reads the preview, saves, and
     asserts the recorded `computed_balance` is the figure the user was shown.
+  - `test_ownership_predicates.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Every repository
+    `get_by_id` that takes a `user_id`, driven against two users' rows: each must return the row to its
+    owner AND nothing to anybody else. The predicate IS the behaviour, so a mocked session cannot test
+    it at all — deleting `X.user_id == user_id` from four repositories left the whole unit suite green.
+    Also the two funding rules that ask "does this belong to THAT MEMBER", which RLS cannot answer.
+    Its population is DERIVED by `tests/unit/test_ownership_predicate_coverage.py`, which fails when a
+    new owner-scoped `get_by_id` appears with no case here.
+- **Reach for one when the PREDICATE IS THE BEHAVIOUR.** A repository method whose whole job is a
+  `WHERE` clause cannot be tested through a mocked session: the mock returns what the test told it to,
+  so the assertion reads the same whether the clause is there or not. Ownership scoping is the
+  canonical case — and when several methods share the shape, DERIVE the population from the source
+  rather than listing it, or the next one added is unpinned by default.
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against

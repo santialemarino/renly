@@ -64,6 +64,36 @@ class TestReachingACoOwnedRow:
             await account_service.get_account_in_scope(AsyncMock(), 7, USER)
 
 
+class TestReadingAChildListChecksTheParentFirst:
+    # `list_snapshots` reads snapshots by INVESTMENT id — `list_by_investment` takes no user and no
+    # scope — so the only thing standing between a guessed id and another person's valuation history is
+    # the `get_investment` call above it. Deleting that one line left all 2877 unit tests green.
+
+    @pytest.mark.asyncio
+    async def test_snapshots_of_an_investment_that_is_not_yours_are_refused(self, monkeypatch):
+        listed = AsyncMock(return_value=([], 0))
+        monkeypatch.setattr(investment_service, "get_investment", AsyncMock(side_effect=NotFoundError("Investment not found")))
+        monkeypatch.setattr(investment_service.snapshot_repository, "list_by_investment", listed)
+
+        with pytest.raises(NotFoundError):
+            await investment_service.list_snapshots(AsyncMock(), 3, USER)
+
+        # Asserted as well as the raise, because the refusal is only worth anything if it happens
+        # BEFORE the read. A guard that raises after fetching has already done the leaking.
+        listed.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_snapshots_of_your_own_investment_are_returned(self, monkeypatch):
+        # The positive control: without it the guard above passes just as well if list_snapshots were
+        # changed to raise unconditionally.
+        monkeypatch.setattr(investment_service, "get_investment", AsyncMock(return_value=_investment(user_id=1)))
+        monkeypatch.setattr(investment_service.snapshot_repository, "list_by_investment", AsyncMock(return_value=([], 0)))
+
+        result = await investment_service.list_snapshots(AsyncMock(), 3, USER)
+
+        assert result.total == 0
+
+
 class TestChildRowsInheritTheirParentsScope:
     # A snapshot or transaction takes its scope from the INVESTMENT, never from whoever is typing.
     # Taking the caller's would both violate the single-owner CHECK (a co-owned parent's child would
