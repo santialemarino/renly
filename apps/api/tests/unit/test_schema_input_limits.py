@@ -61,52 +61,72 @@ def _request_schemas():
     return sorted(set(walk(RequestBase)), key=lambda c: (c.__module__, c.__name__))
 
 
-# The non-None members of a union (`X | None`, `Optional[X]`, `Union[...]`), or the annotation itself when
-# it is not a union. Only a UNION is split: splitting any generic by its arguments reads `dict[str, int]`
-# as the two branches `str` and `int`, which is how the key check once never saw a mapping at all.
+# An annotation with any `Annotated[...]` wrapping removed — its metadata is constraints, not a type.
+def _unwrap(annotation):
+    while get_origin(annotation) is typing.Annotated:
+        annotation = get_args(annotation)[0]
+    return annotation
+
+
+# The non-None members of a union (`X | None`, `Optional[X]`, `Union[...]`), each unwrapped, or the
+# unwrapped annotation itself when it is not a union. Only a UNION is split: splitting any generic by
+# its arguments reads `dict[str, int]` as the two branches `str` and `int`, which is how the key check
+# once never saw a mapping at all.
 def _union_branches(annotation) -> list:
+    annotation = _unwrap(annotation)
     if get_origin(annotation) in (typing.Union, types.UnionType):
-        return [a for a in get_args(annotation) if a is not type(None)]
+        return [_unwrap(a) for a in get_args(annotation) if a is not type(None)]
     return [annotation]
 
 
 def _plain_str(annotation) -> bool:
+    return _unwrap(annotation) is str
+
+
+# Whether a plain `str` appears ANYWHERE in an annotation's type arguments, at any depth and through
+# unions and `Annotated`. One level was not enough: `list[list[str]]` and `dict[int, list[str]]` carry
+# the same payload as `list[str]` and passed uncapped when only the outer arguments were inspected.
+def _contains_plain_str(annotation) -> bool:
+    annotation = _unwrap(annotation)
     if annotation is str:
         return True
-    if get_origin(annotation) is typing.Annotated:
-        return _plain_str(get_args(annotation)[0])
-    return False
+    return any(_contains_plain_str(arg) for arg in get_args(annotation) if arg is not type(None))
 
 
 # "str" | "container" | None for a field's annotation. PLAIN str only, unwrapping Optional and
 # Annotated — an enum, a date or a Decimal is bounded by its own parser and needs no length cap. A
-# CONTAINER is free text when any of its type arguments is a plain str, whatever the container: a
-# `dict[str, str]`, a `set[str]` or a `tuple[str, ...]` carries a payload exactly as a `list[str]` does,
-# and an earlier version of this that only recognised `list` passed all three uncapped.
+# CONTAINER is free text when a plain str appears anywhere inside it, whatever the container and however
+# deep: a `dict[str, str]`, a `set[str]`, a `tuple[str, ...]` or a `list[list[str]]` carries a payload
+# exactly as a `list[str]` does.
 def _free_text_kind(annotation):
-    branches = _union_branches(annotation)
-    for branch in branches:
-        if _plain_str(branch):
+    for branch in _union_branches(annotation):
+        if branch is str:
             return "str"
-        if get_origin(branch) is not None and any(_plain_str(arg) for arg in get_args(branch)):
+        if get_origin(branch) is not None and _contains_plain_str(branch):
             return "container"
     return None
 
 
-# Whether an annotation is (or unions in) a mapping keyed by plain str — whose KEYS are payload too.
+# Whether an annotation holds, at any depth, a mapping keyed by plain str — whose KEYS are payload too.
 # `collections.abc.Mapping`, not `typing.Mapping`: `get_origin(typing.Mapping[str, X])` answers the ABC,
 # so comparing against the typing alias would never match.
 def _has_str_keys(annotation) -> bool:
-    branches = _union_branches(annotation)
-    return any(get_origin(b) in (dict, collections.abc.Mapping) and get_args(b) and _plain_str(get_args(b)[0]) for b in branches)
+    annotation = _unwrap(annotation)
+    args = [arg for arg in get_args(annotation) if arg is not type(None)]
+    if get_origin(annotation) in (dict, collections.abc.Mapping) and args and _plain_str(args[0]):
+        return True
+    return any(_has_str_keys(arg) for arg in args)
 
 
 # Every string-typed leaf of a compiled property schema, following $ref, the anyOf that `str | None`
 # becomes, into array items (a `list[str]`'s ITEM cap is what gets checked rather than the list's),
-# into a tuple's `prefixItems`, and into a mapping's values. With `str_keys`, a mapping's KEYS are a
-# leaf as well: its `propertyNames` when the schema carries one, and an uncapped string when it does not.
+# into a tuple's `prefixItems`, and into a mapping's values, at any depth. With `str_keys`, every
+# MAPPING's keys are a leaf as well: its `propertyNames` when the schema carries one, and an uncapped
+# string when it does not. JSON Schema cannot tell a str-keyed mapping from an int-keyed one, so once the
+# annotation holds a str-keyed mapping anywhere, every mapping in the field is held to a key cap — the
+# conservative direction, which can only fail loudly on an int-keyed wrapper, never pass silently.
 def _string_leaves(prop, defs, depth=0, str_keys=False):
-    if depth > 6 or not isinstance(prop, dict):
+    if depth > 8 or not isinstance(prop, dict):
         return
     if "$ref" in prop:
         yield from _string_leaves(defs.get(prop["$ref"].rsplit("/", 1)[-1], {}), defs, depth + 1, str_keys)
@@ -118,12 +138,11 @@ def _string_leaves(prop, defs, depth=0, str_keys=False):
             yield from _string_leaves(sub, defs, depth + 1, str_keys)
     if prop.get("type") == "array":
         if isinstance(prop.get("items"), dict):
-            yield from _string_leaves(prop["items"], defs, depth + 1)
+            yield from _string_leaves(prop["items"], defs, depth + 1, str_keys)
         for item in prop.get("prefixItems", []):
-            yield from _string_leaves(item, defs, depth + 1)
-    if prop.get("type") == "object":
-        if isinstance(prop.get("additionalProperties"), dict):
-            yield from _string_leaves(prop["additionalProperties"], defs, depth + 1)
+            yield from _string_leaves(item, defs, depth + 1, str_keys)
+    if prop.get("type") == "object" and isinstance(prop.get("additionalProperties"), dict):
+        yield from _string_leaves(prop["additionalProperties"], defs, depth + 1, str_keys)
         if str_keys:
             yield prop.get("propertyNames", {"type": "string"})
 
@@ -297,7 +316,22 @@ class TestEveryContainerOfStrIsFreeText:
 
     @pytest.mark.parametrize(
         "annotation",
-        [str, str | None, list[str], set[str], frozenset[str], tuple[str, ...], dict[str, str], dict[str, int], dict[int, str] | None],
+        [
+            str,
+            str | None,
+            list[str],
+            set[str],
+            frozenset[str],
+            tuple[str, ...],
+            dict[str, str],
+            dict[str, int],
+            dict[int, str] | None,
+            list[list[str]],
+            dict[int, list[str]],
+            list[list[str]] | None,
+            dict[int, list[str]] | None,
+            typing.Annotated[list[list[str]] | None, "meta"],
+        ],
     )
     def test_is_free_text(self, annotation):
         assert _free_text_kind(annotation) is not None
@@ -321,6 +355,11 @@ class TestEveryContainerOfStrIsFreeText:
             "Mapping[str, int]": (typing.Mapping[str, int], False),
             "Mapping[capped, int]": (typing.Mapping[capped, int], True),
             "dict[str, capped]": (dict[str, capped], False),
+            "list[list[str]]": (list[list[str]], False),
+            "dict[int, list[str]]": (dict[int, list[str]], False),
+            "list[dict[str, capped]]": (list[dict[str, capped]], False),
+            "list[list[capped]]": (list[list[capped]], True),
+            "list[dict[capped, capped]]": (list[dict[capped, capped]], True),
             "dict[capped, capped]": (dict[capped, capped], True),
             "set[capped]": (set[capped], True),
         }

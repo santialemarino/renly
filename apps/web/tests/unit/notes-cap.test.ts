@@ -34,25 +34,29 @@ function webNotesFields(): [string, string][] {
   );
 }
 
-// The whole `Field(...)` call that follows `notes:` in a class body, however many lines it spans:
-// from the opening parenthesis to the one that balances it.
-function notesFieldCalls(body: string): string[] {
-  return [...body.matchAll(/^\s+notes:[^=\n]*=\s*Field\(/gm)].map((match) => {
-    const start = (match.index ?? 0) + match[0].length;
-    let depth = 1;
+// The whole `notes` declaration in a class body — annotation AND default — from `notes:` to the end of
+// the statement: the first newline reached with every bracket closed. Read as one statement so neither
+// a Field split across lines nor a cap carried in the annotation (`notes: Annotated[str | None,
+// Field(max_length=600)] = Field(default=None)`) is skipped.
+function notesDeclarations(body: string): string[] {
+  return [...body.matchAll(/^[ \t]+notes:/gm)].map((match) => {
+    const start = match.index ?? 0;
+    let depth = 0;
     let end = start;
-    while (end < body.length && depth > 0) {
-      if (body[end] === '(') depth += 1;
-      if (body[end] === ')') depth -= 1;
+    while (end < body.length) {
+      const char = body[end];
+      if ('([{'.includes(char ?? '')) depth += 1;
+      if (')]}'.includes(char ?? '')) depth -= 1;
+      if (char === '\n' && depth === 0) break;
       end += 1;
     }
-    return body.slice(start, end - 1);
+    return body.slice(start, end);
   });
 }
 
-// The `max_length` on every `notes` field of an API REQUEST schema (a class inheriting RequestBase),
-// read from the whole Field call so a field split across lines is not skipped. A notes field with no
-// `max_length` at all reads as NaN, which the equality below refuses.
+// Every `max_length` on every `notes` field of an API REQUEST schema (a class inheriting RequestBase),
+// wherever in the declaration it sits. A notes field with no `max_length` at all reads as NaN, which the
+// equality below refuses.
 function apiNotesCaps(): number[] {
   return readdirSync(API_SCHEMAS)
     .filter((f) => f.endsWith('.py'))
@@ -61,7 +65,12 @@ function apiNotesCaps(): number[] {
         .split(/^class /m)
         .filter((body) => /^\w+\([^)]*RequestBase[^)]*\):/.test(body))
         .flatMap((body) =>
-          notesFieldCalls(body).map((call) => Number(/max_length\s*=\s*(\d+)/.exec(call)?.[1])),
+          notesDeclarations(body).flatMap((declaration) => {
+            const caps = [...declaration.matchAll(/max_length\s*=\s*(\d+)/g)].map((m) =>
+              Number(m[1]),
+            );
+            return caps.length > 0 ? caps : [Number.NaN];
+          }),
         ),
     );
 }
