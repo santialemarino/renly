@@ -1,4 +1,5 @@
 import collections.abc
+import gc
 import importlib
 import pkgutil
 import types
@@ -8,7 +9,7 @@ from decimal import Decimal
 from typing import get_args, get_origin
 
 import pytest
-from pydantic import AfterValidator, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 import app.schemas
 from app.models.investment import Currency
@@ -51,14 +52,37 @@ for _module in pkgutil.iter_modules(app.schemas.__path__):
 NOTES_MAX_LENGTH = 500
 
 
-# Every request-body schema in the app: RequestBase's subclasses, transitively.
+# Every model a request body can carry: RequestBase's subclasses, transitively, PLUS every pydantic model
+# reachable from their fields at any depth. The second half is what covers a plain `BaseModel` nested in a
+# request (a `list[Item]` field): its own string fields are payload the request accepts, and a scan of
+# RequestBase subclasses alone would never read them.
 def _request_schemas():
-    def walk(cls):
+    def subclasses(cls):
         for sub in cls.__subclasses__():
             yield sub
-            yield from walk(sub)
+            yield from subclasses(sub)
 
-    return sorted(set(walk(RequestBase)), key=lambda c: (c.__module__, c.__name__))
+    return sorted(_reachable_models(set(subclasses(RequestBase))), key=lambda c: (c.__module__, c.__name__))
+
+
+# The given models plus every pydantic model their fields reach, at any depth and through any container.
+def _reachable_models(roots: set) -> set:
+    def models_in(annotation):
+        annotation = _unwrap(annotation)
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield annotation
+        for arg in get_args(annotation):
+            yield from models_in(arg)
+
+    found = set(roots)
+    pending = list(found)
+    while pending:
+        for field in pending.pop().model_fields.values():
+            for model in models_in(field.annotation):
+                if model not in found:
+                    found.add(model)
+                    pending.append(model)
+    return found
 
 
 # An annotation with any `Annotated[...]` wrapping removed — its metadata is constraints, not a type.
@@ -83,12 +107,17 @@ def _plain_str(annotation) -> bool:
     return _unwrap(annotation) is str
 
 
+# `Any` and `object` accept a string of any length, so wherever they appear they are free text too.
+def _accepts_any_string(annotation) -> bool:
+    return _unwrap(annotation) in (str, typing.Any, object)
+
+
 # Whether a plain `str` appears ANYWHERE in an annotation's type arguments, at any depth and through
 # unions and `Annotated`. One level was not enough: `list[list[str]]` and `dict[int, list[str]]` carry
 # the same payload as `list[str]` and passed uncapped when only the outer arguments were inspected.
 def _contains_plain_str(annotation) -> bool:
     annotation = _unwrap(annotation)
-    if annotation is str:
+    if _accepts_any_string(annotation):
         return True
     return any(_contains_plain_str(arg) for arg in get_args(annotation) if arg is not type(None))
 
@@ -100,7 +129,7 @@ def _contains_plain_str(annotation) -> bool:
 # exactly as a `list[str]` does.
 def _free_text_kind(annotation):
     for branch in _union_branches(annotation):
-        if branch is str:
+        if _accepts_any_string(branch):
             return "str"
         if get_origin(branch) is not None and _contains_plain_str(branch):
             return "container"
@@ -118,18 +147,39 @@ def _has_str_keys(annotation) -> bool:
     return any(_has_str_keys(arg) for arg in args)
 
 
-# Every string-typed leaf of a compiled property schema, following $ref, the anyOf that `str | None`
-# becomes, into array items (a `list[str]`'s ITEM cap is what gets checked rather than the list's),
-# into a tuple's `prefixItems`, and into a mapping's values, at any depth. With `str_keys`, every
-# MAPPING's keys are a leaf as well: its `propertyNames` when the schema carries one, and an uncapped
-# string when it does not. JSON Schema cannot tell a str-keyed mapping from an int-keyed one, so once the
-# annotation holds a str-keyed mapping anywhere, every mapping in the field is held to a key cap — the
-# conservative direction, which can only fail loudly on an int-keyed wrapper, never pass silently.
+# The leaf that stands for "any string at all": what an unconstrained schema (`Any`, `object`, a mapping's
+# `additionalProperties: true`) accepts, and what a str-keyed mapping with no `propertyNames` accepts as
+# a key. It has no maxLength, so any field reaching it reads as uncapped.
+_UNCAPPED = {"type": "string"}
+
+
+# Every string-typed leaf of a compiled property schema, at any depth. It follows `$ref`; the `anyOf` /
+# `oneOf` / `allOf` a union becomes; an array's `items` and a tuple's `prefixItems` (so a `list[str]`'s
+# ITEM cap is what is checked, not the list's); and a mapping's values. An UNCONSTRAINED schema — `{}` or
+# `true`, which is what `Any`, `object` and `dict[str, Any]`'s values compile to — is an uncapped leaf,
+# because it accepts a string of any length.
+#
+# A mapping is an object with no `properties`. With `str_keys`, EVERY mapping reached yields its keys as a
+# leaf — its `propertyNames` when the schema carries one, uncapped when it does not — whether its
+# `additionalProperties` is a schema or `true`. JSON Schema cannot tell a str-keyed mapping from an
+# int-keyed one, so once the annotation holds a str-keyed mapping anywhere, every mapping in the field is
+# held to a key cap. That errs in one direction only: an int-keyed mapping sitting beside a capped
+# str-keyed one is flagged although it is bounded. It never lets an uncapped key through.
+#
+# NOT covered here, and covered elsewhere: an object WITH `properties` is a nested model, whose fields
+# are scanned as a schema of their own (`_request_schemas` reaches every model a request can carry), so
+# this does not descend into it. NOT covered at all: a pattern or a custom validator that bounds a string
+# without a `maxLength` reads as uncapped (the bcrypt byte cap is the one such rule recognised, by name).
 def _string_leaves(prop, defs, depth=0, str_keys=False):
-    if depth > 8 or not isinstance(prop, dict):
+    if depth > 10:
+        return
+    if prop is True or prop == {}:
+        yield _UNCAPPED
+        return
+    if not isinstance(prop, dict):
         return
     if "$ref" in prop:
-        yield from _string_leaves(defs.get(prop["$ref"].rsplit("/", 1)[-1], {}), defs, depth + 1, str_keys)
+        yield from _string_leaves(defs.get(prop["$ref"].rsplit("/", 1)[-1], {"properties": {}}), defs, depth + 1, str_keys)
         return
     if prop.get("type") == "string":
         yield prop
@@ -137,14 +187,14 @@ def _string_leaves(prop, defs, depth=0, str_keys=False):
         for sub in prop.get(key, []):
             yield from _string_leaves(sub, defs, depth + 1, str_keys)
     if prop.get("type") == "array":
-        if isinstance(prop.get("items"), dict):
+        if "items" in prop:
             yield from _string_leaves(prop["items"], defs, depth + 1, str_keys)
         for item in prop.get("prefixItems", []):
             yield from _string_leaves(item, defs, depth + 1, str_keys)
-    if prop.get("type") == "object" and isinstance(prop.get("additionalProperties"), dict):
-        yield from _string_leaves(prop["additionalProperties"], defs, depth + 1, str_keys)
+    if prop.get("type") == "object" and "properties" not in prop:
+        yield from _string_leaves(prop.get("additionalProperties", True), defs, depth + 1, str_keys)
         if str_keys:
-            yield prop.get("propertyNames", {"type": "string"})
+            yield prop.get("propertyNames", _UNCAPPED)
 
 
 # Whether a field carries the bcrypt BYTE ceiling instead of a character one.
@@ -331,6 +381,9 @@ class TestEveryContainerOfStrIsFreeText:
             list[list[str]] | None,
             dict[int, list[str]] | None,
             typing.Annotated[list[list[str]] | None, "meta"],
+            typing.Any,
+            object,
+            dict[int, typing.Any] | None,
         ],
     )
     def test_is_free_text(self, annotation):
@@ -360,6 +413,18 @@ class TestEveryContainerOfStrIsFreeText:
             "list[dict[str, capped]]": (list[dict[str, capped]], False),
             "list[list[capped]]": (list[list[capped]], True),
             "list[dict[capped, capped]]": (list[dict[capped, capped]], True),
+            # A mapping whose values are `Any` compiles to `additionalProperties: true` — no value schema at
+            # all — and once passed with a capped leaf beside it.
+            "capped | dict[str, Any]": (capped | dict[str, typing.Any], False),
+            "tuple[capped, dict[str, Any]]": (tuple[capped, dict[str, typing.Any]], False),
+            "tuple[capped, dict[str, capped]]": (tuple[capped, dict[str, capped]], False),
+            "list[capped | dict[str, Any]]": (list[capped | dict[str, typing.Any]], False),
+            "dict[str, object] | capped": (dict[str, object] | capped, False),
+            "dict[capped, Any]": (dict[capped, typing.Any], False),
+            "capped | Any": (capped | typing.Any, False),
+            # The one deliberate false positive, pinned so it stays a choice: JSON Schema cannot tell the
+            # int-keyed outer mapping from the str-keyed inner one, so both are held to a key cap.
+            "dict[int, dict[capped, capped]]": (dict[int, dict[capped, capped]], False),
             "dict[capped, capped]": (dict[capped, capped], True),
             "set[capped]": (set[capped], True),
         }
@@ -368,6 +433,38 @@ class TestEveryContainerOfStrIsFreeText:
             leaves = _string_leaves(compiled, compiled.get("$defs", {}), str_keys=_has_str_keys(annotation))
             assert _free_text_kind(annotation) is not None, label
             assert _all_capped(leaves) is expected, label
+
+
+class TestNestedModelsAreScanned:
+    def test_a_plain_model_nested_in_a_request_is_reached(self):
+        # A plain BaseModel carried by a request field is payload the request accepts; the scan reaches it
+        # through the field, at any depth, rather than only reading RequestBase subclasses.
+        class Leaf(BaseModel):
+            label: str
+
+        class Middle(BaseModel):
+            leaves: list[Leaf] | None = None
+
+        class Probe(BaseModel):
+            by_key: dict[int, Middle]
+
+        assert _reachable_models({Probe}) == {Probe, Middle, Leaf}
+
+    def test_the_real_scan_reads_through_a_request_into_its_models(self):
+        # Through `_request_schemas` itself, so the scan cannot quietly go back to RequestBase subclasses
+        # only. Every string here is capped, so the probe cannot fail the real guard if it outlives this
+        # test in the subclass registry.
+        class CappedItem(BaseModel):
+            label: str = Field(description="probe", max_length=5)
+
+        class ProbeCarrier(RequestBase):
+            items: list[CappedItem] = Field(default_factory=list, description="probe")
+
+        try:
+            assert CappedItem in _request_schemas()
+        finally:
+            del ProbeCarrier
+            gc.collect()
 
 
 class TestTheCapsAreRealAtRuntime:
