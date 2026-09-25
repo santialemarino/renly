@@ -8,6 +8,7 @@ from app.schemas.collection import (
     CollectionSetInvestmentsBody,
     CollectionUpdate,
 )
+from app.schemas.params import CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.services import collection_service
 
 router = APIRouter(prefix="/collections", tags=["collections"])
@@ -30,9 +31,11 @@ def _to_response(collection, investment_ids: list[int]) -> CollectionResponse:
 async def list_collections(
     current_user: CurrentUser,
     session: SessionDep,
-    search: str | None = Query(default=None, description="Filter collections by name (case-insensitive substring match)."),
-    sort_by: str | None = Query(default=None, description="Column to sort by (name)."),
-    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
+    search: str | None = Query(
+        default=None, max_length=SEARCH_MAX_LENGTH, description="Filter collections by name (case-insensitive substring match)."
+    ),
+    sort_by: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description="Column to sort by (name)."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, description="Sort direction (asc or desc)."),
 ) -> list[CollectionResponse]:
     pairs = await collection_service.list_collections(session, current_user, search=search, sort_by=sort_by, sort_order=sort_order)
     return [_to_response(c, ids) for c, ids in pairs]

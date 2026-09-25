@@ -15,6 +15,7 @@ from app.schemas.account_reconciliation import (
     AccountReconciliationListResponse,
     AccountReconciliationResponse,
 )
+from app.schemas.params import CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.services import account_movement_service, account_reconciliation_service, account_service
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -30,9 +31,9 @@ async def list_accounts(
         default=ListScope.private,
         description="Which scopes to return: private (own only, the default), shared (co-owned only) or all (both, grouped).",
     ),
-    search: str | None = Query(default=None, description="Filter accounts by name (case-insensitive)."),
-    sort_by: str | None = Query(default=None, description="Column to sort by (name, type, currency, opening_date)."),
-    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description="Filter accounts by name (case-insensitive)."),
+    sort_by: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description="Column to sort by (name, type, currency, opening_date)."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) accounts."),
 ) -> AccountListResponse:
     return await account_service.list_accounts_grouped(

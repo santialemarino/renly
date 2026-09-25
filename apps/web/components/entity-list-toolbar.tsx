@@ -7,6 +7,7 @@ import { LayoutGroup, motion } from 'motion/react';
 
 import { Button, Pill, SearchInput } from '@repo/ui/components';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
+import { SEARCH_MAX } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 interface EntityListToolbarProps {
@@ -84,6 +85,7 @@ export function EntityListToolbar({
           <SearchInput
             placeholder={searchPlaceholder}
             value={search}
+            maxLength={SEARCH_MAX}
             surface
             onChange={(e) => setSearch(e.target.value)}
             onClear={() => setSearch('')}

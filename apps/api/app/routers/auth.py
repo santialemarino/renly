@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.config import SignupMode, settings
 from app.deps.auth import CurrentUser
@@ -16,6 +16,7 @@ from app.rate_limit import (
     limiter,
 )
 from app.schemas.auth import (
+    TOKEN_MAX_LENGTH,
     ConfirmEmailRequest,
     ConfirmEmailResponse,
     EmailActionRequest,
@@ -66,7 +67,10 @@ async def register(request: Request, response: Response, body: RegisterRequest, 
 # form to (so the signup page shows the invite-only screen vs the form). Privileged session: the
 # invite lookup is pre-auth (no user context), so it bypasses RLS (SEC-15).
 @router.get("/signup-context", response_model=SignupContextResponse)
-async def signup_context(session: AdminSessionDep, invite: str | None = None) -> SignupContextResponse:
+async def signup_context(
+    session: AdminSessionDep,
+    invite: str | None = Query(default=None, max_length=TOKEN_MAX_LENGTH, description="Raw invite token from the emailed link."),
+) -> SignupContextResponse:
     invited_email = None
     if settings.signup_mode == SignupMode.invite and invite:
         found = await invite_service.get_pending_invite_by_token(session, invite)

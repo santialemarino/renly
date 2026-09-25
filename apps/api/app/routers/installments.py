@@ -5,6 +5,7 @@ from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.installment import InstallmentCreate, InstallmentResponse, InstallmentUpdate
+from app.schemas.params import CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.services import installment_service
 
 router = APIRouter(prefix="/installments", tags=["installments"])
@@ -16,15 +17,16 @@ async def list_installments(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
-    search: str | None = Query(default=None, description="Filter installments by name (case-insensitive)."),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description="Filter installments by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
+        max_length=CODE_MAX_LENGTH,
         description=(
             "Column to sort by (name, total_amount, installment_amount, currency, "
             "installments_count, current_installment, start_date, next_cuota_date)."
         ),
     ),
-    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (completed) installments."),
     include_ids: list[int] | None = Query(
         default=None,

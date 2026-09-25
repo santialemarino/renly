@@ -3146,14 +3146,14 @@
         "label": "Max collections",
         "hint": "Maximum number of investment collections allowed.",
         "default": "Defaults to {value} if left empty.",
-        "invalidRange": "Must be a whole number of 1 or more."
+        "invalidRange": "Must be a whole number between {min} and {max}."
       },
       "collectionWarningPct": {
         "label": "Collection limit warning (%)",
         "hint": "Show a warning when this percentage of max collections is reached.",
         "default": "Defaults to {value}% if left empty.",
         "noDefault": "Leave empty to disable the warning.",
-        "invalidRange": "Must be a whole number between 1 and 100."
+        "invalidRange": "Must be a whole number between {min} and {max}."
       },
       "liquidityThreshold": {
         "label": "Liquidity threshold (%)",

@@ -1,7 +1,10 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Path
 
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep
+from app.schemas.auth import TOKEN_MAX_LENGTH
 from app.schemas.group_invite import GroupInviteAcceptedResponse, GroupInvitePreviewResponse
 from app.services import group_invite_service
 
@@ -20,7 +23,7 @@ router = APIRouter(prefix="/group-invites", tags=["groups"])
 # probed).
 @router.get("/{token}", response_model=GroupInvitePreviewResponse)
 async def preview_group_invite(
-    token: str,
+    token: Annotated[str, Path(max_length=TOKEN_MAX_LENGTH, description="Raw invite token from the join link.")],
     admin_session: AdminSessionDep,
 ) -> GroupInvitePreviewResponse:
     return await group_invite_service.preview_invite(admin_session, token)
@@ -31,7 +34,7 @@ async def preview_group_invite(
 # caller already holds a seat in that group.
 @router.post("/{token}/accept", response_model=GroupInviteAcceptedResponse)
 async def accept_group_invite(
-    token: str,
+    token: Annotated[str, Path(max_length=TOKEN_MAX_LENGTH, description="Raw invite token from the join link.")],
     current_user: CurrentUser,
     admin_session: AdminSessionDep,
 ) -> GroupInviteAcceptedResponse:

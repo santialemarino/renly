@@ -7,15 +7,19 @@ Base URL: the API host root — there is no path prefix. Every path below is abs
 
 ---
 
-## How request bodies are bounded
+## How request input is bounded
 
-No free-text field a request body carries is unbounded. Every plain-string field on every request
-schema has a length ceiling, and going over it is a **422** at the request boundary rather than
-something the storage layer discovers later. The ceilings follow the shape of the thing rather than a
-guess: a `notes` field takes 500 characters, a name takes what its column holds, an ISO 4217 currency
-code takes three, and a token takes enough for one the API issued. A list of codes is bounded in both
-dimensions — the number of items and the length of each — since capping only the list still lets a
-single item carry the payload.
+No free-text value a request carries is unbounded — not in a JSON body, and not in a path segment, a
+query parameter or a multipart form field either. Every plain-string input has a length ceiling, and
+going over it is a **422** at the request boundary rather than something the storage layer discovers
+later. The ceilings follow the shape of the thing rather than a guess: a `notes` field takes 500
+characters, a name takes what its column holds, an ISO 4217 currency code (including the `currency`
+display parameter) takes three, a token (in a body, in the `/group-invites/{token}` path or in
+`/auth/signup-context?invite=`) takes enough for one the API issued, a list `search` takes 500 (the
+longest column any search matches), a sort key or category takes 32, a `{ticker}` takes 20, and an
+import's `mapping` form field takes 8,192. A collection of codes is bounded in both dimensions — the
+number of items and the length of each — since capping only the collection still lets a single item
+carry the payload.
 
 A **password** is the one field capped in BYTES rather than characters, at bcrypt's own 72-byte limit:
 `á` is two bytes in UTF-8 and an emoji is four, so a character cap would be the wrong rule rather than
@@ -719,8 +723,8 @@ User preferences stored as key-value pairs. All fields are optional on update --
 | `secondary_currency`           | string   | Secondary display currency (e.g., `ARS`).                                                                                                                                                                                           |
 | `preferred_currencies`         | string[] | Ordered list of currencies for the currency switcher.                                                                                                                                                                               |
 | `period_presets`               | object[] | Custom period presets for the dashboard date range selector.                                                                                                                                                                        |
-| `max_collections`              | int      | Maximum number of collections the user can create.                                                                                                                                                                                  |
-| `collection_warning_pct`       | number   | Percentage threshold that triggers a collection-limit warning.                                                                                                                                                                      |
+| `max_collections`              | int      | Maximum number of collections the user can create, in `[1, 1000]`; out of range is a 422.                                                                                                                                           |
+| `collection_warning_pct`       | int      | Percentage of `max_collections` that triggers a collection-limit warning, in `[1, 100]`; out of range is a 422.                                                                                                                     |
 | `dollar_rate_preference`       | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`.                                                                                                                                                             |
 | `shortcut_currencies`          | string[] | Currencies shown in the iOS Shortcut currency picker.                                                                                                                                                                               |
 | `timezone`                     | string   | User's IANA timezone (e.g. `America/Argentina/Buenos_Aires`). Used by the auto-expense scheduler to fire cycles on the user's local calendar day. Defaults to UTC when unset. Validated server-side; invalid IANA names return 400. |

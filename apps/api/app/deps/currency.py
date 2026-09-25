@@ -2,6 +2,8 @@ from typing import Annotated
 
 from fastapi import Depends, Query
 
+from app.schemas.params import CURRENCY_CODE_MAX_LENGTH
+
 # Human-facing description for the display-currency query param, shared by every read endpoint.
 CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 
@@ -19,7 +21,9 @@ CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 # is EXCLUDED and the total reads 0, with every source currency named in `skipped_currencies`.
 # Measured: two rows worth 1,974.53 USD total 0 under an unsupported display currency. Any surface
 # showing a total therefore has to render the skip hint, or it reports a number that is simply wrong.
-def _display_currency(currency: str | None = Query(default=None, description=CURRENCY_DESC)) -> str | None:
+def _display_currency(
+    currency: str | None = Query(default=None, max_length=CURRENCY_CODE_MAX_LENGTH, description=CURRENCY_DESC),
+) -> str | None:
     return currency.upper() if currency else None
 
 

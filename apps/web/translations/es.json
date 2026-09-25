@@ -3146,14 +3146,14 @@
         "label": "Máximo de colecciones",
         "hint": "Cantidad máxima de colecciones de inversiones permitidas.",
         "default": "Por defecto {value} si se deja vacío.",
-        "invalidRange": "Debe ser un número entero mayor o igual a 1."
+        "invalidRange": "Debe ser un número entero entre {min} y {max}."
       },
       "collectionWarningPct": {
         "label": "Advertencia de límite de colecciones (%)",
         "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de colecciones.",
         "default": "Por defecto {value}% si se deja vacío.",
         "noDefault": "Dejá vacío para desactivar la advertencia.",
-        "invalidRange": "Debe ser un número entero entre 1 y 100."
+        "invalidRange": "Debe ser un número entero entre {min} y {max}."
       },
       "liquidityThreshold": {
         "label": "Umbral de liquidez (%)",

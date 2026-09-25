@@ -15,6 +15,7 @@ from app.schemas.card_reconciliation import (
 )
 from app.schemas.card_settlement import CardSettlementCreate, CardSettlementListResponse, CardSettlementResponse
 from app.schemas.credit_card import CardBucketBalanceResponse, CreditCardCreate, CreditCardResponse, CreditCardUpdate
+from app.schemas.params import CODE_MAX_LENGTH, CURRENCY_CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.services import card_reconciliation_service, credit_card_service
 
 router = APIRouter(prefix="/credit-cards", tags=["credit-cards"])
@@ -42,9 +43,9 @@ def _to_response(card: object, buckets: list[CardBucketBalance], has_expenses: b
 async def list_cards(
     current_user: JwtOrApiKeyUser,
     session: SessionDep,
-    search: str | None = Query(default=None, description="Filter cards by name (case-insensitive)."),
-    sort_by: str | None = Query(default=None, description="Column to sort by (name, closing_day, due_day, currency)."),
-    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description="Filter cards by name (case-insensitive)."),
+    sort_by: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description="Column to sort by (name, closing_day, due_day, currency)."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) cards."),
 ) -> list[CreditCardResponse]:
     cards = await credit_card_service.list_cards(
@@ -206,7 +207,7 @@ async def list_reconciliations(
     current_user: CurrentUser,
     session: SessionDep,
     page_query: PageQuery,
-    currency: str | None = Query(default=None, description="Filter to a single bucket currency."),
+    currency: str | None = Query(default=None, max_length=CURRENCY_CODE_MAX_LENGTH, description="Filter to a single bucket currency."),
 ) -> CardReconciliationListResponse:
     return await card_reconciliation_service.list_reconciliations(
         session, card_id, current_user, currency=currency, page=page_query.page, page_size=page_query.page_size
@@ -219,7 +220,7 @@ async def list_statements(
     card_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str = Query(description="Bucket currency to list statements for."),
+    currency: str = Query(max_length=CURRENCY_CODE_MAX_LENGTH, description="Bucket currency to list statements for."),
 ) -> list[StatementPeriodResponse]:
     card = await credit_card_service.get_card(session, card_id, current_user)
     statements = await card_reconciliation_service.list_recent_statements(session, card, currency)

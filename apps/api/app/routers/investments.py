@@ -12,6 +12,7 @@ from app.schemas.investment import (
     InvestmentSetCollectionsBody,
     InvestmentUpdate,
 )
+from app.schemas.params import CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.schemas.snapshot import SnapshotCreate, SnapshotListResponse, SnapshotResponse
 from app.schemas.transaction import (
     TransactionCreate,
@@ -35,12 +36,12 @@ async def list_investments(
         default=ListScope.private,
         description="Which scopes to return: private (own only, the default), shared (co-owned only) or all (both, grouped).",
     ),
-    search: str | None = Query(default=None, description="Filter by name (case-insensitive)."),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description="Filter by name (case-insensitive)."),
     collection_ids: list[int] | None = Query(default=None, description="Filter by collection ids (union)."),
     category: InvestmentCategory | None = Query(default=None, description="Filter by category."),
     active_only: bool = Query(default=True, description="Return only active investments."),
-    sort_by: str | None = Query(default=None, description="Sort field: name, category, base_currency, broker."),
-    sort_order: str = Query(default="asc", pattern="^(asc|desc)$", description="Sort direction."),
+    sort_by: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description="Sort field: name, category, base_currency, broker."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, pattern="^(asc|desc)$", description="Sort direction."),
 ) -> InvestmentListResponse:
     return await investment_service.list_investments(
         session,

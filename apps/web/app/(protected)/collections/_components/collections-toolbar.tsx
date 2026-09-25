@@ -11,6 +11,7 @@ import { CollectionFormDialog } from '@/app/(protected)/collections/_components/
 import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
+import { SEARCH_MAX } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 interface CollectionsToolbarProps {
@@ -56,6 +57,7 @@ export function CollectionsToolbar({
             <SearchInput
               placeholder={t('toolbar.searchPlaceholder')}
               value={search}
+              maxLength={SEARCH_MAX}
               surface
               onChange={(e) => setSearch(e.target.value)}
               onClear={() => setSearch('')}

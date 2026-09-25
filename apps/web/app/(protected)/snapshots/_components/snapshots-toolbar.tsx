@@ -18,7 +18,7 @@ import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SnapshotGridInterval } from '@/lib/api/snapshots';
 import type { ListScope } from '@/lib/api/types';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
-import { CATEGORY_ALL } from '@/lib/constants/api-constants';
+import { CATEGORY_ALL, SEARCH_MAX } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 
@@ -91,6 +91,7 @@ export function SnapshotsToolbar({
           <SearchInput
             placeholder={t('toolbar.searchPlaceholder')}
             value={search}
+            maxLength={SEARCH_MAX}
             surface
             onChange={(e) => setSearch(e.target.value)}
             onClear={() => setSearch('')}
