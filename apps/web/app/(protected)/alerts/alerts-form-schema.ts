@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+import { COLLECTION_WARNING_PCT_RANGE, MAX_COLLECTIONS_RANGE } from '@/lib/constants/collections';
+
+// A blank field, or a whole number inside the inclusive range.
+function blankOrIntWithin(value: string | undefined, [min, max]: readonly [number, number]) {
+  if (!value) return true;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= min && n <= max;
+}
+
 interface AlertsFormMessages {
   maxCollectionsInvalidMsg: string;
   collectionWarningPctInvalidMsg: string;
@@ -13,13 +22,13 @@ export function buildAlertsFormSchema(messages: AlertsFormMessages) {
     maxCollections: z
       .string()
       .optional()
-      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1), {
+      .refine((v) => blankOrIntWithin(v, MAX_COLLECTIONS_RANGE), {
         message: messages.maxCollectionsInvalidMsg,
       }),
     collectionWarningPct: z
       .string()
       .optional()
-      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 100), {
+      .refine((v) => blankOrIntWithin(v, COLLECTION_WARNING_PCT_RANGE), {
         message: messages.collectionWarningPctInvalidMsg,
       }),
     liquidityThresholdPct: z

@@ -3,20 +3,26 @@
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { Button, Hint, Label, Separator } from '@repo/ui/components';
+import { Button, Hint, Separator } from '@repo/ui/components';
 import { saveAlerts } from '@/app/(protected)/alerts/alerts-actions';
 import {
   buildAlertsFormSchema,
   type AlertsFormValues,
 } from '@/app/(protected)/alerts/alerts-form-schema';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { InfoHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
-import { ENV_COLLECTION_WARNING_PCT, ENV_MAX_COLLECTIONS } from '@/lib/constants/collections';
+import {
+  COLLECTION_WARNING_PCT_RANGE,
+  ENV_COLLECTION_WARNING_PCT,
+  ENV_MAX_COLLECTIONS,
+  MAX_COLLECTIONS_RANGE,
+} from '@/lib/constants/collections';
 import {
   ENV_INCOME_EXPENSE_RATIO_HEALTHY,
   ENV_SAVINGS_RATE_HEALTHY_PCT,
@@ -34,19 +40,20 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
   const router = useRouter();
 
   const schema = buildAlertsFormSchema({
-    maxCollectionsInvalidMsg: t('form.maxCollections.invalidRange'),
-    collectionWarningPctInvalidMsg: t('form.collectionWarningPct.invalidRange'),
+    maxCollectionsInvalidMsg: t('form.maxCollections.invalidRange', {
+      min: MAX_COLLECTIONS_RANGE[0],
+      max: MAX_COLLECTIONS_RANGE[1],
+    }),
+    collectionWarningPctInvalidMsg: t('form.collectionWarningPct.invalidRange', {
+      min: COLLECTION_WARNING_PCT_RANGE[0],
+      max: COLLECTION_WARNING_PCT_RANGE[1],
+    }),
     liquidityThresholdInvalidMsg: t('form.liquidityThreshold.invalidRange'),
     savingsRateInvalidMsg: t('form.savingsRate.invalidRange'),
     incomeExpenseRatioInvalidMsg: t('form.incomeExpenseRatio.invalidRange'),
   });
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = useForm<AlertsFormValues>({
+  const form = useForm<AlertsFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       maxCollections: initialSettings.maxCollections?.toString() ?? '',
@@ -80,7 +87,7 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
         incomeExpenseRatioHealthy: toFloatOrNull(values.incomeExpenseRatioHealthy),
       });
 
-      reset(values);
+      form.reset(values);
       router.refresh();
       toast.success(t('form.saveSuccess'), { id: 'alerts-save' });
     } catch {
@@ -89,160 +96,189 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full gap-y-6 lg:gap-y-10">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-8">
-        {/* Left column — Account limits */}
-        <div className="flex flex-col max-w-md gap-y-3">
-          <h3 className="text-paragraph-sm-semibold text-muted-foreground">
-            {t('form.sectionAccountLimits')}
-          </h3>
+    <Form {...form}>
+      <form
+        noValidate
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="flex flex-col w-full gap-y-6 lg:gap-y-10"
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-8">
+          {/* Left column — Account limits */}
+          <div className="flex flex-col max-w-md gap-y-3">
+            <h3 className="text-paragraph-sm-semibold text-muted-foreground">
+              {t('form.sectionAccountLimits')}
+            </h3>
 
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.maxCollections.label')}</Label>
-            <Hint>{t('form.maxCollections.hint')}</Hint>
-            <Controller
+            <FormField
+              control={form.control}
               name="maxCollections"
-              control={control}
               render={({ field }) => (
-                <IntegerInput {...field} surface placeholder={String(ENV_MAX_COLLECTIONS)} />
+                <FormItem>
+                  <FormLabel>{t('form.maxCollections.label')}</FormLabel>
+                  <Hint>{t('form.maxCollections.hint')}</Hint>
+                  <FormControl>
+                    <IntegerInput {...field} surface placeholder={String(ENV_MAX_COLLECTIONS)} />
+                  </FormControl>
+                  <FormMessage />
+                  <InfoHint>
+                    {t('form.maxCollections.default', { value: String(ENV_MAX_COLLECTIONS) })}
+                  </InfoHint>
+                </FormItem>
               )}
             />
-            <InfoHint>
-              {t('form.maxCollections.default', { value: String(ENV_MAX_COLLECTIONS) })}
-            </InfoHint>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.collectionWarningPct.label')}</Label>
-            <Hint>{t('form.collectionWarningPct.hint')}</Hint>
-            <Controller
+            <FormField
+              control={form.control}
               name="collectionWarningPct"
-              control={control}
               render={({ field }) => (
-                <IntegerInput
-                  {...field}
-                  surface
-                  placeholder={
-                    ENV_COLLECTION_WARNING_PCT != null
-                      ? String(ENV_COLLECTION_WARNING_PCT)
-                      : undefined
-                  }
-                />
+                <FormItem>
+                  <FormLabel>{t('form.collectionWarningPct.label')}</FormLabel>
+                  <Hint>{t('form.collectionWarningPct.hint')}</Hint>
+                  <FormControl>
+                    <IntegerInput
+                      {...field}
+                      surface
+                      placeholder={
+                        ENV_COLLECTION_WARNING_PCT != null
+                          ? String(ENV_COLLECTION_WARNING_PCT)
+                          : undefined
+                      }
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <InfoHint>
+                    {ENV_COLLECTION_WARNING_PCT != null
+                      ? t('form.collectionWarningPct.default', {
+                          value: String(ENV_COLLECTION_WARNING_PCT),
+                        })
+                      : t('form.collectionWarningPct.noDefault')}
+                  </InfoHint>
+                </FormItem>
               )}
             />
-            <InfoHint>
-              {ENV_COLLECTION_WARNING_PCT != null
-                ? t('form.collectionWarningPct.default', {
-                    value: String(ENV_COLLECTION_WARNING_PCT),
-                  })
-                : t('form.collectionWarningPct.noDefault')}
-            </InfoHint>
           </div>
-        </div>
 
-        {/* Right column — Financial health */}
-        <div className="flex flex-col max-w-md gap-y-3">
-          <h3 className="text-paragraph-sm-semibold text-muted-foreground">
-            {t('form.sectionFinancialHealth')}
-          </h3>
+          {/* Right column — Financial health */}
+          <div className="flex flex-col max-w-md gap-y-3">
+            <h3 className="text-paragraph-sm-semibold text-muted-foreground">
+              {t('form.sectionFinancialHealth')}
+            </h3>
 
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.liquidityThreshold.label')}</Label>
-            <Hint>{t('form.liquidityThreshold.hint')}</Hint>
-            <Controller
+            <FormField
+              control={form.control}
               name="liquidityThresholdPct"
-              control={control}
               render={({ field }) => (
-                <IntegerInput
-                  {...field}
-                  surface
-                  placeholder={String(ENV_LIQUIDITY_THRESHOLD_PCT)}
-                />
+                <FormItem>
+                  <FormLabel>{t('form.liquidityThreshold.label')}</FormLabel>
+                  <Hint>{t('form.liquidityThreshold.hint')}</Hint>
+                  <FormControl>
+                    <IntegerInput
+                      {...field}
+                      surface
+                      placeholder={String(ENV_LIQUIDITY_THRESHOLD_PCT)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <InfoHint>
+                    {t('form.liquidityThreshold.default', {
+                      value: String(ENV_LIQUIDITY_THRESHOLD_PCT),
+                    })}
+                  </InfoHint>
+                </FormItem>
               )}
             />
-            <InfoHint>
-              {t('form.liquidityThreshold.default', {
-                value: String(ENV_LIQUIDITY_THRESHOLD_PCT),
-              })}
-            </InfoHint>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.savingsRateHealthy.label')}</Label>
-            <Hint>{t('form.savingsRateHealthy.hint')}</Hint>
-            <Controller
+            <FormField
+              control={form.control}
               name="savingsRateHealthyPct"
-              control={control}
               render={({ field }) => (
-                <IntegerInput
-                  {...field}
-                  surface
-                  placeholder={String(ENV_SAVINGS_RATE_HEALTHY_PCT)}
-                />
+                <FormItem>
+                  <FormLabel>{t('form.savingsRateHealthy.label')}</FormLabel>
+                  <Hint>{t('form.savingsRateHealthy.hint')}</Hint>
+                  <FormControl>
+                    <IntegerInput
+                      {...field}
+                      surface
+                      placeholder={String(ENV_SAVINGS_RATE_HEALTHY_PCT)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <InfoHint>
+                    {t('form.savingsRateHealthy.default', {
+                      value: String(ENV_SAVINGS_RATE_HEALTHY_PCT),
+                    })}
+                  </InfoHint>
+                </FormItem>
               )}
             />
-            <InfoHint>
-              {t('form.savingsRateHealthy.default', {
-                value: String(ENV_SAVINGS_RATE_HEALTHY_PCT),
-              })}
-            </InfoHint>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.savingsRateModerate.label')}</Label>
-            <Hint>{t('form.savingsRateModerate.hint')}</Hint>
-            <Controller
+            <FormField
+              control={form.control}
               name="savingsRateModeratePct"
-              control={control}
               render={({ field }) => (
-                <IntegerInput
-                  {...field}
-                  surface
-                  placeholder={String(ENV_SAVINGS_RATE_MODERATE_PCT)}
-                />
+                <FormItem>
+                  <FormLabel>{t('form.savingsRateModerate.label')}</FormLabel>
+                  <Hint>{t('form.savingsRateModerate.hint')}</Hint>
+                  <FormControl>
+                    <IntegerInput
+                      {...field}
+                      surface
+                      placeholder={String(ENV_SAVINGS_RATE_MODERATE_PCT)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <InfoHint>
+                    {t('form.savingsRateModerate.default', {
+                      value: String(ENV_SAVINGS_RATE_MODERATE_PCT),
+                    })}
+                  </InfoHint>
+                </FormItem>
               )}
             />
-            <InfoHint>
-              {t('form.savingsRateModerate.default', {
-                value: String(ENV_SAVINGS_RATE_MODERATE_PCT),
-              })}
-            </InfoHint>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.incomeExpenseRatio.label')}</Label>
-            <Hint>{t('form.incomeExpenseRatio.hint')}</Hint>
-            <Controller
+            <FormField
+              control={form.control}
               name="incomeExpenseRatioHealthy"
-              control={control}
               render={({ field }) => (
-                <LocaleAmountInput
-                  {...field}
-                  maxDecimals={2}
-                  placeholder={String(ENV_INCOME_EXPENSE_RATIO_HEALTHY)}
-                />
+                <FormItem>
+                  <FormLabel>{t('form.incomeExpenseRatio.label')}</FormLabel>
+                  <Hint>{t('form.incomeExpenseRatio.hint')}</Hint>
+                  <FormControl>
+                    <LocaleAmountInput
+                      {...field}
+                      maxDecimals={2}
+                      placeholder={String(ENV_INCOME_EXPENSE_RATIO_HEALTHY)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <InfoHint>
+                    {t('form.incomeExpenseRatio.default', {
+                      value: String(ENV_INCOME_EXPENSE_RATIO_HEALTHY),
+                    })}
+                  </InfoHint>
+                </FormItem>
               )}
             />
-            <InfoHint>
-              {t('form.incomeExpenseRatio.default', {
-                value: String(ENV_INCOME_EXPENSE_RATIO_HEALTHY),
-              })}
-            </InfoHint>
           </div>
         </div>
-      </div>
 
-      <Button blue type="submit" className="w-full max-w-md lg:max-w-full" disabled={isSubmitting}>
-        {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
-      </Button>
-    </form>
+        <Button
+          blue
+          type="submit"
+          className="w-full max-w-md lg:max-w-full"
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
+        </Button>
+      </form>
+    </Form>
   );
 }

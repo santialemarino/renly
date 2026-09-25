@@ -261,11 +261,8 @@ async def _owner_split(session: AsyncSession, scope: _Scope, *, total: Decimal, 
 # The audience is `pot_service.list_notifiable_user_ids`, which is the pot's own visibility rule — an
 # 'owners' pot must not announce itself to a member the policy hides it from.
 #
-# `notify=False` records the audit entry and sends nothing, and exists for exactly one caller: the row a
-# same-date re-run SUPERSEDES. Its removal belongs in the trail — without a `deleted` line between them
-# a reader sees two "reconciled the account" entries on one date and cannot tell the first was undone,
-# which is the very misreading a stacked pair used to produce — but it is half of a single act the user
-# experienced as one save, and two pushes per button press is how people learn to mute an event.
+# A same-date re-run does not come through here, because it is TWO trail entries and ONE message: see
+# `_announce_replace`. The two halves are therefore separate functions this one composes.
 async def _announce(
     session: AsyncSession,
     account: Account,
@@ -274,9 +271,47 @@ async def _announce(
     action: AuditAction,
     *,
     difference: Decimal,
-    notify: bool = True,
 ) -> None:
-    variant = _movement_variant(action, difference) if notify else None
+    await _record(session, account, scope, user, action, difference=difference)
+    await _notify(session, account, scope, user, action, difference=difference)
+
+
+# What a same-date re-run tells the pot: the trail records BOTH halves and the members get exactly ONE
+# message, or none when nothing moved. The removal's trail entry is written by `create_or_replace` before
+# the superseded row is deleted; this writes the new row's entry and sends the one message.
+#
+# The trail needs the `deleted` line: without it between the two, a reader sees two "reconciled the
+# account" entries on one date and cannot tell the first was undone — the very misreading a stacked pair
+# used to produce. The message is one because the user pressed one button; two pushes per press is how
+# people learn to mute an event.
+#
+# WHICH message is decided by what moved. The new difference when it is non-zero, since that is the
+# adjustment now standing. When it is zero, the only movement left is the superseded adjustment coming
+# back OUT of every share, so the message is that removal, at the superseded amount — announcing nothing
+# there would move every co-owner's share with no word to any of them, the one thing this function
+# exists to prevent. And when both are zero nothing moved at all, and nothing is sent: the no-movement
+# rule `_movement_variant` states for every other path.
+#
+# `superseded_difference` is passed in rather than read off the row, which has been deleted by the time
+# the new one exists.
+async def _announce_replace(
+    session: AsyncSession,
+    account: Account,
+    scope: _Scope,
+    user: User,
+    *,
+    superseded_difference: Decimal,
+    difference: Decimal,
+) -> None:
+    await _record(session, account, scope, user, AuditAction.created, difference=difference)
+    if difference != ZERO:
+        await _notify(session, account, scope, user, AuditAction.created, difference=difference)
+    else:
+        await _notify(session, account, scope, user, AuditAction.deleted, difference=superseded_difference)
+
+
+# The group's trail entry for a reconciliation event, written for every difference including zero.
+async def _record(session: AsyncSession, account: Account, scope: _Scope, user: User, action: AuditAction, *, difference: Decimal) -> None:
     await shared_audit_service.record(
         session,
         group_id=scope.pot.group_id,
@@ -294,6 +329,11 @@ async def _announce(
             "currency": account.currency,
         },
     )
+
+
+# The pot members' message for a reconciliation event, or nothing when the difference moved no share.
+async def _notify(session: AsyncSession, account: Account, scope: _Scope, user: User, action: AuditAction, *, difference: Decimal) -> None:
+    variant = _movement_variant(action, difference)
     if variant is None:
         return
     recipients = await pot_service.list_notifiable_user_ids(session, scope.pot, exclude_user_id=user.id)
@@ -513,11 +553,13 @@ async def create_or_replace(
 
     # The superseded row's trail entry goes in BEFORE the delete, for the reason delete_reconciliation
     # records its own first: the sentence interpolates the difference the row carries, and reading it
-    # back afterwards would read a detached object. It is audited and NOT notified — see _announce.
+    # back afterwards would read a detached object. It is recorded and NOT notified here — the replace
+    # sends its one message once the new row exists; see _announce_replace.
     superseded = await account_reconciliation_repository.get_by_account_date(session, account_id, as_of_date)
+    superseded_difference = superseded.difference if superseded is not None else None
     if superseded is not None:
         if scope is not None:
-            await _announce(session, account, scope, user, AuditAction.deleted, difference=superseded.difference, notify=False)
+            await _record(session, account, scope, user, AuditAction.deleted, difference=superseded.difference)
         await account_reconciliation_repository.delete(session, superseded)
         # Flushed so the DELETE and its cascades reach the database before the balance below is summed
         # and before the INSERT tests the UNIQUE constraint. Without it the sums would still count the
@@ -546,7 +588,10 @@ async def create_or_replace(
         await _post_private_adjustment(session, reconciliation, account, user, as_of_date=as_of_date, difference=difference)
     else:
         await _post_shared_adjustment(session, reconciliation, account, scope, shares, as_of_date=as_of_date, difference=difference)
-        await _announce(session, account, scope, user, AuditAction.created, difference=difference)
+        if superseded_difference is None:
+            await _announce(session, account, scope, user, AuditAction.created, difference=difference)
+        else:
+            await _announce_replace(session, account, scope, user, superseded_difference=superseded_difference, difference=difference)
 
     await session.commit()
     await session.refresh(reconciliation)

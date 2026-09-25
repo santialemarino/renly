@@ -405,6 +405,16 @@ describe('ownershipEventAmount', () => {
     ).toEqual({ amount: '5.00', currency: 'USD' });
   });
 
+  it('rounds a re-agreement landing on a half up, like every other money figure', () => {
+    // 1 x 1.005 is 1.00499999… in binary, so `toFixed(2)` said 1.00; the API's half-up rule says 1.01.
+    expect(
+      ownershipEventAmount(
+        event({ type: 'reagreement', units: '-1.000000', unitPrice: '1.005000' }),
+        'USD',
+      ),
+    ).toEqual({ amount: '1.01', currency: 'USD' });
+  });
+
   it('takes the magnitude, not the signed unit change', () => {
     // Units are signed against the member the event names, and a re-agreement's are negative. Rendering
     // a negative money figure inside a cell that already carries its own sign would double it.

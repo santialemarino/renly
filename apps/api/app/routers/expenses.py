@@ -24,6 +24,7 @@ from app.schemas.expense import (
     ExpenseUpdate,
     PlanCursorChange,
 )
+from app.schemas.params import CODE_MAX_LENGTH, CURRENCY_CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.services import expense_service
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
@@ -54,13 +55,13 @@ async def list_expenses(
         default=ListScope.all,
         description="Which scopes to return: all (both, grouped — the default), private (own only) or shared (group shares only).",
     ),
-    search: str | None = Query(default=None, description="Search notes."),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description="Search notes."),
     category: ExpenseCategory | None = Query(default=None, description="Filter by category."),
-    payment_method: str | None = Query(default=None, description="Filter by payment method."),
+    payment_method: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description="Filter by payment method."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
-    sort_by: str | None = Query(default=None, description="Column to sort by (date, amount, category, payment_method)."),
-    sort_order: str = Query(default="asc", pattern="^(asc|desc)$", description="Sort direction."),
+    sort_by: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description="Column to sort by (date, amount, category, payment_method)."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, pattern="^(asc|desc)$", description="Sort direction."),
 ) -> ExpenseListResponse:
     return await expense_service.list_expenses(
         session,
@@ -88,7 +89,7 @@ async def auto_charge_match(
     current_user: CurrentUser,
     session: SessionDep,
     credit_card_id: int = Query(description="Credit card id of the candidate manual entry."),
-    currency: str = Query(description="Currency of the candidate manual entry (ISO 4217).", max_length=3),
+    currency: str = Query(description="Currency of the candidate manual entry (ISO 4217).", max_length=CURRENCY_CODE_MAX_LENGTH),
     amount: Decimal = Query(description="Amount of the candidate manual entry.", gt=0),
     date: date_type = Query(description="Date of the candidate manual entry."),
     exclude_expense_id: int | None = Query(

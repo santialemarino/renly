@@ -10,7 +10,13 @@ from app.domain.notification import DEFAULT_EMAIL_CADENCE, EmailCadence
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
-from app.schemas.settings import LANGUAGE_MODE_VALUES, SUPPORTED_LANGUAGES, TIMEZONE_MODE_VALUES
+from app.schemas.settings import (
+    COLLECTION_WARNING_PCT_RANGE,
+    LANGUAGE_MODE_VALUES,
+    MAX_COLLECTIONS_RANGE,
+    SUPPORTED_LANGUAGES,
+    TIMEZONE_MODE_VALUES,
+)
 from app.utils.dates import today_in_timezone
 from app.utils.liquidity import DEFAULT_LIQUIDITY_THRESHOLD_PCT
 
@@ -52,6 +58,17 @@ DEFAULT_LANGUAGE = SUPPORTED_LANGUAGES[0]
 _NOT_SET = object()
 
 
+# A stored int setting pulled into the inclusive range the write path enforces, or None when it is not an
+# int at all. Read-side too, because a value stored before the range existed is still in the blob — and
+# CLAMPED rather than dropped: a legacy limit of 1500 read as None would empty the form and fall back to
+# the default of 20, silently disabling "Add collection" for someone who already has more. Nothing is
+# written back; the next save through the form stores an in-range value.
+def _int_clamped(value: object, bounds: tuple[int, int]) -> int | None:
+    if not isinstance(value, int):
+        return None
+    return min(max(value, bounds[0]), bounds[1])
+
+
 # Normalizes the raw settings blob into the response dict: type-checks every key and applies fallbacks.
 def _settings_to_response(settings: dict) -> dict:
     raw_primary = settings.get(SETTINGS_KEY_PRIMARY)
@@ -63,9 +80,9 @@ def _settings_to_response(settings: dict) -> dict:
     raw_presets = settings.get(SETTINGS_KEY_PERIOD_PRESETS)
     period_presets = raw_presets if isinstance(raw_presets, list) else None
     raw_max_collections = settings.get(SETTINGS_KEY_MAX_COLLECTIONS)
-    max_collections = raw_max_collections if isinstance(raw_max_collections, int) else None
+    max_collections = _int_clamped(raw_max_collections, MAX_COLLECTIONS_RANGE)
     raw_warning_pct = settings.get(SETTINGS_KEY_COLLECTION_WARNING_PCT)
-    collection_warning_pct = raw_warning_pct if isinstance(raw_warning_pct, int) else None
+    collection_warning_pct = _int_clamped(raw_warning_pct, COLLECTION_WARNING_PCT_RANGE)
     raw_dollar_pref = settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
     dollar_rate_preference = raw_dollar_pref if isinstance(raw_dollar_pref, str) and raw_dollar_pref else None
     raw_shortcut = settings.get(SETTINGS_KEY_SHORTCUT_CURRENCIES)

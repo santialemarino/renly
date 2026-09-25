@@ -15,6 +15,7 @@ from app.schemas.metrics import (
     PortfolioEvolutionResponse,
     PortfolioMetricsResponse,
 )
+from app.schemas.params import CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.services import metrics_service
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -37,8 +38,8 @@ async def get_portfolio_metrics(
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
-    category: str | None = Query(default=None, description=CATEGORY_DESC),
-    search: str | None = Query(default=None, description=SEARCH_DESC),
+    category: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description=CATEGORY_DESC),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description=SEARCH_DESC),
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> PortfolioMetricsResponse:
@@ -64,8 +65,8 @@ async def get_portfolio_evolution(
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
-    category: str | None = Query(default=None, description=CATEGORY_DESC),
-    search: str | None = Query(default=None, description=SEARCH_DESC),
+    category: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description=CATEGORY_DESC),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description=SEARCH_DESC),
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> PortfolioEvolutionResponse:
@@ -108,8 +109,8 @@ async def get_allocation(
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
-    category: str | None = Query(default=None, description=CATEGORY_DESC),
-    search: str | None = Query(default=None, description=SEARCH_DESC),
+    category: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description=CATEGORY_DESC),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description=SEARCH_DESC),
 ) -> AllocationResponse:
     return await metrics_service.get_allocation(
         session,
@@ -131,8 +132,8 @@ async def get_allocation_by_collection(
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
-    category: str | None = Query(default=None, description=CATEGORY_DESC),
-    search: str | None = Query(default=None, description=SEARCH_DESC),
+    category: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description=CATEGORY_DESC),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description=SEARCH_DESC),
 ) -> CollectionAllocationResponse:
     return await metrics_service.get_allocation_by_collection(
         session,
@@ -154,8 +155,8 @@ async def get_investments_summary(
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
-    category: str | None = Query(default=None, description=CATEGORY_DESC),
-    search: str | None = Query(default=None, description=SEARCH_DESC),
+    category: str | None = Query(default=None, max_length=CODE_MAX_LENGTH, description=CATEGORY_DESC),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description=SEARCH_DESC),
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> InvestmentsSummaryResponse:

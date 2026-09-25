@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, status
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
+from app.schemas.params import CODE_MAX_LENGTH, SEARCH_MAX_LENGTH
 from app.schemas.payment_obligation import (
     PaymentObligationCreate,
     PaymentObligationResponse,
@@ -19,12 +20,13 @@ async def list_obligations(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
-    search: str | None = Query(default=None, description="Filter obligations by name (case-insensitive)."),
+    search: str | None = Query(default=None, max_length=SEARCH_MAX_LENGTH, description="Filter obligations by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
+        max_length=CODE_MAX_LENGTH,
         description="Column to sort by (name, amount, currency, next_due_date, recurrence, category).",
     ),
-    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
+    sort_order: str = Query(default="asc", max_length=CODE_MAX_LENGTH, description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) obligations."),
     include_ids: list[int] | None = Query(
         default=None,

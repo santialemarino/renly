@@ -1,12 +1,14 @@
 from datetime import date as date_type
+from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Path, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.deps.pagination import PageQuery
 from app.models.investment import InvestmentCategory
 from app.schemas.asset_price import AssetPriceListResponse, AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
+from app.schemas.params import CURRENCY_CODE_MAX_LENGTH, TICKER_MAX_LENGTH
 from app.services import asset_price_service
 
 router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
@@ -16,12 +18,12 @@ router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
 # When convert_to is provided, converts the price to the target currency using the rate map.
 @router.get("/{ticker}/lookup", response_model=PriceLookupResponse | None)
 async def lookup_price(
-    ticker: str,
+    ticker: Annotated[str, Path(max_length=TICKER_MAX_LENGTH, description="Asset symbol (e.g. AAPL, AAPL.BA).")],
     current_user: CurrentUser,
     session: SessionDep,
     date: date_type = Query(description="Price date."),
     category: InvestmentCategory = Query(description="Investment category (determines provider)."),
-    convert_to: str | None = Query(default=None, description="Target currency for conversion."),
+    convert_to: str | None = Query(default=None, max_length=CURRENCY_CODE_MAX_LENGTH, description="Target currency for conversion."),
 ) -> PriceLookupResponse | None:
     # Uppercase-normalize the display target so a lowercase code converts instead of silently
     # skipping (rate maps are uppercase-keyed), matching the DisplayCurrency dep on the read routes.
@@ -32,7 +34,7 @@ async def lookup_price(
 # Returns the latest stored price for a ticker.
 @router.get("/{ticker}/latest", response_model=AssetPriceResponse | None)
 async def get_latest_price(
-    ticker: str,
+    ticker: Annotated[str, Path(max_length=TICKER_MAX_LENGTH, description="Asset symbol (e.g. AAPL, AAPL.BA).")],
     current_user: CurrentUser,
     session: SessionDep,
 ) -> AssetPriceResponse | None:
@@ -45,7 +47,7 @@ async def get_latest_price(
 # Returns one page of a ticker's price history, newest first, with optional date range.
 @router.get("/{ticker}", response_model=AssetPriceListResponse)
 async def get_price_history(
-    ticker: str,
+    ticker: Annotated[str, Path(max_length=TICKER_MAX_LENGTH, description="Asset symbol (e.g. AAPL, AAPL.BA).")],
     current_user: CurrentUser,
     session: SessionDep,
     page_query: PageQuery,

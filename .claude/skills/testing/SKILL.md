@@ -93,12 +93,15 @@ pnpm test:e2e        # Playwright E2E
     difference while the save DELETES it and re-derives, so each case reads the preview, saves, and
     asserts the recorded `computed_balance` is the figure the user was shown.
   - `test_ownership_predicates.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). Every repository
-    `get_by_id` that takes a `user_id`, driven against two users' rows: each must return the row to its
-    owner AND nothing to anybody else. The predicate IS the behaviour, so a mocked session cannot test
-    it at all — deleting `X.user_id == user_id` from four repositories left the whole unit suite green.
-    Also the two funding rules that ask "does this belong to THAT MEMBER", which RLS cannot answer.
-    Its population is DERIVED by `tests/unit/test_ownership_predicate_coverage.py`, which fails when a
-    new owner-scoped `get_by_id` appears with no case here.
+    keyed read or delete (`get_by_*`, `find_by_*`, `delete_*`) that takes a `user_id` alongside another
+    parameter, driven against two users' rows: a read must return the row to its owner AND nothing to
+    anybody else, and a delete must remove the named user's rows and nobody else's. The predicate IS the
+    behaviour, so a mocked session cannot test it at all — deleting `X.user_id == user_id` from four
+    repositories left the whole unit suite green, and the two token deletes run on the admin session,
+    where RLS cannot backstop them. Also the two funding rules that ask "does this belong to THAT
+    MEMBER", which RLS cannot answer. Its population is DERIVED by
+    `tests/unit/test_ownership_predicate_coverage.py`, which fails when a new owner-scoped read or
+    delete appears with no case here.
   - `test_list_bounds_queries.py` — `LEDGER_TEST_DATABASE_URL`. The list caps and the pager's
     `OFFSET`, seeded PAST the boundary (`MAX_LIST_ROWS + 1` rows, three pages), because a bound
     asserted against fewer rows than it bounds passes with the bound deleted.

@@ -8,6 +8,7 @@ from app.domain import InvalidImportFileError
 from app.domain.import_specs import ImportEntity
 from app.rate_limit import IMPORT_LIMIT, limiter
 from app.schemas.imports import ImportPreviewResponse, ImportResultResponse
+from app.schemas.params import IMPORT_MAPPING_MAX_LENGTH
 from app.services import import_service
 
 router = APIRouter(prefix="/imports", tags=["imports"])
@@ -40,7 +41,7 @@ async def preview_import(
     current_user: CurrentUser,
     session: SessionDep,
     file: UploadFile = File(..., description="CSV or XLSX file to import."),
-    mapping: str | None = Form(default=None, description="Optional JSON mapping of field → source column."),
+    mapping: str | None = Form(default=None, max_length=IMPORT_MAPPING_MAX_LENGTH, description="Optional JSON mapping of field → source column."),
 ) -> ImportPreviewResponse:
     content = await file.read()
     return await import_service.preview_import(session, current_user, entity, file.filename or "", content, _parse_mapping(mapping))
@@ -56,7 +57,7 @@ async def confirm_import(
     current_user: CurrentUser,
     session: SessionDep,
     file: UploadFile = File(..., description="CSV or XLSX file to import."),
-    mapping: str = Form(..., description="JSON mapping of field → source column."),
+    mapping: str = Form(..., max_length=IMPORT_MAPPING_MAX_LENGTH, description="JSON mapping of field → source column."),
     import_duplicates: bool = Form(default=False, description="Import rows flagged as duplicates too."),
 ) -> ImportResultResponse:
     content = await file.read()

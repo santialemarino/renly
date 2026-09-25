@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { GROUP_NAME_MAX } from '@/lib/constants/api-constants';
+import { EXPENSE_NOTES_MAX, GROUP_NAME_MAX } from '@/lib/constants/api-constants';
 import {
   POT_CADENCES,
   POT_MOVEMENT_TYPES,
@@ -87,7 +87,7 @@ export function buildPotOpeningFormSchema({
       date: z.string().min(1, { message: requiredMsg }),
       value: positiveField(requiredMsg, positiveMsg),
       shares: z.array(z.object({ memberId: z.number(), percentage: z.string() })),
-      notes: z.string().optional(),
+      notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
     })
     .refine((values) => openingSharesTotal(values.shares) === POT_PERCENTAGE_TOTAL, {
       message: totalMsg,
@@ -144,7 +144,7 @@ export function buildPotMovementFormSchema({
       // tracked account.
       privateAccountId: z.string().optional(),
       potAccountId: z.string().optional(),
-      notes: z.string().optional(),
+      notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
     })
     .refine((values) => baseAmountStated(values, baseCurrency), {
       message: requiredMsg,
@@ -184,7 +184,7 @@ export function buildPotReagreementFormSchema({
         (v) => Number(v) <= POT_PERCENTAGE_TOTAL,
         { message: rangeMsg },
       ),
-      notes: z.string().optional(),
+      notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
     })
     .refine((values) => values.fromMemberId !== values.toMemberId, {
       message: sameMemberMsg,
@@ -228,7 +228,7 @@ export function buildPotTakeOutFormSchema({
       baseAmount: z.string().optional(),
       privateAccountId: z.string().optional(),
       potAccountId: z.string().optional(),
-      notes: z.string().optional(),
+      notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
     })
     .refine((values) => baseAmountStated(values, baseCurrency), {
       message: requiredMsg,
@@ -253,7 +253,7 @@ export type PotTakeOutFormValues = z.infer<ReturnType<typeof buildPotTakeOutForm
 export function buildPotContributeFormSchema(requiredMsg: string) {
   return z.object({
     holding: z.string().min(1, { message: requiredMsg }),
-    notes: z.string().optional(),
+    notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
   });
 }
 
@@ -281,7 +281,7 @@ export function buildPotBuyOutFormSchema({
       date: z.string().min(1, { message: requiredMsg }),
       fromMemberId: z.string().min(1, { message: requiredMsg }),
       toMemberId: z.string().min(1, { message: requiredMsg }),
-      notes: z.string().optional(),
+      notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
     })
     .refine((values) => values.fromMemberId !== values.toMemberId, {
       message: sameMemberMsg,

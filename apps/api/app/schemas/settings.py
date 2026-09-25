@@ -7,10 +7,19 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.base import RequestBase
+from app.schemas.params import CURRENCY_CODE_MAX_LENGTH
 
 TIMEZONE_MODE_VALUES = ("auto", "manual")
 LANGUAGE_MODE_VALUES = ("auto", "manual")
 SUPPORTED_LANGUAGES = ("en", "es")
+
+# The two collection-limit settings, bounded to what the Alerts form's controls allow. A warning is a
+# percentage of the limit, so it lives in [1, 100]. The limit itself is a soft cap on how many
+# collections a person keeps, defaulting to 50: a thousand is far past any real portfolio's groupings
+# and keeps the figure a number the collections page can multiply and print, where unbounded it
+# stored a 4,000-digit integer and a negative percentage without complaint.
+MAX_COLLECTIONS_RANGE = (1, 1000)
+COLLECTION_WARNING_PCT_RANGE = (1, 100)
 
 # Length ceilings for the settings a PUT can carry. These are not guesses about what a user might
 # type: every one of these fields holds a code from a known set, so the ceiling is the shape of the
@@ -23,14 +32,13 @@ SUPPORTED_LANGUAGES = ("en", "es")
 # would be more honest but would start 422-ing requests this endpoint has always swallowed — and a
 # request mixing one bad value with good ones would stop applying the good ones. The cap closes the
 # unbounded-write hole without changing which requests succeed.
-_CURRENCY_CODE_MAX = 3
 _SETTING_KEY_MAX = 32
 _TIMEZONE_MAX = 64
 # A list of codes, not a free-text list: enough room for every code the app has plus headroom, so the
 # item cap above is what bounds the payload rather than this.
 _CODE_LIST_MAX_ITEMS = 32
 
-CurrencyCode = Annotated[str, Field(max_length=_CURRENCY_CODE_MAX)]
+CurrencyCode = Annotated[str, Field(max_length=CURRENCY_CODE_MAX_LENGTH)]
 SettingCode = Annotated[str, Field(max_length=_SETTING_KEY_MAX)]
 
 
@@ -128,11 +136,15 @@ class SettingsUpdate(RequestBase):
     )
     max_collections: int | None = Field(
         default=None,
-        description="Maximum number of investment collections.",
+        description="Maximum number of investment collections, in [1, 1000].",
+        ge=MAX_COLLECTIONS_RANGE[0],
+        le=MAX_COLLECTIONS_RANGE[1],
     )
     collection_warning_pct: int | None = Field(
         default=None,
-        description="Percentage of max collections for approaching-limit warning.",
+        description="Percentage of max collections for approaching-limit warning, in [1, 100].",
+        ge=COLLECTION_WARNING_PCT_RANGE[0],
+        le=COLLECTION_WARNING_PCT_RANGE[1],
     )
     dollar_rate_preference: SettingCode | None = Field(
         default=None,

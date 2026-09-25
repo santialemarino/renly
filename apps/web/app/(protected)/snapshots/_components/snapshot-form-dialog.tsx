@@ -40,6 +40,7 @@ import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { moneyProduct } from '@/lib/money';
 
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly (DB cache hit).
@@ -194,10 +195,9 @@ export function SnapshotFormDialog({
   // Derivation: when in quantity mode and effective price is available, derive value from quantity.
   useEffect(() => {
     if (!quantityMode || !effectivePrice || !watchedQuantity) return;
-    const qty = parseFloat(watchedQuantity);
-    if (!isNaN(qty) && qty > 0) {
-      form.setValue('value', (qty * effectivePrice).toFixed(2), { shouldValidate: true });
-    }
+    const value =
+      parseFloat(watchedQuantity) > 0 ? moneyProduct(watchedQuantity, effectivePrice) : null;
+    if (value !== null) form.setValue('value', value, { shouldValidate: true });
   }, [watchedQuantity, quantityMode, effectivePrice, form]);
 
   // Derivation: when NOT in quantity mode and effective price is available, derive quantity from value.
@@ -212,12 +212,9 @@ export function SnapshotFormDialog({
   // Transaction derivation: same logic, same toggle, same price.
   useEffect(() => {
     if (!quantityMode || !effectivePrice || !watchedTxQuantity || !includeTransaction) return;
-    const qty = parseFloat(watchedTxQuantity);
-    if (!isNaN(qty) && qty > 0) {
-      form.setValue('transactionAmount', (qty * effectivePrice).toFixed(2), {
-        shouldValidate: false,
-      });
-    }
+    const amount =
+      parseFloat(watchedTxQuantity) > 0 ? moneyProduct(watchedTxQuantity, effectivePrice) : null;
+    if (amount !== null) form.setValue('transactionAmount', amount, { shouldValidate: false });
   }, [watchedTxQuantity, quantityMode, effectivePrice, includeTransaction, form]);
 
   useEffect(() => {

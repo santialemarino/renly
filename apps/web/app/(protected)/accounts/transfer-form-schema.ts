@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { EXPENSE_NOTES_MAX } from '@/lib/constants/api-constants';
+
 /*
  * The credited amount is optional here on purpose: within one currency it mirrors the debited amount
  * and the field is hidden, while across currencies the dialog reveals it and marks it required. The
@@ -13,7 +15,7 @@ export function buildTransferFormSchema(requiredMsg: string) {
     date: z.string().min(1, { message: requiredMsg }),
     fromAmount: z.string().min(1, { message: requiredMsg }),
     toAmount: z.string().optional(),
-    notes: z.string().optional(),
+    notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
   });
 }
 
