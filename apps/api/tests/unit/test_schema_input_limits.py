@@ -166,10 +166,14 @@ _UNCAPPED = {"type": "string"}
 # held to a key cap. That errs in one direction only: an int-keyed mapping sitting beside a capped
 # str-keyed one is flagged although it is bounded. It never lets an uncapped key through.
 #
-# NOT covered here, and covered elsewhere: an object WITH `properties` is a nested model, whose fields
-# are scanned as a schema of their own (`_request_schemas` reaches every model a request can carry), so
-# this does not descend into it. NOT covered at all: a pattern or a custom validator that bounds a string
-# without a `maxLength` reads as uncapped (the bcrypt byte cap is the one such rule recognised, by name).
+# NOT covered here, and covered elsewhere: an object WITH `properties` is a nested pydantic model, whose
+# fields are scanned as a schema of their own (`_request_schemas` reaches every pydantic model a request
+# can carry), so this does not descend into it. NOT covered at all: a `TypedDict` or dataclass nested in
+# a request (also an object with `properties`, but not a pydantic model, so nothing scans it); `bytes`,
+# `SecretStr` and URL types, which accept unbounded input but are never selected as free text; the extra
+# keys of a nested model with `extra="allow"`; nesting deeper than ten levels; and a pattern or a custom
+# validator that bounds a string without a `maxLength`, which reads as uncapped (the bcrypt byte cap is
+# the one such rule recognised, by name). No request schema uses any of these today.
 def _string_leaves(prop, defs, depth=0, str_keys=False):
     if depth > 10:
         return
