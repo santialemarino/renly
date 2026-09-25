@@ -1,47 +1,53 @@
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-# Every repository `get_by_id` that takes a `user_id` refuses a row belonging to somebody else — proven
-# by running the real query against a real Postgres with two users' rows in the table.
+# Every repository keyed read (`get_by_*` / `find_by_*`) and every `delete_*` that takes a `user_id`
+# alongside something else refuses — or spares — a row belonging to somebody else, proven by running the
+# real query against a real Postgres with two users' rows in the table.
 #
 # ▸ WHY THIS CANNOT BE A UNIT TEST. The predicate IS the behaviour. A mocked session returns whatever
 # the test told it to, so a unit test asserting "another user's row comes back as None" passes exactly
 # as well after the predicate is deleted — which is not a hypothetical: deleting
 # `X.user_id == user_id` from the investment, account, credit_card and collection repositories left the
-# entire 2877-test unit suite green. Four of these twelve were named in the pre-launch audit; the other
-# eight have the identical shape and were unpinned for the same reason.
+# entire 2877-test unit suite green, and so did deleting it from the two batched `get_by_ids` reads.
 #
 # ▸ WHY BOTH HALVES OF EACH CASE. Each case asserts the owner DOES get the row and the other user does
 # NOT. Without the first half a predicate mutated to something permanently false — `1 == 0`, a typo
 # comparing the column to itself — passes the cross-tenant half perfectly while breaking the feature.
 #
 # ▸ WHY RLS IS NOT THE ANSWER HERE. The row-level policies do backstop the ordinary case, where the
-# `user_id` passed is the caller's own. They cannot backstop the case these predicates exist for:
+# `user_id` passed is the caller's own. They cannot backstop the cases these predicates exist for:
 # `shared_expense_service._load_card_id` asks "does this card belong to THE NAMED PAYER", who is not
-# the caller, and `app_current_user_id()` has no opinion about that. See TestCrossMemberFunding below.
+# the caller, and `app_current_user_id()` has no opinion about that (see TestCrossMemberFunding below);
+# and the two token deletes run on the admin session, which bypasses RLS altogether (see
+# TestEveryOwnerScopedDelete).
 #
 # The population is DERIVED, not listed: `tests/unit/test_ownership_predicate_coverage.py` walks
-# `app/repositories` for every `get_by_id` taking a `user_id` and fails when one has no case here — so
-# the next repository added does not quietly join the unpinned set.
+# `app/repositories` for every keyed read and delete taking a `user_id` beside something else, and fails
+# when one has no case here — so the next one added does not quietly join the unpinned set.
 #
 # Skipped unless LEDGER_TEST_DATABASE_URL points at a database with the schema applied, so the default
-# `pnpm test:api` run stays unit-only. It is the OWNER-role variable because these seed rows for two
-# different users, which no single app-role session may do.
+# `pnpm test:api` run stays unit-only. Point it at the BYPASSRLS admin role (`renly_admin`): these seed
+# rows for two different users, which no app-role session may do, and with FORCE ROW LEVEL SECURITY on
+# every table even the tables' owner reads and writes nothing unless it bypasses RLS.
 from app.domain import NotFoundError
+from app.models.auth_token import AuthTokenType
 from app.models.group import GroupMember
 from app.models.group_money_settings import SplitMethod
 from app.models.user import User
 from app.repositories import (
     account_repository,
     api_key_repository,
+    auth_token_repository,
     collection_repository,
     credit_card_repository,
     expense_repository,
@@ -50,6 +56,7 @@ from app.repositories import (
     investment_repository,
     notification_repository,
     payment_obligation_repository,
+    refresh_token_repository,
     subscription_repository,
     transfer_repository,
 )
@@ -67,14 +74,15 @@ _EMAILS = ("own_a@test.local", "own_b@test.local")
 _DATE = date(2026, 7, 1)
 
 
-# One case per repository: how to create a row owned by a given user, and how to read it back scoped to
-# a given user. `read` is spelled out per case rather than derived from the module, because
-# `notification_repository.get_by_id` takes its arguments in the other order — a generic driver would
-# have silently passed the id as the user and the user as the id, and every assertion would still have
-# come out the colour the test wanted.
+# One case per owner-scoped read, named `<repository>.<function>`: how to create a row owned by a given
+# user, and how to read it back scoped to a given user. `read` is spelled out per case rather than
+# derived from the module, because `notification_repository.get_by_id` takes its arguments in the other
+# order — a generic driver would have silently passed the id as the user and the user as the id, and
+# every assertion would still have come out the colour the test wanted. A batch read answers a list, so
+# "nothing" is an empty one; both are falsy, which is what the assertions test.
 @dataclass(frozen=True)
 class _Case:
-    repository: str
+    function: str
     seed: Callable[[AsyncSession, int], Awaitable[int]]
     read: Callable[[AsyncSession, int, int], Awaitable[object | None]]
 
@@ -106,14 +114,27 @@ async def _seed_transfer(s: AsyncSession, user_id: int) -> int:
     )
 
 
+async def _seed_investment(s: AsyncSession, user_id: int) -> int:
+    return await _insert(
+        s,
+        "INSERT INTO investments (user_id, name, category, base_currency) VALUES (:u, 'own', 'cedears', 'ARS') RETURNING id",
+        u=user_id,
+    )
+
+
 _CASES = (
     _Case(
-        "account_repository",
+        "account_repository.get_by_id",
         _seed_account,
         lambda s, row, user: account_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "api_key_repository",
+        "account_repository.get_by_ids",
+        _seed_account,
+        lambda s, row, user: account_repository.get_by_ids(s, [row], user),
+    ),
+    _Case(
+        "api_key_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO api_keys (user_id, name, key_hash, key_prefix) VALUES (:u, 'own', :h, :p) RETURNING id",
@@ -124,12 +145,12 @@ _CASES = (
         lambda s, row, user: api_key_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "collection_repository",
+        "collection_repository.get_by_id",
         lambda s, u: _insert(s, "INSERT INTO investment_collections (user_id, name) VALUES (:u, 'own') RETURNING id", u=u),
         lambda s, row, user: collection_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "credit_card_repository",
+        "credit_card_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO credit_cards (user_id, name, closing_day, due_day, currency) VALUES (:u, 'own', 10, 20, 'ARS') RETURNING id",
@@ -138,7 +159,7 @@ _CASES = (
         lambda s, row, user: credit_card_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "expense_repository",
+        "expense_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO expense_entries (user_id, date, amount, currency) VALUES (:u, :d, 1, 'ARS') RETURNING id",
@@ -148,7 +169,7 @@ _CASES = (
         lambda s, row, user: expense_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "income_repository",
+        "income_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO income_entries (user_id, date, amount, currency) VALUES (:u, :d, 1, 'ARS') RETURNING id",
@@ -158,7 +179,7 @@ _CASES = (
         lambda s, row, user: income_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "installment_repository",
+        "installment_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO installments (user_id, name, total_amount, installment_amount, currency, installments_count, start_date)"
@@ -169,22 +190,23 @@ _CASES = (
         lambda s, row, user: installment_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "investment_repository",
-        lambda s, u: _insert(
-            s,
-            "INSERT INTO investments (user_id, name, category, base_currency) VALUES (:u, 'own', 'cedears', 'ARS') RETURNING id",
-            u=u,
-        ),
+        "investment_repository.get_by_id",
+        _seed_investment,
         lambda s, row, user: investment_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "notification_repository",
+        "investment_repository.get_by_ids",
+        _seed_investment,
+        lambda s, row, user: investment_repository.get_by_ids(s, [row], user),
+    ),
+    _Case(
+        "notification_repository.get_by_id",
         lambda s, u: _insert(s, "INSERT INTO notifications (user_id, event) VALUES (:u, 'snapshot_due') RETURNING id", u=u),
         # Arguments in the other order — the reason `read` is written out per case.
         lambda s, row, user: notification_repository.get_by_id(s, user, row),
     ),
     _Case(
-        "payment_obligation_repository",
+        "payment_obligation_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO payment_obligations (user_id, name, amount, currency, next_due_date, anchor_day)"
@@ -195,7 +217,7 @@ _CASES = (
         lambda s, row, user: payment_obligation_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "subscription_repository",
+        "subscription_repository.get_by_id",
         lambda s, u: _insert(
             s,
             "INSERT INTO subscriptions (user_id, name, amount, currency, billing_cycle, next_billing_date, anchor_day)"
@@ -206,14 +228,91 @@ _CASES = (
         lambda s, row, user: subscription_repository.get_by_id(s, row, user),
     ),
     _Case(
-        "transfer_repository",
+        "transfer_repository.get_by_id",
         _seed_transfer,
         lambda s, row, user: transfer_repository.get_by_id(s, row, user),
     ),
 )
 
+
+# One case per owner-scoped DELETE. These two run on the admin session, which bypasses RLS, so the
+# `user_id` predicate is the only thing between the statement and every user's rows — and the first one
+# is reachable before login: forgot-password, register, a verification resend and an email change all
+# call `issue_token`, which clears the named user's pending tokens first. With its predicate gone, one
+# anonymous forgot-password would void every pending reset and verification link in the database.
+#
+# `doomed` seeds a row the delete for that user must remove; `near_misses` seeds that same user's rows
+# it must KEEP, one per other clause, so a case list of obvious qualifiers cannot pass with a clause
+# deleted.
+@dataclass(frozen=True)
+class _DeleteCase:
+    function: str
+    table: str
+    doomed: Callable[[AsyncSession, int], Awaitable[int]]
+    near_misses: Callable[[AsyncSession, int], Awaitable[list[int]]]
+    delete: Callable[[AsyncSession, int], Awaitable[None]]
+
+
+_NOW = datetime(2026, 7, 1, 12, 0)
+
+
+async def _seed_auth_token(s: AsyncSession, user_id: int, token_type: str, consumed: bool = False) -> int:
+    return await _insert(
+        s,
+        "INSERT INTO auth_tokens (user_id, token_hash, token_type, expires_at, consumed_at)"
+        " VALUES (:u, :h, CAST(:t AS auth_token_type), :e, :c) RETURNING id",
+        u=user_id,
+        h=uuid4().hex,
+        t=token_type,
+        e=_NOW + timedelta(hours=1),
+        c=_NOW if consumed else None,
+    )
+
+
+async def _seed_refresh_token(s: AsyncSession, user_id: int, expires_at: datetime) -> int:
+    return await _insert(
+        s,
+        "INSERT INTO refresh_tokens (user_id, token_hash, family_id, session_epoch, remember_me, expires_at)"
+        " VALUES (:u, :h, :f, 0, false, :e) RETURNING id",
+        u=user_id,
+        h=uuid4().hex,
+        f=uuid4().hex,
+        e=expires_at,
+    )
+
+
+async def _auth_token_near_misses(s: AsyncSession, user_id: int) -> list[int]:
+    # Same user and type but already consumed; same user, unconsumed, but another type.
+    return [
+        await _seed_auth_token(s, user_id, AuthTokenType.password_reset, consumed=True),
+        await _seed_auth_token(s, user_id, AuthTokenType.email_verification),
+    ]
+
+
+async def _refresh_token_near_misses(s: AsyncSession, user_id: int) -> list[int]:
+    # Same user, not yet expired.
+    return [await _seed_refresh_token(s, user_id, _NOW + timedelta(days=1))]
+
+
+_DELETE_CASES = (
+    _DeleteCase(
+        "auth_token_repository.delete_unconsumed_by_user_type",
+        "auth_tokens",
+        lambda s, u: _seed_auth_token(s, u, AuthTokenType.password_reset),
+        _auth_token_near_misses,
+        lambda s, u: auth_token_repository.delete_unconsumed_by_user_type(s, u, AuthTokenType.password_reset),
+    ),
+    _DeleteCase(
+        "refresh_token_repository.delete_expired_by_user",
+        "refresh_tokens",
+        lambda s, u: _seed_refresh_token(s, u, _NOW - timedelta(days=1)),
+        _refresh_token_near_misses,
+        lambda s, u: refresh_token_repository.delete_expired_by_user(s, u, _NOW),
+    ),
+)
+
 # Imported by the coverage guard in tests/unit/, which compares it against the repositories on disk.
-COVERED_REPOSITORIES = frozenset(case.repository for case in _CASES)
+COVERED_FUNCTIONS = frozenset(case.function for case in _CASES) | frozenset(case.function for case in _DELETE_CASES)
 
 
 # Two users with nothing in common. Every row these tests create hangs off one of them, so teardown
@@ -260,15 +359,36 @@ async def _cleanup(session: AsyncSession) -> None:
 
 
 class TestEveryOwnerScopedRead:
-    @pytest.mark.parametrize("case", _CASES, ids=[case.repository for case in _CASES])
+    @pytest.mark.parametrize("case", _CASES, ids=[case.function for case in _CASES])
     @pytest.mark.asyncio
     async def test_it_returns_the_row_to_its_owner_and_nothing_to_anyone_else(self, users, case):
         session = users["session"]
         row_id = await case.seed(session, users["a"])
         await session.flush()
 
-        assert await case.read(session, row_id, users["a"]) is not None, f"{case.repository} hid a row from its own owner"
-        assert await case.read(session, row_id, users["b"]) is None, f"{case.repository} handed a row to another user"
+        assert await case.read(session, row_id, users["a"]), f"{case.function} hid a row from its own owner"
+        assert not await case.read(session, row_id, users["b"]), f"{case.function} handed a row to another user"
+
+
+class TestEveryOwnerScopedDelete:
+    @pytest.mark.parametrize("case", _DELETE_CASES, ids=[case.function for case in _DELETE_CASES])
+    @pytest.mark.asyncio
+    async def test_it_deletes_the_named_users_rows_and_nobody_elses(self, users, case):
+        # Both users hold a row the delete would take if it were theirs. Only A's may go: B's row
+        # surviving is the cross-user half, and A's near-misses surviving is each remaining clause.
+        session = users["session"]
+        doomed = await case.doomed(session, users["a"])
+        bystander = await case.doomed(session, users["b"])
+        kept = await case.near_misses(session, users["a"])
+        await session.flush()
+
+        await case.delete(session, users["a"])
+
+        query = text(f"SELECT id FROM {case.table} WHERE id = ANY(:ids)")
+        remaining = set((await session.execute(query, {"ids": [doomed, bystander, *kept]})).scalars())
+        assert doomed not in remaining, f"{case.function} left the named user's row in place"
+        assert bystander in remaining, f"{case.function} deleted another user's row"
+        assert set(kept) <= remaining, f"{case.function} deleted rows of the named user that its other clauses should keep"
 
 
 # The two funding rules that ask "does this instrument belong to THAT MEMBER" rather than "to the
