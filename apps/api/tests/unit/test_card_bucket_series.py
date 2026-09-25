@@ -55,23 +55,23 @@ _CHARGES: dict[str, list[tuple[int, date, str, Decimal]]] = {
 
 
 # The grouped shape the headline reads: {card_id: {currency: total}}, every row, no date bound.
-def _grouped(source: str, card_ids: list[int]) -> dict[int, dict[str, float]]:
-    grouped: dict[int, dict[str, float]] = {}
+def _grouped(source: str, card_ids: list[int]) -> dict[int, dict[str, Decimal]]:
+    grouped: dict[int, dict[str, Decimal]] = {}
     for card_id, _row_date, currency, amount in _CHARGES[source]:
         if card_id in card_ids:
             by_currency = grouped.setdefault(card_id, {})
-            by_currency[currency] = float(Decimal(str(by_currency.get(currency, 0))) + amount)
+            by_currency[currency] = by_currency.get(currency, ZERO) + amount
     return grouped
 
 
 # The monthly shape the series reads: the same rows as (card_id, year, month, currency, total).
-def _monthly(source: str, card_ids: list[int]) -> list[tuple[int, int, int, str, float]]:
+def _monthly(source: str, card_ids: list[int]) -> list[tuple[int, int, int, str, Decimal]]:
     totals: dict[tuple[int, int, int, str], Decimal] = {}
     for card_id, row_date, currency, amount in _CHARGES[source]:
         if card_id in card_ids:
             key = (card_id, row_date.year, row_date.month, currency)
             totals[key] = totals.get(key, ZERO) + amount
-    return sorted((card_id, year, month, currency, float(total)) for (card_id, year, month, currency), total in totals.items())
+    return sorted((card_id, year, month, currency, total) for (card_id, year, month, currency), total in totals.items())
 
 
 # Stubs the three grouped sums the headline reads.
@@ -165,7 +165,7 @@ class TestAgreementWithTheHeadline:
 class TestComputeCardBucketSeries:
     def test_each_month_carries_the_running_bucket_not_that_months_movement(self):
         series = credit_card_service.compute_card_bucket_series(
-            [(1, 2026, 1, "USD", 100.0), (1, 2026, 3, "USD", 50.0)],
+            [(1, 2026, 1, "USD", Decimal("100.0")), (1, 2026, 3, "USD", Decimal("50.0"))],
             [],
         )
         assert series == {(2026, 1): {(1, "USD"): Decimal("100")}, (2026, 3): {(1, "USD"): Decimal("150")}}
@@ -176,7 +176,7 @@ class TestComputeCardBucketSeries:
         # private one arrives after it. Accumulating in arrival order would put the whole of March
         # inside January's entry and leave March holding only its own charge.
         series = credit_card_service.compute_card_bucket_series(
-            [(1, 2026, 3, "USD", 50.0), (1, 2026, 1, "USD", 100.0)],
+            [(1, 2026, 3, "USD", Decimal("50.0")), (1, 2026, 1, "USD", Decimal("100.0"))],
             [],
         )
         assert series == {(2026, 1): {(1, "USD"): Decimal("100")}, (2026, 3): {(1, "USD"): Decimal("150")}}
@@ -184,12 +184,12 @@ class TestComputeCardBucketSeries:
     def test_a_month_with_no_movement_has_no_entry(self):
         # The caller forward-fills. Emitting a row for every month in between would make this function
         # need a grid it has no business knowing about.
-        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "USD", 100.0), (1, 2026, 3, "USD", 50.0)], [])
+        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "USD", Decimal("100.0")), (1, 2026, 3, "USD", Decimal("50.0"))], [])
         assert (2026, 2) not in series
 
     def test_currencies_never_net_against_each_other(self):
         series = credit_card_service.compute_card_bucket_series(
-            [(1, 2026, 1, "USD", 100.0), (1, 2026, 1, "ARS", 120000.0)],
+            [(1, 2026, 1, "USD", Decimal("100.0")), (1, 2026, 1, "ARS", Decimal("120000.0"))],
             [],
         )
         assert series[(2026, 1)] == {(1, "USD"): Decimal("100"), (1, "ARS"): Decimal("120000")}
@@ -198,39 +198,39 @@ class TestComputeCardBucketSeries:
         # They are never added together here, because the conversion layer has to round them the way
         # the headline does — one bucket at a time.
         series = credit_card_service.compute_card_bucket_series(
-            [(1, 2026, 1, "USD", 100.0), (2, 2026, 1, "USD", 40.0)],
+            [(1, 2026, 1, "USD", Decimal("100.0")), (2, 2026, 1, "USD", Decimal("40.0"))],
             [],
         )
         assert series[(2026, 1)] == {(1, "USD"): Decimal("100"), (2, "USD"): Decimal("40")}
 
     def test_a_settlement_reduces_its_own_bucket_only(self):
         series = credit_card_service.compute_card_bucket_series(
-            [(1, 2026, 1, "USD", 100.0), (1, 2026, 1, "ARS", 5000.0)],
-            [(1, 2026, 2, "USD", 30.0)],
+            [(1, 2026, 1, "USD", Decimal("100.0")), (1, 2026, 1, "ARS", Decimal("5000.0"))],
+            [(1, 2026, 2, "USD", Decimal("30.0"))],
         )
         assert series[(2026, 2)] == {(1, "USD"): Decimal("70"), (1, "ARS"): Decimal("5000")}
 
     def test_a_settlement_clears_its_own_cards_bucket_and_not_the_other_cards(self):
         series = credit_card_service.compute_card_bucket_series(
-            [(1, 2026, 1, "USD", 100.0), (2, 2026, 1, "USD", 100.0)],
-            [(1, 2026, 2, "USD", 100.0)],
+            [(1, 2026, 1, "USD", Decimal("100.0")), (2, 2026, 1, "USD", Decimal("100.0"))],
+            [(1, 2026, 2, "USD", Decimal("100.0"))],
         )
         assert series[(2026, 2)] == {(1, "USD"): ZERO, (2, "USD"): Decimal("100")}
 
     def test_a_bucket_cleared_in_full_stays_present_as_a_zero(self):
         # It is not dropped, because "this currency is settled" and "this currency was never here" are
         # different facts and the conversion layer treats them the same way only by choice.
-        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "EUR", 40.0)], [(1, 2026, 2, "EUR", 40.0)])
+        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "EUR", Decimal("40.0"))], [(1, 2026, 2, "EUR", Decimal("40.0"))])
         assert series[(2026, 2)] == {(1, "EUR"): ZERO}
 
     def test_an_overpayment_is_a_negative_bucket(self):
-        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "USD", 50.0)], [(1, 2026, 1, "USD", 100.0)])
+        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "USD", Decimal("50.0"))], [(1, 2026, 1, "USD", Decimal("100.0"))])
         assert series[(2026, 1)] == {(1, "USD"): Decimal("-50")}
 
     def test_each_month_gets_its_own_map(self):
         # The running map is mutated in place; a month that stored a reference to it rather than a copy
         # would report every later month's balance as its own, and the series would be flat.
-        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "USD", 100.0), (1, 2026, 2, "USD", 50.0)], [])
+        series = credit_card_service.compute_card_bucket_series([(1, 2026, 1, "USD", Decimal("100.0")), (1, 2026, 2, "USD", Decimal("50.0"))], [])
         assert series[(2026, 1)] is not series[(2026, 2)]
         assert series[(2026, 1)] == {(1, "USD"): Decimal("100")}
 

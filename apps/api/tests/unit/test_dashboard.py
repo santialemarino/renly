@@ -789,8 +789,8 @@ class TestTheEvolutionSeriesTerms:
             monkeypatch,
             shared_values=[Decimal("0")],
             cards=[card],
-            card_expenses=[(1, 2026, 7, "ARS", 100.0)],
-            shared_card=[(1, 2026, 7, "ARS", 400.0)],
+            card_expenses=[(1, 2026, 7, "ARS", Decimal("100.0"))],
+            shared_card=[(1, 2026, 7, "ARS", Decimal("400.0"))],
         )
         points, _ = await dashboard_service.compute_net_worth_evolution(AsyncMock(), 1, currency=None, lookup=None, today=date_type(2026, 7, 15))
         assert [p.card_balance for p in points] == [Decimal("500")]
@@ -805,7 +805,7 @@ class TestTheEvolutionSeriesTerms:
             monkeypatch,
             shared_values=[Decimal("0")],
             cards=[card],
-            card_expenses=[(1, 2026, 7, "EUR", 80.0)],
+            card_expenses=[(1, 2026, 7, "EUR", Decimal("80.0"))],
         )
         points, skipped = await dashboard_service.compute_net_worth_evolution(
             AsyncMock(), 1, currency="USD", lookup=FIXED_LOOKUP, today=date_type(2026, 7, 15)
