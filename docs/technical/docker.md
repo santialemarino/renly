@@ -28,11 +28,13 @@ Environment variables with defaults: `POSTGRES_USER=renly`, `POSTGRES_PASSWORD=r
 
 Reads an **optional** root `.env` (`env_file` long syntax, `required: false`) — the stack boots
 zero-config without it. `environment` provides working local defaults with **service-name hosts**:
-`DATABASE_URL` and `DATABASE_ADMIN_URL` default to `postgresql+asyncpg://renly:renly@postgres:5432/renly`,
-plus a dev placeholder `JWT_SECRET` and `WEB_BASE_URL`. Every other API var comes from the root
-`.env` (if present) or its in-code default (`config.py`). Local compose runs **single-role** (the
-owner for both DB URLs), so Row-Level Security is bypassed here as in any single-role local setup;
-production uses the two-role env contract from the deploy runbook instead of compose. Any root
+`DATABASE_URL` defaults to `renly_app` and `DATABASE_ADMIN_URL` to `renly_admin`, both on the
+`postgres` service host, plus a dev placeholder `JWT_SECRET` and `WEB_BASE_URL`. Every other API var
+comes from the root `.env` (if present) or its in-code default (`config.py`). **Compose is no longer
+single-role**, and it cannot be: the policied tables carry `FORCE ROW LEVEL SECURITY`, so the owner
+connection this used to default to now reads nothing rather than bypassing the policies. Row-Level
+Security is therefore live in compose exactly as in production, which is the same three-role contract
+the deploy runbook describes. Any root
 `.env` override of the DB URLs must use the `postgres` service host.
 
 ### web
@@ -121,7 +123,7 @@ For developing the API and web app outside Docker while using Docker only for th
 docker compose up -d postgres
 ```
 
-Then set `DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly` in `apps/api/.env` and run the apps with `pnpm dev`.
+Then set `DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly` and `DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly` in `apps/api/.env` and run the apps with `pnpm dev`. Neither names the owner: `FORCE ROW LEVEL SECURITY` leaves an owner connection reading nothing.
 
 To apply the schema on a fresh database:
 

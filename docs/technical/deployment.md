@@ -70,25 +70,57 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 
 ---
 
+## Roles
+
+Three roles, and which one a connection string names is the entire isolation boundary:
+
+| Role          | Attributes                              | Used by                                                            |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------ |
+| `renly`       | owner, **NOSUPERUSER**, **NOBYPASSRLS** | nothing at runtime — it exists to own the tables                   |
+| `renly_admin` | **BYPASSRLS**, member of `renly`        | `DATABASE_ADMIN_URL`, migrations, `pnpm db:backup`, `pnpm db:fork` |
+| `renly_app`   | DML grants only, **NOBYPASSRLS**        | `DATABASE_URL` — every request connection                          |
+
+Every policied table carries `FORCE ROW LEVEL SECURITY`, so **owning a table is no longer an
+exemption from its policies**. A connection pointed at `renly` reads nothing rather than everything,
+which is the point: the previous two-role model made "wrong URL" and "no isolation" the same
+mistake, and both local dev and this document used to make it.
+
+**The owner must not be a superuser.** A superuser bypasses RLS whatever the table says, so `FORCE`
+is completely inert against one — which makes this the part of the model with actual security value
+rather than a formality. Provision `renly` with `NOSUPERUSER NOBYPASSRLS` and grant it only ownership
+of the database.
+
 ## Migrations
 
-Migrations run with the **owner** role, not the restricted request role:
+Migrations run as **`renly_admin`**, which is what `DATABASE_ADMIN_URL` names:
 
 ```bash
-# From apps/api, with DATABASE_URL pointed at the owner role (or export DATABASE_ADMIN_URL as DATABASE_URL):
+# From apps/api. env.py reads DATABASE_ADMIN_URL; do not point DATABASE_URL at a privileged role.
 uv run alembic upgrade head        # == pnpm db:migrate
 ```
 
-A fresh database is built from `apps/api/database/01_create_tables.sql` (which also provisions the
-`renly_app` role + RLS policies) and stamped to head; existing databases upgrade via the migration
-chain. The RLS two-role model is plain Postgres, so it ports to any host.
+Two reasons it must be that role and not the owner. It has to ALTER owner-owned objects, which only a
+member of the owner may do; and several migrations backfill across every user's rows. Under `FORCE` a
+backfill run without `BYPASSRLS` matches nothing, reports `UPDATE 0` and **exits 0** — a data
+migration that silently does nothing. `migrations/env.py` guards that by setting `row_security = off`,
+which a role without `BYPASSRLS` cannot satisfy: the first statement touching a policied table raises
+`query would be affected by row-level security policy` instead. Wrong role, immediate failure.
+
+`env.py` also runs `REASSIGN OWNED BY renly_admin TO <owner>` after each upgrade, so objects a
+migration creates end up owned by `renly` rather than by the role that ran it — a table owned by a
+`BYPASSRLS` role is a table `FORCE` can never apply to.
+
+A fresh database is built from `apps/api/database/01_create_tables.sql` (which provisions both
+non-owner roles, the policies and `FORCE`) and stamped to head; existing databases upgrade via the
+migration chain. The model is plain Postgres roles and `FORCE`, so it ports to any host.
 
 ---
 
 ## Database & backups
 
-The database is any managed PostgreSQL. Provision it, apply the schema/migrations, and create the
-`renly_app` role per `01_create_tables.sql`. For backups and the rehearsed restore procedure, see
+The database is any managed PostgreSQL. Provision it with a **non-superuser** owner, apply the
+schema/migrations (which create `renly_admin` and `renly_app` per `01_create_tables.sql`), and give
+each connection string the role from the table above. For backups and the rehearsed restore procedure, see
 [`backups.md`](./backups.md). If the chosen host offers its own automated backups, enable them at
 go-live as an additional layer.
 
