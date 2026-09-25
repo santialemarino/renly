@@ -5,6 +5,8 @@ export const INVESTMENT_BROKER_MAX = 100;
 export const COLLECTION_NAME_MAX = 255;
 // Covers both groups.name and group_members.display_name — the same VARCHAR(255) on each.
 export const GROUP_NAME_MAX = 255;
+// users.name is VARCHAR(255); the API refuses a longer name at signup with a 422.
+export const USER_NAME_MAX = 255;
 
 // --- API pagination ---
 

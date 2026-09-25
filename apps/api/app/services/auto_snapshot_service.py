@@ -77,7 +77,7 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
         snapshots.append(
             InvestmentSnapshot(
                 # Scope inherited from the parent, both halves. list_with_ticker is a GLOBAL query
-                # (the scheduler runs as the owner, across every user), so it picks up co-owned
+                # (the scheduler runs as renly_admin, across every user), so it picks up co-owned
                 # investments too — and one of those with user_id NULL and no pot_id violates the
                 # single-owner CHECK, which would fail the whole batch for everyone, not just them.
                 investment_id=inv.id,

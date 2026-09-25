@@ -30,12 +30,12 @@ services:
       - path: .env
         required: false
     environment:
-      # In-container hosts are service names. Local compose runs single-role (the owner for both
-      # URLs), so RLS is bypassed here like any single-role local setup; production uses the
-      # two-role env contract from the deploy runbook instead of compose.
-      # Neither default names the owner, and that is not tidiness: the policied tables carry FORCE
-      # ROW LEVEL SECURITY, so an owner connection reads nothing. Both roles are provisioned by
-      # database/01_create_tables.sql, which db-init applies.
+      # In-container hosts are service names. The same role split as production: requests on the
+      # RLS-subject renly_app, context-less work on the BYPASSRLS renly_admin. Neither default names
+      # the owner, and that is not tidiness: the policied tables carry FORCE ROW LEVEL SECURITY, so a
+      # NON-superuser owner reads nothing (compose's own `renly` is a superuser and would read
+      # everything, which is the other reason not to use it). Both roles are provisioned by
+      # database/00_roles.sql, which db-init applies before the schema.
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://renly_app:renly_app@postgres:5432/renly}
       DATABASE_ADMIN_URL: ${DATABASE_ADMIN_URL:-postgresql+asyncpg://renly_admin:renly_admin@postgres:5432/renly}
       # Local-dev placeholder (32+ chars, validated at startup). Must equal web's NEXTAUTH_SECRET.

@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 #   * `pot_id = :p` — without it, deleting one pot's baseline deletes every OTHER pot's too, across
 #     every group in the database.
 #
-# Owner role, no RLS involved: this is about what the statement removes, not about who may call it.
+# Admin role (renly_admin, BYPASSRLS), no RLS involved: this is about what the statement removes, not about who may call it.
 from app.models.pot import OwnershipEventType
 from app.repositories import pot_ownership_repository
 

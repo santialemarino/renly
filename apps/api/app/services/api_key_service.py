@@ -5,7 +5,7 @@ from bcrypt import checkpw, gensalt, hashpw
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError
-from app.domain.password import MAX_PASSWORD_BYTES
+from app.domain.password import within_bcrypt_limit
 from app.models.api_key import ApiKey
 from app.models.user import User
 from app.models.utils import utcnow
@@ -60,7 +60,7 @@ async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
     #
     # Refused rather than truncated: a real key is `secrets.token_urlsafe(32)`, always 43 characters,
     # so anything past the ceiling cannot be one and "no such key" is the honest answer.
-    if len(raw_key.encode("utf-8")) > MAX_PASSWORD_BYTES:
+    if not within_bcrypt_limit(raw_key):
         return None
     prefix = raw_key[:KEY_PREFIX_LENGTH]
     candidates = await api_key_repository.list_active_by_prefix(session, prefix)

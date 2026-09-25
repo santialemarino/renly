@@ -26,6 +26,7 @@
         "passwordMaxLength": "Password must be less than {length} characters",
         "passwordRequirements": "Password does not meet the requirements",
         "passwordMismatch": "Passwords do not match",
+        "passwordTooManyBytes": "This password is too long. Try fewer accented letters or emoji.",
         "serverError": "Something went wrong. Please try again later.",
         "tooLong": "Must be {max} characters or fewer."
       },

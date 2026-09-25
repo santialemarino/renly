@@ -50,19 +50,19 @@ pnpm test:e2e        # Playwright E2E
   when unset, so the default `pnpm test:api` run stays green without a DB. Today:
   - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
   - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
-  - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (owner role only).
+  - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`).
   - `test_rls_pot_scope.py` — the same two `RLS_TEST_*` vars as `test_rls_isolation.py`, so the two
     run together. Covers the dual-scope policies, whose service layer holds a second copy of the
     same rules — the failure that matters is the two disagreeing, which only a real policy shows.
-  - `test_snapshot_scope_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Query
+  - `test_snapshot_scope_queries.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). Query
     semantics, not visibility: an aggregate bounded before rather than after its filter, and a
     bulk insert whose omitted column only a CHECK constraint rejects.
-  - `test_pot_holdings_query.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The pot-holdings
+  - `test_pot_holdings_query.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). The pot-holdings
     read, whose two properties are decisions rather than accidents: it is NOT filtered on
     `is_active` where the two NAV queries beside it are (an archived holding still blocks deleting
     the pot and still has to be movable out), and it IS filtered by `pot_id` (one pot must never
     read another's, nor a private holding). Both live entirely in the SQL.
-  - `test_pot_ownership_delete.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The
+  - `test_pot_ownership_delete.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). The
     baseline-deletion statement, a `DELETE … WHERE` whose two predicates each fail differently:
     without `type = 'opening'` it takes the pot's contributions and withdrawals too, and without
     `pot_id` it takes every OTHER pot's baseline in the database. Seeded with two pots so a
@@ -73,32 +73,65 @@ pnpm test:e2e        # Playwright E2E
     balance silently gains back money it no longer holds) and must see nothing else, and must not be
     able to DELETE the row they can still read — which one `FOR ALL` policy would let them do,
     because Postgres has no `WITH CHECK` for DELETE.
-  - `test_notification_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The two
+  - `test_notification_queries.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). The two
     notification statements whose whole correctness lives in the SQL: the fan-out's
     `ON CONFLICT DO NOTHING` against a PARTIAL unique index (Postgres matches a partial index only
     when the statement repeats its predicate, and getting it wrong raises on every send — invisibly,
     because the dispatcher swallows its own exceptions), and the three feed reads that share one
     WHERE, whose failure is the badge and the list describing different row sets.
-  - `test_shared_flow_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The three queries
+  - `test_shared_flow_queries.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). The three queries
     whose whole correctness lives in the SQL: the `/expenses` UNION (does it return the caller's
     SHARE or the whole expense, and is its page order total across two tables whose ids collide), the
     balance aggregation, and the settlement leg sums' `coalesce(<leg>_amount, amount)`. Seeded with
     one cross-currency settlement whose three figures all differ, so a query reading the wrong column
     shows up as two accounts moving by each other's amount.
-  - `test_account_reconciliation_replace.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Two
+  - `test_account_reconciliation_replace.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). Two
     facts about re-reconciling a date, both of which a mocked session can only watch the ORDER of.
     The `(account_id, as_of_date)` UNIQUE constraint, asserted as a refused INSERT rather than as
     behaviour a code path chooses, because the point is that the two-row state is unreachable for
     every caller. And the preview agreeing with the write: the dialog SUBTRACTS the superseded row's
     difference while the save DELETES it and re-derives, so each case reads the preview, saves, and
     asserts the recorded `computed_balance` is the figure the user was shown.
-  - `test_ownership_predicates.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Every repository
+  - `test_ownership_predicates.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). Every repository
     `get_by_id` that takes a `user_id`, driven against two users' rows: each must return the row to its
     owner AND nothing to anybody else. The predicate IS the behaviour, so a mocked session cannot test
     it at all — deleting `X.user_id == user_id` from four repositories left the whole unit suite green.
     Also the two funding rules that ask "does this belong to THAT MEMBER", which RLS cannot answer.
     Its population is DERIVED by `tests/unit/test_ownership_predicate_coverage.py`, which fails when a
     new owner-scoped `get_by_id` appears with no case here.
+  - `test_list_bounds_queries.py` — `LEDGER_TEST_DATABASE_URL`. The list caps and the pager's
+    `OFFSET`, seeded PAST the boundary (`MAX_LIST_ROWS + 1` rows, three pages), because a bound
+    asserted against fewer rows than it bounds passes with the bound deleted.
+  - `test_pot_balance_series_queries.py` — `LEDGER_TEST_DATABASE_URL`. The dated sums the pot value
+    series is built on: the `date <= until` and `date >= opening_date` bounds, the scope predicate on
+    pot-scoped transfers (which have no `user_id`), and the per-leg column choice on cross-currency
+    movements — all in the SQL, where the unit suite's agreement check cannot reach.
+  - `test_pot_contribution_value.py` — `LEDGER_TEST_DATABASE_URL`. Contributing a holding moves
+    NOBODY's value — a claim spanning the ledger replay, the NAV sum, the balance union and the share
+    split, four of which read SQL.
+  - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
+    table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
+    (derived from the catalogue), the roles carry the attributes the model depends on, the
+    `SECURITY DEFINER` helpers are owned by `renly_policy_definer` and it reads only what they read,
+    tables a migration creates reach `renly_app` with their grants, and `row_security = off` is the loud
+    guard. It also reads a group and a pot as `renly_app` under a NOSUPERUSER owner — directly when the
+    database's owner is one, and otherwise by re-owning the owner's objects to a throwaway role inside a
+    rolled-back transaction, because a superuser owner hides the defect it pins.
+  - `test_rls_reagreement_confirm.py` — the two `RLS_TEST_*` vars. Who may confirm a re-agreement and
+    what the confirmation locks: the affected-seat expression and the lock live only in the policy, with
+    a second copy in the service that must not disagree with it.
+  - `test_rls_shared_audit.py` — the two `RLS_TEST_*` vars. The audit trail's policy (its second,
+    pot-visibility branch), the grants that make it append-only while its cascades keep working, and the
+    counterparty-delete policy on `pot_ownership_events`.
+  - `test_shared_account_reconciliation.py` — the two `RLS_TEST_*` vars. A pot's account becoming
+    reconcilable: which row a reconciliation locks (a locking read is governed by the UPDATE policy), who
+    may write one, and the column grant that caps what an update may touch.
+- **Which role each URL names.** `RLS_TEST_DATABASE_URL` is `renly_app`; every other var, including
+  `RLS_TEST_ADMIN_DATABASE_URL`, is `renly_admin` — never the owner, which under FORCE reads nothing when
+  it is a NOSUPERUSER and everything when it is a superuser, so neither exercises what the suites assert.
+  All four must carry the `postgresql+asyncpg://` prefix. To run the RLS suites production-shaped, build
+  the database `OWNER` a throwaway NOSUPERUSER NOBYPASSRLS role: run `apps/api/database/00_roles.sql`
+  against it as the superuser, then apply `01_create_tables.sql` as that role.
 - **Reach for one when the PREDICATE IS THE BEHAVIOUR.** A repository method whose whole job is a
   `WHERE` clause cannot be tested through a mocked session: the mock returns what the test told it to,
   so the assertion reads the same whether the clause is there or not. Ownership scoping is the

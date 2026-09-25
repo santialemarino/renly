@@ -41,12 +41,18 @@ def do_run_migrations(connection):
     # stops at the first statement instead of appearing to work. Verified both ways against a real
     # database before being relied on.
     #
-    # ▸ The `commit()` is load-bearing and its absence is silent. `exec_driver_sql` opens an implicit
-    # transaction; alembic's own `begin_transaction()` then NESTS inside it, so its commit is a no-op
-    # and the outer transaction is rolled back when the connection closes. Observed exactly once:
-    # alembic logged "Running upgrade 0028 -> 0029", exited 0, and the database came back unchanged
-    # with the version table still reading 0028. `SET` without `LOCAL` is session-scoped, so it
-    # survives the commit and still covers every migration that follows.
+    # ▸ The two `commit()` calls — this one and the one after the REASSIGN below — are load-bearing as a
+    # PAIR, and removing both is silent. `exec_driver_sql` opens an implicit transaction; alembic's own
+    # `begin_transaction()` then NESTS inside it, so alembic's commit is a no-op and whatever commits
+    # the OUTER transaction is what makes the run real. Measured each way against a real database:
+    #   * without this one, the final commit still commits everything — the run applies;
+    #   * without the final one, this one has already ended the implicit transaction, so alembic's own
+    #     commit is real and the migrations apply — but the REASSIGN runs in a fresh implicit
+    #     transaction that is rolled back at close, leaving new objects owned by renly_admin, silently;
+    #   * without BOTH, alembic logs "Running upgrade …", exits 0, and the database comes back
+    #     unchanged with the version table where it was.
+    # `SET` without `LOCAL` is session-scoped, so it survives this commit and still covers every
+    # migration that follows.
     connection.exec_driver_sql("SET row_security = off")
     connection.commit()
     context.configure(connection=connection, target_metadata=target_metadata)
@@ -58,16 +64,28 @@ def do_run_migrations(connection):
     # run keeps ownership in one place without asking each migration to remember, which is the kind of
     # per-file convention that goes missing exactly once and then stays missing.
     #
-    # Guarded rather than assumed: a cluster with no `renly_admin` (a developer running as their own
-    # superuser) has nothing to reassign and should not fail for it.
+    # The target is whoever owns `users`, not the DATABASE owner: those usually coincide, but when they
+    # do not, reassigning to the database owner would hand this run's objects to a role that owns
+    # nothing else — and the next no-op upgrade would still reach this statement after committing.
+    # `users` is the anchor because every Renly database has it from its first revision; a database
+    # without it is not one this chain can migrate, and says so rather than guessing.
+    #
+    # Guarded on the role rather than assumed: a cluster with no `renly_admin` (a developer running as
+    # their own superuser) has nothing to reassign and should not fail for it.
     connection.exec_driver_sql(
         """
-        DO $$ BEGIN
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin')
-             AND CURRENT_USER = 'renly_admin' THEN
-            EXECUTE 'REASSIGN OWNED BY renly_admin TO ' || quote_ident(
-              (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database())
-            );
+        DO $$
+        DECLARE
+          table_owner TEXT;
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin') AND CURRENT_USER = 'renly_admin' THEN
+            SELECT pg_get_userbyid(relowner) INTO table_owner FROM pg_class WHERE oid = to_regclass('public.users');
+            IF table_owner IS NULL THEN
+              RAISE EXCEPTION 'cannot reassign objects created by renly_admin: public.users does not exist, so the table owner is unknown';
+            END IF;
+            IF table_owner <> 'renly_admin' THEN
+              EXECUTE format('REASSIGN OWNED BY renly_admin TO %I', table_owner);
+            END IF;
           END IF;
         END $$
         """

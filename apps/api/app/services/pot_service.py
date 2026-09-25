@@ -17,7 +17,7 @@
 # create_pot is the one function that takes the privileged session, for the same reason create_group
 # does: a pot's first permission row is exactly what app_can_view_pot reads, so the insert cannot
 # satisfy its own predicate. Widening the policy with an author escape hatch would outlive the
-# author's own membership, so the bootstrap runs as the owner instead.
+# author's own membership, so the bootstrap runs on the admin session (renly_admin) instead.
 
 from dataclasses import dataclass
 from datetime import date as date_type

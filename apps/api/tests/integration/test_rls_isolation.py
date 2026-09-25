@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Database-layer proof of Row-Level Security (SEC-15). Unlike the rest of the suite these tests
 # need a real Postgres with the RLS schema applied AND two roles: the restricted request role
-# (RLS_TEST_DATABASE_URL) and the table owner (RLS_TEST_ADMIN_DATABASE_URL). They are skipped when
+# (RLS_TEST_DATABASE_URL) and the BYPASSRLS admin role (RLS_TEST_ADMIN_DATABASE_URL). They are skipped when
 # those env vars are absent, so the default unit-only `pnpm test:api` run stays green. Importing
 # app.db registers the after_begin listener that re-applies the per-transaction user GUC, so these
 # tests exercise the real isolation mechanism, not a reimplementation.
@@ -70,7 +70,7 @@ _GROUP_TABLES = (
 )
 
 
-# Seeds three users via the owner role — A and B fully populated and unrelated, plus C, who holds a
+# Seeds three users via the admin role — A and B fully populated and unrelated, plus C, who holds a
 # seat in A's group so membership can be proven by someone other than the group's creator. Yields
 # their ids + a restricted-role session factory, then deletes all three (cascading their rows) and
 # disposes the engines. A's group also carries a name-only placeholder seat and an outstanding invite,
@@ -410,7 +410,7 @@ async def test_creating_a_group_requires_the_privileged_session(seeded):
         with pytest.raises(DBAPIError):
             await group_service.create_group(s, user, name="rls_group_boot", kind=GroupKind.trip)
 
-    # On the owner session it succeeds, and the creator comes back as its admin.
+    # On the admin session it succeeds, and the creator comes back as its admin.
     admin_engine = create_async_engine(ADMIN_URL)
     try:
         async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
@@ -472,7 +472,7 @@ async def test_nobody_can_insert_a_notification_through_a_request_connection(see
                 {"u": b["user"]},
             )
             await s.commit()
-    # And the owner role still can, or the fan-out would not work at all — which is what makes the two
+    # And the admin role still can, or the fan-out would not work at all — which is what makes the two
     # refusals above evidence of a policy rather than of a broken table.
     admin_engine = create_async_engine(ADMIN_URL)
     try:

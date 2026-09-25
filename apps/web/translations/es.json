@@ -26,6 +26,7 @@
         "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres",
         "passwordRequirements": "La contraseña no cumple los requisitos",
         "passwordMismatch": "Las contraseñas no coinciden",
+        "passwordTooManyBytes": "Esta contraseña es demasiado larga. Probá con menos letras acentuadas o emojis.",
         "serverError": "Algo salió mal. Intentá de nuevo más tarde.",
         "tooLong": "Debe tener {max} caracteres o menos."
       },

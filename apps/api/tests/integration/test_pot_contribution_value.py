@@ -30,7 +30,7 @@ from sqlalchemy.orm import sessionmaker
 # same fixture issues 33.333333 units at 1.65, leaving the contributor on 115.50 and handing the other
 # owner 49.50 for doing nothing. A 5.50 transfer, silent, from exactly two statements swapped.
 #
-# Owner role: this is about what the arithmetic answers, not about who may see it.
+# Admin role (renly_admin, BYPASSRLS): this is about what the arithmetic answers, not about who may see it.
 from app.models.user import User
 from app.services import pot_ownership_service, pot_service
 

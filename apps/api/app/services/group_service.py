@@ -14,7 +14,8 @@
 # create_group is the one function that takes the privileged session: the group's first membership row
 # is exactly what the RLS policy reads, so the insert cannot satisfy its own predicate. Rather than
 # widen the policy with an author-based escape hatch — which would outlive the author's membership —
-# the bootstrap runs as the owner, the same posture as the pre-auth invite and auth-token flows.
+# the bootstrap runs on the admin session (renly_admin), the same posture as the pre-auth invite and
+# auth-token flows.
 
 from datetime import datetime
 from typing import Literal

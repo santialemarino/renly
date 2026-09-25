@@ -29,8 +29,9 @@ BACKUP_DATABASE_URL='postgresql://renly_admin:PASS@HOST:PORT/DB' pnpm db:backup
 > and not as `renly_app` or as the owner. With Row-Level Security enabled (SEC-15) and no
 > `app.current_user_id` set, a role subject to the policies sees **zero rows**, so the dump would be
 > of an empty database. Since the tables also carry `FORCE ROW LEVEL SECURITY`, **owning them is not
-> an exemption**: a dump taken as `renly` is just as empty as one taken as `renly_app`. The bypass has
-> to come from the role attribute.
+> an exemption**: a dump taken as a NOSUPERUSER owner (the production `renly`) is just as empty as one
+> taken as `renly_app`. The bypass has to come from the role attribute. (The local compose `renly` is a
+> superuser and would dump everything — which is exactly why it proves nothing about production.)
 >
 > `pg_dump` does fail loudly under `FORCE` rather than writing an empty file — it exits 1 with
 > `query would be affected by row-level security policy` and a `HINT` naming the cause — so a wrong
@@ -43,7 +44,8 @@ The dump uses `--no-owner --no-acl --clean --if-exists`, making it portable to a
 ### Scheduling (production)
 
 Run `pnpm db:backup` on a schedule on the host (e.g. a daily cron job or the platform's scheduled
-task), with `BACKUP_DATABASE_URL` set to the production owner URL, and copy the resulting
+task), with `BACKUP_DATABASE_URL` set to the production **`renly_admin`** URL (as above — the owner's
+would produce no backup), and copy the resulting
 `backups/*.sql.gz` to off-platform storage (e.g. object storage). Treat this as the primary,
 host-independent backup; any provider-native backups complement it.
 
@@ -60,14 +62,29 @@ RESTORE_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' \
   dropped and recreated. The target is taken **only** from `$RESTORE_DATABASE_URL` (never
   `DATABASE_URL`, to avoid clobbering your dev DB), and `--force` is required.
 - Restore **as the table owner** (`psql` runs with `ON_ERROR_STOP=1`).
-- **Role caveat:** `pg_dump` does not include roles, and `--no-acl` omits grants. When restoring
-  into a **brand-new** database, neither `renly_admin` nor `renly_app` is recreated and neither
-  carries its grants. Re-provision both by re-running the role/grant section of
-  [`apps/api/database/01_create_tables.sql`](../../apps/api/database/01_create_tables.sql), then
-  point `DATABASE_URL` at `renly_app` and `DATABASE_ADMIN_URL` at `renly_admin`. The RLS policies,
-  the `FORCE` flags and the `app_current_user_id()` function themselves **are** in the dump and
-  restore automatically — which means a restored database is FORCEd from the first moment, and
-  reading it needs `renly_admin` rather than whoever ran the restore.
+- **Role caveat:** `pg_dump` does not include roles, `--no-owner` drops ownership and `--no-acl`
+  omits grants and default privileges. When restoring into a **brand-new** database: provision the
+  roles first by running [`apps/api/database/00_roles.sql`](../../apps/api/database/00_roles.sql) as a
+  superuser against the target (it also restores `renly_admin`'s default privileges), restore, then
+  re-apply, as the owner, every `GRANT`, `REVOKE`, `ALTER DEFAULT PRIVILEGES` and
+  `ALTER FUNCTION … OWNER TO` statement in the Row-Level Security section of
+  [`apps/api/database/01_create_tables.sql`](../../apps/api/database/01_create_tables.sql) — all of
+  them, in order: several tables are append-only through a `REVOKE`, the owner's default privileges are
+  what give `renly_app` its grants on tables created later, and the three `SECURITY DEFINER` policy
+  helpers must be handed back to `renly_policy_definer`, or on a NOSUPERUSER owner every group and pot
+  read fails with `stack depth limit exceeded`. This extracts exactly those statements (multi-line ones
+  included):
+
+  ```bash
+  sed -n '/^-- Row-Level Security/,$p' apps/api/database/01_create_tables.sql \
+    | awk '/^(GRANT|REVOKE|ALTER DEFAULT PRIVILEGES|ALTER FUNCTION)/,/;$/' \
+    | psql -v ON_ERROR_STOP=1 "<owner url>"
+  ```
+
+  Then point `DATABASE_URL` at `renly_app` and `DATABASE_ADMIN_URL` at `renly_admin`. The RLS policies, the `FORCE` flags and the functions
+  themselves **are** in the dump and restore automatically — which means a restored database is
+  FORCEd from the first moment, and reading it needs `renly_admin` rather than whoever ran the
+  restore.
 
 ---
 
