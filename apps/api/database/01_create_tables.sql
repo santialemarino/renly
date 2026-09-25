@@ -1795,16 +1795,20 @@ CREATE TRIGGER trg_notification_preferences_updated_at
 -- ---------------------------------------------------------------------------
 -- Row-Level Security (SEC-15) — database-enforced per-user isolation
 --
--- THREE roles carry the design, and which one a connection uses is the whole security boundary:
+-- THREE login-relevant roles carry the design, and which one a connection uses is the whole
+-- security boundary:
 --   * renly (the OWNER) owns every table and is NOSUPERUSER / NOBYPASSRLS. Nothing connects as it at
 --     runtime — it exists to own objects. Because the tables below are FORCEd, even the owner is
 --     subject to the policies, so a connection string pointed here by mistake reads nothing rather
---     than everything;
+--     than everything (a SUPERUSER owner, as on a local cluster, still reads everything: FORCE is
+--     inert against a superuser);
 --   * renly_admin has BYPASSRLS and is a MEMBER of renly, so it can both alter owner-owned objects
 --     (migrations) and legitimately span users. It backs DATABASE_ADMIN_URL — the pre-auth users
 --     lookup, the scheduler, and notification dispatch — plus migrations, backups and forks;
 --   * renly_app is granted DML, owns nothing and has NOBYPASSRLS, so every REQUEST connection is
 --     subject to the policies below.
+-- A fourth, renly_policy_definer, is NOLOGIN and exists only to own the SECURITY DEFINER helpers the
+-- policies call (see the block after app_is_group_member() below).
 --
 -- Each request sets `app.current_user_id` per transaction (SET LOCAL, re-applied on
 -- every BEGIN by the app's session layer because connection pooling reuses connections).
@@ -1825,31 +1829,10 @@ CREATE TRIGGER trg_notification_preferences_updated_at
 -- production a month later.
 -- ---------------------------------------------------------------------------
 
--- The two non-owner roles. Cluster-global, so guard creation for shared clusters.
--- The passwords are local-dev defaults; production provisions both with real secrets.
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin') THEN
-    CREATE ROLE renly_admin LOGIN PASSWORD 'renly_admin' NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
-  END IF;
-END $$;
-
--- Membership rather than a pile of grants: migrations ALTER and DROP objects this script's runner
--- owns, and only a member of the owner may do that. BYPASSRLS is a role ATTRIBUTE and is NOT
--- inherited through membership, which is why renly_admin carries it directly — and why `SET ROLE
--- renly` inside an admin session gives up the bypass rather than keeping it.
-DO $$ BEGIN
-  EXECUTE format('GRANT %I TO renly_admin', CURRENT_USER);
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'could not grant % to renly_admin: %', CURRENT_USER, SQLERRM;
-END $$;
-
--- Restricted request role. Cluster-global, so guard creation for shared clusters.
--- The password is a local-dev default; production provisions the role with a real secret.
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_app') THEN
-    CREATE ROLE renly_app LOGIN PASSWORD 'renly_app' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-  END IF;
-END $$;
+-- The roles themselves, their memberships and renly_admin's default privileges are provisioned by
+-- 00_roles.sql, which a SUPERUSER runs before this file. Everything below is what the owner can do
+-- for itself; a role this file names that does not exist yet fails here, loudly, rather than being
+-- created by a statement the NOSUPERUSER owner would be refused.
 
 -- Resolves the current request's user id from the per-transaction GUC. The two-arg
 -- current_setting(..., true) returns NULL when the GUC was never set (instead of erroring),
@@ -1859,7 +1842,9 @@ CREATE OR REPLACE FUNCTION app_current_user_id() RETURNS BIGINT
   AS $$ SELECT NULLIF(current_setting('app.current_user_id', true), '')::bigint $$;
 
 -- Grant the restricted role table/sequence access (RLS, not GRANTs, enforces isolation).
--- Default privileges cover tables/sequences added by future migrations run as the owner.
+-- These default privileges cover tables/sequences the OWNER creates. Migrations run as renly_admin,
+-- so the objects THEY create are covered by renly_admin's own default privileges instead, which only
+-- renly_admin or a superuser may declare — 00_roles.sql holds that half.
 GRANT USAGE ON SCHEMA public TO renly_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO renly_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO renly_app;
@@ -1874,8 +1859,8 @@ GRANT USAGE ON SCHEMA public TO renly_admin;
 -- Shared money — the two pot-scope helpers, defined here because the stock-table policies below are
 -- the first thing that calls them. Same SECURITY DEFINER shape and the same reasons as
 -- app_is_group_member() further down: one place to answer the question so per-table copies cannot
--- drift, the body runs as the owner (exempt from RLS) so a policy on a scoped table can consult
--- pot_member_permissions without recursing, search_path is pinned, and the default PUBLIC EXECUTE
+-- drift, the body runs as renly_policy_definer (BYPASSRLS, so a policy on a scoped table can consult
+-- pot_member_permissions without recursing), search_path is pinned, and the default PUBLIC EXECUTE
 -- grant is revoked.
 --
 -- What "may see this pot" means, in one predicate: an ACTIVE seat in the pot's group, plus permission.
@@ -2140,7 +2125,8 @@ CREATE POLICY investment_collection_members_isolation ON investment_collection_m
 -- reasons:
 --   * a policy ON group_members that sub-queried group_members would be evaluated recursively and
 --     Postgres aborts it ("infinite recursion detected in policy for relation"). A SECURITY DEFINER
---     function runs its body as the table owner, which is exempt from RLS, so the lookup terminates;
+--     function runs its body as its OWNER, and this one is owned by renly_policy_definer, which has
+--     BYPASSRLS, so the lookup terminates;
 --   * one helper cannot drift. Three tables (and, from the pot work on, more) ask the same question,
 --     and a predicate copy-pasted per table is a predicate that eventually disagrees with itself.
 -- Three properties make the shape safe:
@@ -2153,8 +2139,8 @@ CREATE POLICY investment_collection_members_isolation ON investment_collection_m
 -- The self-referential bootstrap: creating a group and accepting an invite both have to write the
 -- very membership row this predicate reads, so neither can satisfy it. Rather than widen the policy
 -- with an author-based escape hatch (which would outlive the author's own membership), those two use
--- cases run on the privileged owner session — the same posture as the pre-auth invite and auth-token
--- flows. Every other group operation runs on the request session under these policies.
+-- cases run on the privileged admin session (renly_admin) — the same posture as the pre-auth invite
+-- and auth-token flows. Every other group operation runs on the request session under these policies.
 --
 -- SECURITY DEFINER, and why it leaks nothing: the function takes a group id and returns a boolean
 -- about the CALLING user's own membership, which the caller necessarily already knows. It exposes no
@@ -2172,11 +2158,35 @@ CREATE OR REPLACE FUNCTION app_is_group_member(p_group_id BIGINT) RETURNS BOOLEA
     )
   $$;
 
--- SECURITY DEFINER runs as the owner, so the default PUBLIC EXECUTE grant that every function gets
--- is revoked before granting it deliberately. app_current_user_id() keeps the default because it is
--- not SECURITY DEFINER — it reads a GUC and can do nothing its caller could not.
+-- SECURITY DEFINER runs as the function's owner, so the default PUBLIC EXECUTE grant that every
+-- function gets is revoked before granting it deliberately. app_current_user_id() keeps the default
+-- because it is not SECURITY DEFINER — it reads a GUC and can do nothing its caller could not.
 REVOKE ALL ON FUNCTION app_is_group_member(BIGINT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
+
+-- WHO the three SECURITY DEFINER helpers run as. Not the owner: every policied table is FORCEd, so
+-- the owner is subject to the policies like anyone else, and a helper running as a NOSUPERUSER owner
+-- re-enters the policy that called it — group_members' policy calls app_is_group_member(), which
+-- reads group_members, whose policy calls app_is_group_member() … until "stack depth limit exceeded"
+-- on every read of a group, a roster or a pot. (A SUPERUSER owner hides this completely, which is why
+-- a local cluster never showed it.)
+--
+-- So they belong to renly_policy_definer: NOLOGIN, BYPASSRLS, not a superuser, and holding SELECT on
+-- exactly the three tables these bodies read and nothing else — so the bypass reaches no further than
+-- the questions the helpers answer, and every table stays FORCEd. The role is created by 00_roles.sql.
+--
+-- Handing a function to a role requires that role to hold CREATE on the function's schema, so it is
+-- granted for the handover and revoked straight after; the role keeps only what it reads. A later
+-- `CREATE OR REPLACE FUNCTION` keeps the owner, but a new SECURITY DEFINER helper (or a DROP and
+-- re-CREATE) is owned by whoever created it — repeat this block for it, grant SELECT on what it reads,
+-- and the catalogue guard in tests/integration/test_rls_force_role_model.py fails until you do.
+GRANT USAGE ON SCHEMA public TO renly_policy_definer;
+GRANT SELECT ON pots, group_members, pot_member_permissions TO renly_policy_definer;
+GRANT CREATE ON SCHEMA public TO renly_policy_definer;
+ALTER FUNCTION app_can_view_pot(BIGINT) OWNER TO renly_policy_definer;
+ALTER FUNCTION app_can_write_pot(BIGINT) OWNER TO renly_policy_definer;
+ALTER FUNCTION app_is_group_member(BIGINT) OWNER TO renly_policy_definer;
+REVOKE CREATE ON SCHEMA public FROM renly_policy_definer;
 
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE groups FORCE ROW LEVEL SECURITY;
@@ -2510,5 +2520,5 @@ CREATE POLICY notifications_user_delete ON notifications FOR DELETE
 
 -- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by
 -- pair/ticker (not by user) and are intentionally left without RLS so every request
--- connection can read them; the scheduler writes them under the owner role.
+-- connection can read them; the scheduler writes them on the admin session (renly_admin).
 
