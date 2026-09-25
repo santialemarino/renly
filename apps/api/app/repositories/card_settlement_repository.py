@@ -178,7 +178,7 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
 async def sum_by_card_ids_grouped(
     session: AsyncSession,
     credit_card_ids: list[int],
-) -> dict[int, dict[str, float]]:
+) -> dict[int, dict[str, Decimal]]:
     if not credit_card_ids:
         return {}
     result = await session.execute(
@@ -190,9 +190,9 @@ async def sum_by_card_ids_grouped(
         .where(CardSettlement.credit_card_id.in_(credit_card_ids))
         .group_by(CardSettlement.credit_card_id, CardSettlement.currency)
     )
-    grouped: dict[int, dict[str, float]] = {}
+    grouped: dict[int, dict[str, Decimal]] = {}
     for card_id, currency, total in result.all():
-        grouped.setdefault(card_id, {})[currency] = float(total)
+        grouped.setdefault(card_id, {})[currency] = total
     return grouped
 
 
@@ -202,7 +202,7 @@ async def sum_by_card_ids_grouped(
 async def sum_by_card_ids_monthly(
     session: AsyncSession,
     credit_card_ids: list[int],
-) -> list[tuple[int, int, int, str, float]]:
+) -> list[tuple[int, int, int, str, Decimal]]:
     if not credit_card_ids:
         return []
     year_col = func.extract("year", CardSettlement.date).label("year")
@@ -219,7 +219,7 @@ async def sum_by_card_ids_monthly(
         .group_by(CardSettlement.credit_card_id, year_col, month_col, CardSettlement.currency)
         .order_by(year_col, month_col)
     )
-    return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
+    return [(row[0], int(row[1]), int(row[2]), row[3], row[4]) for row in result.all()]
 
 
 # Which of the given accounts have any linked settlement row at all. Drives the currency lock, so unlike
