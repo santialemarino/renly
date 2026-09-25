@@ -1795,20 +1795,53 @@ CREATE TRIGGER trg_notification_preferences_updated_at
 -- ---------------------------------------------------------------------------
 -- Row-Level Security (SEC-15) — database-enforced per-user isolation
 --
--- Two roles carry the design:
---   * the table owner / migration role (the role that runs this script and the
---     scheduler + auth bootstrap) keeps full access — it bypasses RLS because it
---     owns the tables, which is what background jobs and pre-auth lookups need;
---   * a restricted login role (renly_app) is granted DML but is NOT the owner and
---     has NOBYPASSRLS, so every request connection is subject to the policies below.
+-- THREE roles carry the design, and which one a connection uses is the whole security boundary:
+--   * renly (the OWNER) owns every table and is NOSUPERUSER / NOBYPASSRLS. Nothing connects as it at
+--     runtime — it exists to own objects. Because the tables below are FORCEd, even the owner is
+--     subject to the policies, so a connection string pointed here by mistake reads nothing rather
+--     than everything;
+--   * renly_admin has BYPASSRLS and is a MEMBER of renly, so it can both alter owner-owned objects
+--     (migrations) and legitimately span users. It backs DATABASE_ADMIN_URL — the pre-auth users
+--     lookup, the scheduler, and notification dispatch — plus migrations, backups and forks;
+--   * renly_app is granted DML, owns nothing and has NOBYPASSRLS, so every REQUEST connection is
+--     subject to the policies below.
 --
 -- Each request sets `app.current_user_id` per transaction (SET LOCAL, re-applied on
 -- every BEGIN by the app's session layer because connection pooling reuses connections).
 -- Policies compare the row's owner against that GUC; with no GUC set, the helper returns
 -- NULL and the comparison excludes every row (a context-less session reads nothing).
--- ENABLE (not FORCE) ROW LEVEL SECURITY is deliberate: FORCE would also subject the
--- owner role, breaking the scheduler and pre-auth reads that legitimately span users.
+--
+-- ▸ FORCE, and what it costs. This file used to say ENABLE-not-FORCE was deliberate because FORCE
+-- "would also subject the owner role, breaking the scheduler and pre-auth reads". That was true of a
+-- TWO-role model where the owner did that work; it is why the third role exists. The hole it leaves
+-- is not hypothetical: local dev ran with DATABASE_URL pointed at the owner for months with every
+-- policy silently inert, and deployment.md told operators to do the same for migrations.
+--
+-- ▸ The failure FORCE introduces, and how it is made loud. Under FORCE a backfill run as the owner
+-- with no user context does not error — it reports `UPDATE 0` and exits 0, so a data migration
+-- silently does nothing. `migrations/env.py` therefore sets `row_security = off`, which a
+-- NOBYPASSRLS role cannot satisfy: the statement raises "query would be affected by row-level
+-- security policy" instead. Wrong role, loud failure, at the first statement rather than in
+-- production a month later.
 -- ---------------------------------------------------------------------------
+
+-- The two non-owner roles. Cluster-global, so guard creation for shared clusters.
+-- The passwords are local-dev defaults; production provisions both with real secrets.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin') THEN
+    CREATE ROLE renly_admin LOGIN PASSWORD 'renly_admin' NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
+  END IF;
+END $$;
+
+-- Membership rather than a pile of grants: migrations ALTER and DROP objects this script's runner
+-- owns, and only a member of the owner may do that. BYPASSRLS is a role ATTRIBUTE and is NOT
+-- inherited through membership, which is why renly_admin carries it directly — and why `SET ROLE
+-- renly` inside an admin session gives up the bypass rather than keeping it.
+DO $$ BEGIN
+  EXECUTE format('GRANT %I TO renly_admin', CURRENT_USER);
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'could not grant % to renly_admin: %', CURRENT_USER, SQLERRM;
+END $$;
 
 -- Restricted request role. Cluster-global, so guard creation for shared clusters.
 -- The password is a local-dev default; production provisions the role with a real secret.
@@ -1833,6 +1866,10 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO renly_app;
 GRANT EXECUTE ON FUNCTION app_current_user_id() TO renly_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO renly_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO renly_app;
+
+-- renly_admin reaches the same objects through its membership of the owner, so it needs no table
+-- grants — only the schema, which membership does not imply for a role connecting as itself.
+GRANT USAGE ON SCHEMA public TO renly_admin;
 
 -- Shared money — the two pot-scope helpers, defined here because the stock-table policies below are
 -- the first thing that calls them. Same SECURITY DEFINER shape and the same reasons as
@@ -1911,6 +1948,7 @@ GRANT EXECUTE ON FUNCTION app_can_write_pot(BIGINT) TO renly_app;
 -- same two columns denormalized from their parent, exactly as their user_id already was — a policy
 -- that had to EXISTS-join to the parent would pay that join on every row of every read.
 ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investments FORCE ROW LEVEL SECURITY;
 CREATE POLICY investments_scope_read ON investments FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY investments_scope_write ON investments FOR ALL
@@ -1918,6 +1956,7 @@ CREATE POLICY investments_scope_write ON investments FOR ALL
   WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
 
 ALTER TABLE investment_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_snapshots FORCE ROW LEVEL SECURITY;
 CREATE POLICY investment_snapshots_scope_read ON investment_snapshots FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY investment_snapshots_scope_write ON investment_snapshots FOR ALL
@@ -1925,6 +1964,7 @@ CREATE POLICY investment_snapshots_scope_write ON investment_snapshots FOR ALL
   WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
 
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transactions FORCE ROW LEVEL SECURITY;
 CREATE POLICY transactions_scope_read ON transactions FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY transactions_scope_write ON transactions FOR ALL
@@ -1932,6 +1972,7 @@ CREATE POLICY transactions_scope_write ON transactions FOR ALL
   WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
 
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE accounts FORCE ROW LEVEL SECURITY;
 CREATE POLICY accounts_scope_read ON accounts FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY accounts_scope_write ON accounts FOR ALL
@@ -1952,6 +1993,7 @@ CREATE POLICY accounts_scope_write ON accounts FOR ALL
 -- other". No WITH CHECK on the update: Postgres reuses the USING expression when one is absent, and
 -- nothing the predicate reads is writable anyway.
 ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_reconciliations FORCE ROW LEVEL SECURITY;
 CREATE POLICY account_reconciliations_scope_read ON account_reconciliations FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY account_reconciliations_scope_insert ON account_reconciliations FOR INSERT
@@ -1967,6 +2009,7 @@ GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_exp
   ON account_reconciliations TO renly_app;
 
 ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transfers FORCE ROW LEVEL SECURITY;
 CREATE POLICY transfers_scope_read ON transfers FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY transfers_scope_write ON transfers FOR ALL
@@ -1975,52 +2018,64 @@ CREATE POLICY transfers_scope_write ON transfers FOR ALL
 
 -- The users table keys on its own id (a user may read/write only its own row).
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users FORCE ROW LEVEL SECURITY;
 CREATE POLICY users_self_isolation ON users
   USING (id = app_current_user_id())
   WITH CHECK (id = app_current_user_id());
 
 -- Tables owned directly via a user_id column: identical owner-match policy on each.
 ALTER TABLE investment_collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_collections FORCE ROW LEVEL SECURITY;
 CREATE POLICY investment_collections_user_isolation ON investment_collections
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE credit_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_cards FORCE ROW LEVEL SECURITY;
 CREATE POLICY credit_cards_user_isolation ON credit_cards
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE income_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE income_entries FORCE ROW LEVEL SECURITY;
 CREATE POLICY income_entries_user_isolation ON income_entries
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE card_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE card_settlements FORCE ROW LEVEL SECURITY;
 CREATE POLICY card_settlements_user_isolation ON card_settlements
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
 CREATE POLICY subscriptions_user_isolation ON subscriptions
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE installments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE installments FORCE ROW LEVEL SECURITY;
 CREATE POLICY installments_user_isolation ON installments
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE expense_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE expense_entries FORCE ROW LEVEL SECURITY;
 CREATE POLICY expense_entries_user_isolation ON expense_entries
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE card_reconciliations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE card_reconciliations FORCE ROW LEVEL SECURITY;
 CREATE POLICY card_reconciliations_user_isolation ON card_reconciliations
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE payment_obligations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_obligations FORCE ROW LEVEL SECURITY;
 CREATE POLICY payment_obligations_user_isolation ON payment_obligations
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys FORCE ROW LEVEL SECURITY;
 CREATE POLICY api_keys_user_isolation ON api_keys
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings FORCE ROW LEVEL SECURITY;
 CREATE POLICY user_settings_user_isolation ON user_settings
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
@@ -2030,6 +2085,7 @@ CREATE POLICY user_settings_user_isolation ON user_settings
 -- target-address availability check can see other accounts. This per-user policy is therefore
 -- defense-in-depth — no request-session path inserts or reads here.
 ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_tokens FORCE ROW LEVEL SECURITY;
 CREATE POLICY auth_tokens_user_isolation ON auth_tokens
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
@@ -2038,6 +2094,7 @@ CREATE POLICY auth_tokens_user_isolation ON auth_tokens
 -- exists, and /auth/refresh is pre-auth (it carries a refresh token, not an access token). This
 -- per-user policy is therefore defense-in-depth — no request-session path inserts or reads here.
 ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refresh_tokens FORCE ROW LEVEL SECURITY;
 CREATE POLICY refresh_tokens_user_isolation ON refresh_tokens
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
@@ -2046,10 +2103,12 @@ CREATE POLICY refresh_tokens_user_isolation ON refresh_tokens
 -- lookups are pre-auth. This per-admin policy is therefore defense-in-depth — the real gate is the
 -- is_admin check at the admin endpoints, no request-session path inserts or reads here.
 ALTER TABLE invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invites FORCE ROW LEVEL SECURITY;
 CREATE POLICY invites_admin_isolation ON invites
   USING (invited_by = app_current_user_id()) WITH CHECK (invited_by = app_current_user_id());
 
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feedback FORCE ROW LEVEL SECURITY;
 CREATE POLICY feedback_user_isolation ON feedback
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
@@ -2058,6 +2117,7 @@ CREATE POLICY feedback_user_isolation ON feedback
 -- belong to the same user (enforced by the SEC-4 cross-tenant FK checks), so checking
 -- the investment side is sufficient and the lookup hits the investments primary key.
 ALTER TABLE investment_collection_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_collection_members FORCE ROW LEVEL SECURITY;
 CREATE POLICY investment_collection_members_isolation ON investment_collection_members
   USING (
     EXISTS (
@@ -2119,6 +2179,7 @@ REVOKE ALL ON FUNCTION app_is_group_member(BIGINT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
 
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE groups FORCE ROW LEVEL SECURITY;
 CREATE POLICY groups_member_isolation ON groups
   USING (app_is_group_member(id)) WITH CHECK (app_is_group_member(id));
 
@@ -2126,6 +2187,7 @@ CREATE POLICY groups_member_isolation ON groups
 -- group, including the name-only placeholders, which have no user_id to match on at all. Matching on
 -- user_id would show each member only themselves, which is the opposite of a roster.
 ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE group_members FORCE ROW LEVEL SECURITY;
 CREATE POLICY group_members_member_isolation ON group_members
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
@@ -2133,6 +2195,7 @@ CREATE POLICY group_members_member_isolation ON group_members
 -- Consuming one is the bootstrap case above — the accepter is not a member yet, so this policy hides
 -- the row from them and the accept runs on the privileged session.
 ALTER TABLE group_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE group_invites FORCE ROW LEVEL SECURITY;
 CREATE POLICY group_invites_member_isolation ON group_invites
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
@@ -2149,6 +2212,7 @@ CREATE POLICY group_invites_member_isolation ON group_invites
 -- That is the same self-referential bootstrap group creation has, and it has the same answer — pot
 -- creation runs on the privileged session, and the admin gate lives in the service either way.
 ALTER TABLE pots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pots FORCE ROW LEVEL SECURITY;
 CREATE POLICY pots_scope_read ON pots FOR SELECT
   USING (app_can_view_pot(id));
 CREATE POLICY pots_scope_write ON pots FOR ALL
@@ -2165,6 +2229,7 @@ CREATE POLICY pots_scope_write ON pots FOR ALL
 -- lives in the service, exactly as it does for group_members — the same accepted split: RLS holds
 -- the confidentiality boundary, the service holds administration.
 ALTER TABLE pot_member_permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pot_member_permissions FORCE ROW LEVEL SECURITY;
 CREATE POLICY pot_member_permissions_scope_read ON pot_member_permissions FOR SELECT
   USING (app_can_view_pot(pot_id));
 CREATE POLICY pot_member_permissions_scope_write ON pot_member_permissions FOR ALL
@@ -2185,6 +2250,7 @@ CREATE POLICY pot_member_permissions_scope_write ON pot_member_permissions FOR A
 -- movement. It therefore exposes nothing about any other member, and no row it returns is one the
 -- caller did not make themselves.
 ALTER TABLE pot_ownership_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pot_ownership_events FORCE ROW LEVEL SECURITY;
 CREATE POLICY pot_ownership_events_scope_read ON pot_ownership_events FOR SELECT
   USING (
     app_can_view_pot(pot_id)
@@ -2315,10 +2381,12 @@ CREATE POLICY pot_ownership_events_counterparty_delete ON pot_ownership_events F
 -- than one because Postgres has no WITH CHECK for DELETE: a single FOR ALL policy carrying the wide
 -- read branch would let a former member DELETE the group's expense, not merely see their own leg of it.
 ALTER TABLE group_money_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE group_money_settings FORCE ROW LEVEL SECURITY;
 CREATE POLICY group_money_settings_member_isolation ON group_money_settings
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
 ALTER TABLE shared_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_expenses FORCE ROW LEVEL SECURITY;
 CREATE POLICY shared_expenses_scope_read ON shared_expenses FOR SELECT
   USING (
     app_is_group_member(group_id)
@@ -2342,10 +2410,12 @@ CREATE POLICY shared_expenses_scope_write ON shared_expenses FOR ALL
 -- expenses from your own /expenses list, which is the same thing leaving does to a pot, and it is
 -- visible rather than silent.
 ALTER TABLE shared_expense_splits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_expense_splits FORCE ROW LEVEL SECURITY;
 CREATE POLICY shared_expense_splits_member_isolation ON shared_expense_splits
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
 ALTER TABLE group_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE group_settlements FORCE ROW LEVEL SECURITY;
 CREATE POLICY group_settlements_scope_read ON group_settlements FOR SELECT
   USING (
     app_is_group_member(group_id)
@@ -2363,6 +2433,7 @@ CREATE POLICY group_settlements_scope_write ON group_settlements FOR ALL
 -- row is a movement in their own ledger, and without the branch leaving the group would silently take
 -- that money back off their balance.
 ALTER TABLE shared_income ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_income FORCE ROW LEVEL SECURITY;
 CREATE POLICY shared_income_scope_read ON shared_income FOR SELECT
   USING (
     app_is_group_member(group_id)
@@ -2377,6 +2448,7 @@ CREATE POLICY shared_income_scope_write ON shared_income FOR ALL
 
 -- No second branch on the splits, for the reason spelled out above shared_expense_splits.
 ALTER TABLE shared_income_splits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_income_splits FORCE ROW LEVEL SECURITY;
 CREATE POLICY shared_income_splits_member_isolation ON shared_income_splits
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
@@ -2393,6 +2465,7 @@ CREATE POLICY shared_income_splits_member_isolation ON shared_income_splits
 -- APPEND-ONLY: the ALTER DEFAULT PRIVILEGES above hands renly_app all four verbs, so UPDATE and DELETE
 -- are revoked back off. An audit entry the request role can rewrite or erase is not an audit entry.
 ALTER TABLE shared_audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_audit_log FORCE ROW LEVEL SECURITY;
 CREATE POLICY shared_audit_log_scope ON shared_audit_log
   USING (
     app_is_group_member(group_id)
@@ -2407,10 +2480,12 @@ REVOKE UPDATE, DELETE ON shared_audit_log FROM renly_app;
 -- The notification layer. Back to the plain owner match: these are the recipient's rows, so
 -- app_is_group_member() appears nowhere here even though group activity is what produces them.
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_preferences FORCE ROW LEVEL SECURITY;
 CREATE POLICY notification_preferences_user_isolation ON notification_preferences
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE push_subscriptions FORCE ROW LEVEL SECURITY;
 CREATE POLICY push_subscriptions_user_isolation ON push_subscriptions
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
@@ -2425,6 +2500,7 @@ CREATE POLICY push_subscriptions_user_isolation ON push_subscriptions
 -- stay visible under the SELECT policy, and widening either one alone still refuses it. DELETE gets its
 -- own policy because Postgres has no WITH CHECK for DELETE.
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications FORCE ROW LEVEL SECURITY;
 CREATE POLICY notifications_user_read ON notifications FOR SELECT
   USING (user_id = app_current_user_id());
 CREATE POLICY notifications_user_update ON notifications FOR UPDATE
