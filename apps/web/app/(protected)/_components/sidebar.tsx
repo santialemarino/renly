@@ -259,12 +259,15 @@ export function AppSidebar({
    * happened. Keying only on `pathname` sounds sufficient and is not: the route does not change
    * until the server responds, which on a cold dev server measured over two seconds and on cellular
    * is worse — the whole time, the reader is looking at the menu they just tapped with the old item
-   * still highlighted. Closing on the click gives them the page back immediately.
+   * still highlighted. Closing on the click gives them the page back immediately — and it is the
+   * only thing that closes the sheet when the link is the page they are already on, because then
+   * the route never changes at all.
    *
    * One delegated handler rather than a prop on each link: the links are spread across five sites
    * (NavSubItem for the Finances / Commitments / Settings / Admin groups, the Dashboard link, and
    * the help link), so per-link wiring is five chances to miss one and a sixth the next time
-   * somebody adds a destination.
+   * somebody adds a destination. On a phone the base `Sidebar` puts it on the Sheet's content
+   * element, which is what holds the links; on desktop it is a no-op, since there is no sheet.
    */
   const closeSheetOnDestinationClick = (event: React.MouseEvent<HTMLElement>) => {
     if ((event.target as HTMLElement).closest('a[href]')) setOpenMobile(false);

@@ -15,9 +15,9 @@ from app.schemas.settings import SUPPORTED_LANGUAGES
 MIN_PASSWORD_LENGTH = 12
 
 
-# Rejects a password bcrypt could not hash. The rule and its reasoning live in `domain/password.py`,
-# because `api_key_service` enforces the same ceiling on a credential that never passes through a
-# schema — one definition, two callers.
+# Rejects a password bcrypt could not hash. The rule itself is `domain.password.within_bcrypt_limit`,
+# which has exactly two callers: this validator, and `api_key_service.verify_api_key`, which applies
+# the same ceiling to the raw Bearer credential that never passes through a schema.
 def _within_bcrypt_limit(value: str) -> str:
     if not within_bcrypt_limit(value):
         raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes once UTF-8 encoded.")

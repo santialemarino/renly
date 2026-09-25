@@ -20,12 +20,21 @@ import { ROUTES } from '@/config/routes';
  *
  * `sticky` because this is the only route out of the page on a phone. Static, it scrolls off the top
  * of a 2600px dashboard on the first flick and the reader has to scroll all the way back to leave.
+ *
+ * `z-40` because a sticky bar only stays on top of what it outranks. Page content keeps its own
+ * sticky layers at `z-10` (the snapshots grid's pinned first and last columns), and at an equal
+ * z-index the later element in the DOM paints over the earlier one — so those cells slid over the bar
+ * as the page scrolled. `z-40` is the app's sticky-header layer, the one the public header uses: above
+ * any page content, below the `z-50` overlays (the nav Sheet itself, dialogs), which must cover it.
  */
 export async function MobileNavBar() {
   const t = await getTranslations('sidebar');
 
   return (
-    <header className="sticky top-0 z-10 flex md:hidden items-center shrink-0 px-4 py-3 gap-x-2 bg-background border-b border-sidebar-border">
+    <header
+      data-testid="mobile-nav-bar"
+      className="flex md:hidden shrink-0 items-center px-4 py-3 gap-x-2 bg-background border-b border-sidebar-border sticky top-0 z-40"
+    >
       <SidebarTrigger />
       {/* The wordmark is the conventional "back to the start" target in a phone header, and it is the
           only always-present one here — every other destination lives behind the trigger. */}
