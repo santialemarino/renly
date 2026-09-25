@@ -1,5 +1,7 @@
+import collections.abc
 import importlib
 import pkgutil
+import types
 import typing
 from datetime import date
 from decimal import Decimal
@@ -59,6 +61,15 @@ def _request_schemas():
     return sorted(set(walk(RequestBase)), key=lambda c: (c.__module__, c.__name__))
 
 
+# The non-None members of a union (`X | None`, `Optional[X]`, `Union[...]`), or the annotation itself when
+# it is not a union. Only a UNION is split: splitting any generic by its arguments reads `dict[str, int]`
+# as the two branches `str` and `int`, which is how the key check once never saw a mapping at all.
+def _union_branches(annotation) -> list:
+    if get_origin(annotation) in (typing.Union, types.UnionType):
+        return [a for a in get_args(annotation) if a is not type(None)]
+    return [annotation]
+
+
 def _plain_str(annotation) -> bool:
     if annotation is str:
         return True
@@ -73,7 +84,7 @@ def _plain_str(annotation) -> bool:
 # `dict[str, str]`, a `set[str]` or a `tuple[str, ...]` carries a payload exactly as a `list[str]` does,
 # and an earlier version of this that only recognised `list` passed all three uncapped.
 def _free_text_kind(annotation):
-    branches = [a for a in get_args(annotation) if a is not type(None)] or [annotation]
+    branches = _union_branches(annotation)
     for branch in branches:
         if _plain_str(branch):
             return "str"
@@ -83,9 +94,11 @@ def _free_text_kind(annotation):
 
 
 # Whether an annotation is (or unions in) a mapping keyed by plain str — whose KEYS are payload too.
+# `collections.abc.Mapping`, not `typing.Mapping`: `get_origin(typing.Mapping[str, X])` answers the ABC,
+# so comparing against the typing alias would never match.
 def _has_str_keys(annotation) -> bool:
-    branches = [a for a in get_args(annotation) if a is not type(None)] or [annotation]
-    return any(get_origin(b) in (dict, typing.Mapping) and get_args(b) and _plain_str(get_args(b)[0]) for b in branches)
+    branches = _union_branches(annotation)
+    return any(get_origin(b) in (dict, collections.abc.Mapping) and get_args(b) and _plain_str(get_args(b)[0]) for b in branches)
 
 
 # Every string-typed leaf of a compiled property schema, following $ref, the anyOf that `str | None`
@@ -305,6 +318,9 @@ class TestEveryContainerOfStrIsFreeText:
             "set[str]": (set[str], False),
             "tuple[str, ...]": (tuple[str, ...], False),
             "dict[str, int]": (dict[str, int], False),
+            "Mapping[str, int]": (typing.Mapping[str, int], False),
+            "Mapping[capped, int]": (typing.Mapping[capped, int], True),
+            "dict[str, capped]": (dict[str, capped], False),
             "dict[capped, capped]": (dict[capped, capped], True),
             "set[capped]": (set[capped], True),
         }

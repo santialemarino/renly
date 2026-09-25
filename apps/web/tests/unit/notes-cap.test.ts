@@ -34,7 +34,25 @@ function webNotesFields(): [string, string][] {
   );
 }
 
-// Every `max_length` on a `notes` field of an API REQUEST schema (a class inheriting RequestBase).
+// The whole `Field(...)` call that follows `notes:` in a class body, however many lines it spans:
+// from the opening parenthesis to the one that balances it.
+function notesFieldCalls(body: string): string[] {
+  return [...body.matchAll(/^\s+notes:[^=\n]*=\s*Field\(/gm)].map((match) => {
+    const start = (match.index ?? 0) + match[0].length;
+    let depth = 1;
+    let end = start;
+    while (end < body.length && depth > 0) {
+      if (body[end] === '(') depth += 1;
+      if (body[end] === ')') depth -= 1;
+      end += 1;
+    }
+    return body.slice(start, end - 1);
+  });
+}
+
+// The `max_length` on every `notes` field of an API REQUEST schema (a class inheriting RequestBase),
+// read from the whole Field call so a field split across lines is not skipped. A notes field with no
+// `max_length` at all reads as NaN, which the equality below refuses.
 function apiNotesCaps(): number[] {
   return readdirSync(API_SCHEMAS)
     .filter((f) => f.endsWith('.py'))
@@ -43,7 +61,7 @@ function apiNotesCaps(): number[] {
         .split(/^class /m)
         .filter((body) => /^\w+\([^)]*RequestBase[^)]*\):/.test(body))
         .flatMap((body) =>
-          [...body.matchAll(/^\s+notes: .*max_length=(\d+)/gm)].map((m) => Number(m[1])),
+          notesFieldCalls(body).map((call) => Number(/max_length\s*=\s*(\d+)/.exec(call)?.[1])),
         ),
     );
 }
