@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const ENV_PATH = path.join(process.cwd(), 'apps/api/.env');
+const ROLES_PATH = path.join(process.cwd(), 'apps/api/database/00_roles.sql');
 
 const LOCAL_PORT = process.argv[2] || '5433';
 const CONTAINER_NAME = `renly-db-local-${LOCAL_PORT}`;
@@ -102,7 +103,17 @@ async function run() {
       throw new Error('PostgreSQL did not become ready after 15 attempts; aborting setup.');
     }
 
-    // 2. Sync data
+    // 2. Provision the roles the app connects as. A fresh container has only the `renly` superuser,
+    // and roles are CLUSTER-global, so pg_dump never carries them: without this the fork has no
+    // renly_app or renly_admin to log in as, and every grant and ownership the dump names fails to
+    // apply. The same file a new database is provisioned from, so the fork cannot drift from it.
+    console.log(`Provisioning roles (00_roles.sql)...`);
+    execSync(`docker exec -i ${CONTAINER_NAME} psql -q -v ON_ERROR_STOP=1 -U renly -d renly`, {
+      input: fs.readFileSync(ROLES_PATH, 'utf8'),
+      stdio: ['pipe', 'inherit', 'inherit'],
+    });
+
+    // 3. Sync data
     console.log(`Syncing data from ${creds.host}:${creds.port}...`);
 
     // Use a throwaway container to run pg_dump — no need to install it on the host.
@@ -122,8 +133,11 @@ async function run() {
       creds.user,
       '-d',
       creds.database,
-      '--no-owner', // Don't restore ownership (local user differs)
-      '--no-acl', // Skip GRANT/REVOKE
+      // Ownership and grants are kept, not stripped: they ARE the isolation model. renly_app's DML
+      // grants and the policy helpers' owner (renly_policy_definer) come across exactly as the source
+      // has them, onto the roles provisioned above. A source whose owner is not named `renly` logs one
+      // error per OWNER TO line and leaves those objects owned by the fork's superuser, which still
+      // works — a superuser owner reads everything, as on any local cluster.
       '--clean', // DROP before CREATE (idempotent re-runs)
       '--if-exists', // Avoid errors dropping non-existent objects
     ]);
@@ -181,12 +195,18 @@ async function run() {
       psqlImport.on('error', reject);
     });
 
-    console.log(`\nSuccess! Local database is ready.`);
-    console.log(`   - Host:     127.0.0.1`);
-    console.log(`   - Port:     ${LOCAL_PORT}`);
-    console.log(`   - User:     renly`);
-    console.log(`   - Pass:     renly`);
-    console.log(`\nDon't forget to update DATABASE_URL in apps/api/.env!`);
+    console.log(`\nSuccess! Local database is ready on 127.0.0.1:${LOCAL_PORT}, database renly.`);
+    console.log(
+      `\nPoint BOTH urls in apps/api/.env at it — leaving one on the source splits the app across`,
+    );
+    console.log(`two databases (requests on the fork, the scheduler and logins on the source):`);
+    console.log(
+      `  DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:${LOCAL_PORT}/renly            (restricted, RLS-subject request role)`,
+    );
+    console.log(
+      `  DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:${LOCAL_PORT}/renly  (BYPASSRLS: scheduler, migrations, auth bootstrap)`,
+    );
+    console.log(`\nFor psql, the fork's superuser is renly / renly.`);
   } catch (err) {
     console.error(`Error during fork: ${err.message}`);
     process.exit(1);

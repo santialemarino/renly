@@ -45,7 +45,7 @@ The access control between "my friends" and the public for the invited beta. `SI
   - `POST /admin/invites/{id}/revoke` — sets `revoked` so the link stops working. `404` unknown, `409` if already accepted.
 - **Accept flow** — the emailed link is `{WEB_BASE_URL}/signup?invite=<raw_token>`. `GET /auth/signup-context?invite=<token>` (pre-auth, privileged session) returns `{signup_mode, invited_email}`: in invite mode a valid token resolves the bound email (so the signup form locks to it), an invalid/missing token returns `invited_email: null` (the web shows an invite-only screen — **no open form**, preserving the AUTH-5 anti-enumeration property). `POST /auth/register` then re-validates the token + email match server-side and consumes it.
 - **Account-deletion cleanup** — deleting an account also removes the invite that created it (matched by email), so a deleted account leaves no orphaned `accepted` invite in the admin list. The invite is FK'd to the inviting admin (not the invitee), so it's unreachable from the user's own RLS-scoped session and is cleared on the **privileged session** — ordered before the account delete so a partial failure can't strand the orphan. Changing an account's email does **not** touch the invite: the freed old address can simply be re-invited (which re-arms the row).
-- **First-admin bootstrap** — with invite mode on and no admin/invite yet, nobody can self-register, so the **first admin is set directly** in the database (a one-off, run with the privileged/owner role):
+- **First-admin bootstrap** — with invite mode on and no admin/invite yet, nobody can self-register, so the **first admin is set directly** in the database (a one-off, run as **`renly_admin`**, the `DATABASE_ADMIN_URL` role — check it reports `UPDATE 1`: run as a NOSUPERUSER owner or as `renly_app`, the `FORCE`d policy matches no row and it reports `UPDATE 0` and succeeds, leaving nobody an admin):
 
   ```sql
   UPDATE users SET is_admin = true WHERE email = 'you@example.com';
@@ -98,7 +98,7 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 - `GET /me/export` — returns the user's full data set as a downloadable JSON document (`Content-Disposition: attachment`). Excludes the password hash and api-key hashes/prefixes.
 - `DELETE /me` `{password, confirmation}` — verifies the password and a typed confirmation matching the account email, then deletes the user. FK `ON DELETE CASCADE` removes every owned row. The web signs out and returns to login.
 
-`auth_tokens` (and `refresh_tokens`, AUTH-7) are under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches them runs on the privileged (owner) session and bypasses RLS — the pre-auth flows have no user context (login issues a refresh token before any request-session context exists; `/auth/refresh` carries a refresh token, not an access token), and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policies are defense-in-depth (SEC-15).
+`auth_tokens` (and `refresh_tokens`, AUTH-7) are under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches them runs on the privileged session (`renly_admin`, `BYPASSRLS`) and bypasses RLS — the pre-auth flows have no user context (login issues a refresh token before any request-session context exists; `/auth/refresh` carries a refresh token, not an access token), and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policies are defense-in-depth (SEC-15).
 
 ### Transactional email localization
 
@@ -182,10 +182,12 @@ The following endpoints accept API key auth (used by the iOS Shortcut). All othe
 
 A second, database-enforced isolation layer (SEC-15) sits under the application's `user_id` filters: even if a code path forgets to scope a query, Postgres itself prevents one user from reading or writing another's rows.
 
-### Two roles
+### Roles
 
-- **Restricted request role** (`DATABASE_URL`, e.g. `renly_app`): `NOBYPASSRLS`, not the table owner. Every HTTP request connects as this role, so all policies apply.
-- **Privileged owner role** (`DATABASE_ADMIN_URL`): owns the tables and therefore bypasses RLS. Used only for work with no user context — the scheduler, Alembic migrations, and pre-auth lookups (login, register, API-key verification). RLS is `ENABLE`d, not `FORCE`d, precisely so the owner stays exempt.
+- **Restricted request role** (`DATABASE_URL`, `renly_app`): `NOBYPASSRLS`, not the table owner. Every HTTP request connects as this role, so all policies apply.
+- **Privileged admin role** (`DATABASE_ADMIN_URL`, `renly_admin`): `BYPASSRLS`, not a superuser, a member of the owner. Used only for work with no user context — the scheduler, notification dispatch, Alembic migrations, and pre-auth lookups (login, register, API-key verification).
+- **The owner** (`renly`) owns the tables and nothing connects as it. Every policied table is `ENABLE`d **and `FORCE`d**, so owning a table is no exemption: a NOSUPERUSER owner (the production shape) reads nothing without a user context. (A superuser bypasses RLS regardless, which is why the owner must not be one — see `deployment.md` → Roles.)
+- **The policy-helper role** (`renly_policy_definer`): `NOLOGIN`, `BYPASSRLS`, `SELECT` on exactly `pots`, `group_members` and `pot_member_permissions`. It owns the three `SECURITY DEFINER` helpers below and nothing else.
 
 ### Per-request user context
 
@@ -193,7 +195,7 @@ After authentication resolves the user id, `set_session_user()` (`app/db.py`) st
 
 ### Policies
 
-Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WITH CHECK` that the row's owner equals `app_current_user_id()` — a helper returning `NULLIF(current_setting('app.current_user_id', true), '')::bigint`, which is `NULL` when no context is set, so a context-less connection matches **no rows** (rather than erroring). `users` keys on its own `id`; the hot child tables (`transactions`, `investment_snapshots`, `card_settlements`) carry a denormalized `user_id` so their policy is a direct column check; `investment_collection_members` (a pure junction) uses an `EXISTS`-join to the parent investment. The global reference tables (`exchange_rates`, `asset_prices`, `cedear_ratios`) are keyed by pair/ticker, not by user, and are intentionally left without RLS.
+Every user-owned table has `ENABLE` and `FORCE ROW LEVEL SECURITY` plus a policy `USING`/`WITH CHECK` that the row's owner equals `app_current_user_id()` — a helper returning `NULLIF(current_setting('app.current_user_id', true), '')::bigint`, which is `NULL` when no context is set, so a context-less connection matches **no rows** (rather than erroring). `users` keys on its own `id`; the hot child tables (`transactions`, `investment_snapshots`, `card_settlements`) carry a denormalized `user_id` so their policy is a direct column check; `investment_collection_members` (a pure junction) uses an `EXISTS`-join to the parent investment. The global reference tables (`exchange_rates`, `asset_prices`, `cedear_ratios`) are keyed by pair/ticker, not by user, and are intentionally left without RLS.
 
 #### Group membership — the one non-owner policy shape
 
@@ -201,7 +203,7 @@ Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WI
 
 Four properties are worth knowing:
 
-- **The helper is `SECURITY DEFINER`, and that is required rather than stylistic.** A policy on `group_members` that sub-queried `group_members` would be evaluated recursively, and Postgres aborts it outright (`infinite recursion detected in policy for relation "group_members"`). A `SECURITY DEFINER` function runs its body as the table owner, which is exempt from RLS, so the lookup terminates. `search_path` is pinned and the default `PUBLIC` `EXECUTE` grant is revoked; the function only ever reports on the **calling** user's own membership, so it discloses nothing for any argument.
+- **The helper is `SECURITY DEFINER`, and that is required rather than stylistic.** A policy on `group_members` that sub-queried `group_members` would be evaluated recursively, and Postgres aborts it outright (`infinite recursion detected in policy for relation "group_members"`). A `SECURITY DEFINER` function runs its body as its **owner**, and these helpers are owned by `renly_policy_definer`, which has `BYPASSRLS`, so the lookup terminates. The owner must NOT be the table owner: under `FORCE` the table owner is subject to the policy, so a helper running as a NOSUPERUSER table owner re-enters the policy that called it until `stack depth limit exceeded` (a superuser table owner hides this entirely). `search_path` is pinned and the default `PUBLIC` `EXECUTE` grant is revoked; the function only ever reports on the **calling** user's own membership, so it discloses nothing for any argument.
 - **`role` appears nowhere in it.** Group administration is management, not access: an admin sees precisely what any member sees. This is the "administration never grants visibility" rule, enforced by the policy's shape rather than by convention.
 - **`is_active` is inside the helper**, so removing a member revokes their access in the same statement that removes them — there is no second place to remember.
 - **Two use cases bootstrap the very row the policy reads** and therefore run on the **privileged session**: creating a group (its first membership row cannot satisfy a predicate that requires it) and accepting an invite (the redeemer must _read_ the invite before joining, and no `WITH CHECK` widening helps a `SELECT`). Every other group operation runs on the request session under these policies. The alternative — widening the policy with an author-based escape hatch — was rejected because it would outlive the author's own membership.

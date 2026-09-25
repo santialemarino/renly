@@ -21,9 +21,11 @@ DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/r
 ```
 
 Both lines are required, and neither names the owner. The policied tables carry `FORCE ROW LEVEL
-SECURITY`, so a connection pointed at the owner reads **nothing** rather than everything — and without
-the admin line the pre-auth users lookup finds no one, so login fails in a way that looks exactly like
-a wrong password.
+SECURITY`, so a connection pointed at a **non-superuser** owner (the production shape) reads
+**nothing** rather than everything. The local compose owner `renly` is a superuser, which reads
+everything whatever the tables say — so pointing a URL at it locally hides every policy, which is the
+failure the two lines exist to avoid. Without the admin line the pre-auth users lookup finds no one,
+so login fails in a way that looks exactly like a wrong password.
 
 ## Structure
 
@@ -103,7 +105,7 @@ To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:w
 
 ## Docker
 
-- **Postgres:** `pnpm db:init` starts Postgres 16 on port 5432 and applies the schema (first time), which also provisions the `renly_admin` and `renly_app` roles. Set `DATABASE_URL` to `renly_app` and `DATABASE_ADMIN_URL` to `renly_admin` in `apps/api/.env` — not the `renly` owner, which the tables' `FORCE ROW LEVEL SECURITY` leaves reading nothing.
+- **Postgres:** `pnpm db:init` starts Postgres 16 on port 5432 and applies the schema (first time), after provisioning the roles from `apps/api/database/00_roles.sql` (`renly_admin`, `renly_app`, and the NOLOGIN `renly_policy_definer`). Set `DATABASE_URL` to `renly_app` and `DATABASE_ADMIN_URL` to `renly_admin` in `apps/api/.env` — never the `renly` owner, which locally is a superuser that bypasses every policy.
 - **Full stack in Docker:** Put required env vars in a root `.env` (see `apps/api/.env.example` and `apps/web/.env.example`), then `pnpm dev:docker` (or `docker compose up -d`). First time, run `pnpm db:init` after to apply the schema to the DB.
 - **Build images (from repo root):**
   - API: `docker build -f docker/api.Dockerfile .`

@@ -8,8 +8,8 @@
  *   3. DATABASE_URL in apps/api/.env       — falls back, but a restricted RLS role dumps ZERO rows
  *
  * The bypass has to come from the ROLE, not from ownership. The tables FORCE row-level security, so
- * owning them is no longer an exemption: a dump taken as the owner with no user context contains
- * nothing. pg_dump at least says so — it exits 1 with "query would be affected by row-level security
+ * owning them is no longer an exemption: a dump taken as a NOSUPERUSER owner with no user context
+ * contains nothing. pg_dump at least says so — it exits 1 with "query would be affected by row-level security
  * policy" rather than writing an empty file — but only renly_admin produces a usable backup.
  *
  * Uses a throwaway postgres:16-alpine container, so host pg_dump isn't required. The dump is

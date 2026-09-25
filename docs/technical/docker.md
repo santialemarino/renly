@@ -30,11 +30,11 @@ Reads an **optional** root `.env` (`env_file` long syntax, `required: false`) �
 zero-config without it. `environment` provides working local defaults with **service-name hosts**:
 `DATABASE_URL` defaults to `renly_app` and `DATABASE_ADMIN_URL` to `renly_admin`, both on the
 `postgres` service host, plus a dev placeholder `JWT_SECRET` and `WEB_BASE_URL`. Every other API var
-comes from the root `.env` (if present) or its in-code default (`config.py`). **Compose is no longer
-single-role**, and it cannot be: the policied tables carry `FORCE ROW LEVEL SECURITY`, so the owner
-connection this used to default to now reads nothing rather than bypassing the policies. Row-Level
-Security is therefore live in compose exactly as in production, which is the same three-role contract
-the deploy runbook describes. Any root
+comes from the root `.env` (if present) or its in-code default (`config.py`). **Compose is not
+single-role**: the owner connection this used to default to is compose's own `renly` superuser, which
+bypasses every policy whatever the tables say, so Row-Level Security would be inert. With the two
+defaults above it is live in compose exactly as in production — the same role contract the deploy
+runbook describes. Any root
 `.env` override of the DB URLs must use the `postgres` service host.
 
 ### web
@@ -90,7 +90,7 @@ has a working local default. A fresh database, however, needs its schema applied
 API applies no migrations on startup:
 
 ```bash
-# From repo root — apply the schema to a fresh DB (starts renly-postgres and runs 01_create_tables.sql)
+# From repo root — provision roles and apply the schema to a fresh DB (starts renly-postgres, then runs 00_roles.sql and 01_create_tables.sql)
 pnpm db:init
 
 # Then start postgres, api, and web
@@ -110,6 +110,7 @@ If you prefer not to use `pnpm db:init`, apply the schema manually after Postgre
 
 ```bash
 docker compose up -d postgres
+docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/00_roles.sql
 docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/01_create_tables.sql
 docker compose up --build
 ```
@@ -123,11 +124,12 @@ For developing the API and web app outside Docker while using Docker only for th
 docker compose up -d postgres
 ```
 
-Then set `DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly` and `DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly` in `apps/api/.env` and run the apps with `pnpm dev`. Neither names the owner: `FORCE ROW LEVEL SECURITY` leaves an owner connection reading nothing.
+Then set `DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly` and `DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly` in `apps/api/.env` and run the apps with `pnpm dev`. Neither names the owner: locally it is a superuser, which bypasses every policy, and in production (NOSUPERUSER, with `FORCE ROW LEVEL SECURITY`) it reads nothing.
 
-To apply the schema on a fresh database:
+To apply the schema on a fresh database (roles first — the schema grants to them):
 
 ```bash
+docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/00_roles.sql
 docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/01_create_tables.sql
 ```
 
