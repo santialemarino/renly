@@ -93,6 +93,30 @@ class TestAutoSnapshotSkips:
         session.add_all.assert_not_called()
 
 
+class TestAutoSnapshotRounding:
+    @pytest.mark.asyncio
+    async def test_a_value_landing_on_a_half_rounds_up_like_every_other_money_figure(self, monkeypatch):
+        # 10 x 0.2345 = 2.345 exactly. The builtin round() on a Decimal is banker's rounding and
+        # stores 2.34; the one money rule is half-up and says 2.35.
+        investments = [_inv(inv_id=1, ticker="AAPL", base_currency="USD")]
+        monkeypatch.setattr(auto_snapshot_service.investment_repository, "list_with_ticker", AsyncMock(return_value=investments))
+        monkeypatch.setattr(auto_snapshot_service.snapshot_repository, "get_ids_with_snapshot_on_date", AsyncMock(return_value=set()))
+        monkeypatch.setattr(
+            auto_snapshot_service.asset_price_repository,
+            "get_latest_by_tickers",
+            AsyncMock(return_value={"AAPL": _price(ticker="AAPL", price=Decimal("0.2345"), currency="USD")}),
+        )
+        monkeypatch.setattr(
+            auto_snapshot_service.snapshot_repository,
+            "get_latest_by_investments",
+            AsyncMock(return_value={1: _snap(inv_id=1, quantity=Decimal("10"))}),
+        )
+        session = AsyncMock()
+        session.add_all = Mock()
+        await auto_snapshot_service.generate_auto_snapshots(session)
+        assert session.add_all.call_args.args[0][0].value == Decimal("2.35")
+
+
 class TestScopeInheritance:
     @pytest.mark.asyncio
     async def test_a_co_owned_investments_snapshot_inherits_the_pots_scope(self, monkeypatch):

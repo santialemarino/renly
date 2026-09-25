@@ -8,11 +8,11 @@ import calendar
 import logging
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
-from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.domain.money import MONEY_PLACES, quantize
 from app.models.snapshot import InvestmentSnapshot
 from app.repositories.asset_price_repository import asset_price_repository
 from app.repositories.investment_repository import investment_repository
@@ -84,7 +84,7 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
                 user_id=inv.user_id,
                 pot_id=inv.pot_id,
                 date=today,
-                value=Decimal(str(round(value, 2))),
+                value=quantize(value, MONEY_PLACES),
                 quantity=quantity,
                 currency=inv.base_currency,
                 source=SOURCE_AUTO,

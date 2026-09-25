@@ -24,7 +24,20 @@ from app.domain.money import MONEY_PLACES, quantize
 # that rounds the wrong way is only visibly wrong on inputs that land exactly on a half, which most
 # tests never construct.
 
+#
+# ▸ The builtin `round(x, n)` is the same trap by another name: on a Decimal it is ROUND_HALF_EVEN too,
+# and on a float it rounds the binary approximation. The auto-snapshot job stored every position as
+# `round(quantity * price, 2)` for exactly that reason. The line it is drawn on is the SCALE, derived
+# from `MONEY_PLACES` rather than written as `2`: a two-argument `round()` to the money scale is a
+# second money rule and fails, and so does one whose `ndigits` is not a literal, since nothing can
+# prove it is not the money scale. A literal at any OTHER scale passes — the six-place `round()` on a
+# provider's quoted price and on the IRR solver's rate are not money figures and have no half-up rule
+# to disagree with.
+
 APP = pathlib.Path(__file__).resolve().parents[2] / "app"
+
+# The number of decimal places a money figure carries, read off the rule rather than restated.
+MONEY_DIGITS = -MONEY_PLACES.as_tuple().exponent
 
 
 # A stand-in for the SQLAlchemy result a grouped sum iterates.
@@ -47,6 +60,23 @@ def _quantize_calls() -> list[tuple[str, bool]]:
                 continue
             names_mode = any(kw.arg == "rounding" for kw in node.keywords) or len(node.args) > 1
             found.append((f"{path.relative_to(APP.parent)}:{node.lineno}", names_mode))
+    return found
+
+
+# Every two-argument builtin `round(...)` call in the app, as (file:line, ndigits) where ndigits is the
+# literal int, or None when the argument is an expression.
+def _round_calls() -> list[tuple[str, int | None]]:
+    found = []
+    for path in sorted(APP.rglob("*.py")):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "round"):
+                continue
+            ndigits = node.args[1] if len(node.args) > 1 else next((kw.value for kw in node.keywords if kw.arg == "ndigits"), None)
+            if ndigits is None:
+                continue
+            literal = ndigits.value if isinstance(ndigits, ast.Constant) and isinstance(ndigits.value, int) else None
+            found.append((f"{path.relative_to(APP.parent)}:{node.lineno}", literal))
     return found
 
 
@@ -73,6 +103,27 @@ class TestNothingInheritsBankersRounding:
         assert value.quantize(MONEY_PLACES, rounding=ROUND_HALF_EVEN) == Decimal("2.34")
         assert value.quantize(MONEY_PLACES, rounding=ROUND_HALF_UP) == Decimal("2.35")
         assert quantize(value, MONEY_PLACES) == Decimal("2.35")
+
+    def test_no_builtin_round_to_the_money_scale(self):
+        offending = sorted(where for where, ndigits in _round_calls() if ndigits is None or ndigits == MONEY_DIGITS)
+        assert offending == [], (
+            f"these round() to {MONEY_DIGITS} places (or to a scale nothing can prove is not it), which is banker's "
+            f"rounding on a Decimal — use domain.money.quantize(value, MONEY_PLACES): {offending}"
+        )
+
+    def test_the_round_walk_actually_finds_the_calls(self):
+        # Anti-vacuity, for the same reason as the quantize walk: the six-place price and IRR roundings
+        # are certain to exist, and a walk that stopped matching would find none of them.
+        calls = _round_calls()
+        assert len(calls) >= 3, f"the walk found only {len(calls)} round() calls — it has stopped matching"
+        assert any(where.startswith("app/utils/metrics.py") for where, _ in calls)
+
+    def test_builtin_round_really_is_bankers_rounding(self):
+        # The premise of the round() guard. Python's round() on a Decimal delegates to
+        # Decimal.__round__, which uses the context's rounding — ROUND_HALF_EVEN by default.
+        assert MONEY_DIGITS == 2
+        assert round(Decimal("2.345"), MONEY_DIGITS) == Decimal("2.34")
+        assert quantize(Decimal("2.345"), MONEY_PLACES) == Decimal("2.35")
 
 
 class TestMoneyNeverRoundTripsThroughFloat:

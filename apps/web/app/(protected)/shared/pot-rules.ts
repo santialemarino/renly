@@ -6,6 +6,7 @@ import type {
   PotOwnershipEvent,
   PotValueSeries,
 } from '@/lib/api/pots';
+import { moneyProduct } from '@/lib/money';
 
 /*
  * What a pot's surface shows and offers, as pure functions over the API's own response.
@@ -340,28 +341,24 @@ export function ownershipEventAmount(
   if (event.type === 'opening') {
     return event.baseAmount === null ? null : { amount: event.baseAmount, currency: baseCurrency };
   }
-  return { amount: reagreementValue(event), currency: baseCurrency };
+  const value = reagreementValue(event);
+  return value === null ? null : { amount: value, currency: baseCurrency };
 }
 
 /*
  * What a re-agreement's transferred units were worth at the price it was recorded at — the one figure
  * in this module that is computed rather than read.
  *
- * The float product carries error (4.545455 x 1.1 is 5.000000499… in binary), and `toFixed(2)` is what
- * absorbs it. Rounding through integer cents FIRST, the way the installment total does, is redundant
- * here and was measured to be: over three million random unit/price pairs the two agree on every one.
- * The installment case is different because its product is SENT to the API, where a `decimal_places=2`
- * validator rejects 17.549999999999997 — there is no rounding step there to absorb it.
+ * Multiplied as decimals through `moneyProduct`, the web's one money-rounding rule, so a product that
+ * lands exactly on a half rounds up the way the API's does rather than the way its binary approximation
+ * happens to fall under `toFixed(2)`.
  *
  * `units` is signed against the member the event names and a re-agreement's is negative, so the
  * magnitude is what a money cell wants: the cell carries its own sign, and a negative figure inside one
  * would show the minus twice.
- *
- * DISPLAY only — never stored, never summed, never sent back — so the worst a pathological input costs
- * is a cent in a label, not a wrong balance.
  */
-function reagreementValue(event: PotOwnershipEvent): string {
-  return (Math.abs(Number(event.units)) * Number(event.unitPrice)).toFixed(2);
+function reagreementValue(event: PotOwnershipEvent): string | null {
+  return moneyProduct(event.units.replace(/^[-+]/, ''), event.unitPrice);
 }
 
 /*
