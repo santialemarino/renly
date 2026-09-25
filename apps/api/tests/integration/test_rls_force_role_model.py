@@ -277,6 +277,33 @@ class TestThePolicyHelpersRunAsTheDefinerRole:
         may_create = (await admin.execute(text("SELECT has_schema_privilege(:r, 'public', 'CREATE')"), {"r": _DEFINER})).scalar_one()
         assert may_create is False
 
+    @pytest.mark.asyncio
+    async def test_nobody_but_the_request_role_may_call_the_helpers(self, admin):
+        # Every function is born with EXECUTE for PUBLIC, and a SECURITY DEFINER one runs with its
+        # owner's bypass for whoever calls it. The schema revokes that default; this proves it stayed
+        # revoked. has_function_privilege on 'public' also covers a NULL ACL, which IS the default grant.
+        callable_by_public = (
+            await admin.execute(
+                text(
+                    "SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace"
+                    " WHERE n.nspname = 'public' AND p.proname = ANY(:h) AND has_function_privilege('public', p.oid, 'EXECUTE')"
+                ),
+                {"h": sorted(_HELPERS)},
+            )
+        ).scalars()
+        assert list(callable_by_public) == []
+
+    @pytest.mark.asyncio
+    async def test_the_request_role_can_become_no_more_privileged_role(self, admin):
+        # Membership is SET ROLE. A renly_app that could become the definer, the admin role or the owner
+        # would carry every bypass this model withholds from it, however its own attributes read.
+        owner = (await admin.execute(text("SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.users'::regclass"))).scalar_one()
+        memberships = {
+            role: (await admin.execute(text("SELECT pg_has_role('renly_app', :r, 'MEMBER')"), {"r": role})).scalar_one()
+            for role in (_DEFINER, "renly_admin", owner)
+        }
+        assert memberships == dict.fromkeys(memberships, False)
+
 
 _DEFINER_EMAILS = ["force_definer_member@test.local", "force_definer_peer@test.local"]
 _DEFINER_GROUP = "force_definer_group"
