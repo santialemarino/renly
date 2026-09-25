@@ -20,7 +20,8 @@ import { describe, expect, it } from 'vitest';
  * correspondence, and the anti-vacuity test below is what keeps that from degenerating.
  *
  * ▸ WHAT IT DOES NOT CHECK. That the page actually renders a hint. That is one step further than a
- * scan can honestly go, so it is covered by the e2e spec instead.
+ * scan can honestly go, so `skipped-currencies-hint.test.tsx` renders every page that reads the field
+ * and asserts the warning names the codes.
  */
 
 const REPO = join(__dirname, '..', '..', '..', '..');
@@ -43,6 +44,24 @@ function apiModulesDeclaringTheField(): string[] {
   return readdirSync(API_SCHEMAS)
     .filter((f) => f.endsWith('.py'))
     .filter((f) => readFileSync(join(API_SCHEMAS, f), 'utf8').includes(FIELD));
+}
+
+// How many response classes in a Python schema module declare the field as a class attribute. Split
+// on top-level `class` statements so each block is one class body; a mention in a comment or a
+// docstring-like `#` line does not count, only an indented `skipped_currencies:` annotation.
+function apiResponsesDeclaringTheField(pythonModule: string): number {
+  const source = readFileSync(join(API_SCHEMAS, pythonModule), 'utf8');
+  const declaration = new RegExp(`^\\s+${FIELD}\\s*:`, 'm');
+  return source
+    .split(/^class /m)
+    .slice(1)
+    .filter((body) => declaration.test(body)).length;
+}
+
+// The web api module an API schema module maps to, or null when the web consumes none of it.
+function existingWebModuleFor(pythonModule: string): string | null {
+  const webFiles = new Set(readdirSync(WEB_API));
+  return webModuleFor(pythonModule).find((f) => webFiles.has(f)) ?? null;
 }
 
 describe('every API response carrying skipped_currencies is read by the web', () => {
@@ -74,9 +93,28 @@ describe('every API response carrying skipped_currencies is read by the web', ()
     expect(offenders).toEqual([]);
   });
 
+  it('declares it on as many raw responses as the API module sends it on', () => {
+    // The API is the other side of the count. Comparing the web with itself (declared vs mapped, below)
+    // stays green when one response of a multi-response module loses the field from EVERY web layer
+    // at once — raw, frontend type, mapper and the page's union — because each layer still agrees
+    // with the others. Counting the Python response classes is what notices the fourth one is gone.
+    const short: Record<string, [number, number]> = {};
+    for (const pythonModule of apiModulesDeclaringTheField()) {
+      const webModule = existingWebModuleFor(pythonModule);
+      if (webModule === null) continue;
+      const sent = apiResponsesDeclaringTheField(pythonModule);
+      const text = readFileSync(join(WEB_API, webModule), 'utf8');
+      const declared = text.split(`${FIELD}: string[]`).length - 1;
+      if (declared < sent) short[`${pythonModule} -> ${webModule}`] = [sent, declared];
+    }
+    expect(short).toEqual({});
+  });
+
   it('maps every raw occurrence rather than declaring it and forgetting the mapper', () => {
     // One `skipped_currencies` in a raw interface needs one `skippedCurrencies: raw.skipped_currencies`
-    // in a mapper. Counting is what catches a fifth response added beside four that are wired.
+    // in a mapper. This compares the web with ITSELF, so it catches a raw field with no mapper line (or
+    // the reverse) — the case where a response is dropped from every layer at once is the API-side
+    // count above.
     const mismatched: Record<string, [number, number]> = {};
     for (const file of readdirSync(WEB_API).filter((f) => f.endsWith('.ts'))) {
       const text = readFileSync(join(WEB_API, file), 'utf8');
@@ -99,6 +137,8 @@ describe('every API response carrying skipped_currencies is read by the web', ()
     expect(apiModules.length).toBeGreaterThanOrEqual(6);
     expect(apiModules).toContain('finance_metrics.py');
     expect(apiModules).toContain('payments_calendar.py');
+    // The class count's own anti-vacuity: the finance module sends the field on four responses.
+    expect(apiResponsesDeclaringTheField('finance_metrics.py')).toBe(4);
 
     const webModules = readdirSync(WEB_API).filter((f) =>
       readFileSync(join(WEB_API, f), 'utf8').includes(FIELD),
