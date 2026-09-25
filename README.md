@@ -13,7 +13,17 @@ pnpm dev
 
 **Requirements:** Node.js 22+, pnpm 10+, Python 3.13+, Docker (for local Postgres).
 
-**First-time DB:** From repo root, run `pnpm db:init` to start the Postgres container (docker compose) and apply the schema. Set `DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly` in `apps/api/.env`.
+**First-time DB:** From repo root, run `pnpm db:init` to start the Postgres container (docker compose) and apply the schema. Then set both database URLs in `apps/api/.env`:
+
+```
+DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly
+DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+```
+
+Both lines are required, and neither names the owner. The policied tables carry `FORCE ROW LEVEL
+SECURITY`, so a connection pointed at the owner reads **nothing** rather than everything — and without
+the admin line the pre-auth users lookup finds no one, so login fails in a way that looks exactly like
+a wrong password.
 
 ## Structure
 
@@ -93,7 +103,7 @@ To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:w
 
 ## Docker
 
-- **Postgres:** `pnpm db:init` starts Postgres 16 on port 5432 and applies the schema (first time). User/pass/db: `renly`. Set `DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly` in `apps/api/.env`.
+- **Postgres:** `pnpm db:init` starts Postgres 16 on port 5432 and applies the schema (first time), which also provisions the `renly_admin` and `renly_app` roles. Set `DATABASE_URL` to `renly_app` and `DATABASE_ADMIN_URL` to `renly_admin` in `apps/api/.env` — not the `renly` owner, which the tables' `FORCE ROW LEVEL SECURITY` leaves reading nothing.
 - **Full stack in Docker:** Put required env vars in a root `.env` (see `apps/api/.env.example` and `apps/web/.env.example`), then `pnpm dev:docker` (or `docker compose up -d`). First time, run `pnpm db:init` after to apply the schema to the DB.
 - **Build images (from repo root):**
   - API: `docker build -f docker/api.Dockerfile .`

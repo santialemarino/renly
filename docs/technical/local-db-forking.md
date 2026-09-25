@@ -28,13 +28,13 @@ DATABASE_URL=postgresql+asyncpg://postgres.xxxx:yourpassword@aws-0-us-east-1.poo
 **Local docker-compose postgres (port 5432):**
 
 ```env
-DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly
+DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly
 ```
 
 **Local fork (after running the script):**
 
 ```env
-DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5433/renly
+DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5433/renly
 ```
 
 **Typical flow:**

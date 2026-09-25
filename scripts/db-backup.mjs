@@ -4,8 +4,13 @@
  *
  * Source URL (first match wins):
  *   1. $BACKUP_DATABASE_URL
- *   2. DATABASE_ADMIN_URL in apps/api/.env — the table owner; bypasses RLS so the dump has ALL rows
+ *   2. DATABASE_ADMIN_URL in apps/api/.env — renly_admin; has BYPASSRLS so the dump has ALL rows
  *   3. DATABASE_URL in apps/api/.env       — falls back, but a restricted RLS role dumps ZERO rows
+ *
+ * The bypass has to come from the ROLE, not from ownership. The tables FORCE row-level security, so
+ * owning them is no longer an exemption: a dump taken as the owner with no user context contains
+ * nothing. pg_dump at least says so — it exits 1 with "query would be affected by row-level security
+ * policy" rather than writing an empty file — but only renly_admin produces a usable backup.
  *
  * Uses a throwaway postgres:16-alpine container, so host pg_dump isn't required. The dump is
  * created with --no-owner --no-acl --clean --if-exists so it restores into any fresh database
@@ -40,7 +45,7 @@ function parseUrl(raw) {
   };
 }
 
-// Resolves the source URL, preferring the owner role so RLS doesn't filter rows out of the dump.
+// Resolves the source URL, preferring the BYPASSRLS role so RLS doesn't filter rows out of the dump.
 function resolveSourceUrl() {
   if (process.env.BACKUP_DATABASE_URL) {
     return { raw: process.env.BACKUP_DATABASE_URL, origin: '$BACKUP_DATABASE_URL' };
@@ -55,7 +60,7 @@ function resolveSourceUrl() {
   if (url) {
     console.warn(
       'WARNING: backing up via DATABASE_URL. If that is the restricted RLS role (renly_app), the\n' +
-        'dump will contain ZERO user rows. Set DATABASE_ADMIN_URL (owner) or $BACKUP_DATABASE_URL.',
+        'dump will contain ZERO user rows. Set DATABASE_ADMIN_URL (renly_admin) or $BACKUP_DATABASE_URL.',
     );
     return { raw: url, origin: 'DATABASE_URL (apps/api/.env)' };
   }

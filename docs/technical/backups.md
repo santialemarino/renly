@@ -17,18 +17,25 @@ directory is gitignored).
 ```bash
 # Source resolution (first match wins):
 #   1. $BACKUP_DATABASE_URL
-#   2. DATABASE_ADMIN_URL in apps/api/.env   (table owner — bypasses RLS, dumps ALL rows)
+#   2. DATABASE_ADMIN_URL in apps/api/.env   (renly_admin — BYPASSRLS, dumps ALL rows)
 #   3. DATABASE_URL in apps/api/.env         (restricted RLS role → dumps ZERO user rows; warns)
 pnpm db:backup
 
 # Or point it at production explicitly:
-BACKUP_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' pnpm db:backup
+BACKUP_DATABASE_URL='postgresql://renly_admin:PASS@HOST:PORT/DB' pnpm db:backup
 ```
 
-> **Critical (RLS):** the backup must connect as the **table owner**, not the restricted `renly_app`
-> role. With Row-Level Security enabled (SEC-15) and no `app.current_user_id` set, the restricted
-> role sees **zero rows**, so a dump taken as `renly_app` would back up an empty database. The
-> script prefers `DATABASE_ADMIN_URL` for this reason and warns if it falls back to `DATABASE_URL`.
+> **Critical (RLS):** the backup must connect as **`renly_admin`** — the role with `BYPASSRLS` —
+> and not as `renly_app` or as the owner. With Row-Level Security enabled (SEC-15) and no
+> `app.current_user_id` set, a role subject to the policies sees **zero rows**, so the dump would be
+> of an empty database. Since the tables also carry `FORCE ROW LEVEL SECURITY`, **owning them is not
+> an exemption**: a dump taken as `renly` is just as empty as one taken as `renly_app`. The bypass has
+> to come from the role attribute.
+>
+> `pg_dump` does fail loudly under `FORCE` rather than writing an empty file — it exits 1 with
+> `query would be affected by row-level security policy` and a `HINT` naming the cause — so a wrong
+> role produces no backup rather than a useless one. The script prefers `DATABASE_ADMIN_URL` for this
+> reason and warns if it falls back to `DATABASE_URL`.
 
 The dump uses `--no-owner --no-acl --clean --if-exists`, making it portable to a fresh Postgres
 (ownership/role grants are not embedded — see the role caveat under Restore).
@@ -54,12 +61,13 @@ RESTORE_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' \
   `DATABASE_URL`, to avoid clobbering your dev DB), and `--force` is required.
 - Restore **as the table owner** (`psql` runs with `ON_ERROR_STOP=1`).
 - **Role caveat:** `pg_dump` does not include roles, and `--no-acl` omits grants. When restoring
-  into a **brand-new** database, the restricted `renly_app` role and its grants are not recreated.
-  Re-provision them by re-running the role/grant section of
-  [`apps/api/database/01_create_tables.sql`](../../apps/api/database/01_create_tables.sql) (the
-  `CREATE ROLE renly_app … / GRANT …` block), then point `DATABASE_URL` at `renly_app`. The RLS
-  policies and the `app_current_user_id()` function themselves **are** in the dump and restore
-  automatically.
+  into a **brand-new** database, neither `renly_admin` nor `renly_app` is recreated and neither
+  carries its grants. Re-provision both by re-running the role/grant section of
+  [`apps/api/database/01_create_tables.sql`](../../apps/api/database/01_create_tables.sql), then
+  point `DATABASE_URL` at `renly_app` and `DATABASE_ADMIN_URL` at `renly_admin`. The RLS policies,
+  the `FORCE` flags and the `app_current_user_id()` function themselves **are** in the dump and
+  restore automatically — which means a restored database is FORCEd from the first moment, and
+  reading it needs `renly_admin` rather than whoever ran the restore.
 
 ---
 
