@@ -29,8 +29,9 @@ engine = create_async_engine(
     pool_recycle=POOL_RECYCLE_SECONDS,
 )
 
-# Privileged engine for context-less work (scheduler, auth bootstrap). Connects as the table
-# owner, which bypasses RLS. Same URL as the request engine when no admin URL is configured.
+# Privileged engine for context-less work (scheduler, auth bootstrap). Connects as renly_admin,
+# which bypasses RLS by attribute (BYPASSRLS), not by owning the tables — the owner is subject to the
+# FORCEd policies. Same URL as the request engine when no admin URL is configured.
 # Small pool: only the scheduler and pre-auth lookups borrow from it.
 admin_engine = create_async_engine(
     settings.admin_database_url,
@@ -59,7 +60,7 @@ AdminSessionLocal = sessionmaker(
 # again, and pooled connections are reused across requests — so binding the GUC to after_begin
 # (rather than setting it once) keeps each transaction correctly scoped and never leaks the value
 # to another request. Sessions with no stashed user id (scheduler, auth bootstrap) are left alone
-# so the owner role keeps its RLS-bypassing, cross-user access.
+# so the admin role keeps its RLS-bypassing, cross-user access.
 @event.listens_for(Session, "after_begin")
 def _apply_rls_user_context(session: Session, transaction, connection) -> None:
     user_id = session.info.get(RLS_USER_INFO_KEY)
@@ -78,7 +79,7 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
         yield session
 
 
-# Privileged session: owner role, bypasses RLS. For pre-auth lookups (login, register, API-key
+# Privileged session: renly_admin, bypasses RLS. For pre-auth lookups (login, register, API-key
 # verification) that have no user context yet. Never use for normal user-scoped request work.
 async def get_admin_session() -> AsyncGenerator[AsyncSession]:
     async with AdminSessionLocal() as session:

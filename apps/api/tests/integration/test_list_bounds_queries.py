@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 # the OFFSET deleted — a fixture that happens to satisfy a rule is not a test of it. So the cap is
 # driven with MAX_LIST_ROWS + 1 rows and the pager with three pages' worth.
 #
-# Owner role, no RLS involved: this is about how much a query returns, not about who may see it.
+# Admin role (renly_admin, BYPASSRLS), no RLS involved: this is about how much a query returns, not about who may see it.
 from app.repositories import collection_repository, pot_ownership_repository, transaction_repository
 from app.utils.pagination import MAX_LIST_ROWS
 

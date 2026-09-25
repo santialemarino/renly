@@ -25,7 +25,7 @@ from sqlalchemy.orm import sessionmaker
 # Plus the two ownership legs, whose per-leg CASE decides which of two differently-denominated columns
 # a cross-currency movement contributes. Summing one column on both sides credits the wrong figure.
 #
-# Owner role, no RLS involved — this is about query semantics, not visibility.
+# Admin role (renly_admin, BYPASSRLS), no RLS involved — this is about query semantics, not visibility.
 from app.repositories import (
     card_settlement_repository,
     expense_repository,

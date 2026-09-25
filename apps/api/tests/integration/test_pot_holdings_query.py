@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 #   * It is filtered by pot_id, so one pot never reads another's holdings — nor a private holding,
 #     which is the fail-closed direction the whole scope model rests on.
 #
-# Owner role, no RLS involved: this is about what the query selects, not about who may see it.
+# Admin role (renly_admin, BYPASSRLS), no RLS involved: this is about what the query selects, not about who may see it.
 from app.repositories import pot_repository
 
 DB_URL = os.getenv("LEDGER_TEST_DATABASE_URL")

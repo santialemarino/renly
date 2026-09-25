@@ -96,7 +96,7 @@ class TestAutoSnapshotSkips:
 class TestScopeInheritance:
     @pytest.mark.asyncio
     async def test_a_co_owned_investments_snapshot_inherits_the_pots_scope(self, monkeypatch):
-        # list_with_ticker is a GLOBAL query — the scheduler runs as the table owner, across every
+        # list_with_ticker is a GLOBAL query — the scheduler runs as renly_admin, across every
         # user — so it picks up co-owned investments as readily as private ones. Taking user_id from
         # the parent without also taking pot_id leaves a row with NEITHER owner, which violates the
         # single-owner CHECK and fails the whole batch: one shared ticker-tracked holding would stop

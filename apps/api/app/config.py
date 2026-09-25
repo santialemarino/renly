@@ -37,11 +37,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Request connections use this URL — a restricted, NOBYPASSRLS, non-owner role subject to
-    # Row-Level Security (SEC-15). Must NOT be the table owner/superuser or RLS is silently bypassed.
+    # Row-Level Security (SEC-15). Must NOT be a superuser or renly_admin, or RLS is silently bypassed.
     database_url: str
     # Privileged connection for work with no user context (scheduler, migrations, auth bootstrap).
-    # Connects as the table owner, which bypasses RLS. Falls back to database_url when unset (e.g.
-    # single-role local setups and tests); production must set a distinct owner URL.
+    # Connects as renly_admin, which has BYPASSRLS — not as the table owner, which the FORCEd
+    # policies apply to. Falls back to database_url when unset, which leaves that work reading nothing
+    # (login included), so every real setup sets it.
     database_admin_url: str | None = None
     jwt_secret: str
     jwt_algorithm: str = "HS256"

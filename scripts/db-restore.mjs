@@ -6,8 +6,9 @@
  * DESTRUCTIVE: the dump uses --clean --if-exists, so matching objects in the target are dropped
  * and recreated. The target is taken ONLY from $RESTORE_DATABASE_URL (never DATABASE_URL, to avoid
  * clobbering your dev DB by accident), and --force is required to proceed. Restore as the table
- * owner. The renly_app role + its grants are NOT in the dump — re-provision them (the role section
- * of apps/api/database/01_create_tables.sql) when restoring into a brand-new database. See
+ * owner. Roles, grants and ownership are NOT in the dump — for a brand-new database, run
+ * apps/api/database/00_roles.sql as a superuser first and re-apply the RLS section's GRANT / REVOKE /
+ * ALTER FUNCTION … OWNER statements from apps/api/database/01_create_tables.sql afterwards. See
  * docs/technical/backups.md for the full procedure.
  */
 import { spawn } from 'child_process';
