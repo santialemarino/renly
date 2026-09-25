@@ -6,7 +6,8 @@ from app.services import settings_service
 
 # The two collection-limit settings are ranged on the way IN and on the way OUT. Unranged, `PUT
 # /settings` stored a 4,000-digit `max_collections` and a `collection_warning_pct` of -5, and the reader
-# handed both straight back to a page that multiplies one by the other.
+# handed both straight back to a page that multiplies one by the other. The read clamps what was stored
+# before the range existed.
 
 
 class TestTheWriteRefusesAnOutOfRangeValue:
@@ -38,17 +39,27 @@ class TestTheWriteRefusesAnOutOfRangeValue:
         assert COLLECTION_WARNING_PCT_RANGE == (1, 100)
 
 
-class TestTheReadDropsAValueStoredBeforeTheRange:
+class TestTheReadClampsAValueStoredBeforeTheRange:
+    # Clamped, not dropped: a legacy 1500 read as None would empty the form and fall the collections
+    # toolbar back to the default of 20, silently disabling "Add collection" for someone who has more.
     @pytest.mark.parametrize(
         ("stored", "expected"),
-        [({"max_collections": 20}, 20), ({"max_collections": 10**4000}, None), ({"max_collections": 0}, None)],
+        [
+            ({"max_collections": 20}, 20),
+            ({"max_collections": 1500}, 1000),
+            ({"max_collections": 10**4000}, 1000),
+            ({"max_collections": 0}, 1),
+            ({"max_collections": -3}, 1),
+            ({"max_collections": "20"}, None),
+            ({}, None),
+        ],
     )
     def test_max_collections(self, stored, expected):
         assert settings_service._settings_to_response(stored)["max_collections"] == expected
 
     @pytest.mark.parametrize(
         ("stored", "expected"),
-        [({"collection_warning_pct": 80}, 80), ({"collection_warning_pct": -5}, None), ({"collection_warning_pct": 101}, None)],
+        [({"collection_warning_pct": 80}, 80), ({"collection_warning_pct": -5}, 1), ({"collection_warning_pct": 101}, 100)],
     )
     def test_collection_warning_pct(self, stored, expected):
         assert settings_service._settings_to_response(stored)["collection_warning_pct"] == expected
