@@ -460,7 +460,7 @@ async def sum_by_credit_card_ids_grouped(
     session: AsyncSession,
     credit_card_ids: list[int],
     user_id: int,
-) -> dict[int, dict[str, float]]:
+) -> dict[int, dict[str, Decimal]]:
     if not credit_card_ids:
         return {}
     result = await session.execute(
@@ -475,9 +475,9 @@ async def sum_by_credit_card_ids_grouped(
         )
         .group_by(ExpenseEntry.credit_card_id, ExpenseEntry.currency)
     )
-    grouped: dict[int, dict[str, float]] = {}
+    grouped: dict[int, dict[str, Decimal]] = {}
     for card_id, currency, total in result.all():
-        grouped.setdefault(card_id, {})[currency] = float(total)
+        grouped.setdefault(card_id, {})[currency] = total
     return grouped
 
 
@@ -487,7 +487,7 @@ async def sum_by_credit_card_ids_monthly(
     session: AsyncSession,
     credit_card_ids: list[int],
     user_id: int,
-) -> list[tuple[int, int, int, str, float]]:
+) -> list[tuple[int, int, int, str, Decimal]]:
     if not credit_card_ids:
         return []
     year_col = func.extract("year", ExpenseEntry.date).label("year")
@@ -507,7 +507,7 @@ async def sum_by_credit_card_ids_monthly(
         .group_by(ExpenseEntry.credit_card_id, year_col, month_col, ExpenseEntry.currency)
         .order_by(year_col, month_col)
     )
-    return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
+    return [(row[0], int(row[1]), int(row[2]), row[3], row[4]) for row in result.all()]
 
 
 # Monthly expense totals for a user grouped by currency.

@@ -196,7 +196,7 @@ async def sum_by_account_ids_dated(session: AsyncSession, account_ids: list[int]
 # expense_repository.sum_by_credit_card_ids_grouped returns, because the two are merged bucket by
 # bucket before compute_card_balances sees them. A card's liability is per currency bucket and a
 # group's expense can be in any of them, including one the card has never seen before.
-async def sum_by_credit_card_ids_grouped(session: AsyncSession, card_ids: list[int]) -> dict[int, dict[str, float]]:
+async def sum_by_credit_card_ids_grouped(session: AsyncSession, card_ids: list[int]) -> dict[int, dict[str, Decimal]]:
     if not card_ids:
         return {}
     result = await session.execute(
@@ -204,7 +204,7 @@ async def sum_by_credit_card_ids_grouped(session: AsyncSession, card_ids: list[i
         .where(SharedExpense.credit_card_id.in_(card_ids))
         .group_by(SharedExpense.credit_card_id, SharedExpense.currency)
     )
-    grouped: dict[int, dict[str, float]] = {}
+    grouped: dict[int, dict[str, Decimal]] = {}
     for card_id, currency, total in result.all():
         grouped.setdefault(card_id, {})[currency] = total
     return grouped
@@ -218,7 +218,7 @@ async def sum_by_credit_card_ids_grouped(session: AsyncSession, card_ids: list[i
 # card line described different sets of charges. A card's whole charge is its owner's liability
 # whoever consumed what it bought, which is why there is no split here and no user filter: the rows
 # belong to the group, RLS scopes them, and a card only ever carries its own owner's charges.
-async def sum_by_credit_card_ids_monthly(session: AsyncSession, card_ids: list[int]) -> list[tuple[int, int, int, str, float]]:
+async def sum_by_credit_card_ids_monthly(session: AsyncSession, card_ids: list[int]) -> list[tuple[int, int, int, str, Decimal]]:
     if not card_ids:
         return []
     year_col = func.extract("year", SharedExpense.date).label("year")
@@ -235,7 +235,7 @@ async def sum_by_credit_card_ids_monthly(session: AsyncSession, card_ids: list[i
         .group_by(SharedExpense.credit_card_id, year_col, month_col, SharedExpense.currency)
         .order_by(year_col, month_col)
     )
-    return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
+    return [(row[0], int(row[1]), int(row[2]), row[3], row[4]) for row in result.all()]
 
 
 # Counts the shared expenses charged to one card, for the card-delete guard. No user filter: RLS

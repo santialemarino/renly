@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from app.domain.money import MONEY_PLACES, quantize
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -597,6 +598,29 @@ class TestConvertValue:
 
     def test_missing_target_rate_returns_none(self):
         assert convert_value(Decimal("100"), "USD", "CHF", self.RATE_MAP) is None
+
+    # Rounding is a PRODUCT decision, and there is one of it. `domain/money.py` picks ROUND_HALF_UP
+    # because these are figures a person reads and checks by hand; `convert_value` used to call
+    # `.quantize()` with no mode, which takes Decimal's default of ROUND_HALF_EVEN — banker's
+    # rounding — so a converted amount landing exactly on a half went the OTHER way from the same
+    # figure anywhere else in the app. Half of every exactly-half result disagreed.
+    def test_a_result_landing_exactly_on_a_half_rounds_up_like_every_other_money_figure(self):
+        # 4.69 ARS at 1 USD = 2 ARS is exactly 2.345 USD. Banker's gives 2.34 (to the even digit);
+        # the domain rule gives 2.35. Asserted against the literal, not against `quantize`, so a
+        # change to the domain rule shows up here as a decision rather than as silent agreement.
+        halves = {"USD": Decimal("1"), "ARS": Decimal("2")}
+        assert convert_value(Decimal("4.69"), "ARS", "USD", halves) == Decimal("2.35")
+
+    def test_it_agrees_with_the_domain_rule_across_every_exact_half(self):
+        # The breadth behind the single case above: every value that lands on a half at all. A
+        # one-case guard passes on a mode that happens to agree at 2.345 and differs elsewhere.
+        halves = {"USD": Decimal("1"), "ARS": Decimal("2")}
+        disagreements = [
+            cents
+            for cents in range(1, 400)
+            if convert_value(Decimal(cents) / 100, "ARS", "USD", halves) != quantize(Decimal(cents) / 200, MONEY_PLACES)
+        ]
+        assert disagreements == []
 
     def test_eur_to_ars_via_pivot(self):
         # 100 EUR → USD: 100 / 0.92 = 108.6956... . USD → ARS: * 1400 = 152173.9130... .

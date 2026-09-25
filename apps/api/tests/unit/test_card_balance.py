@@ -11,8 +11,8 @@ class TestComputeCardBalances:
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "USD"},
-            expense_grouped={1: {"USD": 100.0}},
-            settlement_grouped={1: {"USD": 30.0}},
+            expense_grouped={1: {"USD": Decimal("100.0")}},
+            settlement_grouped={1: {"USD": Decimal("30.0")}},
         )
         buckets = result[1]
         assert len(buckets) == 1
@@ -37,8 +37,8 @@ class TestComputeCardBalances:
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "ARS"},
-            expense_grouped={1: {"ARS": 50000.0, "USD": 100.0}},
-            settlement_grouped={1: {"ARS": 20000.0, "USD": 40.0}},
+            expense_grouped={1: {"ARS": Decimal("50000.0"), "USD": Decimal("100.0")}},
+            settlement_grouped={1: {"ARS": Decimal("20000.0"), "USD": Decimal("40.0")}},
         )
         buckets = result[1]
         assert len(buckets) == 2
@@ -55,7 +55,7 @@ class TestComputeCardBalances:
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "USD"},
-            expense_grouped={1: {"USD": 100.0, "ARS": 1200.0}},
+            expense_grouped={1: {"USD": Decimal("100.0"), "ARS": Decimal("1200.0")}},
             settlement_grouped={},
         )
         buckets = result[1]
@@ -69,8 +69,8 @@ class TestComputeCardBalances:
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "ARS"},
-            expense_grouped={1: {"USD": 100.0}},
-            settlement_grouped={1: {"USD": 100.0}},
+            expense_grouped={1: {"USD": Decimal("100.0")}},
+            settlement_grouped={1: {"USD": Decimal("100.0")}},
         )
         buckets = result[1]
         # Primary ARS bucket: no activity -> 0.
@@ -84,8 +84,8 @@ class TestComputeCardBalances:
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "ARS"},
-            expense_grouped={1: {"ARS": 5000.0}},
-            settlement_grouped={1: {"ARS": 8000.0}},
+            expense_grouped={1: {"ARS": Decimal("5000.0")}},
+            settlement_grouped={1: {"ARS": Decimal("8000.0")}},
         )
         buckets = result[1]
         assert len(buckets) == 1
@@ -97,12 +97,12 @@ class TestComputeCardBalances:
             card_ids=[1, 2],
             card_currencies={1: "USD", 2: "ARS"},
             expense_grouped={
-                1: {"USD": 50.0},
-                2: {"ARS": 10000.0, "USD": 10.0},
+                1: {"USD": Decimal("50.0")},
+                2: {"ARS": Decimal("10000.0"), "USD": Decimal("10.0")},
             },
             settlement_grouped={
-                1: {"USD": 20.0},
-                2: {"ARS": 5000.0},
+                1: {"USD": Decimal("20.0")},
+                2: {"ARS": Decimal("5000.0")},
             },
         )
         # Card 1: single USD bucket, 50 - 20 = 30.
@@ -121,7 +121,7 @@ class TestComputeCardBalances:
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "USD"},
-            expense_grouped={1: {"ARS": 1000.0, "EUR": 50.0}},
+            expense_grouped={1: {"ARS": Decimal("1000.0"), "EUR": Decimal("50.0")}},
             settlement_grouped={},
         )
         currencies = [b.currency for b in result[1]]

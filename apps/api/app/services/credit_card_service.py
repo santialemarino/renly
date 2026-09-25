@@ -72,8 +72,8 @@ async def get_card(session: AsyncSession, card_id: int, user: User) -> CreditCar
 def compute_card_balances(
     card_ids: list[int],
     card_currencies: dict[int, str],
-    expense_grouped: dict[int, dict[str, float]],
-    settlement_grouped: dict[int, dict[str, float]],
+    expense_grouped: dict[int, dict[str, Decimal]],
+    settlement_grouped: dict[int, dict[str, Decimal]],
 ) -> dict[int, list[CardBucketBalance]]:
     result: dict[int, list[CardBucketBalance]] = {}
     for card_id in card_ids:
@@ -86,8 +86,8 @@ def compute_card_balances(
         ordered = ([primary] if primary else []) + sorted(c for c in active if c != primary)
         buckets: list[CardBucketBalance] = []
         for cur in ordered:
-            expenses = Decimal(str(expense_by_cur.get(cur, 0)))
-            settlements = Decimal(str(settlement_by_cur.get(cur, 0)))
+            expenses = expense_by_cur.get(cur, ZERO)
+            settlements = settlement_by_cur.get(cur, ZERO)
             buckets.append(CardBucketBalance(currency=cur, balance=expenses - settlements))
         result[card_id] = buckets
     return result
@@ -113,7 +113,7 @@ async def get_card_balances(
     for card_id, by_currency in shared_grouped.items():
         card_buckets = expense_grouped.setdefault(card_id, {})
         for currency, total in by_currency.items():
-            card_buckets[currency] = Decimal(str(card_buckets.get(currency, 0))) + Decimal(str(total))
+            card_buckets[currency] = card_buckets.get(currency, ZERO) + total
     settlement_grouped = await card_settlement_repository.sum_by_card_ids_grouped(session, card_ids)
     return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
 
@@ -138,15 +138,15 @@ async def get_card_balances(
 # The zero-activity primary bucket compute_card_balances always emits has no counterpart here — a month
 # in which nothing moved is not a month this series has an entry for, and a zero adds nothing anyway.
 def compute_card_bucket_series(
-    expense_monthly: list[tuple[int, int, int, str, float]],
-    settlement_monthly: list[tuple[int, int, int, str, float]],
+    expense_monthly: list[tuple[int, int, int, str, Decimal]],
+    settlement_monthly: list[tuple[int, int, int, str, Decimal]],
 ) -> dict[tuple[int, int], dict[tuple[int, str], Decimal]]:
     deltas: dict[tuple[int, int], dict[tuple[int, str], Decimal]] = {}
     for rows, sign in ((expense_monthly, 1), (settlement_monthly, -1)):
         for card_id, year, month, currency, total in rows:
             per_month = deltas.setdefault((year, month), {})
             bucket = (card_id, currency)
-            per_month[bucket] = per_month.get(bucket, ZERO) + Decimal(str(total)) * sign
+            per_month[bucket] = per_month.get(bucket, ZERO) + total * sign
     running: dict[tuple[int, str], Decimal] = {}
     series: dict[tuple[int, int], dict[tuple[int, str], Decimal]] = {}
     for year_month in sorted(deltas):

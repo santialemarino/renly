@@ -8,6 +8,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from app.domain.currency import get_ars_pair, is_supported
+from app.domain.money import MONEY_PLACES, quantize
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -381,6 +382,14 @@ def can_convert(from_currency: str, to_currency: str) -> bool:
 # from_rate * to_rate` runs under Python's default 28-digit Decimal precision — which
 # produces 26-digit results on non-terminating divisions (e.g. ARS -> BRL via USD).
 # Without quantization those overflow the Pydantic validator and surface as 500s.
+#
+# ▸ Through `domain.money.quantize`, so this rounds HALF-UP like every other money figure in the app.
+# It used to call `.quantize()` bare, which takes Decimal's default of ROUND_HALF_EVEN — banker's
+# rounding — so a converted amount landing exactly on a half went the opposite way from the same
+# figure anywhere else: `convert_value(4.69, ARS->USD)` at 1 USD = 2 ARS gave 2.34 where the domain
+# rule gives 2.35. Half of every exactly-half result disagreed. The rounding mode is a product
+# decision rather than arithmetic — the money module says so in its own comment, and money a person
+# reads and checks by hand rounds half up — so there is one rule and this is not a second copy of it.
 def convert_value(
     value: Decimal,
     from_currency: str,
@@ -393,7 +402,7 @@ def convert_value(
     to_rate = rate_map.get(to_currency)
     if from_rate is None or to_rate is None:
         return None
-    return (value / from_rate * to_rate).quantize(Decimal("0.01"))
+    return quantize(value / from_rate * to_rate, MONEY_PLACES)
 
 
 # Converts a value into the requested display currency at the rate in effect on as_of_date.

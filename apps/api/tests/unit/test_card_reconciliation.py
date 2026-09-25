@@ -229,7 +229,7 @@ class TestSignedAdjustment:
         balances = credit_card_service.compute_card_balances(
             [7],
             {7: "ARS"},
-            {7: {"ARS": 800.0}},
+            {7: {"ARS": Decimal("800.0")}},
             {},
         )
         assert balances[7] == [CardBucketBalance(currency="ARS", balance=Decimal("800"))]
