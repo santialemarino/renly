@@ -9,13 +9,22 @@ const CONTAINER_NAME = `renly-db-local-${LOCAL_PORT}`;
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '']);
 
-// Parse DATABASE_URL from a .env file.
+// Parse the SOURCE url from a .env file: DATABASE_ADMIN_URL, falling back to DATABASE_URL.
 // Handles both postgresql:// and postgresql+asyncpg:// (SQLAlchemy async format).
+//
+// The admin url first, and that is the whole correctness of this script. It used to read
+// DATABASE_URL, which names the RESTRICTED request role — a role with no user context and, now that
+// the tables FORCE row-level security, no exemption from any policy. The fork came up EMPTY and the
+// script printed "Success!", which is the failure mode its sibling db-backup.mjs already guards
+// against. pg_dump does exit 1 under FORCE rather than writing nothing silently, but a script that
+// reaches for the wrong role at all is one restore away from the quiet version.
 function parseEnv(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
 
-  const match = content.match(/^DATABASE_URL\s*=\s*(.+)$/m);
-  if (!match) throw new Error('DATABASE_URL not found in apps/api/.env');
+  const match =
+    content.match(/^DATABASE_ADMIN_URL\s*=\s*(.+)$/m) ??
+    content.match(/^DATABASE_URL\s*=\s*(.+)$/m);
+  if (!match) throw new Error('Neither DATABASE_ADMIN_URL nor DATABASE_URL found in apps/api/.env');
 
   // Strip driver suffix (e.g. +asyncpg) so pg tools can parse it.
   const raw = match[1].trim().replace(/^postgresql\+\w+:\/\//, 'postgresql://');

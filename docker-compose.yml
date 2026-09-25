@@ -33,8 +33,11 @@ services:
       # In-container hosts are service names. Local compose runs single-role (the owner for both
       # URLs), so RLS is bypassed here like any single-role local setup; production uses the
       # two-role env contract from the deploy runbook instead of compose.
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://renly:renly@postgres:5432/renly}
-      DATABASE_ADMIN_URL: ${DATABASE_ADMIN_URL:-postgresql+asyncpg://renly:renly@postgres:5432/renly}
+      # Neither default names the owner, and that is not tidiness: the policied tables carry FORCE
+      # ROW LEVEL SECURITY, so an owner connection reads nothing. Both roles are provisioned by
+      # database/01_create_tables.sql, which db-init applies.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://renly_app:renly_app@postgres:5432/renly}
+      DATABASE_ADMIN_URL: ${DATABASE_ADMIN_URL:-postgresql+asyncpg://renly_admin:renly_admin@postgres:5432/renly}
       # Local-dev placeholder (32+ chars, validated at startup). Must equal web's NEXTAUTH_SECRET.
       JWT_SECRET: ${JWT_SECRET:-renly-local-compose-dev-secret-0123456789}
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:3000}

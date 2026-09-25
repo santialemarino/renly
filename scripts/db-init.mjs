@@ -77,9 +77,11 @@ async function main() {
   }
 
   console.log(
-    'Database initialized (schema also provisions the restricted renly_app role + RLS policies). In apps/api/.env set:\n' +
-      '  DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly        (restricted, RLS-subject request role)\n' +
-      '  DATABASE_ADMIN_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly           (owner role: scheduler, migrations, auth bootstrap)',
+    'Database initialized (the schema also provisions renly_admin + renly_app and FORCEs RLS). In apps/api/.env set:\n' +
+      '  DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly            (restricted, RLS-subject request role)\n' +
+      '  DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly  (BYPASSRLS: scheduler, migrations, auth bootstrap)\n' +
+      '\nThe OWNER role is not in either line and should not be: the tables FORCE row-level security,\n' +
+      'so a connection pointed at the owner reads nothing rather than everything.',
   );
 }
 
