@@ -36,7 +36,7 @@ pytestmark = pytest.mark.skipif(
 _EMAIL = "notification_dedupe@test.local"
 
 
-# Seeds one account on the owner role and yields its id plus a session factory, then removes it (the
+# Seeds one account on the admin role and yields its id plus a session factory, then removes it (the
 # notifications cascade with it).
 @pytest_asyncio.fixture
 async def seeded():

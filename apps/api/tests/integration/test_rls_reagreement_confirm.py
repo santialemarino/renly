@@ -315,7 +315,7 @@ async def test_a_member_denied_the_pot_cannot_confirm_the_change_to_their_OWN_sh
     """
     # RLS refuses by FILTERING, so a bare "0 rows" is also true of a fixture whose id is wrong. Nobody
     # can confirm this particular event — its affected seat IS the denied member — so the positive
-    # control has to be that the row exists and is the shape under test, asserted as the owner.
+    # control has to be that the row exists and is the shape under test, asserted as the admin role.
     async with seeded["admin"]() as admin:
         kind = (
             await admin.execute(text("SELECT type::text FROM pot_ownership_events WHERE id = :i"), {"i": seeded["events"]["denied_is_giver"]})

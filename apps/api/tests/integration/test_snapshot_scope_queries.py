@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 #   * bulk_upsert writes pot_id. Omitting it produces a row with neither owner, which only the
 #     database's single-owner CHECK will tell you about.
 #
-# Owner role, no RLS involved — this is about query semantics, not visibility.
+# Admin role (renly_admin, BYPASSRLS), no RLS involved — this is about query semantics, not visibility.
 from app.models.snapshot import InvestmentSnapshot
 from app.repositories import snapshot_repository
 
