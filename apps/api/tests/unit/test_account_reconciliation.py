@@ -1033,6 +1033,59 @@ class TestSharedAccountAnnouncement:
         assert captured["dispatch"].await_args.args[2]["amount"] == "200"
 
     @pytest.mark.asyncio
+    async def test_a_replace_that_lands_on_zero_sends_one_removal_message_at_the_superseded_amount(self, monkeypatch):
+        # Non-zero -> zero. The new row moves nothing, but the superseded adjustment still comes back OUT
+        # of every share — so this is a movement, and the one message is that removal, stating the amount
+        # that moved. Sending nothing here moved every co-owner's share with no word to any of them.
+        captured = _wire_shared(
+            monkeypatch,
+            _shared_account(),
+            last_reconciled=TODAY,
+            superseded=_reconciliation(id=41, user_id=None, pot_id=4, as_of_date=TODAY, difference=Decimal("-120")),
+        )
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
+
+        removal, creation = (call.kwargs for call in captured["audit"].await_args_list)
+        assert (removal["action"], removal["payload"]["amount"]) == (AuditAction.deleted, "120")
+        assert (creation["action"], creation["payload"]["variant"]) == (AuditAction.created, "matched")
+        captured["dispatch"].assert_awaited_once()
+        payload = captured["dispatch"].await_args.args[2]
+        assert (payload["variant"], payload["amount"]) == ("reconciliation_removed", "120")
+
+    @pytest.mark.asyncio
+    async def test_a_replace_from_zero_to_non_zero_sends_the_new_adjustment_once(self, monkeypatch):
+        # Zero -> non-zero: only the new adjustment moved anything, and it is the one message.
+        captured = _wire_shared(
+            monkeypatch,
+            _shared_account(),
+            last_reconciled=TODAY,
+            superseded=_reconciliation(id=41, user_id=None, pot_id=4, as_of_date=TODAY, difference=Decimal("0")),
+        )
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
+
+        captured["dispatch"].assert_awaited_once()
+        payload = captured["dispatch"].await_args.args[2]
+        assert (payload["variant"], payload["amount"]) == ("reconciliation_shortfall", "200")
+
+    @pytest.mark.asyncio
+    async def test_a_replace_from_zero_to_zero_moves_nothing_and_so_sends_nothing(self, monkeypatch):
+        # Zero -> zero is the no-movement rule every other path follows: both halves are in the trail,
+        # and no share moved, so no message.
+        captured = _wire_shared(
+            monkeypatch,
+            _shared_account(),
+            last_reconciled=TODAY,
+            superseded=_reconciliation(id=41, user_id=None, pot_id=4, as_of_date=TODAY, difference=Decimal("0")),
+        )
+
+        await svc.create_or_replace(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("1000"))
+
+        assert [call.kwargs["action"] for call in captured["audit"].await_args_list] == [AuditAction.deleted, AuditAction.created]
+        captured["dispatch"].assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_a_replace_on_a_PRIVATE_account_still_announces_nothing(self, monkeypatch):
         # The removal is audited only where there is a group to audit it to. A private account has no
         # trail and no audience, and the replace must not invent either.
