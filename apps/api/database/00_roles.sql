@@ -26,6 +26,9 @@
 --
 -- The passwords are local-dev defaults; production provisions both login roles with real secrets.
 
+-- Stop at the first error rather than report it and carry on to exit 0.
+\set ON_ERROR_STOP on
+
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin') THEN
     CREATE ROLE renly_admin LOGIN PASSWORD 'renly_admin' NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;

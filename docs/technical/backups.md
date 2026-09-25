@@ -63,15 +63,25 @@ RESTORE_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' \
   `DATABASE_URL`, to avoid clobbering your dev DB), and `--force` is required.
 - Restore **as the table owner** (`psql` runs with `ON_ERROR_STOP=1`).
 - **Role caveat:** `pg_dump` does not include roles, `--no-owner` drops ownership and `--no-acl`
-  omits grants. When restoring into a **brand-new** database: provision the roles first by running
-  [`apps/api/database/00_roles.sql`](../../apps/api/database/00_roles.sql) as a superuser against the
-  target, restore, then re-apply every `GRANT`, `REVOKE` and `ALTER FUNCTION … OWNER TO` statement
-  in the Row-Level Security section of
+  omits grants and default privileges. When restoring into a **brand-new** database: provision the
+  roles first by running [`apps/api/database/00_roles.sql`](../../apps/api/database/00_roles.sql) as a
+  superuser against the target (it also restores `renly_admin`'s default privileges), restore, then
+  re-apply, as the owner, every `GRANT`, `REVOKE`, `ALTER DEFAULT PRIVILEGES` and
+  `ALTER FUNCTION … OWNER TO` statement in the Row-Level Security section of
   [`apps/api/database/01_create_tables.sql`](../../apps/api/database/01_create_tables.sql) — all of
-  them, in order: several tables are append-only through a `REVOKE`, and the three `SECURITY DEFINER`
-  policy helpers must be handed back to `renly_policy_definer`, or on a NOSUPERUSER owner every group
-  and pot read fails with `stack depth limit exceeded`. Then point `DATABASE_URL` at `renly_app` and
-  `DATABASE_ADMIN_URL` at `renly_admin`. The RLS policies, the `FORCE` flags and the functions
+  them, in order: several tables are append-only through a `REVOKE`, the owner's default privileges are
+  what give `renly_app` its grants on tables created later, and the three `SECURITY DEFINER` policy
+  helpers must be handed back to `renly_policy_definer`, or on a NOSUPERUSER owner every group and pot
+  read fails with `stack depth limit exceeded`. This extracts exactly those statements (multi-line ones
+  included):
+
+  ```bash
+  sed -n '/^-- Row-Level Security/,$p' apps/api/database/01_create_tables.sql \
+    | awk '/^(GRANT|REVOKE|ALTER DEFAULT PRIVILEGES|ALTER FUNCTION)/,/;$/' \
+    | psql -v ON_ERROR_STOP=1 "<owner url>"
+  ```
+
+  Then point `DATABASE_URL` at `renly_app` and `DATABASE_ADMIN_URL` at `renly_admin`. The RLS policies, the `FORCE` flags and the functions
   themselves **are** in the dump and restore automatically — which means a restored database is
   FORCEd from the first moment, and reading it needs `renly_admin` rather than whoever ran the
   restore.

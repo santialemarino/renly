@@ -1,5 +1,32 @@
 -- Renly — PostgreSQL Schema
--- Run this on a fresh database to initialize all tables (rebuild from zero).
+-- Run this on a fresh database to initialize all tables (rebuild from zero), as the table owner,
+-- AFTER apps/api/database/00_roles.sql has been run as a superuser.
+
+-- Stop at the first error. Without this psql reports each failed statement and carries on, exiting 0
+-- with a half-built schema — tables FORCEd but with no grants, helpers owned by the wrong role — which
+-- the next step (`alembic stamp head`) would then happily mark as current. Set here rather than left to
+-- each caller's command line, so no way of running the file can forget it.
+\set ON_ERROR_STOP on
+
+-- Refuse to start if 00_roles.sql has not run, before anything is created: every role below is granted
+-- to or handed objects further down, and failing there would leave the tables behind it already built.
+-- The membership check is what lets this file hand the policy helpers to renly_policy_definer.
+DO $$
+DECLARE
+  missing TEXT := (
+    SELECT string_agg(r, ', ') FROM unnest(ARRAY['renly_admin', 'renly_app', 'renly_policy_definer']) AS r
+    WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r)
+  );
+BEGIN
+  IF missing IS NOT NULL THEN
+    RAISE EXCEPTION 'roles missing: %', missing
+      USING HINT = 'Run apps/api/database/00_roles.sql as a superuser against this database first.';
+  END IF;
+  IF NOT pg_has_role(CURRENT_USER, 'renly_policy_definer', 'MEMBER') THEN
+    RAISE EXCEPTION '% cannot act as renly_policy_definer', CURRENT_USER
+      USING HINT = 'Run apps/api/database/00_roles.sql as a superuser against this database first (connected to it, so it grants the database owner that membership), and apply this file as the database owner.';
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Enums
@@ -1831,8 +1858,8 @@ CREATE TRIGGER trg_notification_preferences_updated_at
 
 -- The roles themselves, their memberships and renly_admin's default privileges are provisioned by
 -- 00_roles.sql, which a SUPERUSER runs before this file. Everything below is what the owner can do
--- for itself; a role this file names that does not exist yet fails here, loudly, rather than being
--- created by a statement the NOSUPERUSER owner would be refused.
+-- for itself. A missing role is caught by the check at the top of this file, before any table exists,
+-- rather than being created by a statement the NOSUPERUSER owner would be refused.
 
 -- Resolves the current request's user id from the per-transaction GUC. The two-arg
 -- current_setting(..., true) returns NULL when the GUC was never set (instead of erroring),

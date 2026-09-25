@@ -110,8 +110,8 @@ If you prefer not to use `pnpm db:init`, apply the schema manually after Postgre
 
 ```bash
 docker compose up -d postgres
-docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/00_roles.sql
-docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/01_create_tables.sql
+docker exec -i renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly < apps/api/database/00_roles.sql
+docker exec -i renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly < apps/api/database/01_create_tables.sql
 docker compose up --build
 ```
 
@@ -129,8 +129,8 @@ Then set `DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/r
 To apply the schema on a fresh database (roles first — the schema grants to them):
 
 ```bash
-docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/00_roles.sql
-docker exec -i renly-postgres psql -U renly -d renly < apps/api/database/01_create_tables.sql
+docker exec -i renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly < apps/api/database/00_roles.sql
+docker exec -i renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly < apps/api/database/01_create_tables.sql
 ```
 
 Or simply run `pnpm db:init` which does both steps.

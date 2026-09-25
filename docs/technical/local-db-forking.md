@@ -145,6 +145,6 @@ docker run --name renly-db-local-5433 \
   -p 5433:5432 \
   -d postgres:16-alpine
 
-docker exec -i renly-db-local-5433 psql -U renly -d renly < apps/api/database/00_roles.sql
-docker exec -i renly-db-local-5433 psql -U renly -d renly < apps/api/database/01_create_tables.sql
+docker exec -i renly-db-local-5433 psql -v ON_ERROR_STOP=1 -U renly -d renly < apps/api/database/00_roles.sql
+docker exec -i renly-db-local-5433 psql -v ON_ERROR_STOP=1 -U renly -d renly < apps/api/database/01_create_tables.sql
 ```

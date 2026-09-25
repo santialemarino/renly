@@ -68,7 +68,7 @@ async function main() {
   });
 
   console.log('Applying schema (01_create_tables.sql)...');
-  execSync(`docker exec -i ${CONTAINER} psql -U renly -d renly`, {
+  execSync(`docker exec -i ${CONTAINER} psql -v ON_ERROR_STOP=1 -U renly -d renly`, {
     input: fs.readFileSync(SCHEMA_PATH, 'utf8'),
     stdio: ['pipe', 'inherit', 'inherit'],
     cwd: ROOT,

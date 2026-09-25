@@ -112,7 +112,7 @@ CREATE DATABASE renly OWNER renly;
 
 ```bash
 # 2. Everything else the owner cannot do for itself, connected to that database. Idempotent.
-psql -U <superuser> -d renly -f apps/api/database/00_roles.sql
+psql -v ON_ERROR_STOP=1 -U <superuser> -d renly -f apps/api/database/00_roles.sql
 # then set real passwords on the two login roles:
 psql -U <superuser> -d renly -c "ALTER ROLE renly_admin PASSWORD '<secret>'" -c "ALTER ROLE renly_app PASSWORD '<secret>'"
 ```
@@ -125,14 +125,17 @@ privileges, so tables and sequences a migration creates reach `renly_app` with t
 Then build the schema **as the owner**, so the owner owns what it creates:
 
 ```bash
-psql -U renly -d renly -f apps/api/database/01_create_tables.sql
+psql -v ON_ERROR_STOP=1 -U renly -d renly -f apps/api/database/01_create_tables.sql
 cd apps/api && DATABASE_ADMIN_URL=<renly_admin url> uv run alembic stamp head
 ```
 
 `01_create_tables.sql` creates no role and grants no membership — a NOSUPERUSER owner would be refused
 both, and the refusal of a membership grant is only a `NOTICE`, which is exactly the kind of failure
-nobody reads. A role it names that does not exist makes it fail outright, which is the signal to run
-`00_roles.sql` first.
+nobody reads. Instead it checks, before creating anything, that the three roles exist and that the
+role applying it may act as `renly_policy_definer`, and stops with a hint naming `00_roles.sql` if not.
+Both files set `ON_ERROR_STOP` themselves (the `-v ON_ERROR_STOP=1` above says the same thing twice on
+purpose), because psql's default is to report a failed statement and carry on: a schema run that way
+exits 0 half-built, and the `alembic stamp head` after it would mark that as current.
 
 ## Migrations
 
