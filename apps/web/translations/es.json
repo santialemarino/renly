@@ -18,6 +18,16 @@
         "label": "Ir a la página de inicio"
       }
     },
+    "errorBoundary": {
+      "documentTitle": "Algo salió mal",
+      "title": "Algo salió mal",
+      "description": "No pudimos cargar esta página. No se perdió nada de lo que guardaste: volvé a intentarlo en un momento.",
+      "retry": "Reintentar",
+      "home": "Ir a la página de inicio"
+    },
+    "loading": {
+      "status": "Cargando la página…"
+    },
     "form": {
       "errors": {
         "required": "Este campo es requerido",
