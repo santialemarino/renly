@@ -5,6 +5,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { XIcon } from 'lucide-react';
 
 import { cn } from '@repo/ui/lib';
+import { useReturnFocus } from '../hooks/use-return-focus';
 import { useUiLabels } from './ui-labels';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -44,12 +45,17 @@ function DialogContent({
   children,
   showCloseButton = true,
   closeOnClickOutside = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   closeOnClickOutside?: boolean;
 }) {
   const labels = useUiLabels();
+  // Focus goes back to whatever opened the dialog — Radix only does that for its own Dialog.Trigger,
+  // and nearly every dialog here is controlled. See useReturnFocus.
+  const returnFocus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus });
 
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -79,6 +85,8 @@ function DialogContent({
           }
           props.onInteractOutside?.(e);
         }}
+        onOpenAutoFocus={returnFocus.onOpenAutoFocus}
+        onCloseAutoFocus={returnFocus.onCloseAutoFocus}
         {...props}
       >
         {children}
