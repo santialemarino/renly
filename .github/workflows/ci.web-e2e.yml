@@ -1,0 +1,232 @@
+name: CI Web E2E
+
+run-name: 'CI Web E2E by @${{ github.actor }}'
+
+# No path filters, deliberately. The suite drives the API, the web app and packages/ui together, so
+# almost any change can break it — and this is meant to become a REQUIRED check, which a
+# path-filtered workflow cannot be: a PR that skips the workflow leaves the required check pending
+# forever instead of passing.
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# A new push to a PR supersedes the run in flight; a push to main always runs to the end.
+concurrency:
+  group: ci-web-e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The same role split as local dev and production: requests on the RLS-subject renly_app, the
+  # scheduler, migrations and auth bootstrap on the BYPASSRLS renly_admin. Both roles come from
+  # database/00_roles.sql, which `pnpm db:init` applies. The database is compose's own `renly`.
+  DATABASE_URL: postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly
+  DATABASE_ADMIN_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+  EMAIL_PROVIDER: console
+  NEXT_PUBLIC_API_URL: http://localhost:8000
+  NEXTAUTH_URL: http://localhost:3000
+  PLAYWRIGHT_BASE_URL: http://localhost:3000
+  E2E_API_URL: http://localhost:8000
+  # A throwaway account that exists only inside this job's database.
+  E2E_EMAIL: e2e-ci@example.com
+
+jobs:
+  e2e-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'pnpm'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Generate this run's secrets
+        # The JWT secret the API signs with and NextAuth verifies with must be equal and 32+ chars;
+        # the password is the throwaway account's. Both live only for this job, and are masked.
+        run: |
+          secret="$(openssl rand -hex 32)"
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::$secret"
+          echo "::add-mask::$password"
+          {
+            echo "JWT_SECRET=$secret"
+            echo "NEXTAUTH_SECRET=$secret"
+            echo "E2E_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install API dependencies
+        working-directory: apps/api
+        run: uv sync --no-install-project
+
+      - name: Initialize the database
+        # The local flow, unchanged: compose's Postgres, then 00_roles.sql, 01_create_tables.sql and
+        # an Alembic stamp.
+        run: pnpm db:init
+
+      - name: Build UI package
+        run: pnpm build:ui
+
+      - name: Build web
+        # A production build, so no test's budget is spent compiling a route on first request.
+        run: pnpm build:web
+
+      - name: Seed exchange rates
+        # The API fetches live rates at startup, from external providers. These rows make the run
+        # independent of them: today's are the fallback a provider outage would otherwise leave
+        # missing (a successful fetch replaces them — same date and pair), and the older month's are
+        # rates NO fetch writes, so the card charge dated then converts differently in its own month
+        # than today. That difference is what gives the conversion-basis spec something to catch.
+        # Seeded before any API starts, because the API caches the rates it reads.
+        run: |
+          today="$(date -u +%F)"
+          past="$(date -u -d '3 months ago' +%F)"
+          docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly -c "
+            insert into exchange_rates (date, pair, rate, source) values
+              ('$today', 'USD_ARS_OFICIAL', 1500, 'ci-seed'),
+              ('$today', 'USD_ARS_MEP', 1550, 'ci-seed'),
+              ('$today', 'USD_ARS_BLUE', 1560, 'ci-seed'),
+              ('$today', 'USD_BRL', 5.2, 'ci-seed'),
+              ('$today', 'USD_EUR', 0.88, 'ci-seed'),
+              ('$today', 'USD_GBP', 0.75, 'ci-seed'),
+              ('$past', 'USD_ARS_OFICIAL', 1000, 'ci-seed'),
+              ('$past', 'USD_ARS_MEP', 1050, 'ci-seed'),
+              ('$past', 'USD_ARS_BLUE', 1060, 'ci-seed')
+            on conflict (date, pair) do nothing"
+
+      - name: Create the harness account
+        # The authenticated specs run as a real account and assume what a lived-in one has, so this
+        # gives the throwaway one exactly that: verified; two display currencies; a USD card owing a
+        # charge from three months ago and one from today, so the dashboard's conversion-basis check
+        # has a foreign balance whose history converts at a different rate than today; and more
+        # expenses than one page holds, so the list renders its pager. The filler is dated in the
+        # past so an expense a spec adds today still lands on page one.
+        #
+        # Registration needs SIGNUP_MODE=open, but the invite-gate spec needs the launch default
+        # (invite) — so this runs against a short-lived open-mode API, stopped before the real one.
+        working-directory: apps/api
+        env:
+          SIGNUP_MODE: open
+        run: |
+          nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/api-signup.log 2>&1 &
+          echo $! > /tmp/api-signup.pid
+          timeout 60 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 1; done'
+
+          api() { curl -sf -X "$1" "http://localhost:8000$2" -H 'content-type: application/json' "${@:3}"; }
+
+          api POST /auth/register -d "$(jq -n --arg e "$E2E_EMAIL" --arg p "$E2E_PASSWORD" \
+            '{name: "E2E CI", email: $e, password: $p, language: "en"}')" > /dev/null
+          docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly \
+            -c "update users set email_verified_at = now() where email = '$E2E_EMAIL'"
+
+          token="$(api POST /auth/login -d "$(jq -n --arg e "$E2E_EMAIL" --arg p "$E2E_PASSWORD" \
+            '{email: $e, password: $p}')" | jq -r .access_token)"
+          echo "::add-mask::$token"
+          authed() { api "$@" -H "Authorization: Bearer $token"; }
+
+          authed PUT /settings -d '{"primary_currency": "ARS", "secondary_currency": "USD"}' > /dev/null
+          card="$(authed POST /credit-cards \
+            -d '{"name": "E2E card", "closing_day": 25, "due_day": 5, "currency": "USD"}' | jq -r .id)"
+          charge() {
+            authed POST /expenses -d "$(jq -n --arg d "$1" --arg a "$2" --argjson c "$card" \
+              '{date: $d, amount: $a, currency: "USD", payment_method: "credit_card", credit_card_id: $c}')" \
+              > /dev/null
+          }
+          charge "$(date -u -d '3 months ago' +%F)" 200.00
+          charge "$(date -u +%F)" 123.45
+
+          filler_date="$(date -u -d '45 days ago' +%F)"
+          for i in $(seq 1 30); do
+            authed POST /expenses -d "$(jq -n --arg d "$filler_date" --arg a "$((1000 + i))" \
+              '{date: $d, amount: $a, currency: "ARS", payment_method: "cash"}')" > /dev/null
+          done
+
+          kill "$(cat /tmp/api-signup.pid)"
+          timeout 30 bash -c 'while curl -s http://localhost:8000/health > /dev/null; do sleep 1; done'
+
+      - name: Start API
+        working-directory: apps/api
+        run: nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/api.log 2>&1 &
+
+      - name: Start web
+        run: nohup pnpm --filter web start > /tmp/web.log 2>&1 &
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter web exec playwright install-deps chromium
+
+      - name: Wait for API and web
+        run: |
+          timeout 120 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 1; done'
+          timeout 120 bash -c 'until curl -sf http://localhost:3000/api/auth/providers > /dev/null; do sleep 1; done'
+
+      - name: Run e2e suite
+        run: pnpm --filter web test:e2e
+
+      - name: Require a full run
+        # A green run that quietly ran less is the failure this step exists for: with E2E_EMAIL or
+        # E2E_PASSWORD missing the authenticated project does not exist, and with the harness
+        # account's seed missing the conversion-basis check skips itself — and either way the suite
+        # still exits 0. So in CI the authenticated project must have run, and nothing may skip.
+        run: |
+          report=apps/web/test-results/results.json
+          jq -e '[.config.projects[].name] | index("chromium-authenticated") != null' "$report" > /dev/null \
+            || { echo "::error::The chromium-authenticated project did not run."; exit 1; }
+          skipped="$(jq '.stats.skipped' "$report")"
+          [ "$skipped" -eq 0 ] || { echo "::error::$skipped test(s) skipped; CI must run the whole suite."; exit 1; }
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14
+
+      - name: Upload test results (traces, screenshots, videos)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload server logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-server-logs
+          path: /tmp/*.log
+          retention-days: 14
