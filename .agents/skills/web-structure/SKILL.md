@@ -10,6 +10,8 @@ description: Frontend app structure and where to create files (pages, components
 - **`app/(auth)/`** — Route group for unauthenticated routes: login, signup. Layout does not require session.
 - **`app/(protected)/`** — Route group for authenticated routes: dashboard, settings, etc. Layout calls `getSession()` and redirects to `LOGIN_ROUTE` when there is no valid session.
 - **`app/layout.tsx`** — Root layout. Route groups each have their own `layout.tsx` for shared wrapper (e.g. auth layout, protected layout with session check).
+- **Error boundaries — three, nested, and a failed read is meant to reach one.** `app/(protected)/error.tsx` renders INSIDE the protected shell (sidebar and mobile bar stay), so a page whose primary read threw can be retried or left. `app/error.tsx` catches what has no nearer boundary: the auth and public pages, and the group LAYOUTS themselves (a segment's `error.tsx` sits inside its layout, so a protected-layout failure lands here). `app/global-error.tsx` replaces the root layout when that throws, so it resolves the locale itself (`resolveLocale` in `lib/i18n/locales.ts`, the same rule `i18n/request.ts` uses) and loads its messages on demand — a static import of `translations/*.json` there ships every locale to every page. All three render `ErrorState` (`components/error-state.tsx`), whose retry is `router.refresh()` + `reset()` in one transition (`reset()` alone re-renders the failed payload), and report through `useReportBoundaryError` (a caught error never reaches the browser SDK's global handler; one with a `digest` was already reported on the server).
+- **Loading states — every protected `page.tsx` has a `loading.tsx` in its OWN directory**, rendering `PageSkeleton` (`app/(protected)/_components/page-skeleton.tsx`) and nothing else. Own directory, not an ancestor's: Next shows the NEAREST boundary, so a parent's `loading.tsx` paints the parent page's header over the child. Pass `namespace` when the page's header is `t('title')` / `t('subtitle')` from that namespace, and omit it when the title is data (an account's name, a pot's label); pick `body` (`table` / `dashboard` / `form` / `sections`) plus `toolbar` / `backLink` / `loose` to match the page's frame, so the swap moves nothing. `tests/unit/route-loading-coverage.test.ts` derives the route list from the filesystem and enforces all of this.
 
 ## Where to create files
 
@@ -32,6 +34,8 @@ description: Frontend app structure and where to create files (pages, components
 ```
 app/
 ├── layout.tsx
+├── error.tsx                # boundary for auth/public pages and the group layouts
+├── global-error.tsx         # replaces the root layout when it throws
 ├── page.tsx
 ├── (auth)/                  # No session required
 │   ├── layout.tsx
@@ -43,9 +47,11 @@ app/
 │       └── _components/
 ├── (protected)/             # getSession + redirect if missing
 │   ├── layout.tsx
-│   ├── _components/         # shared across all protected pages (e.g. page-header.tsx)
+│   ├── error.tsx            # boundary inside the shell
+│   ├── _components/         # shared across all protected pages (e.g. page-header.tsx, page-skeleton.tsx)
 │   └── <route>/
-│       └── page.tsx (+ _components/, actions.ts, schema.ts, etc.)
+│       ├── page.tsx (+ _components/, actions.ts, schema.ts, etc.)
+│       └── loading.tsx      # <PageSkeleton …/> — required for every protected page
 lib/                         # Auth, API, shared utils
 config/
 └── routes.ts                # ROUTES, AUTH_ROUTES, LOGIN_ROUTE
