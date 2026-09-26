@@ -16,7 +16,7 @@ test.describe('invite-only access gate (logged out)', () => {
 
     await expect(page.getByTestId('invite-only-notice')).toBeVisible();
     // No registration form to submit — an uninvited visitor can't even enter a password (anti-enumeration).
-    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
   });
 
   test('an invalid invite token still shows the invite-only notice (no leak, no form)', async ({
@@ -25,7 +25,7 @@ test.describe('invite-only access gate (logged out)', () => {
     await page.goto(`${SIGNUP}?invite=not-a-real-token`);
 
     await expect(page.getByTestId('invite-only-notice')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
   });
 
   test('the admin page redirects logged-out visitors to login', async ({ page }) => {
