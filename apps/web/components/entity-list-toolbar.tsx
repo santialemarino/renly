@@ -10,7 +10,21 @@ import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { SEARCH_MAX } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
-interface EntityListToolbarProps {
+/*
+ * The add button, as one all-or-nothing group: a label with no handler (or the reverse) is a type error
+ * rather than a button that silently fails to render. Left out entirely on a list that creates nothing
+ * from its toolbar — the snapshots grid, whose rows come from the investments it lists.
+ */
+type EntityListToolbarAddProps =
+  | {
+      addLabel: string;
+      onAdd: () => void;
+      // Keeps the button on screen but inert — e.g. collections at their soft limit.
+      addDisabled?: boolean;
+    }
+  | { addLabel?: never; onAdd?: never; addDisabled?: never };
+
+type EntityListToolbarProps = EntityListToolbarAddProps & {
   route: string;
   // Search/filter changes reset pagination on the paginated list pages (expenses/income/investments).
   resetPage?: boolean;
@@ -19,18 +33,22 @@ interface EntityListToolbarProps {
   searchPlaceholder: string;
   // Renders the archived-toggle pill when provided.
   showArchivedLabel?: string;
-  addLabel: string;
-  onAdd: () => void;
   // Extra filter controls rendered in their own layout group between search and the trailing actions.
   filters?: React.ReactNode;
   // Extra trailing content rendered between the archived pill and the add button (e.g. the investments import link).
   trailing?: React.ReactNode;
   // Dialogs owned by the page toolbar, kept inside the LayoutGroup to match the current markup.
   children?: React.ReactNode;
-}
+};
 
-// Shared list-page toolbar: debounced search, optional filter slot, optional archived
-// pill, and the add button — each in its own animated layout group.
+/*
+ * THE list-page toolbar: debounced search, optional filter slot, optional archived pill, trailing
+ * actions and an optional add button — each in its own animated layout group.
+ *
+ * Every list page renders this rather than its own row, and `tests/unit/list-toolbar-ownership.test.ts`
+ * fails otherwise. Two pages once hand-rolled a copy; each kept the pre-fix `min-w-0` search item after
+ * the fix below landed here, which left the snapshots filters dead under the search input at 1024px.
+ */
 export function EntityListToolbar({
   route,
   resetPage = false,
@@ -38,6 +56,7 @@ export function EntityListToolbar({
   showArchivedLabel,
   addLabel,
   onAdd,
+  addDisabled,
   filters,
   trailing,
   children,
@@ -71,7 +90,10 @@ export function EntityListToolbar({
 
   return (
     <LayoutGroup>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-2"
+        data-testid="entity-list-toolbar"
+      >
         {/*
          * `min-w-48` and not `min-w-0`, matching `SearchInput`'s own container minimum.
          *
@@ -121,10 +143,18 @@ export function EntityListToolbar({
           {trailing}
           {/* One testid on the shared primitive, so every list page's add button is already
               reachable — the same rule ConfirmDialog's confirm button follows. */}
-          <Button blue onClick={onAdd} className="min-w-fit flex-1" data-testid="entity-list-add">
-            <Plus className="size-4" />
-            {addLabel}
-          </Button>
+          {addLabel && (
+            <Button
+              blue
+              onClick={onAdd}
+              disabled={addDisabled}
+              className="min-w-fit flex-1"
+              data-testid="entity-list-add"
+            >
+              <Plus className="size-4" />
+              {addLabel}
+            </Button>
+          )}
         </motion.div>
 
         {children}
