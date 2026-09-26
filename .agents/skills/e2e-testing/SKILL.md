@@ -13,7 +13,7 @@ Three layers, independent:
 
 1. **Test library (`@playwright/test`).** Tests live in `apps/web/tests/e2e/`, run with `pnpm test:e2e` from `apps/web/` or via `pnpm --filter web test:e2e` from the repo root. Configured in `apps/web/playwright.config.ts`. This is the deterministic verification contract.
 2. **CLI (`@playwright/cli`).** Installed globally on the dev machine. Use during feature implementation to drive a real browser, verify behavior, capture screenshots and videos. Does not produce committed tests by itself; the agent uses it to verify what was built and then writes a corresponding `.spec.ts` if a persistent test is warranted.
-3. **CI workflow.** `.github/workflows/ci.web-e2e.yml` runs the whole suite against a production build on every PR to `main`, every push to `main`, and on demand. See "CI" at the end of this file.
+3. **CI workflow.** `.github/workflows/ci.web-e2e.yml` runs the whole suite against a production build — on a PR when it touches the floor or carries the `run-e2e` label, every night on `main`, and on demand. See "CI" at the end of this file.
 
 ## When to write a Playwright test
 
@@ -258,13 +258,39 @@ After each command, the CLI outputs a snapshot of the current page state with el
 
 ## CI
 
-`.github/workflows/ci.web-e2e.yml` runs the whole suite on every PR to `main`, every push to `main`,
-and on demand (`workflow_dispatch`). It has **no path filters**: the suite drives the API, the web app
-and `packages/ui` together, so almost any change can break it, and a path-filtered workflow cannot be a
-required check — a PR that skips it leaves the check pending forever. Whether the check is REQUIRED is
-a repository setting, not something the workflow decides.
+`.github/workflows/ci.web-e2e.yml` runs the whole suite in one job, `e2e-web`. The workflow triggers
+on every PR, every night on `main`, and on demand — and decides at JOB level whether `e2e-web` runs.
 
-One job, serial, Chromium only, and it builds its environment from the same pieces a developer uses:
+### When the suite runs
+
+- **The floor, always.** A `changes` job lists the PR's files and sets `floor` when it touches the
+  schema or migrations (`apps/api/database/**`, `apps/api/migrations/**`), a dependency manifest or
+  lockfile (`pnpm-lock.yaml`, any `package.json`, `pnpm-workspace.yaml`, `apps/api/pyproject.toml`,
+  `apps/api/uv.lock`, `.nvmrc`), or the harness itself (the workflow, `playwright.config.ts`,
+  `tests/e2e/**`, `scripts/db-init.mjs`, `docker-compose.yml`). Those are changes whose breakage no
+  per-page browser check would see.
+- **Judgment, by label.** Any other PR runs the suite when it carries the `run-e2e` label (adding the
+  label starts a run). The agent that opens the PR decides:
+  - **Add `run-e2e`** when the change touches a full user flow (auth, entry forms and the quick-add,
+    reconciliation, shared money, the wizards), a shared primitive many pages use, money or
+    currency conversion on the API — or anything the agent did NOT verify in the browser itself.
+  - **Leave it off** for a contained UI change it verified in the browser, copy or style changes, a
+    component used by one page, or API work covered by its own tests.
+- **The net.** Every night at 03:17 UTC on `main`. A red night opens one issue labelled `e2e-red` (or
+  comments on the one already open); the first green night closes it. On top of that, a full run at
+  the end of every structured block of work, and for unstructured work the agent asks Santi.
+
+**While iterating, run targeted specs locally; the full suite runs in CI through the floor or the
+label.**
+
+`e2e-required` is the check to mark REQUIRED (a repository setting, not something the workflow
+decides). It reports on every run and fails only when a job it needs failed or was cancelled, so a PR
+whose gate skipped `e2e-web` passes. The gate lives in the job rather than in `on.paths` because a
+workflow skipped by a path filter leaves a required check pending forever.
+
+### What the job does
+
+One job, serial, Chromium only, built from the same pieces a developer uses:
 
 1. **Database:** `pnpm db:init`, unchanged — compose's Postgres image, `00_roles.sql`,
    `01_create_tables.sql`, an Alembic stamp. No CI-only schema path.
@@ -279,24 +305,32 @@ One job, serial, Chromium only, and it builds its environment from the same piec
 4. **The harness account** is a throwaway `@example.com` user with a per-run password, registered
    against a short-lived `SIGNUP_MODE=open` API that is stopped before the real one starts — the
    invite-gate spec needs the launch default, `invite`. It is then verified in SQL and given what the
-   authenticated specs assume of a lived-in account: two display currencies (ARS + USD), a USD card
-   owing one charge from three months ago and one from today (so the conversion-basis spec reconciles
-   a foreign balance whose history converts at a different rate than today, instead of skipping), and
-   30 past-dated expenses (so `/expenses` renders its pager, and an expense a spec adds today still
-   lands on page one). **A new spec that assumes account data adds it to this step.**
-5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200.
+   authenticated specs assume of a lived-in account: two display currencies (ARS + USD); a card owing
+   a USD and an ARS charge from three months ago plus a USD one from today; and 30 past-dated expenses
+   (so `/expenses` renders its pager, and an expense a spec adds today still lands on page one). The
+   card holds BOTH currencies because the conversion-basis spec checks each display currency, and a
+   bucket already in the display currency never converts — each pass needs one in the other
+   currency, dated where the rate differs from today's. **A new spec that assumes account data adds
+   it to this step.**
+5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200. Locally,
+   `globalSetup` makes the same check first and fails at once with "start the web and API servers"
+   when either does not answer.
 6. **Run:** `pnpm --filter web test:e2e` with `CI=true` (so `forbidOnly` + `retries: 2`), plus two
    reporters the config adds only in CI — `github`, which annotates the PR diff at each failure, and
    `json`, written to `test-results/results.json`.
-7. **Require a full run:** a step reads that JSON and fails the job if the `chromium-authenticated`
-   project did not exist or any test skipped. Both are ways the suite exits 0 on less than itself:
-   unset credentials drop the whole authenticated project, and a missing seed makes the
-   conversion-basis spec skip. So **no spec may skip in CI** — a spec that genuinely cannot run there
-   has to be made to run, not skipped.
-8. **Artifacts, always** (even on success, 14 days): the HTML report (`playwright-report`), the
-   traces / screenshots / videos (`playwright-test-results`), and the API and web server logs
-   (`e2e-server-logs`). To read a failure: download `playwright-report`, then
-   `pnpm --filter web exec playwright show-report <dir>`.
+7. **Require a full run:** a step reads that JSON against the spec files ON DISK and fails the job
+   unless every `*.auth.spec.ts` executed a test in `chromium-authenticated`, every other `*.spec.ts`
+   executed one in `chromium`, and nothing skipped. Each is a way the suite exits 0 on less than
+   itself: unset credentials drop the authenticated project, a `testMatch` that stops matching leaves
+   it running nothing, and a missing seed makes the conversion-basis spec skip. So **no spec may skip
+   in CI** — a spec that genuinely cannot run there has to be made to run, not skipped.
+8. **Artifacts** (14 days, uploaded on every run): the HTML report (`playwright-report`), the API and
+   web server logs (`e2e-server-logs`), and `playwright-test-results` — which holds traces, screenshots
+   and videos only for tests that FAILED (they are `retain-on-failure`), plus the JSON results. To read
+   a failure: download `playwright-report`, then `pnpm --filter web exec playwright show-report <dir>`.
+   The per-run secrets are masked in the job LOG only; a failed test's trace records its requests and
+   can hold the harness password. That is harmless — the account and its database are discarded with
+   the runner — but it is why the password must stay per-run and throwaway.
 
 Browser binaries are cached on the lockfile hash; on a hit only the system dependencies install.
 

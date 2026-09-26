@@ -9,7 +9,7 @@ description: Where tests live, how to run them, and what to test in the Renly re
 
 - **API tests:** `apps/api/tests/unit/` — pytest, ~850 tests across ~50 files covering metrics/date/liquidity helpers, service flows (mocked sessions/repos), schema validation, and in-process endpoint behavior.
 - **Web unit tests:** `apps/web/tests/unit/` — Vitest, split into two projects by file extension (`apps/web/vitest.config.ts`): a **`node`** project for `*.test.ts` (pure functions — the locale/formatting layer under `lib/i18n/`, the `numeric-input` rule kit, EN/ES keyset parity) and a **`jsdom`** project for `*.test.tsx` (React components/hooks driven with React Testing Library + `@testing-library/user-event`, e.g. `LocaleAmountInput`). `vite-tsconfig-paths` wires the `@/*` alias; the jsdom project loads `tests/setup-jsdom.ts` (jest-dom matchers + RTL cleanup). Run both with `pnpm test:web`.
-- **Web E2E tests:** `apps/web/tests/e2e/` — Playwright. Run in CI on every PR by `ci.web-e2e.yml`. See the `e2e-testing` skill for full conventions, configuration, the CI job, and the playwright-cli workflow.
+- **Web E2E tests:** `apps/web/tests/e2e/` — Playwright. Run in CI by `ci.web-e2e.yml` (floor paths or the `run-e2e` label on a PR, nightly on `main`). See the `e2e-testing` skill for full conventions, configuration, the CI job, and the playwright-cli workflow.
 - **Pre-commit:** `pnpm test:api` + `pnpm test:web` run on every commit. Also run in CI (`ci.api.yml` / `ci.web.yml`).
 
 ## Running tests
