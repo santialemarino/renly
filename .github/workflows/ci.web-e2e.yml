@@ -20,6 +20,11 @@ concurrency:
   group: ci-web-e2e-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Read-only token: the job only checks out and uploads artifacts, and on a public repo a push-to-main
+# run would otherwise inherit whatever the repository's default token permissions are.
+permissions:
+  contents: read
+
 env:
   # The same role split as local dev and production: requests on the RLS-subject renly_app, the
   # scheduler, migrations and auth bootstrap on the BYPASSRLS renly_admin. Both roles come from
