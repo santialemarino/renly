@@ -8,6 +8,7 @@ import {
   getLocaleTag,
   LANGUAGE_OPTIONS,
   mapBrowserLanguageToSupported,
+  resolveLocale,
   SUPPORTED_LOCALES,
 } from '@/lib/i18n/locales';
 
@@ -83,5 +84,31 @@ describe('detectBrowserLanguage', () => {
   it('falls back to the default locale when navigator is unavailable', () => {
     vi.stubGlobal('navigator', undefined);
     expect(detectBrowserLanguage()).toBe(DEFAULT_LOCALE);
+  });
+});
+
+/*
+ * The one rule both the server render (cookie + Accept-Language) and the global error page (cookie +
+ * navigator.languages) resolve a locale with, so the two cannot pick differently for one visitor.
+ */
+describe('resolveLocale', () => {
+  it('prefers a supported locale cookie over every language', () => {
+    expect(resolveLocale('es', ['en-US', 'en'])).toBe('es');
+  });
+
+  it('ignores an unsupported cookie and falls through to the languages', () => {
+    expect(resolveLocale('fr', ['es-AR'])).toBe('es');
+    expect(resolveLocale(undefined, ['es'])).toBe('es');
+  });
+
+  it('takes the first supported language, exactly or by its prefix, in order', () => {
+    expect(resolveLocale(null, ['pt-BR', 'es-AR', 'en'])).toBe('es');
+    expect(resolveLocale(null, ['ES-ar'])).toBe('es');
+    expect(resolveLocale(null, [' en '])).toBe('en');
+  });
+
+  it('falls back to the default when nothing resolves', () => {
+    expect(resolveLocale(undefined, [])).toBe(DEFAULT_LOCALE);
+    expect(resolveLocale('xx', ['pt-BR', 'de'])).toBe(DEFAULT_LOCALE);
   });
 });
