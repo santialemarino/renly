@@ -31,6 +31,7 @@ import { PotOpeningDialog } from '@/app/(protected)/shared/pots/[id]/_components
 import { PotReagreementDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-reagreement-dialog';
 import { ComboboxChevron } from '@/components/combobox-chevron';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { SectionHeader } from '@/components/section-header';
 import { sharedBuyOutPath, sharedSharePath, sharedTakeOutPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
@@ -168,9 +169,11 @@ export function PotOwnershipSection({
                 <TableCell className="text-right text-paragraph-sm tabular-nums">
                   {/* Null when the pot has no valuation — a share of an unvalued pot is a real share
                       of an unknown amount, not a share worth nothing. */}
-                  {share.value === null
-                    ? t('pots.unvalued')
-                    : fmt.amount(share.value, pot.baseCurrency)}
+                  {share.value === null ? (
+                    t('pots.unvalued')
+                  ) : (
+                    <MoneyFigure>{fmt.amount(share.value, pot.baseCurrency)}</MoneyFigure>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

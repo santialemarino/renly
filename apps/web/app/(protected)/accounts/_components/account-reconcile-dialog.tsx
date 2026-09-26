@@ -26,6 +26,7 @@ import {
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { MoneyFigure } from '@/components/money-figure';
 import { StyledHint } from '@/components/styled-hint';
 import type { ReconciliationBearer } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
@@ -223,7 +224,7 @@ export function AccountReconcileDialog({
                   <span className="text-muted-foreground">{t('form.computedBalanceLoading')}</span>
                 ) : (
                   <>
-                    {fmt.amount(computedBalance, account.currency)}{' '}
+                    <MoneyFigure>{fmt.amount(computedBalance, account.currency)}</MoneyFigure>{' '}
                     <span className="text-paragraph-xs text-muted-foreground">
                       {account.currency}
                     </span>
@@ -263,7 +264,11 @@ export function AccountReconcileDialog({
                   {t('form.difference')}
                 </span>
                 <span className="text-paragraph tabular-nums">
-                  {diff === 0 ? '0' : fmt.amount(String(diff), account.currency)}{' '}
+                  {diff === 0 ? (
+                    '0'
+                  ) : (
+                    <MoneyFigure>{fmt.amount(String(diff), account.currency)}</MoneyFigure>
+                  )}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {account.currency}
                   </span>

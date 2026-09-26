@@ -22,6 +22,7 @@ import {
   archivePaymentObligation,
   unarchivePaymentObligation,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -226,7 +227,9 @@ export function PaymentObligationsTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {fmt.amount(displayAmount, o.convertedAmount ? activeCurrency : o.currency)}{' '}
+                      <MoneyFigure>
+                        {fmt.amount(displayAmount, o.convertedAmount ? activeCurrency : o.currency)}
+                      </MoneyFigure>{' '}
                       {o.convertedAmount ? '' : o.currency}
                     </TableCell>
                     <TableCell>{fmt.date(o.nextDueDate)}</TableCell>

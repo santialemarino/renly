@@ -9,6 +9,7 @@ import {
   bucketPartlyCleared,
   plannedRows,
 } from '@/app/(protected)/shared/settlement-rules';
+import { MoneyFigure } from '@/components/money-figure';
 import type { GroupSettlementPlan } from '@/lib/api/group-settlements';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -134,7 +135,9 @@ export function SettlementPlanStep({ plan, onToggle, pending }: SettlementPlanSt
             <WizardConfirmRow
               key={row.currency}
               label={t('settlements.plan.rowLabel', { currency: row.currency })}
-              value={`${fmt.amount(row.amount, row.currency)} ${row.currency}`}
+              value={
+                <MoneyFigure>{`${fmt.amount(row.amount, row.currency)} ${row.currency}`}</MoneyFigure>
+              }
             />
           ))}
         </dl>

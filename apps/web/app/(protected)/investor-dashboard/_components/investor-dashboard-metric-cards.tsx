@@ -3,11 +3,18 @@
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { MetricCard, MetricCardGrid } from '@/components/metric-card';
+import { MoneyFigure } from '@/components/money-figure';
 import type { PortfolioMetrics } from '@/lib/api/metrics';
 import { valueColor } from '@/lib/i18n/format';
 import { useFormatters } from '@/lib/i18n/formatters';
+
+// The trend arrow for a return, or none at all when there is no return or it is exactly flat.
+function trendIcon(value: number | null) {
+  if (value === null || value === 0) return undefined;
+  return value > 0 ? TrendingUp : TrendingDown;
+}
 
 interface InvestorDashboardMetricCardsProps {
   metrics: PortfolioMetrics;
@@ -22,74 +29,59 @@ export function InvestorDashboardMetricCards({
   const t = useTranslations('investorDashboard');
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <MetricCardGrid count={4}>
       {/* Total Value */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">
-          {t(hasPeriod ? 'cards.periodEndValue' : 'cards.totalValue')}
-        </span>
-        <p className="text-heading-3">{fmt.value(metrics.totalValue)}</p>
-      </Card>
+      <MetricCard
+        label={t(hasPeriod ? 'cards.periodEndValue' : 'cards.totalValue')}
+        amount={metrics.totalValue}
+      />
 
       {/* TWR */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.twr')}</span>
-        <div className="flex items-center gap-x-2">
-          <p className={cn('text-heading-3', valueColor(metrics.twr))}>
-            {metrics.twr !== null ? fmt.signedPct(metrics.twr) : '—'}
-          </p>
-          {metrics.twr !== null &&
-            metrics.twr !== 0 &&
-            (metrics.twr > 0 ? (
-              <TrendingUp className="size-5 text-emerald-600" />
-            ) : (
-              <TrendingDown className="size-5 text-red-500" />
-            ))}
-        </div>
-      </Card>
+      <MetricCard
+        label={t('cards.twr')}
+        text={metrics.twr !== null ? fmt.signedPct(metrics.twr) : '—'}
+        figureClassName={valueColor(metrics.twr)}
+        icon={trendIcon(metrics.twr)}
+        iconClassName={
+          metrics.twr !== null && metrics.twr > 0 ? 'text-emerald-600' : 'text-red-500'
+        }
+      />
 
       {/* IRR */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.irr')}</span>
-        <div className="flex items-center gap-x-2">
-          <p className={cn('text-heading-3', valueColor(metrics.irr))}>
-            {metrics.irr !== null ? fmt.signedPct(metrics.irr) : '—'}
-          </p>
-          {metrics.irr !== null &&
-            metrics.irr !== 0 &&
-            (metrics.irr > 0 ? (
-              <TrendingUp className="size-5 text-emerald-600" />
-            ) : (
-              <TrendingDown className="size-5 text-red-500" />
-            ))}
-        </div>
-      </Card>
+      <MetricCard
+        label={t('cards.irr')}
+        text={metrics.irr !== null ? fmt.signedPct(metrics.irr) : '—'}
+        figureClassName={valueColor(metrics.irr)}
+        icon={trendIcon(metrics.irr)}
+        iconClassName={
+          metrics.irr !== null && metrics.irr > 0 ? 'text-emerald-600' : 'text-red-500'
+        }
+      />
 
       {/* Gain + simple return % + month change subtext */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">
-          {t(hasPeriod ? 'cards.periodGain' : 'cards.gain')}
-        </span>
-        <div className="flex items-center gap-x-2">
-          <p className={cn('text-heading-3', valueColor(metrics.absoluteGain))}>
-            {fmt.value(metrics.absoluteGain)}
-          </p>
-          {metrics.totalReturnPct !== null && metrics.totalReturnPct !== 0 && (
+      <MetricCard
+        label={t(hasPeriod ? 'cards.periodGain' : 'cards.gain')}
+        amount={metrics.absoluteGain}
+        figureClassName={valueColor(metrics.absoluteGain)}
+        trailing={
+          metrics.totalReturnPct !== null &&
+          metrics.totalReturnPct !== 0 && (
             <span className={cn('text-paragraph-sm', valueColor(metrics.totalReturnPct))}>
               {fmt.signedPct(metrics.totalReturnPct)}
             </span>
-          )}
-        </div>
+          )
+        }
+      >
         {metrics.monthChange !== null && (
           <span className={cn('text-paragraph-xs', valueColor(metrics.monthChange))}>
-            {fmt.signedValue(metrics.monthChange)}
+            <MoneyFigure>{fmt.signedValue(metrics.monthChange)}</MoneyFigure>
             {metrics.monthChangePct !== null && metrics.monthChangePct !== 0 && (
               <> ({fmt.signedPct(metrics.monthChangePct)})</>
             )}{' '}
             {t('cards.vsLastMonth')}
           </span>
         )}
-      </Card>
-    </div>
+      </MetricCard>
+    </MetricCardGrid>
   );
 }

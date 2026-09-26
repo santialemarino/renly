@@ -19,6 +19,7 @@ import {
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortIcon } from '@/components/sort-icon';
@@ -41,13 +42,13 @@ function CellContent({ cell }: CellContentProps) {
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="text-paragraph-sm tabular-nums cursor-default">
-              {fmt.value(cell.value)}
+              <MoneyFigure>{fmt.value(cell.value)}</MoneyFigure>
             </span>
           </TooltipTrigger>
           <TooltipContent>{cell.quantity} shares</TooltipContent>
         </Tooltip>
       ) : (
-        <span className="text-paragraph-sm tabular-nums">{fmt.value(cell.value)}</span>
+        <MoneyFigure className="text-paragraph-sm">{fmt.value(cell.value)}</MoneyFigure>
       )}
 
       {cell.periodReturnPct !== null && (
@@ -76,10 +77,12 @@ function CellContent({ cell }: CellContentProps) {
           <TooltipTrigger asChild>
             <span className="flex items-center gap-x-0.5 text-paragraph-xs text-blue-500 shrink-0">
               <CircleDollarSign className="size-3.5" />
-              {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)
-                ? '-'
-                : '+'}
-              {fmt.value(cell.transaction.amount)}
+              <MoneyFigure>
+                {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)
+                  ? '-'
+                  : '+'}
+                {fmt.value(cell.transaction.amount)}
+              </MoneyFigure>
             </span>
           </TooltipTrigger>
           <TooltipContent>{cell.transaction.type}</TooltipContent>

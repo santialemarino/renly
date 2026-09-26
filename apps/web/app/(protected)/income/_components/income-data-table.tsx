@@ -16,6 +16,7 @@ import {
 } from '@repo/ui/components';
 import { IncomeFormDialog } from '@/app/(protected)/_components/income-form-dialog';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
@@ -262,10 +263,12 @@ function IncomeRow({
     <TableRow>
       <TableCell>{fmt.date(entry.date)}</TableCell>
       <TableCell className="text-paragraph-sm tabular-nums">
-        {fmt.amount(
-          entry.convertedAmount ?? entry.amount,
-          entry.convertedAmount ? activeCurrency : entry.currency,
-        )}
+        <MoneyFigure>
+          {fmt.amount(
+            entry.convertedAmount ?? entry.amount,
+            entry.convertedAmount ? activeCurrency : entry.currency,
+          )}
+        </MoneyFigure>
         {/*
          * A shared row's amount is the viewer's SHARE of a larger sum, and without saying
          * so it reads exactly like a solo entry of that size.

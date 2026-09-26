@@ -19,6 +19,7 @@ import {
 import { PotFormDialog } from '@/app/(protected)/shared/_components/pot-form-dialog';
 import { ConceptHint } from '@/components/concept-hint';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { SectionHeader } from '@/components/section-header';
 import { HELP_ANCHORS, sharedPotPath, sharedSharePath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
@@ -196,7 +197,11 @@ function PotsTable({ pots }: { pots: Pot[] }) {
               </span>
             </TableCell>
             <TableCell className="text-right text-paragraph-sm tabular-nums">
-              {pot.nav === null ? t('pots.unvalued') : fmt.amount(pot.nav, pot.baseCurrency)}
+              {pot.nav === null ? (
+                t('pots.unvalued')
+              ) : (
+                <MoneyFigure>{fmt.amount(pot.nav, pot.baseCurrency)}</MoneyFigure>
+              )}
             </TableCell>
             <TableCell className="text-right text-paragraph-sm tabular-nums">
               {`${fmt.sharePct(Number(pot.myPercentage))}%`}

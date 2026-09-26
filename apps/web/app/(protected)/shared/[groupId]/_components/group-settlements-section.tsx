@@ -29,6 +29,7 @@ import {
 } from '@/app/(protected)/shared/settlement-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
@@ -268,7 +269,7 @@ function SettlementRow({
       <TableCell className="text-right text-paragraph-sm tabular-nums">
         {/* Each figure names its own currency: a settlement list holds one row per bucket the group
             has a position in, and the two are never converted into each other. */}
-        {`${fmt.amount(settlement.amount, settlement.currency)} ${settlement.currency}`}
+        <MoneyFigure>{`${fmt.amount(settlement.amount, settlement.currency)} ${settlement.currency}`}</MoneyFigure>
         {legAccount && legAmount !== null && (
           <span className="block text-paragraph-xs text-muted-foreground">
             {t('settlements.table.leg', {

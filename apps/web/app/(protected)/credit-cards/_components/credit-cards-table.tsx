@@ -35,6 +35,7 @@ import {
   fetchSettlements,
   unarchiveCreditCard,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -204,9 +205,11 @@ function SettlementsSection({
                                     denominated figure sits under it. Uncoded (the Currency column names
                                     it) the two lines read as one currency — "100" over "130.000 ARS" —
                                     which is exactly the misreading the two-leg model exists to prevent. */}
-                                {s.accountAmount && s.accountCurrency
-                                  ? `${fmt.amount(s.amount, s.currency)} ${s.currency}`
-                                  : fmt.amount(s.amount, s.currency)}
+                                {s.accountAmount && s.accountCurrency ? (
+                                  <MoneyFigure>{`${fmt.amount(s.amount, s.currency)} ${s.currency}`}</MoneyFigure>
+                                ) : (
+                                  <MoneyFigure>{fmt.amount(s.amount, s.currency)}</MoneyFigure>
+                                )}
                                 {s.accountAmount && s.accountCurrency && (
                                   <span className="block text-paragraph-xs text-muted-foreground">
                                     {t('settlements.table.paidWith', {
@@ -424,7 +427,9 @@ export function CreditCardsTable({
                         <div className="flex flex-col gap-y-0.5">
                           {card.balances.map((bucket) => (
                             <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
-                              <span>{fmt.amount(bucket.balance, bucket.currency)}</span>
+                              <MoneyFigure>
+                                {fmt.amount(bucket.balance, bucket.currency)}
+                              </MoneyFigure>
                               <span className="text-paragraph-xs text-muted-foreground">
                                 {bucket.currency}
                               </span>

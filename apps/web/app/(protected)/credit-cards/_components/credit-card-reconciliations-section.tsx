@@ -22,6 +22,7 @@ import {
 import { ReconciliationDeleteDialog } from '@/app/(protected)/credit-cards/_components/reconciliation-delete-dialog';
 import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_components/reconciliation-form-dialog';
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
@@ -190,7 +191,9 @@ export function CreditCardReconciliationsSection({
                                 {fmt.date(statement.periodStart)} → {fmt.date(statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {fmt.amount(statement.computedBalance, statement.currency)}{' '}
+                                <MoneyFigure>
+                                  {fmt.amount(statement.computedBalance, statement.currency)}
+                                </MoneyFigure>{' '}
                                 <span className="text-paragraph-xs text-muted-foreground">
                                   {statement.currency}
                                 </span>

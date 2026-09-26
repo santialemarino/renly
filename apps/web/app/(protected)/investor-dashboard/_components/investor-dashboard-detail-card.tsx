@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
+import { MoneyFigure } from '@/components/money-figure';
 import type { InvestmentMetrics } from '@/lib/api/metrics';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -28,7 +29,9 @@ export function InvestorDashboardDetailCard({ metrics }: InvestorDashboardDetail
         {/* Invested Capital */}
         <div className="flex flex-col gap-y-1">
           <span className="text-paragraph-xs text-muted-foreground">{t('detail.invested')}</span>
-          <span className="text-paragraph-semibold">{fmt.value(metrics.investedCapital)}</span>
+          <MoneyFigure className="text-paragraph-semibold">
+            {fmt.value(metrics.investedCapital)}
+          </MoneyFigure>
         </div>
 
         {/* Snapshots */}

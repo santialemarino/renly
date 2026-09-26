@@ -13,6 +13,7 @@ import {
   archiveSubscription,
   unarchiveSubscription,
 } from '@/app/(protected)/subscriptions/subscription-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -151,10 +152,12 @@ export function SubscriptionsTable({
                   <TableRow key={sub.id} className={!sub.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{sub.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {fmt.amount(
-                        displayAmount,
-                        sub.convertedAmount ? activeCurrency : sub.currency,
-                      )}{' '}
+                      <MoneyFigure>
+                        {fmt.amount(
+                          displayAmount,
+                          sub.convertedAmount ? activeCurrency : sub.currency,
+                        )}
+                      </MoneyFigure>{' '}
                       {sub.convertedAmount ? '' : sub.currency}
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>
