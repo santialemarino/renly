@@ -2,26 +2,34 @@ name: CI Web E2E
 
 run-name: 'CI Web E2E by @${{ github.actor }}'
 
-# No path filters, deliberately. The suite drives the API, the web app and packages/ui together, so
-# almost any change can break it — and this is meant to become a REQUIRED check, which a
-# path-filtered workflow cannot be: a PR that skips the workflow leaves the required check pending
-# forever instead of passing.
+# When the suite runs:
+#   * on a PR, if it touches the FLOOR (the paths in the `changes` job below: schema, migrations,
+#     dependency manifests, the e2e harness itself) or carries the `run-e2e` label, which the author
+#     adds by judgment — the e2e-testing skill has the rubric;
+#   * every night on main (`schedule`), which opens or updates one `e2e-red` issue when it fails and
+#     closes it when a later night is green;
+#   * on demand (`workflow_dispatch`).
+#
+# The workflow itself triggers on EVERY PR, and the gate is at JOB level, deliberately: `e2e-required`
+# is the check to mark required, and a required check has to report on every PR. An `on.paths`
+# filter would leave it pending forever on a PR it skipped; a skipped job inside a run that reports
+# does not. No base-branch filter either, so a PR stacked on another branch gets the same gate.
+# `labeled` is in the PR types so that adding `run-e2e` starts a run.
 on:
   pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
-# A new push to a PR supersedes the run in flight; a push to main always runs to the end.
+# A new push (or label) on a PR supersedes the run in flight; every run on the same commit reaches the
+# same gate decision, so the replacement stands in for it fully. Other events run to the end.
 concurrency:
   group: ci-web-e2e-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Read-only token: the job only checks out and uploads artifacts, and on a public repo a push-to-main
-# run would otherwise inherit whatever the repository's default token permissions are.
+# Read-only by default. The two jobs that need more (`changes` reads the PR's file list, the nightly
+# report writes an issue) widen it for themselves only.
 permissions:
   contents: read
 
@@ -40,7 +48,47 @@ env:
   E2E_EMAIL: e2e-ci@example.com
 
 jobs:
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      floor: ${{ steps.filter.outputs.floor }}
+    steps:
+      # Reads the PR's changed files through the API, so no checkout is needed.
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            floor:
+              - 'apps/api/database/**'
+              - 'apps/api/migrations/**'
+              - 'pnpm-lock.yaml'
+              - '**/package.json'
+              - 'pnpm-workspace.yaml'
+              - 'apps/api/pyproject.toml'
+              - 'apps/api/uv.lock'
+              - '.nvmrc'
+              - '.github/workflows/ci.web-e2e.yml'
+              - 'apps/web/playwright.config.ts'
+              - 'apps/web/tests/e2e/**'
+              - 'scripts/db-init.mjs'
+              - 'docker-compose.yml'
+
   e2e-web:
+    needs: changes
+    # `always()` so a skipped `changes` (schedule, dispatch) does not skip this job too; on a PR it
+    # still requires `changes` to have succeeded.
+    if: >-
+      always() && (
+        github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch' ||
+        (needs.changes.result == 'success' && (
+          needs.changes.outputs.floor == 'true' ||
+          contains(github.event.pull_request.labels.*.name, 'run-e2e')
+        ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -65,7 +113,10 @@ jobs:
 
       - name: Generate this run's secrets
         # The JWT secret the API signs with and NextAuth verifies with must be equal and 32+ chars;
-        # the password is the throwaway account's. Both live only for this job, and are masked.
+        # the password is the throwaway account's. Both live only for this job. `add-mask` hides them
+        # in the job LOG only: a failed test's trace (uploaded below) records the requests it made,
+        # so it can hold the password — which is harmless, because the account and the database it
+        # lives in are discarded with the runner.
         run: |
           secret="$(openssl rand -hex 32)"
           password="$(openssl rand -hex 16)"
@@ -100,7 +151,7 @@ jobs:
         # The API fetches live rates at startup, from external providers. These rows make the run
         # independent of them: today's are the fallback a provider outage would otherwise leave
         # missing (a successful fetch replaces them — same date and pair), and the older month's are
-        # rates NO fetch writes, so the card charge dated then converts differently in its own month
+        # rates NO fetch writes, so the card charges dated then convert differently in their own month
         # than today. That difference is what gives the conversion-basis spec something to catch.
         # Seeded before any API starts, because the API caches the rates it reads.
         run: |
@@ -121,11 +172,15 @@ jobs:
 
       - name: Create the harness account
         # The authenticated specs run as a real account and assume what a lived-in one has, so this
-        # gives the throwaway one exactly that: verified; two display currencies; a USD card owing a
-        # charge from three months ago and one from today, so the dashboard's conversion-basis check
-        # has a foreign balance whose history converts at a different rate than today; and more
-        # expenses than one page holds, so the list renders its pager. The filler is dated in the
-        # past so an expense a spec adds today still lands on page one.
+        # gives the throwaway one exactly that: verified; two display currencies (ARS, USD); a card
+        # owing a USD and an ARS charge from three months ago plus a USD one from today; and more
+        # expenses than one page holds, so the list renders its pager (the filler is dated in the
+        # past so an expense a spec adds today still lands on page one).
+        #
+        # The card carries BOTH currencies because the conversion-basis spec checks each display
+        # currency in turn, and a bucket already in the display currency is never converted: with
+        # USD charges only, the USD pass could not fail. Each pass needs a bucket in the OTHER
+        # currency, dated where the seeded rate differs from today's.
         #
         # Registration needs SIGNUP_MODE=open, but the invite-gate spec needs the launch default
         # (invite) — so this runs against a short-lived open-mode API, stopped before the real one.
@@ -153,12 +208,13 @@ jobs:
           card="$(authed POST /credit-cards \
             -d '{"name": "E2E card", "closing_day": 25, "due_day": 5, "currency": "USD"}' | jq -r .id)"
           charge() {
-            authed POST /expenses -d "$(jq -n --arg d "$1" --arg a "$2" --argjson c "$card" \
-              '{date: $d, amount: $a, currency: "USD", payment_method: "credit_card", credit_card_id: $c}')" \
+            authed POST /expenses -d "$(jq -n --arg d "$1" --arg a "$2" --arg cur "$3" --argjson c "$card" \
+              '{date: $d, amount: $a, currency: $cur, payment_method: "credit_card", credit_card_id: $c}')" \
               > /dev/null
           }
-          charge "$(date -u -d '3 months ago' +%F)" 200.00
-          charge "$(date -u +%F)" 123.45
+          charge "$(date -u -d '3 months ago' +%F)" 200.00 USD
+          charge "$(date -u -d '3 months ago' +%F)" 150000.00 ARS
+          charge "$(date -u +%F)" 123.45 USD
 
           filler_date="$(date -u -d '45 days ago' +%F)"
           for i in $(seq 1 30); do
@@ -200,16 +256,34 @@ jobs:
         run: pnpm --filter web test:e2e
 
       - name: Require a full run
-        # A green run that quietly ran less is the failure this step exists for: with E2E_EMAIL or
-        # E2E_PASSWORD missing the authenticated project does not exist, and with the harness
-        # account's seed missing the conversion-basis check skips itself — and either way the suite
-        # still exits 0. So in CI the authenticated project must have run, and nothing may skip.
+        # A green run that quietly ran less is the failure this step exists for, and the suite exits
+        # 0 in each of these: E2E_EMAIL / E2E_PASSWORD missing (no authenticated project at all), a
+        # project whose testMatch stops matching (it exists and runs nothing), a spec file that
+        # matches neither project, and the harness seed missing (the conversion-basis check skips
+        # itself). So the population is DERIVED from the spec files on disk, not from the config:
+        # every `*.auth.spec.ts` must have executed at least one test in `chromium-authenticated`,
+        # every other `*.spec.ts` at least one in `chromium`, and nothing anywhere may skip.
         run: |
           report=apps/web/test-results/results.json
-          jq -e '[.config.projects[].name] | index("chromium-authenticated") != null' "$report" > /dev/null \
-            || { echo "::error::The chromium-authenticated project did not run."; exit 1; }
+          failed=0
+          while IFS= read -r file; do
+            case "$file" in
+              *.auth.spec.ts) project=chromium-authenticated ;;
+              *) project=chromium ;;
+            esac
+            ran="$(jq --arg f "$file" --arg p "$project" '[.suites[] | select(.file == $f) | .. | objects
+              | select(.projectName? == $p and .status != "skipped" and (.results | length) > 0)] | length' "$report")"
+            if [ "$ran" -eq 0 ]; then
+              echo "::error::$file executed no test in the $project project."
+              failed=1
+            fi
+          done < <(cd apps/web/tests/e2e && find . -name '*.spec.ts' | sed 's|^\./||' | sort)
           skipped="$(jq '.stats.skipped' "$report")"
-          [ "$skipped" -eq 0 ] || { echo "::error::$skipped test(s) skipped; CI must run the whole suite."; exit 1; }
+          if [ "$skipped" -ne 0 ]; then
+            echo "::error::$skipped test(s) skipped; CI must run the whole suite."
+            failed=1
+          fi
+          exit "$failed"
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
@@ -235,3 +309,55 @@ jobs:
           name: e2e-server-logs
           path: /tmp/*.log
           retention-days: 14
+
+  # The one check to mark REQUIRED. It reports on every run and fails only when a job it needs failed
+  # or was cancelled — so a PR whose gate skipped `e2e-web` passes, and one where it ran and broke
+  # does not.
+  e2e-required:
+    needs: [changes, e2e-web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if a needed job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error::changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}"
+          exit 1
+      - run: 'echo "changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}"'
+
+  # The nightly net's memory: one open `e2e-red` issue while main's nightly run is red, updated on
+  # each further red night and closed by the first green one. Nothing else in the workflow can write.
+  nightly-report:
+    needs: e2e-web
+    if: always() && github.event_name == 'schedule' && contains(fromJSON('["success", "failure"]'), needs.e2e-web.result)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          RESULT: ${{ needs.e2e-web.result }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner, repo, labels: 'e2e-red', state: 'open', per_page: 1,
+            });
+            const issue = open[0];
+            if (process.env.RESULT === 'failure') {
+              const line = `The nightly e2e run on \`main\` failed: ${runUrl}`;
+              if (issue) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: line });
+              } else {
+                await github.rest.issues.create({
+                  owner, repo, title: 'Nightly e2e is red on main', labels: ['e2e-red'],
+                  body: `${line}\n\nClosed automatically by the first green nightly run.`,
+                });
+              }
+            } else if (issue) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number, body: `Green again: ${runUrl}`,
+              });
+              await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed' });
+            }

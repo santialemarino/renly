@@ -22,7 +22,8 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const authenticated = e2eCredentials() !== null;
 
 // Playwright configuration for the Renly web app.
-// Tests live under tests/e2e/ and run against a local dev server on port 3000.
+// Tests live under tests/e2e/ and run against an already-running web app (a local dev server on port
+// 3000 by default, a production build in CI) — globalSetup fails fast when nothing answers there.
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
@@ -33,8 +34,8 @@ export default defineConfig({
   workers: 1,
   /*
    * CI adds two: `github` turns each failure into an annotation on the PR's diff, and `json` writes
-   * the counts the workflow checks after the run — that the authenticated project existed and that
-   * nothing skipped, the two ways a run can go green on less than the whole suite.
+   * the results the workflow checks after the run — that every spec file executed in its project and
+   * that nothing skipped: the ways a run can go green on less than the whole suite.
    */
   reporter: [
     ['list'],

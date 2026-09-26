@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { e2eCredentials } from './helpers/auth';
+import { E2E_API_URL, e2eCredentials } from './helpers/auth';
 
 /*
  * The dashboard's two conversion frames, and the one assertion that can only be made end to end.
@@ -25,12 +25,6 @@ import { e2eCredentials } from './helpers/auth';
  * `tests/unit/test_dashboard.py`, against a lookup whose rate moves per month.
  */
 
-// Where the API is, for the one assertion the DOM cannot make. A shell var like E2E_EMAIL and
-// E2E_PASSWORD — Playwright reads no dotenv file, so it stays out of `.env.example` too — with the
-// local default that makes it optional. `||` rather than `??` so an empty value falls back.
-// eslint-disable-next-line turbo/no-undeclared-env-vars
-const API_BASE = process.env.E2E_API_URL || 'http://localhost:8000';
-
 interface DashboardTotals {
   cardBalance: string;
   netWorth: string;
@@ -44,15 +38,15 @@ async function apiToken(request: APIRequestContext): Promise<string> {
   // The authenticated project only exists when both are set, so this cannot be null here — the check
   // is what makes that a type fact rather than a comment.
   if (credentials === null) throw new Error('E2E_EMAIL / E2E_PASSWORD are required for this spec');
-  const response = await request.post(`${API_BASE}/auth/login`, { data: credentials });
-  expect(response.ok(), `login to ${API_BASE} failed with ${response.status()}`).toBe(true);
+  const response = await request.post(`${E2E_API_URL}/auth/login`, { data: credentials });
+  expect(response.ok(), `login to ${E2E_API_URL} failed with ${response.status()}`).toBe(true);
   return (await response.json()).access_token;
 }
 
 // The account's own display currencies, in the order the sidebar offers them: primary first, then the
 // optional secondary. "Original" is excluded — it converts nothing, so there is no agreement to check.
 async function displayCurrencies(request: APIRequestContext, token: string): Promise<string[]> {
-  const response = await request.get(`${API_BASE}/settings`, {
+  const response = await request.get(`${E2E_API_URL}/settings`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.ok()).toBe(true);
@@ -67,10 +61,10 @@ async function readTotals(
   currency: string,
 ): Promise<{ headline: DashboardTotals; lastPoint: DashboardTotals }> {
   const headers = { Authorization: `Bearer ${token}` };
-  const overview = await request.get(`${API_BASE}/dashboard/overview?currency=${currency}`, {
+  const overview = await request.get(`${E2E_API_URL}/dashboard/overview?currency=${currency}`, {
     headers,
   });
-  const evolution = await request.get(`${API_BASE}/dashboard/evolution?currency=${currency}`, {
+  const evolution = await request.get(`${E2E_API_URL}/dashboard/evolution?currency=${currency}`, {
     headers,
   });
   expect(overview.ok()).toBe(true);
@@ -117,9 +111,10 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
       anyCardDebt ||= Number(headline.cardBalance) !== 0;
       // String equality on the serialised decimals, not a numeric tolerance: the whole point is that
       // the two agree to the cent, and a tolerance would accept the rounding drift that converting at
-      // the wrong granularity produces.
-      expect(lastPoint.cardBalance, `card balance in ${currency}`).toBe(headline.cardBalance);
-      expect(lastPoint.netWorth, `net worth in ${currency}`).toBe(headline.netWorth);
+      // the wrong granularity produces. SOFT, so a regression reports every currency it breaks rather
+      // than stopping at the first — the two signs above are two findings, not one.
+      expect.soft(lastPoint.cardBalance, `card balance in ${currency}`).toBe(headline.cardBalance);
+      expect.soft(lastPoint.netWorth, `net worth in ${currency}`).toBe(headline.netWorth);
     }
 
     /*
