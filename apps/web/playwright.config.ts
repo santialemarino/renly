@@ -31,7 +31,16 @@ export default defineConfig({
   // Single worker by default so files run serially too — `fullyParallel: false` only disables
   // intra-file parallelism. Bump this once the suite is large and tests are proven independent.
   workers: 1,
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  /*
+   * CI adds two: `github` turns each failure into an annotation on the PR's diff, and `json` writes
+   * the counts the workflow checks after the run — that the authenticated project existed and that
+   * nothing skipped, the two ways a run can go green on less than the whole suite.
+   */
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ...(isCI ? ([['github'], ['json', { outputFile: 'test-results/results.json' }]] as const) : []),
+  ],
   outputDir: 'test-results',
   // Logs in once and saves the state the authenticated project loads. A no-op when unconfigured.
   globalSetup: './tests/e2e/global-setup.ts',
