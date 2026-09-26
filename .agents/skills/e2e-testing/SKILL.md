@@ -13,7 +13,7 @@ Three layers, independent:
 
 1. **Test library (`@playwright/test`).** Tests live in `apps/web/tests/e2e/`, run with `pnpm test:e2e` from `apps/web/` or via `pnpm --filter web test:e2e` from the repo root. Configured in `apps/web/playwright.config.ts`. This is the deterministic verification contract.
 2. **CLI (`@playwright/cli`).** Installed globally on the dev machine. Use during feature implementation to drive a real browser, verify behavior, capture screenshots and videos. Does not produce committed tests by itself; the agent uses it to verify what was built and then writes a corresponding `.spec.ts` if a persistent test is warranted.
-3. **CI workflow.** Not yet implemented. Future plan documented at the end of this file under "Future: CI integration."
+3. **CI workflow.** `.github/workflows/ci.web-e2e.yml` runs the whole suite against a production build on every PR to `main`, every push to `main`, and on demand. See "CI" at the end of this file.
 
 ## When to write a Playwright test
 
@@ -92,7 +92,7 @@ is optional, and it stays out of both env files for the same reason the two abov
 the API has to log in for its OWN bearer token: the browser's session is a NextAuth cookie on the web
 origin, which the API never sees, so a request context cannot borrow it.
 
-**`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings.
+**`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings. In CI the config also adds the `github` and `json` reporters (see "CI").
 
 ## Conventions
 
@@ -256,43 +256,49 @@ After each command, the CLI outputs a snapshot of the current page state with el
 
 **Refs are stable across actions within a session.** Once you've snapshotted a page, you can chain `click e15` → `fill e22 "value"` → `click e30` without re-running `snapshot` between them — the refs keep pointing to the same elements. Only re-snapshot when the page itself changes (navigation, dialog open/close, dynamic content load).
 
-## Future: CI integration
+## CI
 
-Not yet implemented. When the user is ready, the plan is:
+`.github/workflows/ci.web-e2e.yml` runs the whole suite on every PR to `main`, every push to `main`,
+and on demand (`workflow_dispatch`). It has **no path filters**: the suite drives the API, the web app
+and `packages/ui` together, so almost any change can break it, and a path-filtered workflow cannot be a
+required check — a PR that skips it leaves the check pending forever. Whether the check is REQUIRED is
+a repository setting, not something the workflow decides.
 
-**Phase 1: Manual trigger (workflow_dispatch).**
+One job, serial, Chromium only, and it builds its environment from the same pieces a developer uses:
 
-- Create `.github/workflows/ci.web-e2e.yml`.
-- Trigger: `on: workflow_dispatch` only — runs only when the user clicks "Run workflow" in the Actions tab.
-- Job steps:
-  1. Checkout the repo.
-  2. Set up Node 22 (matches root `package.json` `engines.node: >=22`) and pnpm.
-  3. Set up Postgres as a service container with the same image used in `pnpm db:init`.
-  4. Install dependencies with `pnpm install --frozen-lockfile`.
-  5. Run `pnpm db:init` to apply schema.
-  6. Start the API in background: `cd apps/api && uv run uvicorn app.main:app --port 8000 &`.
-  7. Start the web in background: `cd apps/web && pnpm build && pnpm start &`.
-  8. Wait for both to be healthy (curl loop).
-  9. Install Playwright browsers: `pnpm --filter web exec playwright install chromium`.
-  10. Run tests: `pnpm --filter web test:e2e`.
-  11. Upload artifacts (screenshots, videos, traces, HTML report) regardless of outcome.
-- Iterate on the workflow until 3-5 consecutive runs are clean.
+1. **Database:** `pnpm db:init`, unchanged — compose's Postgres image, `00_roles.sql`,
+   `01_create_tables.sql`, an Alembic stamp. No CI-only schema path.
+2. **Web:** a PRODUCTION build (`pnpm build:ui`, `pnpm build:web`, then `pnpm --filter web start`), so
+   no test's budget is spent compiling a route on first request — the cause of every cold-start
+   timeout the specs' comments describe. The API runs under `uvicorn` on the `renly_app` /
+   `renly_admin` role split, with `EMAIL_PROVIDER=console` and a JWT / NextAuth secret generated per
+   run.
+3. **Exchange rates** are seeded before any API starts (it caches what it reads): today's, as the
+   fallback a provider outage would otherwise leave missing, and a set three months back that no live
+   fetch writes. The startup fetch still runs and simply replaces today's rows.
+4. **The harness account** is a throwaway `@example.com` user with a per-run password, registered
+   against a short-lived `SIGNUP_MODE=open` API that is stopped before the real one starts — the
+   invite-gate spec needs the launch default, `invite`. It is then verified in SQL and given what the
+   authenticated specs assume of a lived-in account: two display currencies (ARS + USD), a USD card
+   owing one charge from three months ago and one from today (so the conversion-basis spec reconciles
+   a foreign balance whose history converts at a different rate than today, instead of skipping), and
+   30 past-dated expenses (so `/expenses` renders its pager, and an expense a spec adds today still
+   lands on page one). **A new spec that assumes account data adds it to this step.**
+5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200.
+6. **Run:** `pnpm --filter web test:e2e` with `CI=true` (so `forbidOnly` + `retries: 2`), plus two
+   reporters the config adds only in CI — `github`, which annotates the PR diff at each failure, and
+   `json`, written to `test-results/results.json`.
+7. **Require a full run:** a step reads that JSON and fails the job if the `chromium-authenticated`
+   project did not exist or any test skipped. Both are ways the suite exits 0 on less than itself:
+   unset credentials drop the whole authenticated project, and a missing seed makes the
+   conversion-basis spec skip. So **no spec may skip in CI** — a spec that genuinely cannot run there
+   has to be made to run, not skipped.
+8. **Artifacts, always** (even on success, 14 days): the HTML report (`playwright-report`), the
+   traces / screenshots / videos (`playwright-test-results`), and the API and web server logs
+   (`e2e-server-logs`). To read a failure: download `playwright-report`, then
+   `pnpm --filter web exec playwright show-report <dir>`.
 
-**Phase 2: Automatic on PRs.**
-
-- Add `pull_request` to the trigger: `on: [workflow_dispatch, pull_request]`.
-- Filter by paths so the workflow only runs when `apps/web/**` or `playwright.config.ts` or `tests/e2e/**` changed.
-- Add a step that posts a sticky comment on the PR with embedded screenshots and a link to the HTML report. Use `marocchino/sticky-pull-request-comment` or equivalent.
-- Continue tuning until stable enough to be a required check.
-
-**Decisions already made for the CI work:**
-
-- Start with `workflow_dispatch` (manual) before going automatic.
-- One job, serial execution, chromium only at the start.
-- Artifacts always uploaded, even on success — gives the user the screenshots embedded in the PR comment in Phase 2.
-- Use the same Postgres image and schema init flow as local `pnpm db:init`. Do not invent a separate CI-only setup.
-
-When picking this work up, read this section in full first, then proceed.
+Browser binaries are cached on the lockfile hash; on a hit only the system dependencies install.
 
 ## Glossary
 

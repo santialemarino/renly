@@ -40,6 +40,8 @@ First-time setup (one-off per machine): `pnpm exec playwright install chromium`.
 
 Prerequisite for every run: `pnpm dev` running on http://localhost:3000 (override with `PLAYWRIGHT_BASE_URL=...`).
 
+In CI, `.github/workflows/ci.web-e2e.yml` runs the whole suite on every PR to `main` against a production build and a seeded throwaway account; the report, traces and server logs are uploaded as artifacts on every run.
+
 For full conventions (selectors, auth, fixtures, `playwright-cli` workflow), see the `e2e-testing` skill in `.claude/skills/e2e-testing/SKILL.md`.
 
 ## Structure
