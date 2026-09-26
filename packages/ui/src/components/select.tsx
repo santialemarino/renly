@@ -48,7 +48,7 @@ function SelectTrigger({
         surface ? 'bg-background' : 'bg-input',
         blue
           ? 'border-blue-800/50 hover:border-blue-800 hover:bg-blue-50 focus-visible:border-blue-800 focus-visible:ring-blue-800/30'
-          : 'border-border hover:border-ring hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50',
+          : 'border-border hover:border-border-3 hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring',
         className,
       )}
       {...props}

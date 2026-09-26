@@ -44,7 +44,7 @@ export function NotificationRow({ notification, onOpen, className }: Notificatio
       href={row.href}
       onClick={() => onOpen?.(notification.id)}
       className={cn(
-        'flex items-start px-3 py-2.5 gap-x-3 hover:bg-muted/60 rounded-lg outline-none focus-visible:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors',
+        'flex items-start px-3 py-2.5 gap-x-3 hover:bg-muted/60 rounded-lg outline-none focus-visible:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring transition-colors',
         className,
       )}
     >

@@ -91,7 +91,7 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label={count > 0 ? t('bell.unread', { count }) : t('bell.none')}
-        className="group/bell relative grid size-8 shrink-0 place-items-center rounded-lg outline-none hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+        className="group/bell relative grid size-8 shrink-0 place-items-center rounded-lg outline-none hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:ring-3 focus-visible:ring-ring transition-colors"
       >
         <Bell className="size-5 text-muted-foreground group-hover/bell:text-foreground group-focus-visible/bell:animate-focus-bump transition-colors" />
         {/*
@@ -115,7 +115,7 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
               onClick={handleMarkAll}
               disabled={isRefreshing}
               className={cn(
-                'rounded-md px-1 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 transition-colors',
+                'rounded-md px-1 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring disabled:opacity-50 transition-colors',
                 'text-paragraph-xs text-muted-foreground',
               )}
             >
@@ -143,7 +143,7 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
         <Link
           href={ROUTES.notifications}
           onClick={() => setOpen(false)}
-          className="px-1 py-1 rounded-md outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 text-center text-paragraph-xs text-muted-foreground transition-colors"
+          className="px-1 py-1 rounded-md outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring text-center text-paragraph-xs text-muted-foreground transition-colors"
         >
           {t('bell.seeAll')}
         </Link>

@@ -102,8 +102,8 @@ export function ComboboxMultiSelect({
               'h-9 w-full justify-between gap-x-2 border-border px-3 shadow-xs',
               'text-paragraph-sm font-normal',
               selectedIds.length > 0 ? 'text-foreground' : 'text-muted-foreground',
-              'hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+              'hover:border-border-3',
+              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
               surface ? 'bg-background' : 'bg-input',
             )}
           >

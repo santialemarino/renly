@@ -124,7 +124,7 @@ export function ImportSection({ initialType }: ImportSectionProps) {
               // distinct from the others.
               entity === key
                 ? 'bg-blue-800 text-white focus-visible:ring-blue-800/50'
-                : 'bg-muted text-foreground hover:bg-muted/70 focus-visible:ring-ring/50',
+                : 'bg-muted text-foreground hover:bg-muted/70 focus-visible:ring-ring',
             )}
           >
             {t(`types.${key}`)}

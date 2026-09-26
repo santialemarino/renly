@@ -149,7 +149,7 @@
 }
 
 .shepherd-button.shepherd-button-secondary:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 /* Flex-center the ✕ glyph in its box (font glyphs sit high in the line box) so it — and its focus

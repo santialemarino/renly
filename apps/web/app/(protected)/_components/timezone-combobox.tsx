@@ -69,7 +69,7 @@ export function TimezoneCombobox({
           size="lg"
           disabled={disabled}
           className={cn(
-            'w-full min-w-0 justify-between px-3 group shadow-xs hover:border-ring has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/50 text-paragraph-sm font-normal',
+            'w-full min-w-0 justify-between px-3 group shadow-xs hover:border-border-3 has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring text-paragraph-sm font-normal',
             // Same affordance as every other dropdown trigger (Select, category, etc.): shadow-xs,
             // px-3, the text-paragraph-sm token, a hover border highlight, and a muted fill on hover
             // (Button's outline base supplies hover:bg-muted / aria-expanded:bg-muted once the

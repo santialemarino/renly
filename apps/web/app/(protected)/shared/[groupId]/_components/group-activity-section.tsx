@@ -81,7 +81,7 @@ function ActivityLine({ entry, groupId }: { entry: ActivityEntry; groupId: numbe
        */}
       <Link
         href={row.href}
-        className="flex items-baseline justify-between px-4 py-3 gap-x-4 hover:bg-muted/40 rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+        className="flex items-baseline justify-between px-4 py-3 gap-x-4 hover:bg-muted/40 rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-ring transition-colors"
       >
         <span className="text-paragraph-sm">
           {t(`activity.entries.${row.textKey}`, row.params)}
