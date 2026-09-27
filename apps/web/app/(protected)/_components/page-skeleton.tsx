@@ -26,10 +26,17 @@ interface PageSkeletonProps extends PageSkeletonLayoutProps {
   // The page's translation namespace, whose `title` and `subtitle` ARE its header. Omit it when the
   // page's title is DATA (an account's or a group's name), which a loading state cannot know.
   namespace?: string;
+  // The page's title is static but its subtitle depends on data (a filter's name): paint the title
+  // and a placeholder where the subtitle goes, rather than a default subtitle the page contradicts.
+  subtitleIsData?: boolean;
 }
 
 // What each route's `loading.tsx` renders: resolves the copy, then draws the view below.
-export async function PageSkeleton({ namespace, ...layout }: PageSkeletonProps) {
+export async function PageSkeleton({
+  namespace,
+  subtitleIsData = false,
+  ...layout
+}: PageSkeletonProps) {
   const tCommon = await getTranslations('common.loading');
   const t = namespace ? await getTranslations(namespace) : null;
 
@@ -37,7 +44,7 @@ export async function PageSkeleton({ namespace, ...layout }: PageSkeletonProps) 
     <PageSkeletonView
       status={tCommon('status')}
       title={t?.('title')}
-      subtitle={t?.('subtitle')}
+      subtitle={subtitleIsData ? undefined : t?.('subtitle')}
       {...layout}
     />
   );
@@ -85,8 +92,13 @@ export function PageSkeletonView({
         {status}
       </p>
       {backLink && <Skeleton className="w-40 h-5 rounded-md" />}
-      {title !== undefined ? (
-        <PageHeader title={title} subtitle={subtitle ?? ''} />
+      {title !== undefined && subtitle !== undefined ? (
+        <PageHeader title={title} subtitle={subtitle} />
+      ) : title !== undefined ? (
+        <div className="flex flex-col gap-y-1">
+          <h1 className="text-heading-2 text-foreground">{title}</h1>
+          <Skeleton className="w-80 max-w-full h-6 rounded-md" />
+        </div>
       ) : (
         <div className="flex flex-col gap-y-1">
           <Skeleton className="w-64 max-w-full h-10 rounded-lg" />

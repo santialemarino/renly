@@ -48,16 +48,45 @@ function protectedPageDirs(): string[] {
   return out.sort();
 }
 
-// The namespace a page's header copy comes from, or null when its title is not a static translation.
-function pageHeaderNamespace(source: string): string | null {
-  const header = /<PageHeader\s+title=\{(\w+)\('title'\)\}/.exec(source);
-  if (!header) return null;
-  const translator = new RegExp(`const ${header[1]} = await getTranslations\\('([^']+)'\\)`).exec(
+interface PageHeaderCopy {
+  // The namespace the title is `t('title')` from, or null when the title is not a static translation.
+  namespace: string | null;
+  // Whether the subtitle is that same translator's `t('subtitle')`, i.e. what the skeleton paints.
+  staticSubtitle: boolean;
+}
+
+/*
+ * What a page's header is made of, read from every `<PageHeader …/>` tag's own props (a page can have
+ * two — a dashboard's load-error branch renders its own). The title counts as static only if every tag
+ * takes it from `t('title')` of one namespace, and the subtitle only if every tag also uses that
+ * translator's `t('subtitle')` — one data-driven branch is enough to make the loading copy a claim.
+ */
+function pageHeaderCopy(source: string): PageHeaderCopy {
+  const tags: string[] = [];
+  for (
+    let at = source.indexOf('<PageHeader');
+    at !== -1;
+    at = source.indexOf('<PageHeader', at + 1)
+  ) {
+    tags.push(source.slice(at, source.indexOf('/>', at)));
+  }
+  const titles = tags.map((tag) => /^<PageHeader\s+title=\{(\w+)\('title'\)\}/.exec(tag)?.[1]);
+  const name = titles[0];
+  if (!name || titles.some((t) => t !== name)) return { namespace: null, staticSubtitle: false };
+  const subtitle = new RegExp(`\\ssubtitle=\\{${name}\\('subtitle'\\)\\}`);
+  return {
+    namespace: pageHeaderNamespace(source, name),
+    staticSubtitle: tags.every((tag) => subtitle.test(tag)),
+  };
+}
+
+// The namespace bound to translator `name` in a page.
+function pageHeaderNamespace(source: string, name: string): string {
+  const translator = new RegExp(`const ${name} = await getTranslations\\('([^']+)'\\)`).exec(
     source,
   );
   // A header built from a translator this scan cannot find is a scan failure, not a dynamic title.
-  if (!translator)
-    throw new Error(`PageHeader uses ${header[1]}() but no getTranslations binds it`);
+  if (!translator) throw new Error(`PageHeader uses ${name}() but no getTranslations binds it`);
   return translator[1]!;
 }
 
@@ -100,8 +129,11 @@ describe('protected route loading coverage', () => {
     const page = readFileSync(join(PROTECTED, dir, 'page.tsx'), 'utf8');
     const loading = readFileSync(join(PROTECTED, dir, 'loading.tsx'), 'utf8');
 
-    const expected = pageHeaderNamespace(page);
+    const { namespace: expected, staticSubtitle } = pageHeaderCopy(page);
     expect(loadingNamespace(loading)).toBe(expected);
+    // A static title over a data-driven subtitle (a filter's name) must not paint the default subtitle.
+    const expectsDataSubtitle = expected !== null && !staticSubtitle;
+    expect(/<PageSkeleton\b[^>]*\bsubtitleIsData\b/.test(loading)).toBe(expectsDataSubtitle);
 
     if (expected !== null) {
       for (const messages of [en, es]) {
@@ -114,9 +146,10 @@ describe('protected route loading coverage', () => {
   it('tells a static header from a data-driven one on real pages', () => {
     // Both branches of the namespace check must actually be exercised, or one of them is vacuous.
     const kinds = PAGE_DIRS.map((dir) =>
-      pageHeaderNamespace(readFileSync(join(PROTECTED, dir, 'page.tsx'), 'utf8')),
+      pageHeaderCopy(readFileSync(join(PROTECTED, dir, 'page.tsx'), 'utf8')),
     );
-    expect(kinds).toContain('expenses');
-    expect(kinds).toContain(null);
+    expect(kinds).toContainEqual({ namespace: 'expenses', staticSubtitle: true });
+    expect(kinds).toContainEqual({ namespace: 'investorDashboard', staticSubtitle: false });
+    expect(kinds).toContainEqual({ namespace: null, staticSubtitle: false });
   });
 });
