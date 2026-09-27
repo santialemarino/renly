@@ -18,6 +18,13 @@ import { describe, expect, it } from 'vitest';
  * the page. An unclassified bare read fails here, and so does a stale entry (a read listed as primary
  * that the page no longer makes bare), so the table cannot drift into describing a page that has moved
  * on. Reads that never throw by construction are in `NEVER_THROWS`, each checked against its source.
+ *
+ * LAYOUTS are scanned as well as pages, and they matter more: a bare read in `(protected)/layout.tsx`
+ * fails every protected route at once, and its failure lands in `app/error.tsx`, outside the app shell,
+ * because a segment's own boundary sits inside its layout. A layout's entries are keyed by its file
+ * (`layout.tsx`, `<dir>/layout.tsx`). And a read is found by what it IS, not what it is called here: an
+ * aliased import (`getAccounts as loadAccounts`) is tracked under its local name and classified under
+ * the function's own.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,9 +51,9 @@ const LIST = 'the page IS this list — an empty table would claim there is noth
 const FIGURES = "the page's figures; the page's own try turns a failure into its inline load error";
 const NOT_FOUND = 'the record the page is about: a 404 is notFound(), anything else must be loud';
 
-// Every bare read a protected page makes, and why its failure may take the page.
+// Every bare read a protected page or layout makes, and why its failure may take the page.
 const PRIMARY: Record<string, Record<string, string>> = {
-  accounts: { getAccountsGrouped: LIST },
+  'accounts/(list)': { getAccountsGrouped: LIST },
   'accounts/[id]': { getAccount: NOT_FOUND },
   collections: { getCollections: LIST },
   'credit-cards': { getCreditCards: LIST },
@@ -75,8 +82,8 @@ const PRIMARY: Record<string, Record<string, string>> = {
   },
   'payment-obligations': { getPaymentObligations: LIST },
   'payments-calendar': { getPaymentsCalendar: LIST },
-  shared: { getGroups: LIST },
-  'shared/[groupId]': {
+  'shared/(groups)': { getGroups: LIST },
+  'shared/[groupId]/(hub)': {
     getGroup: NOT_FOUND,
     getPots: 'an empty pots section would say the group shares nothing',
     getSharedExpenses:
@@ -97,7 +104,7 @@ const PRIMARY: Record<string, Record<string, string>> = {
     getInvestments:
       'the eligible set IS the page: an empty list would say there is nothing to share',
   },
-  'shared/pots/[id]': {
+  'shared/pots/[id]/(pot)': {
     getGroup: NOT_FOUND,
     getPot: NOT_FOUND,
     getPotHoldings: NOT_FOUND,
@@ -119,37 +126,48 @@ const PRIMARY: Record<string, Record<string, string>> = {
   subscriptions: { getSubscriptions: LIST },
 };
 
-// Every directory under app/(protected) holding a page.tsx, relative to it.
-function protectedPageDirs(): string[] {
-  const out: string[] = [];
+interface Source {
+  // What `PRIMARY` keys it by: a page's directory, or a layout's file.
+  key: string;
+  path: string;
+}
+
+// Every page and layout under app/(protected): pages keyed by directory, layouts by file.
+function protectedSources(): Source[] {
+  const out: Source[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
       if (statSync(full).isDirectory()) walk(full);
-      else if (entry === 'page.tsx') out.push(relative(PROTECTED, dir));
+      else if (entry === 'page.tsx') out.push({ key: relative(PROTECTED, dir), path: full });
+      else if (entry === 'layout.tsx') out.push({ key: relative(PROTECTED, full), path: full });
     }
   };
   walk(PROTECTED);
-  return out.sort();
+  return out.sort((a, b) => a.key.localeCompare(b.key));
 }
 
-// The value-level functions a page imports from `@/lib/api/*` (types and constants excluded).
-function apiReads(source: string): string[] {
-  const names = new Set<string>();
+/*
+ * The functions a file imports from `@/lib/api/*`, as `local name -> the function's own name`. Every
+ * lowercase value import counts (types are marked `type`, error classes and constants are capitalised),
+ * and `x as y` maps `y` back to `x`, so renaming a read at the import cannot hide it.
+ */
+function apiReads(source: string): Map<string, string> {
+  const reads = new Map<string, string>();
   for (const match of source.matchAll(/import \{([^}]*)\} from '@\/lib\/api\/[^']+';/g)) {
     for (const raw of match[1]!.split(',')) {
-      const name = raw.trim();
-      if (/^get[A-Z]\w*$/.test(name)) names.add(name);
+      const binding = /^([a-z]\w*)(?:\s+as\s+(\w+))?$/.exec(raw.trim());
+      if (binding) reads.set(binding[2] ?? binding[1]!, binding[1]!);
     }
   }
-  return [...names];
+  return reads;
 }
 
-// The reads a page makes BARE — at least one call site not followed by `.catch(`.
+// The reads a file makes BARE — at least one call site not followed by `.catch(` — by their own name.
 function bareReads(source: string): string[] {
   const bare = new Set<string>();
-  for (const name of apiReads(source)) {
-    for (const match of source.matchAll(new RegExp(`\\b${name}\\(`, 'g'))) {
+  for (const [local, name] of apiReads(source)) {
+    for (const match of source.matchAll(new RegExp(`\\b${local}\\(`, 'g'))) {
       let i = match.index! + match[0].length;
       for (let depth = 1; depth > 0; i += 1) {
         if (source[i] === '(') depth += 1;
@@ -161,29 +179,46 @@ function bareReads(source: string): string[] {
   return [...bare].sort();
 }
 
-const PAGE_DIRS = protectedPageDirs();
+const SOURCES = protectedSources();
 
 describe('protected page read classification', () => {
   it('derives reads from real pages, caught and bare alike', () => {
     // A scan that found nothing would pass every assertion below.
     const expenses = readFileSync(join(PROTECTED, 'expenses', 'page.tsx'), 'utf8');
-    expect(apiReads(expenses)).toEqual(expect.arrayContaining(['getExpenses', 'getAccounts']));
+    expect([...apiReads(expenses).values()]).toEqual(
+      expect.arrayContaining(['getExpenses', 'getAccounts']),
+    );
     expect(bareReads(expenses)).toContain('getExpenses');
     expect(bareReads(expenses)).not.toContain('getAccounts');
+    // The protected layout is in the population — the file whose failure has the widest reach.
+    expect(SOURCES.map((source) => source.key)).toContain('layout.tsx');
   });
 
-  it.each(PAGE_DIRS)('%s makes no unclassified bare read', (dir) => {
-    const bare = bareReads(readFileSync(join(PROTECTED, dir, 'page.tsx'), 'utf8'));
-    const classified = PRIMARY[dir] ?? {};
-    const unclassified = bare.filter((name) => !(name in classified) && !(name in NEVER_THROWS));
-    expect(unclassified, `bare reads in ${dir} need .catch or a PRIMARY entry`).toEqual([]);
-
-    const stale = Object.keys(classified).filter((name) => !bare.includes(name));
-    expect(stale, `PRIMARY lists reads ${dir} no longer makes bare`).toEqual([]);
+  it('resolves an aliased import to the read it is', () => {
+    const aliased = [
+      "import { getAccounts as loadAccounts, getGroups } from '@/lib/api/accounts';",
+      'const a = await loadAccounts();',
+      'const g = await getGroups().catch(() => []);',
+    ].join('\n');
+    expect(bareReads(aliased)).toEqual(['getAccounts']);
   });
 
-  it('names only pages that exist', () => {
-    expect(Object.keys(PRIMARY).filter((dir) => !PAGE_DIRS.includes(dir))).toEqual([]);
+  it.each(SOURCES.map((source) => [source.key, source.path]))(
+    '%s makes no unclassified bare read',
+    (key, path) => {
+      const bare = bareReads(readFileSync(path, 'utf8'));
+      const classified = PRIMARY[key] ?? {};
+      const unclassified = bare.filter((name) => !(name in classified) && !(name in NEVER_THROWS));
+      expect(unclassified, `bare reads in ${key} need .catch or a PRIMARY entry`).toEqual([]);
+
+      const stale = Object.keys(classified).filter((name) => !bare.includes(name));
+      expect(stale, `PRIMARY lists reads ${key} no longer makes bare`).toEqual([]);
+    },
+  );
+
+  it('names only pages and layouts that exist', () => {
+    const keys = SOURCES.map((source) => source.key);
+    expect(Object.keys(PRIMARY).filter((key) => !keys.includes(key))).toEqual([]);
   });
 
   it.each(Object.entries(NEVER_THROWS))('%s catches every failure itself', (_, { file, proof }) => {

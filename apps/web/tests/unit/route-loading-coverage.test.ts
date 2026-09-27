@@ -19,6 +19,15 @@ import es from '../../translations/es.json';
  * page is worse than none; a single `(protected)/loading.tsx` would satisfy the weaker rule for every
  * route at once and be exactly that.
  *
+ * Owning its directory is not enough on its own, either: a `loading.tsx` is the boundary for every route
+ * BENEATH its directory too, and a production build prefetches a dynamic route only down to the first
+ * loading boundary under the segment it shares with the current page. So a list page whose details live
+ * under it (`accounts/` holding `accounts/[id]`) painted the LIST's skeleton over every detail entered
+ * from another section, even with the detail's own `loading.tsx` in place. Such a list page and its
+ * loading state therefore live in a route group (`accounts/(list)/`), which wraps that one page and
+ * changes no URL — and the rule enforced here is that no `loading.tsx` shares its directory with a
+ * nested route.
+ *
  * And the header it paints must be the page's own. Where the page renders
  * `<PageHeader title={t('title')} …>` from a `getTranslations('<ns>')`, the loading state must pass
  * `namespace="<ns>"`; where the page's title is data (an account's name, a pot's label in a wizard's
@@ -33,19 +42,23 @@ const PROTECTED = join(here, '..', '..', 'app', '(protected)');
 const SKELETON_IMPORT =
   "import { PageSkeleton } from '@/app/(protected)/_components/page-skeleton';";
 
-// Every directory under app/(protected) holding a page.tsx, relative to it ('' is not possible — the
-// group root has no page).
-function protectedPageDirs(): string[] {
+// Every directory under app/(protected) holding `file`, relative to it.
+function protectedDirsWith(file: string): string[] {
   const out: string[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
       if (statSync(full).isDirectory()) walk(full);
-      else if (entry === 'page.tsx') out.push(relative(PROTECTED, dir));
+      else if (entry === file) out.push(relative(PROTECTED, dir));
     }
   };
   walk(PROTECTED);
   return out.sort();
+}
+
+// Every directory under app/(protected) holding a page.tsx, relative to it.
+function protectedPageDirs(): string[] {
+  return protectedDirsWith('page.tsx');
 }
 
 interface PageHeaderCopy {
@@ -107,6 +120,8 @@ function lookup(messages: unknown, path: string): unknown {
 }
 
 const PAGE_DIRS = protectedPageDirs();
+// Every directory under app/(protected) holding a loading.tsx, whether or not a page sits beside it.
+const LOADING_DIRS = protectedDirsWith('loading.tsx');
 
 describe('protected route loading coverage', () => {
   it('derives a population that includes nested and dynamic routes', () => {
@@ -114,6 +129,8 @@ describe('protected route loading coverage', () => {
     expect(PAGE_DIRS).toContain('expenses');
     expect(PAGE_DIRS).toContain('accounts/[id]');
     expect(PAGE_DIRS).toContain('shared/pots/[id]/contribute');
+    // The nested-route rule needs real nesting to compare against: a page beside a route group.
+    expect(PAGE_DIRS).toContain('accounts/(list)');
   });
 
   it.each(PAGE_DIRS)('%s has its own loading.tsx rendering the shared skeleton', (dir) => {
@@ -123,6 +140,12 @@ describe('protected route loading coverage', () => {
     const source = readFileSync(loadingPath, 'utf8');
     expect(source).toContain(SKELETON_IMPORT);
     expect(source).toMatch(/return \(?\s*<PageSkeleton\b/);
+  });
+
+  it.each(LOADING_DIRS)('%s/loading.tsx wraps exactly one page and nothing nested', (dir) => {
+    expect(PAGE_DIRS, `${dir}/loading.tsx has no page beside it`).toContain(dir);
+    const nested = PAGE_DIRS.filter((other) => other.startsWith(`${dir}/`));
+    expect(nested, `move ${dir}/page.tsx and its loading.tsx into a route group`).toEqual([]);
   });
 
   it.each(PAGE_DIRS)('%s paints its own header while loading', (dir) => {
@@ -141,6 +164,15 @@ describe('protected route loading coverage', () => {
         expect(typeof lookup(messages, `${expected}.subtitle`)).toBe('string');
       }
     }
+  });
+
+  it.each(PAGE_DIRS)('%s gives its period picker a placeholder when it has one', (dir) => {
+    // A dashboard's picker row is a whole control tall; a loading state without it shifts the page.
+    const page = readFileSync(join(PROTECTED, dir, 'page.tsx'), 'utf8');
+    const loading = readFileSync(join(PROTECTED, dir, 'loading.tsx'), 'utf8');
+    expect(/\bperiodPicker="(header|toolbar)"/.test(loading)).toBe(
+      page.includes('<DashboardPeriodPicker'),
+    );
   });
 
   it.each(PAGE_DIRS)('%s names toolbar labels that exist in both locales', (dir) => {
