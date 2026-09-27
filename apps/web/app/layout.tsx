@@ -9,6 +9,7 @@ import { Toaster } from 'sonner';
 import { UiLabelsProvider } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CookieConsent } from '@/components/cookie-consent';
+import { MotionProvider } from '@/components/motion-provider';
 import { OG_SITE_DEFAULTS, siteConfig, TWITTER_SITE_DEFAULTS } from '@/config/site';
 import { BRAND_SURFACE } from '@/lib/constants/brand';
 
@@ -82,13 +83,15 @@ export default async function RootLayout({
           'min-h-safe-bottom md:min-h-screen w-full bg-muted/30 antialiased overflow-x-hidden',
         )}
       >
-        <NextIntlClientProvider messages={messages}>
-          <UiLabelsProvider labels={uiLabels}>
-            {children}
-            <CookieConsent />
-            <Toaster richColors />
-          </UiLabelsProvider>
-        </NextIntlClientProvider>
+        <MotionProvider>
+          <NextIntlClientProvider messages={messages}>
+            <UiLabelsProvider labels={uiLabels}>
+              {children}
+              <CookieConsent />
+              <Toaster richColors />
+            </UiLabelsProvider>
+          </NextIntlClientProvider>
+        </MotionProvider>
       </body>
     </html>
   );
