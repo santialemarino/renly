@@ -10,7 +10,7 @@ description: Frontend app structure and where to create files (pages, components
 - **`app/(auth)/`** — Route group for unauthenticated routes: login, signup. Layout does not require session.
 - **`app/(protected)/`** — Route group for authenticated routes: dashboard, settings, etc. Layout calls `getSession()` and redirects to `LOGIN_ROUTE` when there is no valid session.
 - **`app/layout.tsx`** — Root layout. Route groups each have their own `layout.tsx` for shared wrapper (e.g. auth layout, protected layout with session check).
-- **Error boundaries — three, nested, and a failed read is meant to reach one.** `app/(protected)/error.tsx` renders INSIDE the protected shell (sidebar and mobile bar stay), so a page whose primary read threw can be retried or left. `app/error.tsx` catches what has no nearer boundary: the auth and public pages, and the group LAYOUTS themselves (a segment's `error.tsx` sits inside its layout, so a protected-layout failure lands here). `app/global-error.tsx` replaces the root layout when that throws, so it resolves the locale itself (`resolveLocale` in `lib/i18n/locales.ts`, the same rule `i18n/request.ts` uses) and loads its messages on demand — a static import of `translations/*.json` there ships every locale to every page. All three render `ErrorState` (`components/error-state.tsx`), whose retry is `router.refresh()` + `reset()` in one transition (`reset()` alone re-renders the failed payload), and report through `useReportBoundaryError` (a caught error never reaches the browser SDK's global handler; one with a `digest` was already reported on the server).
+- **Error boundaries — one per surface, plus two fallbacks, and a failed read is meant to reach one.** Each route group has its own `error.tsx`, rendered INSIDE that group's layout so the visitor keeps the chrome they were using: `(protected)/error.tsx` keeps the sidebar and mobile bar, `(public)/error.tsx` the site header and footer, `(auth)/error.tsx` the auth column (with a home link, since it has no nav). `app/error.tsx` catches the group LAYOUTS themselves (a segment's `error.tsx` sits inside its layout, so a protected-layout failure lands there). `app/global-error.tsx` replaces the root layout when that throws: it resolves the locale itself (`resolveLocale` in `lib/i18n/locales.ts`, the same rule `i18n/request.ts` uses) and renders copy it imports STATICALLY, so it can never render empty — which is why `common.errorBoundary` lives in its own small `translations/error-boundary/<code>.json` (exported as `ERROR_BOUNDARY_MESSAGES` from `lib/i18n/error-boundary-messages.ts`, and merged into `common` by `i18n/request.ts` for every other render) rather than in the main files, which are too large to ship to every page. All of them render `ErrorState` (`components/error-state.tsx`), whose retry is `router.refresh()` + `reset()` in one transition (`reset()` alone re-renders the failed payload), and report through `useReportBoundaryError` (a caught error never reaches the browser SDK's global handler; one with a `digest` was already reported on the server). `tests/unit/error-boundary-coverage.test.ts` derives the route groups and fails on one without its boundary.
 - **Loading states — every protected `page.tsx` has a `loading.tsx` in its OWN directory**, rendering `PageSkeleton` (`app/(protected)/_components/page-skeleton.tsx`) and nothing else. Own directory, not an ancestor's: Next shows the NEAREST boundary, so a parent's `loading.tsx` paints the parent page's header over the child. Pass `namespace` when the page's header is `t('title')` / `t('subtitle')` from that namespace, and omit it when the title is data (an account's name, a pot's label); pick `body` (`table` / `dashboard` / `form` / `sections`) plus `toolbar` / `backLink` / `loose` to match the page's frame, so the swap moves nothing. `tests/unit/route-loading-coverage.test.ts` derives the route list from the filesystem and enforces all of this.
 
 ## Where to create files
@@ -34,7 +34,7 @@ description: Frontend app structure and where to create files (pages, components
 ```
 app/
 ├── layout.tsx
-├── error.tsx                # boundary for auth/public pages and the group layouts
+├── error.tsx                # boundary for the group layouts themselves
 ├── global-error.tsx         # replaces the root layout when it throws
 ├── page.tsx
 ├── (auth)/                  # No session required
@@ -47,7 +47,7 @@ app/
 │       └── _components/
 ├── (protected)/             # getSession + redirect if missing
 │   ├── layout.tsx
-│   ├── error.tsx            # boundary inside the shell
+│   ├── error.tsx            # boundary inside the shell ((auth)/ and (public)/ have their own too)
 │   ├── _components/         # shared across all protected pages (e.g. page-header.tsx, page-skeleton.tsx)
 │   └── <route>/
 │       ├── page.tsx (+ _components/, actions.ts, schema.ts, etc.)
