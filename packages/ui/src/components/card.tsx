@@ -35,9 +35,18 @@ function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
+/*
+ * A `div` by default, since most card titles label a card inside a page that already has its heading.
+ * `as` makes it a real heading where the card IS the page — the auth screens, whose only title is the
+ * card's — so the page has an `h1` rather than a styled div that no heading navigation can reach.
+ */
+function CardTitle({
+  className,
+  as: Tag = 'div',
+  ...props
+}: React.HTMLAttributes<HTMLElement> & { as?: 'div' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' }) {
   return (
-    <div
+    <Tag
       data-slot="card-title"
       className={cn('text-heading-5 text-neutral-950', className)}
       {...props}

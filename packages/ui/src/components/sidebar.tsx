@@ -30,6 +30,9 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleSidebar: () => void;
+  // The id of the element holding the sidebar — the Sheet on a phone, the fixed column otherwise — so
+  // the trigger can name what it controls.
+  sidebarId: string;
 };
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null);
@@ -58,6 +61,7 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
+  const sidebarId = React.useId();
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -109,8 +113,9 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      sidebarId,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, sidebarId],
   );
 
   return (
@@ -150,7 +155,7 @@ function Sidebar({
   variant?: 'sidebar' | 'floating' | 'inset';
   collapsible?: 'offcanvas' | 'icon' | 'none';
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const { isMobile, state, openMobile, setOpenMobile, sidebarId } = useSidebar();
   const labels = useUiLabels();
 
   if (collapsible === 'none') {
@@ -195,6 +200,7 @@ function Sidebar({
           }
           side={side}
           {...props}
+          id={sidebarId}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{labels.sidebarTitle}</SheetTitle>
@@ -240,6 +246,7 @@ function Sidebar({
         )}
         style={style}
         {...props}
+        id={sidebarId}
       >
         <div
           data-sidebar="sidebar"
@@ -253,8 +260,14 @@ function Sidebar({
   );
 }
 
+/*
+ * A disclosure for the sidebar, so it says which way it is and what it opens: `aria-expanded` follows
+ * the Sheet on a phone (the only place the trigger is shown, since desktop collapsing is disabled) and
+ * the column's own state otherwise. The Sheet is unmounted while closed, so `aria-controls` names an
+ * id that exists only while it is open — which is what ARIA allows of a collapsed disclosure.
+ */
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, isMobile, openMobile, open, sidebarId } = useSidebar();
   const labels = useUiLabels();
 
   return (
@@ -263,6 +276,8 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon-sm"
+      aria-expanded={isMobile ? openMobile : open}
+      aria-controls={sidebarId}
       className={cn(className)}
       onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
         onClick?.(event);
@@ -632,18 +647,24 @@ function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<'li'>)
   );
 }
 
+/*
+ * A `button` by default, like `SidebarMenuButton`; a link comes in through `asChild` (a Next `Link`).
+ * shadcn's default is an `<a>`, which with no `href` is not a link at all: it is not focusable, and
+ * the ARIA a disclosure puts on it (`aria-expanded`, `aria-controls`) is not allowed there — which is
+ * exactly what the Commitments group's trigger rendered.
+ */
 function SidebarMenuSubButton({
   asChild = false,
   size = 'md',
   isActive = false,
   className,
   ...props
-}: React.ComponentProps<'a'> & {
+}: React.ComponentProps<'button'> & {
   asChild?: boolean;
   size?: 'sm' | 'md';
   isActive?: boolean;
 }) {
-  const Comp = asChild ? Slot : 'a';
+  const Comp = asChild ? Slot : 'button';
 
   return (
     <Comp
@@ -651,8 +672,9 @@ function SidebarMenuSubButton({
       data-sidebar="menu-sub-button"
       data-size={size}
       data-active={isActive}
+      type={asChild ? undefined : 'button'}
       className={cn(
-        'text-sidebar-foreground ring-sidebar-ring h-7 gap-2 rounded-md px-2 focus-visible:ring-2 data-[size=md]:text-sm data-[size=sm]:text-xs [&>svg]:size-4 flex min-w-0 -translate-x-px items-center overflow-hidden outline-hidden group-data-[collapsible=icon]:hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:shrink-0',
+        'text-sidebar-foreground ring-sidebar-ring h-7 w-full gap-2 rounded-md px-2 text-left focus-visible:ring-2 data-[size=md]:text-sm data-[size=sm]:text-xs [&>svg]:size-4 flex min-w-0 -translate-x-px items-center overflow-hidden outline-hidden group-data-[collapsible=icon]:hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:shrink-0',
         className,
       )}
       {...props}

@@ -20,7 +20,8 @@ export async function PublicHeader() {
   return (
     <header className="sticky top-0 z-40 flex w-full items-center justify-between px-6 py-4 border-b border-neutral-200 bg-background/80 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-screen before:bg-background before:content-['']">
       <Brand name={tCommon('appName')} href={ROUTES.landing} size="md" />
-      <nav className="flex items-center gap-x-2">
+      {/* Named, like every nav landmark: the footer has one too, and two unnamed ones read alike. */}
+      <nav aria-label={t('navLabel')} className="flex items-center gap-x-2">
         {isAuthenticated ? (
           <Button asChild blue size="sm">
             <a href={ROUTES.home}>{tCommon('goToDashboard')}</a>

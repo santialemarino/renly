@@ -37,7 +37,7 @@ export function SignupCard({ lockedEmail = null, inviteToken = null }: SignupCar
         <motion.div key="form" {...FADE_PROPS} className="w-full max-w-auth-form">
           <Card>
             <CardHeader>
-              <CardTitle className="text-heading-4 text-center text-blue-800">
+              <CardTitle as="h1" className="text-heading-4 text-center text-blue-800">
                 {t('title')}
               </CardTitle>
             </CardHeader>

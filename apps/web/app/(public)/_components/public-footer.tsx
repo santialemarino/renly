@@ -29,7 +29,10 @@ export async function PublicFooter() {
           <Brand name={tCommon('appName')} size="sm" />
           <span className="text-paragraph-sm text-muted-foreground">{t('tagline')}</span>
         </div>
-        <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+        <nav
+          aria-label={t('navLabel')}
+          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+        >
           {links.map((link) => (
             <InlineLink key={link.href} href={link.href} color="muted">
               {link.label}

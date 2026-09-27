@@ -183,13 +183,16 @@
     "cookieConsent": {
       "message": "Renly uses essential cookies to keep you signed in and remember your preferences.\nWe don't use them for advertising or third-party tracking.",
       "accept": "Got it",
-      "learnMore": "Privacy Policy"
+      "learnMore": "Privacy Policy",
+      "label": "Cookie notice"
     },
     "publicHeader": {
       "login": "Log in",
-      "signup": "Sign up"
+      "signup": "Sign up",
+      "navLabel": "Account"
     },
     "publicFooter": {
+      "navLabel": "Help and legal",
       "tagline": "Personal finance for Argentine investors.",
       "disclaimerShort": "Renly is an informational tool and does not provide financial advice.",
       "links": {
@@ -1228,6 +1231,7 @@
         "sharedExpense": "Shared with {group}"
       },
       "table": {
+        "title": "Movements",
         "date": "Date",
         "movement": "Movement",
         "notes": "Notes",
@@ -3664,6 +3668,7 @@
         "ignore": "Don't import"
       },
       "preview": {
+        "title": "Rows to import",
         "summary": "{total, plural, one {# row} other {# rows}}",
         "valid": "{count} to import",
         "duplicate": "{count, plural, one {# duplicate} other {# duplicates}}",
