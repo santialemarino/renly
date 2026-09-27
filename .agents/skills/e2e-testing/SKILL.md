@@ -89,8 +89,11 @@ credentials rather than deploy-time configuration, and one of them is a real pas
 **`E2E_API_URL`** joins them, for the rare spec that asserts something the DOM cannot show — a figure
 the page abbreviates, or two endpoints that must agree. It defaults to `http://localhost:8000`, so it
 is optional, and it stays out of both env files for the same reason the two above do. A spec reaching
-the API has to log in for its OWN bearer token: the browser's session is a NextAuth cookie on the web
-origin, which the API never sees, so a request context cannot borrow it.
+the API gets its bearer token from `apiToken()` in `tests/e2e/helpers/api.ts` (which also exports
+`API_BASE`). That reads the token from the session globalSetup saved, via NextAuth's
+`/api/auth/session`, and never calls `POST /auth/login`. The API allows five logins a minute, and
+Playwright restarts the worker after every failed test, re-running each `beforeAll`. A spec that logged
+in there turned a handful of real failures into a wall of `429`s that hid the regression.
 
 **`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings. In CI the config also adds the `github` and `json` reporters (see "CI").
 
@@ -166,9 +169,11 @@ history — so it must also never depend on, or leave behind, a row of its own. 
 `apps/web/tests/e2e/helpers/factories.ts` and the pattern is a **marker**: a per-run unique string
 written into a free-text field (an expense's notes), with every assertion and every cleanup scoped to
 the row carrying it. That is what removes the need for an id, since the marker comes back on the list
-page as something a locator can find. Clean up through the same UI a user would use, in a `finally` or
-an `afterAll`, and make the cleanup a no-op when the row is already gone so it is safe to call
-unconditionally.
+page as something a locator can find. The flow a spec is TESTING goes through the UI, create and
+cleanup alike. Data it is NOT testing, such as the group and collection a layout sweep needs on screen,
+may be seeded and removed through the API (`helpers/api.ts`), which is faster and deterministic, and it
+is still marked. Either way, clean up in a `finally` or an `afterAll`, and make the cleanup a no-op when
+the row is already gone so it is safe to call unconditionally.
 
 **A round trip is ONE test, not two.** Splitting create and delete across tests makes the second depend
 on the first having run — which `workers: 1` happens to guarantee today and no spec should rely on.

@@ -7,15 +7,6 @@ import { join } from 'node:path';
  */
 export const AUTH_STATE_PATH = join(import.meta.dirname, '../.auth/storage-state.json');
 
-/*
- * Where the API is, for the specs that assert something the DOM cannot show and for globalSetup's
- * preflight. A shell var like E2E_EMAIL and E2E_PASSWORD — Playwright reads no dotenv file, so it stays
- * out of `.env.example` too — with the local default that makes it optional. `||` rather than `??` so
- * an empty value falls back.
- */
-// eslint-disable-next-line turbo/no-undeclared-env-vars
-export const E2E_API_URL = process.env.E2E_API_URL || 'http://localhost:8000';
-
 export interface E2ECredentials {
   email: string;
   password: string;

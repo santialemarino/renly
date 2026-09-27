@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { WEB_BASE } from './tests/e2e/helpers/api';
 import { AUTH_STATE_PATH, e2eCredentials } from './tests/e2e/helpers/auth';
 
 // `process.env.CI` arrives as a string — treat `"false"` and `"0"` as opt-outs so an explicit
@@ -8,10 +9,8 @@ import { AUTH_STATE_PATH, e2eCredentials } from './tests/e2e/helpers/auth';
 const ciEnv = process.env.CI;
 const isCI = !!ciEnv && ciEnv !== 'false' && ciEnv !== '0';
 
-// `||` (not `??`) so an empty `PLAYWRIGHT_BASE_URL=""` falls back to the default instead of
-// producing an unusable empty baseURL.
-// eslint-disable-next-line turbo/no-undeclared-env-vars
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+// One definition, shared with the API helper so the browser and the specs' session reads agree.
+const baseURL = WEB_BASE;
 
 /*
  * The authenticated project runs only when E2E_EMAIL / E2E_PASSWORD name a real account — the same

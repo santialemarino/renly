@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { E2E_API_URL, e2eCredentials } from './helpers/auth';
+import { API_BASE, apiToken } from './helpers/api';
 
 /*
  * The dashboard's two conversion frames, and the one assertion that can only be made end to end.
@@ -30,23 +30,10 @@ interface DashboardTotals {
   netWorth: string;
 }
 
-// Logs into the API directly for its own bearer token. The browser's session is a NextAuth cookie on
-// the WEB origin, which the API never sees — so a request context cannot borrow it, and the harness
-// credentials are the only way in.
-async function apiToken(request: APIRequestContext): Promise<string> {
-  const credentials = e2eCredentials();
-  // The authenticated project only exists when both are set, so this cannot be null here — the check
-  // is what makes that a type fact rather than a comment.
-  if (credentials === null) throw new Error('E2E_EMAIL / E2E_PASSWORD are required for this spec');
-  const response = await request.post(`${E2E_API_URL}/auth/login`, { data: credentials });
-  expect(response.ok(), `login to ${E2E_API_URL} failed with ${response.status()}`).toBe(true);
-  return (await response.json()).access_token;
-}
-
 // The account's own display currencies, in the order the sidebar offers them: primary first, then the
 // optional secondary. "Original" is excluded — it converts nothing, so there is no agreement to check.
 async function displayCurrencies(request: APIRequestContext, token: string): Promise<string[]> {
-  const response = await request.get(`${E2E_API_URL}/settings`, {
+  const response = await request.get(`${API_BASE}/settings`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.ok()).toBe(true);
@@ -61,10 +48,10 @@ async function readTotals(
   currency: string,
 ): Promise<{ headline: DashboardTotals; lastPoint: DashboardTotals }> {
   const headers = { Authorization: `Bearer ${token}` };
-  const overview = await request.get(`${E2E_API_URL}/dashboard/overview?currency=${currency}`, {
+  const overview = await request.get(`${API_BASE}/dashboard/overview?currency=${currency}`, {
     headers,
   });
-  const evolution = await request.get(`${E2E_API_URL}/dashboard/evolution?currency=${currency}`, {
+  const evolution = await request.get(`${API_BASE}/dashboard/evolution?currency=${currency}`, {
     headers,
   });
   expect(overview.ok()).toBe(true);
@@ -88,7 +75,7 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
   test('the chart’s last point agrees with the headline, at the rates actually stored', async ({
     request,
   }) => {
-    const token = await apiToken(request);
+    const token = await apiToken();
 
     /*
      * TWO display currencies, because the gap this closed had a DIFFERENT SIGN in each. Measured on the

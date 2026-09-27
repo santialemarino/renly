@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { chromium, type FullConfig } from '@playwright/test';
 
-import { AUTH_STATE_PATH, E2E_API_URL, e2eCredentials } from './helpers/auth';
+import { API_BASE } from './helpers/api';
+import { AUTH_STATE_PATH, e2eCredentials } from './helpers/auth';
 
 // Route literals mirror apps/web/config/routes.ts. Kept local like the two logged-out specs' — the
 // Playwright loader resolves no build-time path aliases.
@@ -33,7 +34,7 @@ const PREFLIGHT_TIMEOUT_MS = 10_000;
 async function preflight(baseURL: string) {
   const targets = [
     { name: 'web app', url: baseURL },
-    { name: 'API', url: `${E2E_API_URL}/health` },
+    { name: 'API', url: `${API_BASE}/health` },
   ];
   const down: string[] = [];
   for (const { name, url } of targets) {
