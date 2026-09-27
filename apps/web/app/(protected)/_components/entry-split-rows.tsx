@@ -18,6 +18,7 @@ import {
 } from '@/app/(protected)/shared/split-rules';
 import { FormControl, FormField, FormItem } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { MoneyFigure } from '@/components/money-figure';
 import type { GroupMember } from '@/lib/api/groups';
 import {
   SPLIT_FIGURE_DECIMALS,
@@ -115,9 +116,13 @@ export function EntrySplitRows<T extends SplitFormValues & FieldValues>({
    */
   const total = splitFiguresTotal(splits);
   const totalLabel =
-    watchedMethod === 'percentage'
-      ? `${fmt.sharePct(total)}% / ${SPLIT_PERCENTAGE_TOTAL}%`
-      : `${fmt.amount(String(total), currency)} / ${fmt.amount(watchedAmount || '0', currency)}`;
+    watchedMethod === 'percentage' ? (
+      `${fmt.sharePct(total)}% / ${SPLIT_PERCENTAGE_TOTAL}%`
+    ) : (
+      <MoneyFigure>
+        {`${fmt.amount(String(total), currency)} / ${fmt.amount(watchedAmount || '0', currency)}`}
+      </MoneyFigure>
+    );
 
   return (
     <div className="flex flex-col gap-y-2">

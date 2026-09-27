@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
 import { InlineLink } from '@/components/inline-link';
+import { MoneyFigure } from '@/components/money-figure';
 import { ROUTES, sharedPotPath } from '@/config/routes';
 import type { DashboardOverview } from '@/lib/api/dashboard';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -36,7 +37,6 @@ interface DashboardSharedBreakdownProps {
  * the keyboard/hover parity.
  */
 export function DashboardSharedBreakdown({ overview }: DashboardSharedBreakdownProps) {
-  const fmt = useFormatters();
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
 
@@ -44,25 +44,21 @@ export function DashboardSharedBreakdown({ overview }: DashboardSharedBreakdownP
 
   return (
     <div className="flex flex-col pt-2 gap-y-1 border-t border-border-3">
-      <SharedLine label={t('shared.yours')} value={fmt.value(overview.privateNetWorth)} />
+      <SharedLine label={t('shared.yours')} amount={overview.privateNetWorth} />
       <SharedLine
         label={
           <InlineLink href={ROUTES.shared} color="muted" className="text-paragraph-xs">
             {t('shared.shared')}
           </InlineLink>
         }
-        value={fmt.value(overview.sharedNetWorth)}
+        amount={overview.sharedNetWorth}
       />
 
       {overview.sharedReceivable !== 0 && (
-        <SharedLine
-          label={t('shared.owedToYou')}
-          value={fmt.value(overview.sharedReceivable)}
-          muted
-        />
+        <SharedLine label={t('shared.owedToYou')} amount={overview.sharedReceivable} muted />
       )}
       {overview.sharedPayable !== 0 && (
-        <SharedLine label={t('shared.youOwe')} value={fmt.value(overview.sharedPayable)} muted />
+        <SharedLine label={t('shared.youOwe')} amount={overview.sharedPayable} muted />
       )}
 
       {overview.undividedPots.map((pot) => (
@@ -94,24 +90,26 @@ export function DashboardSharedBreakdown({ overview }: DashboardSharedBreakdownP
  */
 function SharedLine({
   label,
-  value,
+  amount,
   muted,
 }: {
   label: React.ReactNode;
-  value: string;
+  amount: number;
   muted?: boolean;
 }) {
+  const fmt = useFormatters();
+
   return (
     <div className="flex flex-wrap items-center gap-x-2">
       <span className="text-paragraph-xs text-muted-foreground">{label}</span>
-      <span
+      <MoneyFigure
         className={cn(
-          'ml-auto shrink-0 tabular-nums',
+          'ml-auto shrink-0',
           muted ? 'text-paragraph-mini text-muted-foreground' : 'text-paragraph-xs-medium',
         )}
       >
-        {value}
-      </span>
+        {fmt.value(amount)}
+      </MoneyFigure>
     </div>
   );
 }

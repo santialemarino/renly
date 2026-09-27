@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_components/linked-expense-edit-trigger';
+import { MoneyFigure } from '@/components/money-figure';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
@@ -133,19 +134,17 @@ export async function PaymentsCalendarList({
                           )}
                       </div>
                     </div>
-                    <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
-                      <span>
-                        {fmt.amount(
-                          displayAmount,
-                          item.convertedAmount ? activeCurrency : item.currency,
-                        )}
-                      </span>
+                    <MoneyFigure className="flex items-baseline gap-x-1.5 text-paragraph-sm">
+                      {fmt.amount(
+                        displayAmount,
+                        item.convertedAmount ? activeCurrency : item.currency,
+                      )}
                       {showOriginalCurrency && (
                         <span className="text-paragraph-xs text-muted-foreground">
                           {item.currency}
                         </span>
                       )}
-                    </div>
+                    </MoneyFigure>
                   </div>
                 );
                 // Paid rows are clickable — open the linked expense's edit dialog inline

@@ -20,6 +20,7 @@ import { deleteSharedIncome } from '@/app/(protected)/shared/shared-income-actio
 import { incomeHolderDisplay } from '@/app/(protected)/shared/shared-income-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
@@ -245,7 +246,7 @@ function IncomeRow({
          * bare 90,000 would leave the reader to guess which is dollars. The share beneath is in the
          * same currency, so it does not repeat it.
          */}
-        {`${fmt.amount(income.amount, income.currency)} ${income.currency}`}
+        <MoneyFigure>{`${fmt.amount(income.amount, income.currency)} ${income.currency}`}</MoneyFigure>
         {/* Null when the viewer is entitled to none of this one, which is a real and unremarkable
             state — a custodian collecting rent on somebody else's behalf. The row then states only
             the group's figure. */}

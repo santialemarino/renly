@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
+import { DonutLegend, DonutLegendLayout } from '@/components/donut-legend';
 import type { CompositionItem } from '@/lib/api/dashboard';
 import {
   CHART_ANIMATION_DURATION,
@@ -77,6 +78,12 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
   }
 
   let investmentIndex = 0;
+  const legendItems = chartData.map((entry) => ({
+    key: entry.name,
+    name: entry.name,
+    color: segmentColor(entry, () => investmentIndex++),
+    percentage: entry.percentage,
+  }));
 
   return (
     <Card className="flex-1">
@@ -87,32 +94,9 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
       </CardHeader>
       <CardContent className="px-6">
         {hasData ? (
-          <div className="flex flex-col gap-y-4">
-            <div className="flex flex-col-reverse items-center gap-y-4 lg:flex-row lg:gap-x-6 lg:gap-y-0">
-              {/* Legend */}
-              <div className="w-full lg:flex-1 lg:min-w-0">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 lg:flex lg:flex-col lg:gap-x-0">
-                  {chartData.map((entry) => {
-                    const color = segmentColor(entry, () => investmentIndex++);
-                    return (
-                      <div key={entry.name} className="flex items-center gap-x-2">
-                        <div
-                          className="size-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: color }}
-                        />
-                        <span className="min-w-0 text-paragraph-xs text-muted-foreground truncate">
-                          {entry.name}
-                        </span>
-                        <span className="shrink-0 text-paragraph-xs-semibold">
-                          {fmt.pct(entry.percentage)}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Donut chart */}
+          <DonutLegendLayout
+            legend={<DonutLegend items={legendItems} />}
+            chart={
               <div style={{ height: DONUT_HEIGHT }} className="w-full max-w-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -149,8 +133,8 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-          </div>
+            }
+          />
         ) : (
           <div style={{ height: DONUT_HEIGHT }} className="flex items-center justify-center">
             <p className="text-paragraph-sm text-muted-foreground">{t('noData')}</p>

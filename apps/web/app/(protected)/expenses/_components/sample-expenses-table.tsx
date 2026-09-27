@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
+import { MoneyFigure } from '@/components/money-figure';
 import { SampleDataTable, type SampleColumn } from '@/components/sample/sample-data-table';
 import type { Expense } from '@/lib/api/expenses';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -17,7 +18,7 @@ export function SampleExpensesTable() {
     { header: t('table.date'), cell: (e) => fmt.date(e.date) },
     {
       header: t('table.amount'),
-      cell: (e) => fmt.amount(e.amount, e.currency),
+      cell: (e) => <MoneyFigure>{fmt.amount(e.amount, e.currency)}</MoneyFigure>,
       className: 'tabular-nums',
     },
     {
@@ -35,7 +36,10 @@ export function SampleExpensesTable() {
     title: e.category ? tCommon(`categories.${e.category}`) : fmt.date(e.date),
     fields: [
       { label: t('table.date'), value: fmt.date(e.date) },
-      { label: t('table.amount'), value: fmt.amount(e.amount, e.currency) },
+      {
+        label: t('table.amount'),
+        value: <MoneyFigure>{fmt.amount(e.amount, e.currency)}</MoneyFigure>,
+      },
       { label: t('table.category'), value: e.category ? tCommon(`categories.${e.category}`) : '—' },
       {
         label: t('table.paymentMethod'),

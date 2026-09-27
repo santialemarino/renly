@@ -25,6 +25,7 @@ import { AccountReconciliationsSection } from '@/app/(protected)/accounts/_compo
 import { AccountTransfersSection } from '@/app/(protected)/accounts/_components/account-transfers-section';
 import { TransferFormDialog } from '@/app/(protected)/accounts/_components/transfer-form-dialog';
 import { archiveAccount, unarchiveAccount } from '@/app/(protected)/accounts/account-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
@@ -206,7 +207,7 @@ export function AccountsTable({
                       </TableCell>
                       <TableCell className="text-muted-foreground">{a.currency}</TableCell>
                       <TableCell className="text-right text-paragraph-sm tabular-nums">
-                        {fmt.amount(a.balance, a.currency)}
+                        <MoneyFigure>{fmt.amount(a.balance, a.currency)}</MoneyFigure>
                       </TableCell>
                       <TableCell>{fmt.date(a.openingDate)}</TableCell>
                       <TableCell className="text-paragraph-sm text-muted-foreground">

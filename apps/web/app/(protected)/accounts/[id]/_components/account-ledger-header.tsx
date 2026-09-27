@@ -2,6 +2,8 @@ import { getTranslations } from 'next-intl/server';
 
 import { Badge } from '@repo/ui/components';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
+import { MoneyFigure } from '@/components/money-figure';
+import { StatList } from '@/components/stat-list';
 import type { Account } from '@/lib/api/accounts';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 
@@ -19,10 +21,18 @@ export async function AccountLedgerHeader({ account }: AccountLedgerHeaderProps)
   const t = await getTranslations('accounts');
 
   const stats = [
-    { label: t('ledger.stats.balance'), value: fmt.amount(account.balance, account.currency) },
+    {
+      label: t('ledger.stats.balance'),
+      value: <MoneyFigure>{fmt.amount(account.balance, account.currency)}</MoneyFigure>,
+    },
     {
       label: t('ledger.stats.opening'),
-      value: `${fmt.amount(account.openingBalance, account.currency)} · ${fmt.date(account.openingDate)}`,
+      value: (
+        <>
+          <MoneyFigure>{fmt.amount(account.openingBalance, account.currency)}</MoneyFigure>
+          {` · ${fmt.date(account.openingDate)}`}
+        </>
+      ),
     },
     {
       label: t('ledger.stats.lastReconciled'),
@@ -43,14 +53,11 @@ export async function AccountLedgerHeader({ account }: AccountLedgerHeaderProps)
         trailing={!account.isActive && <Badge variant="secondary">{t('ledger.archived')}</Badge>}
       />
 
-      <dl className="grid grid-cols-1 sm:grid-cols-3 p-4 gap-x-6 gap-y-4 bg-muted/30 border border-border rounded-1.5xl">
-        {stats.map((stat) => (
-          <div key={stat.label} className="flex flex-col gap-y-1">
-            <dt className="text-paragraph-xs text-muted-foreground">{stat.label}</dt>
-            <dd className="text-paragraph-medium tabular-nums text-foreground">{stat.value}</dd>
-          </div>
-        ))}
-      </dl>
+      <StatList
+        stats={stats}
+        columns={3}
+        className="p-4 bg-muted/30 border border-border rounded-1.5xl"
+      />
     </div>
   );
 }

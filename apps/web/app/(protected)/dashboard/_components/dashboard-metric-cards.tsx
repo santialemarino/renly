@@ -3,9 +3,10 @@
 import { CreditCard, Landmark, TrendingDown, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { DashboardSharedBreakdown } from '@/app/(protected)/dashboard/_components/dashboard-shared-breakdown';
+import { MetricCard, MetricCardGrid } from '@/components/metric-card';
+import { MoneyFigure } from '@/components/money-figure';
 import type { DashboardOverview } from '@/lib/api/dashboard';
 import { valueColor } from '@/lib/i18n/format';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -18,18 +19,15 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
   const fmt = useFormatters();
   const t = useTranslations('dashboard');
 
+  const netCashFlow = overview.totalIncome - overview.totalExpenses;
+
   return (
-    <div
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
-      data-testid="dashboard-metrics"
-    >
+    <MetricCardGrid count={5} testId="dashboard-metrics">
       {/* Net Worth */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.netWorth')}</span>
-        <p className="text-heading-3">{fmt.value(overview.netWorth)}</p>
+      <MetricCard label={t('cards.netWorth')} amount={overview.netWorth}>
         {overview.netWorthChange !== null && (
           <span className={cn('text-paragraph-xs', valueColor(overview.netWorthChange))}>
-            {fmt.signedValue(overview.netWorthChange)}
+            <MoneyFigure>{fmt.signedValue(overview.netWorthChange)}</MoneyFigure>
             {overview.netWorthChangePct !== null && overview.netWorthChangePct !== 0 && (
               <> ({fmt.signedPct(overview.netWorthChangePct)})</>
             )}{' '}
@@ -43,15 +41,15 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
          * all for a solo user.
          */}
         <DashboardSharedBreakdown overview={overview} />
-      </Card>
+      </MetricCard>
 
       {/* Cash / bank balance */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.cash')}</span>
-        <div className="flex items-center gap-x-2">
-          <p className="text-heading-3">{fmt.value(overview.cashTotal)}</p>
-          {overview.cashTotal !== 0 && <Landmark className="size-5 text-emerald-600" />}
-        </div>
+      <MetricCard
+        label={t('cards.cash')}
+        amount={overview.cashTotal}
+        icon={overview.cashTotal !== 0 ? Landmark : undefined}
+        iconClassName="text-emerald-600"
+      >
         {/*
          * Counts the user's own accounts PLUS their share of any a pot holds, which is the same money
          * the composition donut puts in its `cash` slice. Two figures on one screen calling themselves
@@ -60,18 +58,14 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
         <span className="text-paragraph-mini text-muted-foreground">
           {overview.hasShared ? t('cards.cashHintShared') : t('cards.cashHint')}
         </span>
-      </Card>
+      </MetricCard>
 
       {/* Investment Value + gain subtext */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">
-          {t('cards.investmentValue')}
-        </span>
-        <p className="text-heading-3">{fmt.value(overview.investmentTotal)}</p>
+      <MetricCard label={t('cards.investmentValue')} amount={overview.investmentTotal}>
         <div className="flex items-center gap-x-1.5">
           {overview.investmentGain !== 0 && (
             <span className={cn('text-paragraph-xs', valueColor(overview.investmentGain))}>
-              {fmt.signedValue(overview.investmentGain)}
+              <MoneyFigure>{fmt.signedValue(overview.investmentGain)}</MoneyFigure>
               {overview.investmentGainPct !== null && overview.investmentGainPct !== 0 && (
                 <> ({fmt.signedPct(overview.investmentGainPct)})</>
               )}
@@ -89,45 +83,25 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
             {t('cards.investmentGainScope')}
           </span>
         )}
-      </Card>
+      </MetricCard>
 
       {/* Net Cash Flow */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.netCashFlow')}</span>
-        <div className="flex items-center gap-x-2">
-          <p
-            className={cn(
-              'text-heading-3',
-              valueColor(overview.totalIncome - overview.totalExpenses),
-            )}
-          >
-            {fmt.value(overview.totalIncome - overview.totalExpenses)}
-          </p>
-          {overview.totalIncome - overview.totalExpenses !== 0 &&
-            (overview.totalIncome - overview.totalExpenses > 0 ? (
-              <TrendingUp className="size-5 text-emerald-600" />
-            ) : (
-              <TrendingDown className="size-5 text-red-500" />
-            ))}
-        </div>
-      </Card>
+      <MetricCard
+        label={t('cards.netCashFlow')}
+        amount={netCashFlow}
+        figureClassName={valueColor(netCashFlow)}
+        icon={netCashFlow === 0 ? undefined : netCashFlow > 0 ? TrendingUp : TrendingDown}
+        iconClassName={netCashFlow > 0 ? 'text-emerald-600' : 'text-red-500'}
+      />
 
       {/* Credit Card Balance */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">
-          {t('cards.creditCardBalance')}
-        </span>
-        <div className="flex items-center gap-x-2">
-          <p
-            className={cn(
-              'text-heading-3',
-              overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground',
-            )}
-          >
-            {fmt.value(overview.creditCardBalance)}
-          </p>
-          {overview.creditCardBalance > 0 && <CreditCard className="size-5 text-red-500" />}
-        </div>
+      <MetricCard
+        label={t('cards.creditCardBalance')}
+        amount={overview.creditCardBalance}
+        figureClassName={overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground'}
+        icon={overview.creditCardBalance > 0 ? CreditCard : undefined}
+        iconClassName="text-red-500"
+      >
         {/* The last of the three money cards to get a hint, and the one that most needed it: a bucket
             in another currency is valued at the user's chosen dollar rate, while the bill will be
             settled at the "dólar tarjeta" rate — so this figure is what is owed today, not a quote for
@@ -135,7 +109,7 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
         <span className="text-paragraph-mini text-muted-foreground">
           {t('cards.creditCardBalanceHint')}
         </span>
-      </Card>
-    </div>
+      </MetricCard>
+    </MetricCardGrid>
   );
 }

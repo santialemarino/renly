@@ -130,7 +130,7 @@ export function WizardPanel({
  * One line of a confirmation: a label and its figure. A definition pair rather than a table row —
  * there is no second column of the same kind, and each line answers its own question.
  */
-export function WizardConfirmRow({ label, value }: { label: string; value: string }) {
+export function WizardConfirmRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <dt className="text-paragraph-sm text-muted-foreground">{label}</dt>

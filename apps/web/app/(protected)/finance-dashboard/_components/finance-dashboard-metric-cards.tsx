@@ -3,8 +3,8 @@
 import { CreditCard, TrendingDown, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { MetricCard, MetricCardGrid } from '@/components/metric-card';
 import type { FinanceOverview } from '@/lib/api/finance-metrics';
 import { valueColor } from '@/lib/i18n/format';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -18,14 +18,13 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
   const t = useTranslations('financeDashboard');
 
   return (
-    <div
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-      data-testid="dashboard-metrics"
-    >
+    <MetricCardGrid count={4} testId="dashboard-metrics">
       {/* Total Income */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalIncome')}</span>
-        <p className="text-heading-3 text-emerald-600">{fmt.value(overview.totalIncome)}</p>
+      <MetricCard
+        label={t('cards.totalIncome')}
+        amount={overview.totalIncome}
+        figureClassName="text-emerald-600"
+      >
         {overview.incomeChangePct !== null && overview.incomeChangePct !== 0 && (
           <div className="flex items-center gap-x-1">
             <span className={cn('text-paragraph-xs', valueColor(overview.incomeChangePct))}>
@@ -38,12 +37,14 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
             )}
           </div>
         )}
-      </Card>
+      </MetricCard>
 
       {/* Total Expenses */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalExpenses')}</span>
-        <p className="text-heading-3 text-red-500">{fmt.value(overview.totalExpenses)}</p>
+      <MetricCard
+        label={t('cards.totalExpenses')}
+        amount={overview.totalExpenses}
+        figureClassName="text-red-500"
+      >
         {overview.expenseChangePct !== null && overview.expenseChangePct !== 0 && (
           <div className="flex items-center gap-x-1">
             <span className={cn('text-paragraph-xs', valueColor(-overview.expenseChangePct))}>
@@ -57,41 +58,25 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
             )}
           </div>
         )}
-      </Card>
+      </MetricCard>
 
       {/* Net Cash Flow */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.net')}</span>
-        <div className="flex items-center gap-x-2">
-          <p className={cn('text-heading-3', valueColor(overview.net))}>
-            {fmt.value(overview.net)}
-          </p>
-          {overview.net !== 0 &&
-            (overview.net > 0 ? (
-              <TrendingUp className="size-5 text-emerald-600" />
-            ) : (
-              <TrendingDown className="size-5 text-red-500" />
-            ))}
-        </div>
-      </Card>
+      <MetricCard
+        label={t('cards.net')}
+        amount={overview.net}
+        figureClassName={valueColor(overview.net)}
+        icon={overview.net === 0 ? undefined : overview.net > 0 ? TrendingUp : TrendingDown}
+        iconClassName={overview.net > 0 ? 'text-emerald-600' : 'text-red-500'}
+      />
 
       {/* Credit Card Balance */}
-      <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">
-          {t('cards.creditCardBalance')}
-        </span>
-        <div className="flex items-center gap-x-2">
-          <p
-            className={cn(
-              'text-heading-3',
-              overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground',
-            )}
-          >
-            {fmt.value(overview.creditCardBalance)}
-          </p>
-          {overview.creditCardBalance > 0 && <CreditCard className="size-5 text-red-500" />}
-        </div>
-      </Card>
-    </div>
+      <MetricCard
+        label={t('cards.creditCardBalance')}
+        amount={overview.creditCardBalance}
+        figureClassName={overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground'}
+        icon={overview.creditCardBalance > 0 ? CreditCard : undefined}
+        iconClassName="text-red-500"
+      />
+    </MetricCardGrid>
   );
 }

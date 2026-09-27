@@ -19,7 +19,9 @@ import {
 import { PotFormDialog } from '@/app/(protected)/shared/_components/pot-form-dialog';
 import { ConceptHint } from '@/components/concept-hint';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { SectionHeader } from '@/components/section-header';
+import { StatList } from '@/components/stat-list';
 import { HELP_ANCHORS, sharedPotPath, sharedSharePath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
@@ -125,7 +127,12 @@ function SinglePotCard({ pot }: { pot: Pot }) {
       label: t('pots.card.value'),
       // Null NAV is "we have not valued this", never 0 — a pot with no holdings and one worth nothing
       // are different answers, and only one of them can price units.
-      value: pot.nav === null ? t('pots.unvalued') : fmt.amount(pot.nav, pot.baseCurrency),
+      value:
+        pot.nav === null ? (
+          t('pots.unvalued')
+        ) : (
+          <MoneyFigure>{fmt.amount(pot.nav, pot.baseCurrency)}</MoneyFigure>
+        ),
     },
     { label: t('pots.card.myShare'), value: `${fmt.sharePct(Number(pot.myPercentage))}%` },
     { label: t('pots.card.members'), value: String(pot.shares.length) },
@@ -155,14 +162,7 @@ function SinglePotCard({ pot }: { pot: Pot }) {
         </Button>
       </div>
 
-      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="flex flex-col gap-y-1">
-            <dt className="text-paragraph-xs text-muted-foreground">{stat.label}</dt>
-            <dd className="text-paragraph-medium tabular-nums text-foreground">{stat.value}</dd>
-          </div>
-        ))}
-      </dl>
+      <StatList stats={stats} columns={3} />
     </div>
   );
 }
@@ -196,7 +196,11 @@ function PotsTable({ pots }: { pots: Pot[] }) {
               </span>
             </TableCell>
             <TableCell className="text-right text-paragraph-sm tabular-nums">
-              {pot.nav === null ? t('pots.unvalued') : fmt.amount(pot.nav, pot.baseCurrency)}
+              {pot.nav === null ? (
+                t('pots.unvalued')
+              ) : (
+                <MoneyFigure>{fmt.amount(pot.nav, pot.baseCurrency)}</MoneyFigure>
+              )}
             </TableCell>
             <TableCell className="text-right text-paragraph-sm tabular-nums">
               {`${fmt.sharePct(Number(pot.myPercentage))}%`}

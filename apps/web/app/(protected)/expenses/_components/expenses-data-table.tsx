@@ -20,6 +20,7 @@ import {
   type LinkedPlanMismatch,
 } from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
@@ -341,10 +342,12 @@ function ExpenseRow({
     <TableRow>
       <TableCell>{fmt.date(expense.date)}</TableCell>
       <TableCell className="text-paragraph-sm tabular-nums">
-        {fmt.amount(
-          expense.convertedAmount ?? expense.amount,
-          expense.convertedAmount ? activeCurrency : expense.currency,
-        )}
+        <MoneyFigure>
+          {fmt.amount(
+            expense.convertedAmount ?? expense.amount,
+            expense.convertedAmount ? activeCurrency : expense.currency,
+          )}
+        </MoneyFigure>
         {/*
          * A shared row's amount is the viewer's SHARE of a larger bill, and without
          * saying so it reads exactly like a solo expense of that size.

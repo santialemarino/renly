@@ -182,6 +182,10 @@ A spec that temporarily changes ACCOUNT STATE rather than adding a row (a settin
 **A round trip is ONE test, not two.** Splitting create and delete across tests makes the second depend
 on the first having run — which `workers: 1` happens to guarantee today and no spec should rely on.
 
+### Text that must not be cut off
+
+`tests/e2e/helpers/overflow.ts` answers one question for any selector: is any matching element's text cut off? It checks the element's own box (`scrollWidth > clientWidth`, which is also what a `truncate` ellipsis looks like), the box an inline element's text sits in, and every `overflow: hidden` / `clip` ancestor — stopping at a scroll container, since content past a scroller's edge is one scroll away. It measures the laid-out TEXT through a Range, because a clipped element's own box is exactly as wide as the clip. Use `findSettledClipping(page, selector)` (it waits for fonts and animations, and re-measures briefly while a layout converges), and always check `matched` as well as `clipped`: an empty page has nothing clipped. The money sweep is the reference use — `[data-money]` on every money page, at eight widths, in both locales, with the page list derived by a unit test.
+
 ### Headless vs headed
 
 Headless by default. Pass `--headed` (or use `pnpm test:e2e:headed`) when visual inspection is needed during development.
