@@ -98,9 +98,10 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
       anyCardDebt ||= Number(headline.cardBalance) !== 0;
       // String equality on the serialised decimals, not a numeric tolerance: the whole point is that
       // the two agree to the cent, and a tolerance would accept the rounding drift that converting at
-      // the wrong granularity produces.
-      expect(lastPoint.cardBalance, `card balance in ${currency}`).toBe(headline.cardBalance);
-      expect(lastPoint.netWorth, `net worth in ${currency}`).toBe(headline.netWorth);
+      // the wrong granularity produces. SOFT, so a regression reports every currency it breaks rather
+      // than stopping at the first — the two signs above are two findings, not one.
+      expect.soft(lastPoint.cardBalance, `card balance in ${currency}`).toBe(headline.cardBalance);
+      expect.soft(lastPoint.netWorth, `net worth in ${currency}`).toBe(headline.netWorth);
     }
 
     /*
