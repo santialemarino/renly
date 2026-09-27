@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
+import { DonutLegend, DonutLegendLayout } from '@/components/donut-legend';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import type { ExpenseBreakdown, IncomeBreakdown } from '@/lib/api/finance-metrics';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -102,10 +103,10 @@ export function FinanceDashboardDistribution({
             style={{ height: legendHeight }}
           >
             <div ref={legendRef} className="flex flex-col gap-y-4">
-              {/* Chart (top on mobile, right on desktop) + Legend */}
-              <div className="flex flex-col-reverse items-center gap-y-4 lg:flex-row lg:gap-x-6 lg:gap-y-0">
-                {/* Legend items — content fades on mode switch. */}
-                <div className="w-full lg:min-w-0 lg:flex-1">
+              {/* Chart (top in a narrow card, right in a wide one) + Legend */}
+              <DonutLegendLayout
+                legend={
+                  /* Legend items — content fades on mode switch. */
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={mode}
@@ -113,67 +114,59 @@ export function FinanceDashboardDistribution({
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: ANIMATION_DEFAULT }}
-                      className="grid grid-cols-2 gap-x-4 gap-y-2 lg:flex lg:flex-col lg:gap-x-0"
                     >
-                      {chartData.map((entry, index) => (
-                        <div key={entry.name} className="flex items-center gap-x-2">
-                          <div
-                            className="size-2.5 shrink-0 rounded-full"
-                            style={{
-                              backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length],
-                            }}
-                          />
-                          <span className="min-w-0 text-paragraph-xs text-muted-foreground truncate">
-                            {entry.name}
-                          </span>
-                          <span className="shrink-0 text-paragraph-xs-semibold">
-                            {fmt.pct(entry.percentage)}%
-                          </span>
-                        </div>
-                      ))}
+                      <DonutLegend
+                        items={chartData.map((entry, index) => ({
+                          key: entry.name,
+                          name: entry.name,
+                          color: DONUT_COLORS[index % DONUT_COLORS.length],
+                          percentage: entry.percentage,
+                        }))}
+                      />
                     </motion.div>
                   </AnimatePresence>
-                </div>
-
-                {/* Donut chart — key forces remount so Recharts replays the draw animation. */}
-                <div
-                  style={{ height: DONUT_HEIGHT, maxWidth: DONUT_HEIGHT }}
-                  className="w-full shrink-0"
-                >
-                  <ResponsiveContainer key={mode} width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={DONUT_INNER_RADIUS}
-                        outerRadius={DONUT_OUTER_RADIUS}
-                        animationDuration={CHART_ANIMATION_DURATION}
-                        animationEasing={CHART_ANIMATION_EASING}
-                        paddingAngle={DONUT_PADDING_ANGLE}
-                        strokeWidth={0}
-                      >
-                        {chartData.map((_entry, index) => (
-                          <Cell key={index} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        animationDuration={TOOLTIP_ANIMATION_DURATION}
-                        formatter={(value) => fmt.value(Number(value), { compact: true })}
-                        contentStyle={{
-                          backgroundColor: TOOLTIP_BG,
-                          color: TOOLTIP_TEXT,
-                          borderRadius: TOOLTIP_BORDER_RADIUS,
-                          border: TOOLTIP_BORDER,
-                          fontSize: TOOLTIP_FONT_SIZE,
-                        }}
-                        labelStyle={{ color: TOOLTIP_TEXT }}
-                        itemStyle={{ color: TOOLTIP_TEXT }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+                }
+                chart={
+                  /* Donut chart — key forces remount so Recharts replays the draw animation. */
+                  <div
+                    style={{ height: DONUT_HEIGHT, maxWidth: DONUT_HEIGHT }}
+                    className="w-full shrink-0"
+                  >
+                    <ResponsiveContainer key={mode} width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={DONUT_INNER_RADIUS}
+                          outerRadius={DONUT_OUTER_RADIUS}
+                          animationDuration={CHART_ANIMATION_DURATION}
+                          animationEasing={CHART_ANIMATION_EASING}
+                          paddingAngle={DONUT_PADDING_ANGLE}
+                          strokeWidth={0}
+                        >
+                          {chartData.map((_entry, index) => (
+                            <Cell key={index} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          animationDuration={TOOLTIP_ANIMATION_DURATION}
+                          formatter={(value) => fmt.value(Number(value), { compact: true })}
+                          contentStyle={{
+                            backgroundColor: TOOLTIP_BG,
+                            color: TOOLTIP_TEXT,
+                            borderRadius: TOOLTIP_BORDER_RADIUS,
+                            border: TOOLTIP_BORDER,
+                            fontSize: TOOLTIP_FONT_SIZE,
+                          }}
+                          labelStyle={{ color: TOOLTIP_TEXT }}
+                          itemStyle={{ color: TOOLTIP_TEXT }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                }
+              />
             </div>
           </div>
         ) : (

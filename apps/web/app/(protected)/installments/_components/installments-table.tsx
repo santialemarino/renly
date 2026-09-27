@@ -13,6 +13,7 @@ import {
   archiveInstallment,
   unarchiveInstallment,
 } from '@/app/(protected)/installments/installment-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -171,16 +172,23 @@ export function InstallmentsTable({
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {fmt.amount(installmentDisplay, isConverted ? activeCurrency : inst.currency)}
-                      {currencySuffix}
-                    </TableCell>
-                    <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
-                      <div>
+                      <MoneyFigure>
                         {fmt.amount(
-                          String(totalToPay),
+                          installmentDisplay,
                           isConverted ? activeCurrency : inst.currency,
                         )}
                         {currencySuffix}
+                      </MoneyFigure>
+                    </TableCell>
+                    <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
+                      <div>
+                        <MoneyFigure>
+                          {fmt.amount(
+                            String(totalToPay),
+                            isConverted ? activeCurrency : inst.currency,
+                          )}
+                          {currencySuffix}
+                        </MoneyFigure>
                       </div>
                       {interestAmount !== null && (
                         <div className="text-paragraph-xs">

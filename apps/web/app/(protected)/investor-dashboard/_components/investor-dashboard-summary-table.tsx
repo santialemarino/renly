@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { MoneyFigure } from '@/components/money-figure';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentsSummaryResponse } from '@/lib/api/metrics';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -95,10 +96,14 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                   >
                     <TableCell className="text-paragraph-sm-medium">{item.name}</TableCell>
                     <TableCell className="text-right text-paragraph-sm tabular-nums">
-                      {item.currentValue !== null ? fmt.value(item.currentValue) : '—'}
+                      {item.currentValue !== null ? (
+                        <MoneyFigure>{fmt.value(item.currentValue)}</MoneyFigure>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-paragraph-sm tabular-nums">
-                      {fmt.value(item.investedCapital)}
+                      <MoneyFigure>{fmt.value(item.investedCapital)}</MoneyFigure>
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -110,7 +115,11 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                             : 'text-red-500',
                       )}
                     >
-                      {item.absoluteGain !== null ? fmt.value(item.absoluteGain) : '—'}
+                      {item.absoluteGain !== null ? (
+                        <MoneyFigure>{fmt.value(item.absoluteGain)}</MoneyFigure>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div

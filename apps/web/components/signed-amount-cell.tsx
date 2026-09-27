@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@repo/ui/lib';
+import { MoneyFigure } from '@/components/money-figure';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface SignedAmountCellProps {
@@ -25,15 +26,12 @@ export function SignedAmountCell({ amount, currency, outgoing, subLine }: Signed
 
   return (
     <>
-      <span
-        className={cn(
-          'text-paragraph-sm tabular-nums',
-          outgoing ? 'text-muted-foreground' : 'text-foreground',
-        )}
+      <MoneyFigure
+        className={cn('text-paragraph-sm', outgoing ? 'text-muted-foreground' : 'text-foreground')}
       >
         {outgoing ? '−' : '+'}
         {fmt.amount(amount, currency)}
-      </span>
+      </MoneyFigure>
       {subLine && <span className="block text-paragraph-xs text-muted-foreground">{subLine}</span>}
     </>
   );

@@ -16,6 +16,7 @@ import {
 } from '@repo/ui/components';
 import { AccountReconciliationDeleteDialog } from '@/app/(protected)/accounts/_components/account-reconciliation-delete-dialog';
 import { fetchAccountReconciliations } from '@/app/(protected)/accounts/account-actions';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { TablePagination } from '@/components/table-pagination';
@@ -218,10 +219,14 @@ export function AccountReconciliationsSection({
                                   {fmt.date(reconciliation.asOfDate)}
                                 </TableCell>
                                 <TableCell className="text-right text-paragraph-sm tabular-nums">
-                                  {fmt.amount(reconciliation.statementBalance, account.currency)}
+                                  <MoneyFigure>
+                                    {fmt.amount(reconciliation.statementBalance, account.currency)}
+                                  </MoneyFigure>
                                 </TableCell>
                                 <TableCell className="text-right text-paragraph-sm tabular-nums text-muted-foreground">
-                                  {fmt.amount(reconciliation.computedBalance, account.currency)}
+                                  <MoneyFigure>
+                                    {fmt.amount(reconciliation.computedBalance, account.currency)}
+                                  </MoneyFigure>
                                 </TableCell>
                                 <TableCell className="text-paragraph-xs text-muted-foreground">
                                   {adjustmentLabel(reconciliation)}

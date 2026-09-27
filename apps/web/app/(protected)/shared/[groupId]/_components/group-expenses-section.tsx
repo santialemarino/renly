@@ -20,6 +20,7 @@ import { deleteSharedExpense } from '@/app/(protected)/shared/shared-expense-act
 import { expensePayerDisplay } from '@/app/(protected)/shared/shared-expense-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
@@ -247,7 +248,7 @@ function ExpenseRow({
          * bare 90,000 would leave the reader to guess which is dollars. The share beneath is in the
          * same currency, so it does not repeat it.
          */}
-        {`${fmt.amount(expense.amount, expense.currency)} ${expense.currency}`}
+        <MoneyFigure>{`${fmt.amount(expense.amount, expense.currency)} ${expense.currency}`}</MoneyFigure>
         {/* Null when the viewer took no part in this one, which is a real and unremarkable state —
             somebody paid for a meal they were not at. The row then states only the group's figure. */}
         {expense.myShare !== null && (

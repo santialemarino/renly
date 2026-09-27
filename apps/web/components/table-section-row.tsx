@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import { TableCell, TableRow } from '@repo/ui/components';
 import { InlineLink } from '@/components/inline-link';
+import { MoneyFigure } from '@/components/money-figure';
 import { sharedPotPath } from '@/config/routes';
 import type { ListSection } from '@/lib/api/types';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -92,9 +93,9 @@ export function TableSectionRow({
              * 1.452.000 beside a bare 200 leaves the reader to guess which one is dollars.
              */}
             {section.totals.map((total) => (
-              <span key={total.currency} className="tabular-nums">
+              <MoneyFigure key={total.currency}>
                 {`${fmt.amount(total.amount, total.currency)} ${total.currency}`}
-              </span>
+              </MoneyFigure>
             ))}
           </span>
         </div>

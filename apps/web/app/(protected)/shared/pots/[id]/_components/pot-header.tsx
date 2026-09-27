@@ -16,6 +16,8 @@ import {
   potValueDisplay,
 } from '@/app/(protected)/shared/pot-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MoneyFigure } from '@/components/money-figure';
+import { StatList } from '@/components/stat-list';
 import { sharedGroupPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings } from '@/lib/api/pots';
@@ -67,13 +69,16 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
   const valueDisplay = potValueDisplay(pot);
   const freshness = potFreshnessNotice(pot);
   const valueStat =
-    valueDisplay.kind === 'unvalued'
-      ? t('pots.unvalued')
-      : valueDisplay.kind === 'value'
-        ? fmt.amount(valueDisplay.nav, pot.baseCurrency)
-        : `${fmt.amount(valueDisplay.nav, pot.baseCurrency)} · ${t('pots.updatedThrough', {
-            date: fmt.date(valueDisplay.valuedAsOf),
-          })}`;
+    valueDisplay.kind === 'unvalued' ? (
+      t('pots.unvalued')
+    ) : (
+      <>
+        <MoneyFigure>{fmt.amount(valueDisplay.nav, pot.baseCurrency)}</MoneyFigure>
+        {valueDisplay.kind === 'value'
+          ? null
+          : ` · ${t('pots.updatedThrough', { date: fmt.date(valueDisplay.valuedAsOf) })}`}
+      </>
+    );
 
   const stats = [
     {
@@ -166,14 +171,11 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
         </p>
       )}
 
-      <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 p-4 gap-x-6 gap-y-4 bg-muted/30 border border-border rounded-1.5xl">
-        {stats.map((stat) => (
-          <div key={stat.label} className="flex flex-col gap-y-1">
-            <dt className="text-paragraph-xs text-muted-foreground">{stat.label}</dt>
-            <dd className="text-paragraph-medium tabular-nums text-foreground">{stat.value}</dd>
-          </div>
-        ))}
-      </dl>
+      <StatList
+        stats={stats}
+        columns={4}
+        className="p-4 bg-muted/30 border border-border rounded-1.5xl"
+      />
 
       <PotFormDialog
         open={editOpen}

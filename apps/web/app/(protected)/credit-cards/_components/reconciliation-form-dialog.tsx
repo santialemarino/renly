@@ -22,6 +22,7 @@ import {
 } from '@/app/(protected)/credit-cards/reconciliation-form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { MoneyFigure } from '@/components/money-figure';
 import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -139,10 +140,12 @@ export function ReconciliationFormDialog({
             <div className="flex flex-col gap-y-1">
               <span className="text-paragraph-sm-medium">{t('form.computedBalance')}</span>
               <span className="text-paragraph tabular-nums">
-                {fmt.amount(statement.computedBalance, statement.currency)}{' '}
-                <span className="text-paragraph-xs text-muted-foreground">
-                  {statement.currency}
-                </span>
+                <MoneyFigure>
+                  {fmt.amount(statement.computedBalance, statement.currency)}{' '}
+                  <span className="text-paragraph-xs text-muted-foreground">
+                    {statement.currency}
+                  </span>
+                </MoneyFigure>
               </span>
               <span className="text-paragraph-xs text-muted-foreground">
                 {t('form.computedBalanceHint')}
@@ -172,12 +175,12 @@ export function ReconciliationFormDialog({
                 <span className="text-paragraph-xs-medium text-muted-foreground">
                   {t('form.difference')}
                 </span>
-                <span className="text-paragraph tabular-nums">
+                <MoneyFigure className="text-paragraph">
                   {diff === 0 ? '0' : fmt.amount(String(diff), statement.currency)}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {statement.currency}
                   </span>
-                </span>
+                </MoneyFigure>
                 <span className="text-paragraph-xs text-muted-foreground">
                   {diffSide === 'charge' &&
                     t('form.differenceChargePreview', {

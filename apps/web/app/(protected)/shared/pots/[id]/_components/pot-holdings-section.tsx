@@ -24,6 +24,7 @@ import {
 } from '@/app/(protected)/shared/pot-rules';
 import { PotHoldingsDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-holdings-dialog';
 import { EmptyState } from '@/components/empty-state';
+import { MoneyFigure } from '@/components/money-figure';
 import { SectionHeader } from '@/components/section-header';
 import { sharedContributePath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
@@ -249,15 +250,19 @@ function HoldingsTable({
               <TableCell className="text-right text-paragraph-sm tabular-nums">
                 {/* Null means nobody has valued it yet — a pot can legitimately hold something with no
                     snapshot, and rendering that as 0 would assert a value the data does not have. */}
-                {holding.value === null
-                  ? t('pots.unvalued')
-                  : fmt.amount(holding.value, holding.currency)}
+                {holding.value === null ? (
+                  t('pots.unvalued')
+                ) : (
+                  <MoneyFigure>{fmt.amount(holding.value, holding.currency)}</MoneyFigure>
+                )}
               </TableCell>
               {showBase && (
                 <TableCell className="text-right text-paragraph-sm tabular-nums text-muted-foreground">
-                  {holding.baseValue === null
-                    ? t('pots.unvalued')
-                    : fmt.amount(holding.baseValue, baseCurrency)}
+                  {holding.baseValue === null ? (
+                    t('pots.unvalued')
+                  ) : (
+                    <MoneyFigure>{fmt.amount(holding.baseValue, baseCurrency)}</MoneyFigure>
+                  )}
                 </TableCell>
               )}
               {showValuedOn && (

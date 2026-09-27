@@ -14,6 +14,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import { MoneyFigure } from '@/components/money-figure';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
@@ -174,9 +175,11 @@ export function AccountLedgerTable({
                     </TableCell>
                     {showBalance && (
                       <TableCell className="text-right text-paragraph-sm tabular-nums">
-                        {movement.balanceAfter !== null
-                          ? fmt.amount(movement.balanceAfter, currency)
-                          : '—'}
+                        {movement.balanceAfter !== null ? (
+                          <MoneyFigure>{fmt.amount(movement.balanceAfter, currency)}</MoneyFigure>
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
