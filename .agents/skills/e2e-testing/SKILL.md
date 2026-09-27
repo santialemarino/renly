@@ -264,22 +264,25 @@ on every PR, every night on `main`, and on demand — and decides at JOB level w
 ### When the suite runs
 
 - **The floor, always.** A `changes` job lists the PR's files and sets `floor` when it touches the
-  schema or migrations (`apps/api/database/**`, `apps/api/migrations/**`), a dependency manifest or
-  lockfile (`pnpm-lock.yaml`, any `package.json`, `pnpm-workspace.yaml`, `apps/api/pyproject.toml`,
-  `apps/api/uv.lock`, `.nvmrc`), or the harness itself (the workflow, `playwright.config.ts`,
-  `tests/e2e/**`, `scripts/db-init.mjs`, `docker-compose.yml`). Those are changes whose breakage no
-  per-page browser check would see.
+  schema or migrations (`apps/api/database/**`, `apps/api/migrations/**`, `apps/api/alembic.ini`), a
+  dependency manifest or lockfile (`pnpm-lock.yaml`, any `package.json`, `pnpm-workspace.yaml`,
+  `apps/api/pyproject.toml`, `apps/api/uv.lock`, `.nvmrc`), or the harness itself (the workflow,
+  `playwright.config.ts`, `tests/e2e/**`, `scripts/db-init.mjs`, `docker-compose.yml`). Those are
+  changes whose breakage no per-page browser check would see.
 - **Judgment, by label.** Any other PR runs the suite when it carries the `run-e2e` label (adding the
-  label starts a run). The agent that opens the PR decides:
+  label starts a run). The label is read live from the PR, not from the run's event, so re-running an
+  older run sees the labels the PR has now. The agent that opens the PR decides:
   - **Add `run-e2e`** when the change touches a full user flow (auth, entry forms and the quick-add,
     reconciliation, shared money, the wizards), a shared primitive many pages use, money or
     currency conversion on the API — or anything the agent did NOT verify in the browser itself.
   - **Leave it off** for a contained UI change it verified in the browser, copy or style changes, a
     component used by one page, or API work covered by its own tests.
-- **The net.** Every night at 03:17 UTC on `main`. A red night opens one issue labelled `e2e-red` (or
-  comments on the one already open); the first green night closes it — or a manual run dispatched
-  with `report` ticked, which updates the issue the same way. On top of that, a full run at
-  the end of every structured block of work, and for unstructured work the agent asks Santi.
+- **The net.** Every night at 03:17 UTC on `main`. A red night — a failure, or a run that did not
+  finish (a timeout reports as cancelled) — opens one issue labelled `e2e-red` (or comments on the
+  one already open); the first green night closes it. A manual run dispatched ON `main` with `report`
+  ticked updates the issue the same way; on any other branch it never touches it. On top of that, a
+  full run at the end of every structured block of work, and for unstructured work the agent asks
+  Santi.
 
 **While iterating, run targeted specs locally; the full suite runs in CI through the floor or the
 label.**
@@ -315,7 +318,8 @@ One job, serial, Chromium only, built from the same pieces a developer uses:
    it to this step.**
 5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200. Locally,
    `globalSetup` makes the same check first and fails at once with "start the web and API servers"
-   when either does not answer.
+   when either is not running (a port that refuses the connection); a server that is up but slow — a
+   cold `next dev` compile — gets a warning and the run carries on.
 6. **Run:** `pnpm --filter web test:e2e` with `CI=true` (so `forbidOnly` + `retries: 2`), plus two
    reporters the config adds only in CI — `github`, which annotates the PR diff at each failure, and
    `json`, written to `test-results/results.json`.

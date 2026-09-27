@@ -6,10 +6,10 @@ run-name: 'CI Web E2E by @${{ github.actor }}'
 #   * on a PR, if it touches the FLOOR (the paths in the `changes` job below: schema, migrations,
 #     dependency manifests, the e2e harness itself) or carries the `run-e2e` label, which the author
 #     adds by judgment — the e2e-testing skill has the rubric;
-#   * every night on main (`schedule`), which opens or updates one `e2e-red` issue when it fails and
-#     closes it when a later night is green;
-#   * on demand (`workflow_dispatch`), optionally updating the `e2e-red` issue as the nightly does —
-#     how the report itself is exercised, and how a fix is confirmed before the next night.
+#   * every night on main (`schedule`), which opens or updates one `e2e-red` issue when it fails (or
+#     does not finish) and closes it when a later night is green;
+#   * on demand (`workflow_dispatch`); on main it can also update the `e2e-red` issue as the nightly
+#     does — how a fix is confirmed before the next night.
 #
 # The workflow itself triggers on EVERY PR, and the gate is at JOB level, deliberately: `e2e-required`
 # is the check to mark required, and a required check has to report on every PR. An `on.paths`
@@ -61,7 +61,21 @@ jobs:
       pull-requests: read
     outputs:
       floor: ${{ steps.filter.outputs.floor }}
+      run_e2e: ${{ steps.labels.outputs.run_e2e }}
     steps:
+      # The PR's labels as they are NOW, not as the event payload recorded them. "Re-run all jobs" on
+      # an older run replays that run's payload; read from it, a run from before `run-e2e` was added
+      # would skip the suite and report a green `e2e-required` over a labelled run that went red.
+      - id: labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.issues.listLabelsOnIssue({
+              ...context.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+            core.setOutput('run_e2e', String(data.some((label) => label.name === 'run-e2e')));
+
       # Reads the PR's changed files through the API, so no checkout is needed.
       - uses: dorny/paths-filter@v3
         id: filter
@@ -70,6 +84,7 @@ jobs:
             floor:
               - 'apps/api/database/**'
               - 'apps/api/migrations/**'
+              - 'apps/api/alembic.ini'
               - 'pnpm-lock.yaml'
               - '**/package.json'
               - 'pnpm-workspace.yaml'
@@ -92,7 +107,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         (needs.changes.result == 'success' && (
           needs.changes.outputs.floor == 'true' ||
-          contains(github.event.pull_request.labels.*.name, 'run-e2e')
+          needs.changes.outputs.run_e2e == 'true'
         ))
       )
     runs-on: ubuntu-latest
@@ -332,14 +347,22 @@ jobs:
       - run: 'echo "changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}"'
 
   # The nightly net's memory: one open `e2e-red` issue while main's nightly run is red, updated on
-  # each further red night and closed by the first green one. Also on a dispatch with `report` ticked.
-  # Nothing else in the workflow can write.
+  # each further red night and closed by the first green one. A dispatch with `report` ticked does the
+  # same, but ONLY on main — the issue is about main, and a run on any other branch says nothing about
+  # it. Nothing else in the workflow can write.
+  #
+  # On `schedule` a CANCELLED suite counts as red: nothing cancels a nightly run but its own job
+  # timeout (or a person), and a night that never finished is not a green one. On a dispatch it is
+  # left alone, since there the person who cancelled it is watching.
   nightly-report:
     needs: e2e-web
     if: >-
-      always() &&
-      (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.report)) &&
-      contains(fromJSON('["success", "failure"]'), needs.e2e-web.result)
+      always() && (
+        (github.event_name == 'schedule' &&
+          contains(fromJSON('["success", "failure", "cancelled"]'), needs.e2e-web.result)) ||
+        (github.event_name == 'workflow_dispatch' && inputs.report && github.ref == 'refs/heads/main' &&
+          contains(fromJSON('["success", "failure"]'), needs.e2e-web.result))
+      )
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -355,20 +378,21 @@ jobs:
               owner, repo, labels: 'e2e-red', state: 'open', per_page: 1,
             });
             const issue = open[0];
-            const branch = context.ref.replace('refs/heads/', '');
-            if (process.env.RESULT === 'failure') {
-              const line = `The ${context.eventName} e2e run on \`${branch}\` failed: ${runUrl}`;
+            const result = process.env.RESULT;
+            if (result === 'failure' || result === 'cancelled') {
+              const outcome = result === 'failure' ? 'failed' : 'did not finish (cancelled or timed out)';
+              const line = `The ${context.eventName} e2e run on \`main\` ${outcome}: ${runUrl}`;
               if (issue) {
                 await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: line });
               } else {
                 await github.rest.issues.create({
-                  owner, repo, title: 'Nightly e2e is red', labels: ['e2e-red'],
+                  owner, repo, title: 'Nightly e2e is red on main', labels: ['e2e-red'],
                   body: `${line}\n\nClosed automatically by the first green nightly run.`,
                 });
               }
             } else if (issue) {
               await github.rest.issues.createComment({
-                owner, repo, issue_number: issue.number, body: `Green again on \`${branch}\`: ${runUrl}`,
+                owner, repo, issue_number: issue.number, body: `Green again on \`main\`: ${runUrl}`,
               });
               await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed' });
             }
