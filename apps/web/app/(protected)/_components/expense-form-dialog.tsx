@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -220,6 +220,7 @@ export function ExpenseFormDialog({
   const fmt = useFormatters();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
+  const reduceMotion = useReducedMotion();
 
   const schema = useMemo(
     () =>
@@ -706,7 +707,13 @@ export function ExpenseFormDialog({
                         initial={{ opacity: 0, width: 0, marginRight: -12, overflow: 'hidden' }}
                         animate={{ opacity: 1, width: 'auto', marginRight: 0, overflow: 'visible' }}
                         exit={{ opacity: 0, width: 0, marginRight: -12, overflow: 'hidden' }}
-                        transition={{ duration: ANIMATION_DEFAULT }}
+                        // Under reduced motion the root MotionConfig makes `width` jump, but margin is
+                        // not a positional value it skips — so the margin is made instant here too,
+                        // or the field would still slide 12px sideways while only the fade should run.
+                        transition={{
+                          duration: ANIMATION_DEFAULT,
+                          ...(reduceMotion && { marginRight: { duration: 0 } }),
+                        }}
                         className="flex-1 min-w-0"
                       >
                         <FormField

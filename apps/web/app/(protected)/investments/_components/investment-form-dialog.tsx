@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -60,6 +60,7 @@ export function InvestmentFormDialog({
   const locale = useLocale();
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
+  const reduceMotion = useReducedMotion();
 
   const schema = useMemo(
     () => buildInvestmentFormSchema(tCommon('form.errors.required')),
@@ -221,7 +222,13 @@ export function InvestmentFormDialog({
                       initial={{ opacity: 0, width: 0, marginRight: -12 }}
                       animate={{ opacity: 1, width: 'auto', marginRight: 0 }}
                       exit={{ opacity: 0, width: 0, marginRight: -12 }}
-                      transition={{ duration: ANIMATION_DEFAULT }}
+                      // Under reduced motion the root MotionConfig makes `width` jump, but margin is
+                      // not a positional value it skips — so the margin is made instant here too, or
+                      // the field would still slide 12px sideways while only the fade should run.
+                      transition={{
+                        duration: ANIMATION_DEFAULT,
+                        ...(reduceMotion && { marginRight: { duration: 0 } }),
+                      }}
                       style={{ overflow: 'hidden' }}
                       className="flex-1 min-w-0"
                     >
