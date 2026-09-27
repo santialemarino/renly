@@ -1,9 +1,17 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, request, test, type Locator, type Page } from '@playwright/test';
 
-import { expectRingContrast, measureRing, tabTo } from './helpers/focus';
+import { API_BASE, apiToken } from './helpers/api';
+import { testMarker } from './helpers/factories';
+import {
+  expectFocusCueDiffersFromHover,
+  expectRingContrast,
+  measureRing,
+  tabTo,
+} from './helpers/focus';
 
 // Route literals mirror apps/web/config/routes.ts, like every spec's.
 const EXPENSES = '/expenses';
+const SUBSCRIPTIONS = '/subscriptions';
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 800 };
 
@@ -22,9 +30,11 @@ const QUICK_ADD_OPEN_MS = 20_000;
  * into them rather than one per dialog: a plain controlled dialog closed three ways, a popover inside
  * it (Radix's own trigger path, which must keep working), a toolbar popover, the quick-add (whose
  * trigger disables itself while loading, so nothing holds focus when the dialog mounts), the quick-add
- * SWAP (the incoming form was opened from inside the outgoing one, which is gone by the time it closes)
- * and the phone nav sheet (its hamburger sits outside any Dialog.Trigger). `tests/unit/focus-system.test.ts` proves every Radix dialog in the codebase goes through
- * those wrappers; `use-return-focus.test.tsx` covers the chain logic case by case.
+ * SWAP (the incoming form was opened from inside the outgoing one, which is gone by the time it
+ * closes), a type-to-confirm delete (its input takes focus with `autoFocus`, which makes Radix skip its
+ * open event) and the phone nav sheet (its hamburger sits outside any Dialog.Trigger).
+ * `tests/unit/focus-system.test.ts` proves every Radix dialog in the codebase goes through those
+ * wrappers; `use-return-focus.test.tsx` covers the chain logic case by case.
  */
 test.describe('focus returns to what opened an overlay (signed in)', () => {
   const dialog = (page: Page) => page.getByRole('dialog');
@@ -114,6 +124,68 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toHaveCount(0);
     await expect(quickAdd).toBeFocused();
+  });
+
+  test('a type-to-confirm delete, which autofocuses its input, returns to the row’s Delete', async ({
+    page,
+  }) => {
+    // Seeded through the API so the spec owns its row; the list is the subscriptions page, one of the
+    // seven type-to-confirm deletes.
+    const marker = testMarker('focus-type-to-confirm');
+    const token = await apiToken();
+    const api = await request.newContext({
+      baseURL: API_BASE,
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+    const created = await api.post('/subscriptions', {
+      data: {
+        name: marker,
+        amount: '9.99',
+        currency: 'USD',
+        billing_cycle: 'monthly',
+        next_billing_date: new Date().toISOString().slice(0, 10),
+      },
+    });
+    expect(created.ok(), `seeding a subscription failed with ${created.status()}`).toBe(true);
+    const { id } = (await created.json()) as { id: number };
+
+    try {
+      await page.goto(SUBSCRIPTIONS);
+      // The row's last action is its Delete (the RowActionButton order is edit, archive, delete).
+      const remove = page.getByRole('row').filter({ hasText: marker }).getByRole('button').last();
+      const open = async () => {
+        await remove.focus();
+        await page.keyboard.press('Enter');
+        // Premise: the dialog's own input took focus, the case Radix never reports as an open.
+        await expect(dialog(page).locator('input#type-to-confirm')).toBeFocused();
+      };
+
+      await open();
+      await page.keyboard.press('Escape');
+      await expect(dialog(page)).toHaveCount(0);
+      await expect(remove).toBeFocused();
+
+      await open();
+      await dialog(page).locator('[data-slot="dialog-footer"] [data-variant="outline"]').click();
+      await expect(dialog(page)).toHaveCount(0);
+      await expect(remove).toBeFocused();
+    } finally {
+      await api.delete(`/subscriptions/${id}`);
+      await api.dispose();
+    }
+  });
+
+  test('a clear button’s keyboard cue is not its hover cue', async ({ page }) => {
+    // The search field's clear ✕, one of the four icon buttons that used to scale on focus exactly
+    // as on hover. It only joins the tab order once the field has a value.
+    await page.goto(EXPENSES);
+    const search = page.locator('main [data-slot="input"]').first();
+    await search.focus();
+    await page.keyboard.type('x');
+    const clear = search.locator('xpath=..').locator('button');
+    await expect(clear).toHaveAttribute('tabindex', '0');
+    await search.focus();
+    await expectFocusCueDiffersFromHover(page, clear, clear.locator('svg'));
   });
 
   test.describe('below the breakpoint', () => {

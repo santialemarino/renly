@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
 
-import { expectRingContrast, measureRing, tabTo } from './helpers/focus';
+import {
+  expectFocusCueDiffersFromHover,
+  expectRingContrast,
+  measureRing,
+  tabTo,
+} from './helpers/focus';
 
 // Route literals mirror apps/web/config/routes.ts, like every spec's.
 const LANDING = '/';
@@ -59,28 +64,6 @@ test.describe('focus system (signed out)', () => {
     await page.goto(LOGIN);
     const password = page.getByTestId('login-password-input');
     const toggle = password.locator('xpath=..').locator('button[aria-pressed]');
-    const icon = toggle.locator('span').first();
-
-    // What each state paints: the button's own transform and the icon wrapper's animation.
-    const state = async () => ({
-      // Tailwind v4's `scale-*` sets the `scale` property, not `transform`.
-      scale: await toggle.evaluate((element) => getComputedStyle(element).scale),
-      animation: await icon.evaluate((element) => getComputedStyle(element).animationName),
-    });
-
-    await tabTo(page, toggle);
-    expect(await toggle.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
-    const focused = await state();
-    // The focus-bump idiom: the icon plays the bump, the button itself does not grow.
-    expect(focused.animation).toBe('focus-bump');
-    expect(focused.scale).toBe('none');
-
-    await page.keyboard.press('Tab');
-    await toggle.hover();
-    await expect.poll(async () => (await state()).scale).toBe('1.1');
-    const hovered = await state();
-    expect(hovered.animation).toBe('none');
-
-    expect(focused).not.toEqual(hovered);
+    await expectFocusCueDiffersFromHover(page, toggle, toggle.locator('span').first());
   });
 });

@@ -66,17 +66,29 @@ describe('the neutral focus ring is solid', () => {
 
   /*
    * `--ring` is dark enough to clear 3:1 on its own; halving its alpha is what took the old ring to
-   * 1.2:1, so both the utility form and the hand-written CSS form are refused. The variant-tinted rings
-   * (`ring-red-500/50`, `ring-blue-800/50`) are other tokens and keep their alpha.
+   * 1.2:1, so every spelling of an alpha on it is refused: the named utility (`ring-ring/50`), the
+   * CSS-variable utility (`ring-(--ring)/50`, `ring-[var(--ring)]/50`), and a `color-mix` naming the token
+   * with a percentage on EITHER side. The variant-tinted rings (`ring-red-500/50`, `ring-blue-800/50`)
+   * are other tokens and keep their alpha.
    */
   it('never draws the ring token at a reduced alpha', () => {
-    const utility = /\b(?:ring|border|outline)-(?:sidebar-)?ring\/[\d[]/g;
-    const mixed = /color-mix\([^)]*var\(--(?:sidebar-)?ring\)\s*\d/g;
-    const offenders = STYLED.flatMap(([path, source]) =>
-      [...source.matchAll(utility), ...source.matchAll(mixed)].map(
-        (match) => `${path}: ${match[0]}`,
-      ),
-    );
+    const TOKEN = '--(?:sidebar-)?ring';
+    const patterns = [
+      /\b(?:ring|border|outline)-(?:sidebar-)?ring\/[\d[(]/g,
+      new RegExp(`\\b(?:ring|border|outline)-(?:\\(${TOKEN}\\)|\\[var\\(${TOKEN}\\)\\])\\/`, 'g'),
+    ];
+    // A whole `color-mix(...)` call (one level of nested parens, as in `var()` / `oklch()`) that names
+    // the token AND carries a percentage anywhere in its arguments.
+    const mixes = /color-mix\((?:[^()]|\([^()]*\))*\)/g;
+    const ringToken = new RegExp(`var\\(${TOKEN}\\)`);
+    const offenders = STYLED.flatMap(([path, source]) => [
+      ...patterns
+        .flatMap((pattern) => [...source.matchAll(pattern)])
+        .map((match) => `${path}: ${match[0]}`),
+      ...[...source.matchAll(mixes)]
+        .filter(([mix]) => ringToken.test(mix) && /\d%/.test(mix))
+        .map(([mix]) => `${path}: ${mix}`),
+    ]);
     expect(offenders).toEqual([]);
   });
 
@@ -84,6 +96,20 @@ describe('the neutral focus ring is solid', () => {
   it('never uses the ring token as a hover border', () => {
     const offenders = STYLED.flatMap(([path, source]) =>
       [...source.matchAll(/\bhover:border-(?:sidebar-)?ring\b/g)].map(
+        (match) => `${path}: ${match[0]}`,
+      ),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  /*
+   * Keyboard focus on an icon button plays the focus-bump on its icon (`group/<name>` +
+   * `group-focus-visible/<name>:animate-focus-bump`); it never copies the hover's scale, which made
+   * focus and hover indistinguishable on the password toggle and the four clear/dismiss buttons.
+   */
+  it('never scales a control on focus the way hover does', () => {
+    const offenders = STYLED.flatMap(([path, source]) =>
+      [...source.matchAll(/\bfocus-visible:scale-[\w[\].]+/g)].map(
         (match) => `${path}: ${match[0]}`,
       ),
     );
@@ -110,18 +136,34 @@ describe('every dialog primitive returns focus to its opener', () => {
     );
   });
 
+  /*
+   * Three things, each a way the wiring can be silently undone:
+   *   * the Content carries the hook's `ref` (where the opener is recorded) and close handler;
+   *   * both come AFTER `{...props}` in the tag, so nothing a caller passes can replace them;
+   *   * the caller's own `onCloseAutoFocus` and `ref` are pulled out of props and handed TO the hook,
+   *     which composes them — otherwise the spread would drop them, or they would drop the hook's.
+   */
   it('routes each wrapper’s content through useReturnFocus', () => {
     const offenders = wrappers.flatMap(([path, source]) => {
       const contents = openingTags(source, /<\w+\.Content\b/g);
       if (contents.length === 0) return [`${path}: renders no Content`];
-      return contents
-        .filter(
-          (content) =>
-            !content.includes('onOpenAutoFocus={returnFocus.onOpenAutoFocus}') ||
-            !content.includes('onCloseAutoFocus={returnFocus.onCloseAutoFocus}'),
-        )
-        .map(() => `${path}: a Content without the return-focus handlers`)
-        .concat(source.includes('useReturnFocus({') ? [] : [`${path}: never calls useReturnFocus`]);
+      const problems = contents.flatMap((content) => {
+        // The LAST spread is the one that decides: a second one after the wiring would override it.
+        const spread = content.lastIndexOf('{...props}');
+        return ['ref={returnFocus.ref}', 'onCloseAutoFocus={returnFocus.onCloseAutoFocus}'].flatMap(
+          (wiring) => {
+            const at = content.indexOf(wiring);
+            if (at === -1) return [`${path}: Content lacks ${wiring}`];
+            if (spread !== -1 && spread > at) return [`${path}: {...props} can override ${wiring}`];
+            return [];
+          },
+        );
+      });
+      if (!/useReturnFocus\(\{\s*onCloseAutoFocus,\s*ref\s*\}\)/.test(source))
+        problems.push(`${path}: the caller's onCloseAutoFocus/ref are not composed by the hook`);
+      if (/\bonOpenAutoFocus\b/.test(source))
+        problems.push(`${path}: onOpenAutoFocus is intercepted (Radix skips it under autoFocus)`);
+      return problems;
     });
     expect(offenders).toEqual([]);
   });
@@ -160,7 +202,8 @@ describe('every layout with a main offers a way to skip to it', () => {
       .flatMap(([path, source]) => {
         const main = openingTags(source, MAIN_ELEMENT)[0] ?? '';
         const problems: string[] = [];
-        if (!/<SkipLink\s*\/>/.test(source)) problems.push(`${path}: no <SkipLink />`);
+        // On a line of its own: a JSX child, not inside a `{cond && …}` expression.
+        if (!/^\s*<SkipLink\s*\/>\s*$/m.test(source)) problems.push(`${path}: no <SkipLink />`);
         else if (source.indexOf('<SkipLink') > source.search(MAIN_ELEMENT))
           problems.push(`${path}: the skip link comes after the main`);
         if (!main.includes('id={MAIN_CONTENT_ID}')) problems.push(`${path}: main has no target id`);

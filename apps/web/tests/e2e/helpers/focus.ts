@@ -155,3 +155,30 @@ export async function tabTo(page: Page, target: Locator, maxStops = 60) {
   }
   throw new Error(`not reached within ${maxStops} tab stops`);
 }
+
+/*
+ * An icon button's keyboard cue is the focus-bump on its icon, and it is NOT its hover cue: focused,
+ * the icon plays `focus-bump` and the button does not grow; hovered, the button grows (`scale`, which
+ * Tailwind v4's `scale-*` sets instead of `transform`) and the icon does not bump. `control` must be
+ * reachable by Tab from wherever focus is now.
+ */
+export async function expectFocusCueDiffersFromHover(page: Page, control: Locator, icon: Locator) {
+  const state = async () => ({
+    scale: await control.evaluate((element) => getComputedStyle(element).scale),
+    animation: await icon.evaluate((element) => getComputedStyle(element).animationName),
+  });
+
+  await tabTo(page, control);
+  expect(await control.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+  const focused = await state();
+  expect(focused.animation).toBe('focus-bump');
+  // Unscaled: `none`, or `1` where the control carries an explicit `scale-100` (the clear ✕ does).
+  expect(['none', '1']).toContain(focused.scale);
+
+  await page.keyboard.press('Tab');
+  await control.hover();
+  await expect.poll(async () => (await state()).scale).toBe('1.1');
+  const hovered = await state();
+  expect(hovered.animation).toBe('none');
+  expect(focused).not.toEqual(hovered);
+}
