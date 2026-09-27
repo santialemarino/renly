@@ -11,7 +11,16 @@ import { PageSkeletonView } from '@/app/(protected)/_components/page-skeleton';
 
 describe('PageSkeletonView', () => {
   it('marks the pending region busy and says what is happening', () => {
-    render(<PageSkeletonView status="Cargando la página…" toolbar body="table" />);
+    render(
+      <PageSkeletonView
+        status="Cargando la página…"
+        toolbar={{
+          filters: [{ kind: 'filter', label: 'Todas' }],
+          actions: [{ kind: 'add', label: 'Agregar' }],
+        }}
+        body="table"
+      />,
+    );
 
     expect(screen.getByRole('status')).toHaveTextContent('Cargando la página…');
     expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);

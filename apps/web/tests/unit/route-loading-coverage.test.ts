@@ -122,7 +122,7 @@ describe('protected route loading coverage', () => {
 
     const source = readFileSync(loadingPath, 'utf8');
     expect(source).toContain(SKELETON_IMPORT);
-    expect(source).toMatch(/return <PageSkeleton\b/);
+    expect(source).toMatch(/return \(?\s*<PageSkeleton\b/);
   });
 
   it.each(PAGE_DIRS)('%s paints its own header while loading', (dir) => {
@@ -140,6 +140,20 @@ describe('protected route loading coverage', () => {
         expect(typeof lookup(messages, `${expected}.title`)).toBe('string');
         expect(typeof lookup(messages, `${expected}.subtitle`)).toBe('string');
       }
+    }
+  });
+
+  it.each(PAGE_DIRS)('%s names toolbar labels that exist in both locales', (dir) => {
+    // A missing key renders its own path invisibly, sizing the placeholder by the wrong text.
+    const loading = readFileSync(join(PROTECTED, dir, 'loading.tsx'), 'utf8');
+    const keys = [
+      ...[...loading.matchAll(/\blabel: '([^']+)'/g)].map((m) => m[1]!),
+      ...[...loading.matchAll(/\blabels: \[([^\]]*)\]/g)].flatMap((m) =>
+        [...m[1]!.matchAll(/'([^']+)'/g)].map((k) => k[1]!),
+      ),
+    ];
+    for (const key of keys) {
+      for (const messages of [en, es]) expect(typeof lookup(messages, key), key).toBe('string');
     }
   });
 

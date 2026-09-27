@@ -1,8 +1,17 @@
 import { getTranslations } from 'next-intl/server';
 
-import { Skeleton } from '@repo/ui/components';
+import { buttonVariants, Skeleton } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
+import {
+  TOOLBAR_ACTIONS,
+  TOOLBAR_FILTERS,
+  TOOLBAR_ITEM,
+  TOOLBAR_ROW,
+  TOOLBAR_SEARCH,
+} from '@/components/entity-list-toolbar-layout';
+import { PERIOD_PRESETS } from '@/lib/constants/period-presets';
+import { formatPresetLabel } from '@/lib/utils/period-presets';
 
 // How many placeholder rows a table body shows — enough to fill a laptop viewport, no more.
 const TABLE_ROWS = 8;
@@ -12,11 +21,36 @@ const FORM_FIELDS = 4;
 
 export type PageSkeletonBody = 'table' | 'dashboard' | 'form' | 'sections';
 
+/*
+ * One control of a list toolbar, by the kind of control it is and the text it shows. The text is what
+ * makes the placeholder the control's real width — and therefore the row wrap where the real row does,
+ * in either language. In a `loading.tsx` the text is a full translation key; `PageSkeleton` resolves it.
+ */
+export type ToolbarControl<Text = string> =
+  // A `FilterCombobox` trigger: icon, its "all" label, chevron.
+  | { kind: 'filter'; label: Text }
+  // `SegmentedPills`: one pill per option, in one bordered group.
+  | { kind: 'segmented'; labels: Text[] }
+  // The show-archived `Pill`.
+  | { kind: 'pill'; label: Text }
+  // An outline trailing action (an import link, a refresh button); `smallIcon` for a size-3.5 icon.
+  | { kind: 'outline'; label: Text; smallIcon?: boolean }
+  // The blue add button.
+  | { kind: 'add'; label: Text };
+
+/*
+ * What a list page's `EntityListToolbar` holds, in order. Only the controls every visitor sees belong
+ * here: the scope pill (a group member's) and the collections filter (someone who has a collection)
+ * depend on data a loading state cannot read.
+ */
+export interface ToolbarShape<Text = string> {
+  filters?: ToolbarControl<Text>[];
+  actions?: ToolbarControl<Text>[];
+}
+
 interface PageSkeletonLayoutProps {
   // The muted "back to …" link a detail page opens with.
   backLink?: boolean;
-  // The search + filters + add-button row a list page carries under its header.
-  toolbar?: boolean;
   // The detail and wizard pages space their blocks `gap-y-6` rather than the list pages' `gap-y-4`.
   loose?: boolean;
   body: PageSkeletonBody;
@@ -29,22 +63,57 @@ interface PageSkeletonProps extends PageSkeletonLayoutProps {
   // The page's title is static but its subtitle depends on data (a filter's name): paint the title
   // and a placeholder where the subtitle goes, rather than a default subtitle the page contradicts.
   subtitleIsData?: boolean;
+  // The list toolbar under the header, with translation keys for its labels — or `'add-only'` for
+  // the groups page's lone button.
+  toolbar?: ToolbarShape | 'add-only';
+  // The dashboards' period picker beside the header (stacked under it below `sm`). Its labels come
+  // from `<namespace>.period` and the default presets, so the placeholder is as wide as the picker.
+  periodPicker?: boolean;
 }
 
 // What each route's `loading.tsx` renders: resolves the copy, then draws the view below.
 export async function PageSkeleton({
   namespace,
   subtitleIsData = false,
+  toolbar,
+  periodPicker = false,
   ...layout
 }: PageSkeletonProps) {
-  const tCommon = await getTranslations('common.loading');
+  const tAll = await getTranslations();
   const t = namespace ? await getTranslations(namespace) : null;
+
+  const resolve = (control: ToolbarControl): ToolbarControl =>
+    control.kind === 'segmented'
+      ? { ...control, labels: control.labels.map((key) => tAll(key)) }
+      : { ...control, label: tAll(control.label) };
+
+  // The period picker's default labels (a user's own presets are data this state cannot read).
+  const period =
+    periodPicker && t
+      ? {
+          presets: PERIOD_PRESETS.map((preset) =>
+            formatPresetLabel(preset.code, {
+              ytd: t('period.ytd'),
+              all: t('period.all'),
+              monthSuffix: tAll('common.period.monthSuffix'),
+              yearSuffix: tAll('common.period.yearSuffix'),
+            }),
+          ),
+          custom: t('period.custom'),
+        }
+      : undefined;
 
   return (
     <PageSkeletonView
-      status={tCommon('status')}
+      status={tAll('common.loading.status')}
       title={t?.('title')}
       subtitle={subtitleIsData ? undefined : t?.('subtitle')}
+      toolbar={
+        toolbar === 'add-only' || toolbar === undefined
+          ? toolbar
+          : { filters: toolbar.filters?.map(resolve), actions: toolbar.actions?.map(resolve) }
+      }
+      period={period}
       {...layout}
     />
   );
@@ -57,15 +126,19 @@ interface PageSkeletonViewProps extends PageSkeletonLayoutProps {
   // which a loading state cannot know — the header is then a placeholder of the same size.
   title?: string;
   subtitle?: string;
+  // The list toolbar, its labels already translated.
+  toolbar?: ToolbarShape | 'add-only';
+  // The period picker's labels, already translated.
+  period?: { presets: string[]; custom: string };
 }
 
 /*
  * The one loading state every protected route renders, through `PageSkeleton` in its `loading.tsx`.
  *
  * It paints the page's frame at the page's own sizes — the same `p-8` column, the real `PageHeader`
- * when the title is known, and placeholders the height of the toolbar and rows that replace them — so
- * the swap to the loaded page moves nothing. The header is the one part rendered for real: it is the
- * part a user reads to know the navigation worked.
+ * when the title is known, and placeholders laid out by the same classes, and sized by the same text,
+ * as the controls that replace them — so the swap to the loaded page moves nothing. The header is the
+ * one part rendered for real: it is the part a user reads to know the navigation worked.
  *
  * The placeholder block fades in after a short delay rather than appearing at once, so a page that
  * loads quickly swaps straight from its header to its content instead of flashing grey bars. The fade
@@ -79,10 +152,26 @@ export function PageSkeletonView({
   title,
   subtitle,
   backLink = false,
-  toolbar = false,
+  toolbar,
   loose = false,
+  period,
   body,
 }: PageSkeletonViewProps) {
+  const header =
+    title !== undefined && subtitle !== undefined ? (
+      <PageHeader title={title} subtitle={subtitle} />
+    ) : title !== undefined ? (
+      <div className="flex flex-col gap-y-1">
+        <h1 className="text-heading-2 text-foreground">{title}</h1>
+        <Skeleton className="w-80 max-w-full h-6 rounded-md" />
+      </div>
+    ) : (
+      <div className="flex flex-col gap-y-1">
+        <Skeleton className="w-64 max-w-full h-10 rounded-lg" />
+        <Skeleton className="w-80 max-w-full h-6 rounded-md" />
+      </div>
+    );
+
   return (
     <div
       className={cn('flex flex-col flex-1 p-8', loose ? 'gap-y-6' : 'gap-y-4')}
@@ -92,24 +181,21 @@ export function PageSkeletonView({
         {status}
       </p>
       {backLink && <Skeleton className="w-40 h-5 rounded-md" />}
-      {title !== undefined && subtitle !== undefined ? (
-        <PageHeader title={title} subtitle={subtitle} />
-      ) : title !== undefined ? (
-        <div className="flex flex-col gap-y-1">
-          <h1 className="text-heading-2 text-foreground">{title}</h1>
-          <Skeleton className="w-80 max-w-full h-6 rounded-md" />
+      {period ? (
+        // The dashboards' header row, with the classes the pages give it.
+        <div className="flex flex-col gap-y-4 sm:flex-row sm:items-start sm:justify-between">
+          {header}
+          <PeriodPickerSkeleton presets={period.presets} custom={period.custom} />
         </div>
       ) : (
-        <div className="flex flex-col gap-y-1">
-          <Skeleton className="w-64 max-w-full h-10 rounded-lg" />
-          <Skeleton className="w-80 max-w-full h-6 rounded-md" />
-        </div>
+        header
       )}
       <div
         aria-busy="true"
         className="flex flex-col gap-y-4 animate-in fade-in fill-mode-backwards delay-150 duration-300"
       >
-        {toolbar && <ToolbarSkeleton />}
+        {toolbar === 'add-only' && <AddOnlyToolbarSkeleton />}
+        {toolbar && toolbar !== 'add-only' && <ToolbarSkeleton {...toolbar} />}
         {body === 'table' && <TableSkeleton />}
         {body === 'dashboard' && <DashboardSkeleton />}
         {body === 'form' && <FormSkeleton />}
@@ -119,14 +205,170 @@ export function PageSkeletonView({
   );
 }
 
-// Search field (grows), then the pills and the add button — wrapping below `md` like the real row.
-function ToolbarSkeleton() {
+interface SizedPlaceholderProps {
+  // The real control's box classes — its height, padding, gap, type and radius.
+  className: string;
+  // The real control's content: its label and an empty box where each icon sits.
+  children: React.ReactNode;
+}
+
+/*
+ * A placeholder exactly the size of a control: the control's own box, holding its own content
+ * invisibly, under a Skeleton of the same shape. Taking the width from the content (rather than a
+ * guessed `w-*`) is what makes two placeholders wrap onto two rows exactly when the two controls do.
+ */
+function SizedPlaceholder({ className, children }: SizedPlaceholderProps) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <Skeleton className="flex-1 min-w-48 h-9 rounded-lg" />
-      <div className="flex basis-full md:basis-auto items-center gap-x-3">
-        <Skeleton className="flex-1 md:w-28 h-8 rounded-lg" />
-        <Skeleton className="flex-1 md:w-32 h-8 rounded-lg" />
+    <div className={cn('relative', className)}>
+      <span className="invisible flex items-center gap-[inherit] whitespace-nowrap">
+        {children}
+      </span>
+      <Skeleton className="absolute inset-0 rounded-[inherit]" />
+    </div>
+  );
+}
+
+// An empty box the size of an icon, standing where the control draws one.
+function IconBox({ small = false }: { small?: boolean }) {
+  return <span className={cn('shrink-0', small ? 'size-3.5' : 'size-4')} />;
+}
+
+/*
+ * One preset pill's box: `toggleVariants({ size: 'sm' })` plus the group's `px-2` and `flex-1`. Restated
+ * rather than imported because `toggle.tsx` is a client module, whose exports a server component can
+ * only render, not call; the layout e2e (`loading-layout.auth.spec.ts`) fails if this stops matching.
+ */
+const PRESET_BOX =
+  'inline-flex flex-1 shrink-0 h-8 min-w-8 items-center justify-center px-2 gap-2 rounded-md text-paragraph-sm-medium';
+
+// The box classes of an outline or a blue `Button` at the default size — the toolbar's pills and actions.
+const BUTTON_BOX = cn(buttonVariants({ variant: 'outline' }), 'border-transparent shadow-none');
+
+// One toolbar control's placeholder, by kind — each mirroring that control's own box.
+function ControlPlaceholder({ control }: { control: ToolbarControl }) {
+  switch (control.kind) {
+    case 'filter':
+      // `FilterCombobox`: its root takes the item classes, its trigger `h-9 w-full px-3 gap-x-2`.
+      return (
+        <div className={TOOLBAR_ITEM}>
+          <SizedPlaceholder
+            className={cn(
+              buttonVariants({ variant: 'outline' }),
+              'h-9 w-full justify-between px-3 gap-x-2 border-transparent shadow-none text-paragraph-sm font-normal',
+            )}
+          >
+            <span className="flex items-center gap-x-2">
+              <IconBox />
+              {control.label}
+            </span>
+            <IconBox />
+          </SizedPlaceholder>
+        </div>
+      );
+    case 'segmented':
+      // `SegmentedPills`: a `p-0.5` bordered group of `h-8 px-2.5` pills, never narrower than all of them.
+      return (
+        <SizedPlaceholder className="flex min-w-fit items-center p-0.5 border border-transparent rounded-md">
+          {control.labels.map((label) => (
+            <span
+              key={label}
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'h-8 px-2.5 border-0 text-paragraph-sm',
+              )}
+            >
+              {label}
+            </span>
+          ))}
+        </SizedPlaceholder>
+      );
+    case 'pill':
+      return (
+        <SizedPlaceholder className={cn(BUTTON_BOX, TOOLBAR_ITEM, 'rounded-md')}>
+          <IconBox />
+          {control.label}
+        </SizedPlaceholder>
+      );
+    case 'outline':
+      return (
+        <SizedPlaceholder className={cn(BUTTON_BOX, TOOLBAR_ITEM)}>
+          <IconBox small={control.smallIcon} />
+          {control.label}
+        </SizedPlaceholder>
+      );
+    case 'add':
+      return (
+        <SizedPlaceholder className={cn(BUTTON_BOX, TOOLBAR_ITEM)}>
+          <IconBox />
+          {control.label}
+        </SizedPlaceholder>
+      );
+  }
+}
+
+/*
+ * The list toolbar, built from `EntityListToolbar`'s own layout classes so it wraps at the same
+ * widths: the search item, the filters group (its own row until `lg`) and the actions group (its own
+ * row until `md`), each control placeholder sized by that control's own box and text.
+ */
+function ToolbarSkeleton({ filters = [], actions = [] }: ToolbarShape) {
+  return (
+    <div className={TOOLBAR_ROW} data-testid="page-skeleton-toolbar">
+      <div className={TOOLBAR_SEARCH}>
+        <Skeleton className="h-9 rounded-lg" />
+      </div>
+      {filters.length > 0 && (
+        <div className={TOOLBAR_FILTERS}>
+          {filters.map((control, i) => (
+            <ControlPlaceholder key={i} control={control} />
+          ))}
+        </div>
+      )}
+      {actions.length > 0 && (
+        <div className={TOOLBAR_ACTIONS}>
+          {actions.map((control, i) => (
+            <ControlPlaceholder key={i} control={control} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The groups page's toolbar: one add button at the end of its row.
+function AddOnlyToolbarSkeleton() {
+  return (
+    <div className="flex justify-end" data-testid="page-skeleton-toolbar">
+      <Skeleton className="w-32 h-8 rounded-lg" />
+    </div>
+  );
+}
+
+/*
+ * The dashboards' period picker, in the picker's own wrapping row: the preset group (a bordered
+ * `PillToggleGroup` of `h-8 px-2` items that never shrink) and the `h-9 px-3` custom-range button,
+ * each in a `flex-1` item like the real ones, each sized by its real labels.
+ */
+function PeriodPickerSkeleton({ presets, custom }: { presets: string[]; custom: string }) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:max-w-md"
+      data-testid="page-skeleton-period"
+    >
+      <div className="flex-1">
+        <SizedPlaceholder className="flex w-full border border-transparent rounded-full overflow-hidden">
+          {presets.map((label) => (
+            <span key={label} className={PRESET_BOX}>
+              {label}
+            </span>
+          ))}
+        </SizedPlaceholder>
+      </div>
+      <div className="flex-1">
+        <SizedPlaceholder className={cn(BUTTON_BOX, 'h-9 w-full gap-x-1.5 px-3 text-paragraph-sm')}>
+          <IconBox />
+          {custom}
+        </SizedPlaceholder>
       </div>
     </div>
   );
