@@ -91,6 +91,7 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label={count > 0 ? t('bell.unread', { count }) : t('bell.none')}
+        data-testid="notification-bell"
         className="group/bell relative grid size-8 shrink-0 place-items-center rounded-lg outline-none hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
       >
         <Bell className="size-5 text-muted-foreground group-hover/bell:text-foreground group-focus-visible/bell:animate-focus-bump transition-colors" />

@@ -1,22 +1,49 @@
-import { expect, type APIRequestContext } from '@playwright/test';
+import { expect, request } from '@playwright/test';
 
-import { e2eCredentials } from './auth';
+import { AUTH_STATE_PATH } from './auth';
 
-// Where the API is, for what a spec cannot do or see through the DOM. A shell var like E2E_EMAIL and
-// E2E_PASSWORD — Playwright reads no dotenv file, so it stays out of `.env.example` too — with the
-// local default that makes it optional. `||` rather than `??` so an empty value falls back.
+/*
+ * Direct API access for the authenticated specs: seeding the data a spec is not testing, or reading a
+ * figure the DOM cannot show.
+ */
+
+// Where the web app runs. `||` rather than `??` so an empty `PLAYWRIGHT_BASE_URL=""` falls back
+// instead of producing an unusable empty base URL. The Playwright config reads it from here too, so
+// the browser and this helper cannot point at different servers.
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+export const WEB_BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+
+// Where the API is. A shell var like E2E_EMAIL and E2E_PASSWORD, since Playwright reads no dotenv
+// file, so it stays out of `.env.example` too. The local default makes it optional.
 // eslint-disable-next-line turbo/no-undeclared-env-vars
 export const API_BASE = process.env.E2E_API_URL || 'http://localhost:8000';
 
-// Logs into the API directly for its own bearer token. The browser's session is a NextAuth cookie on
-// the WEB origin, which the API never sees — so a request context cannot borrow it, and the harness
-// credentials are the only way in.
-export async function apiToken(request: APIRequestContext): Promise<string> {
-  const credentials = e2eCredentials();
-  // The authenticated project only exists when both are set, so this cannot be null here — the check
-  // is what makes that a type fact rather than a comment.
-  if (credentials === null) throw new Error('E2E_EMAIL / E2E_PASSWORD are required for this spec');
-  const response = await request.post(`${API_BASE}/auth/login`, { data: credentials });
-  expect(response.ok(), `login to ${API_BASE} failed with ${response.status()}`).toBe(true);
-  return (await response.json()).access_token;
+/*
+ * The API bearer token of the session globalSetup already signed in, read from NextAuth's
+ * `/api/auth/session` with the saved storage state (the session callback exposes it as
+ * `user.accessToken`).
+ *
+ * Deliberately NOT a fresh `POST /auth/login`. The API allows five logins a minute, and Playwright
+ * restarts the worker after every failed test, which re-runs each `beforeAll`. A spec that logged in
+ * there spent one login per failure, so after a few real failures every later test reported
+ * `login … failed with 429` instead of the regression it exists to catch. globalSetup's form login is
+ * now the only login in a run.
+ */
+export async function apiToken(): Promise<string> {
+  const context = await request.newContext({ baseURL: WEB_BASE, storageState: AUTH_STATE_PATH });
+  try {
+    const response = await context.get('/api/auth/session');
+    expect(
+      response.ok(),
+      `reading the session from ${WEB_BASE} failed with ${response.status()}`,
+    ).toBe(true);
+    const token: unknown = (await response.json())?.user?.accessToken;
+    expect(
+      typeof token === 'string' && token.length > 0,
+      'the saved session carries no API access token; did globalSetup sign in?',
+    ).toBe(true);
+    return token as string;
+  } finally {
+    await context.dispose();
+  }
 }
