@@ -218,6 +218,7 @@ export function InvestmentFormDialog({
                   {showTicker && (
                     <motion.div
                       key="ticker"
+                      data-testid="investment-ticker-reveal"
                       layout
                       initial={{ opacity: 0, width: 0, marginRight: -12 }}
                       animate={{ opacity: 1, width: 'auto', marginRight: 0 }}

@@ -20,13 +20,38 @@ import { createExpenseViaQuickAdd, deleteExpenseByMarker, testMarker } from './h
 // Deliberately not the dashboard, which auto-starts the welcome tour on an un-onboarded account.
 const START = '/snapshots';
 const EXPENSES = '/expenses';
+const INVESTMENTS = '/investments';
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 900 };
 const COOKIE_KEY = 'cookie-consent-dismissed';
 
+/*
+ * How long to wait for a surface's animation to start, and for a whole test. Read the way
+ * playwright.config.ts reads CI (`CI=false` / `CI=0` opt out).
+ *
+ * Locally the spec runs against a dev server, where a first compile of the route plus the quick-add's
+ * first open can pass 30s, so both budgets are long. CI serves a production build — nothing compiles
+ * on demand — so there the budgets are short: a regression that stops every enter animation fails
+ * each test in about 20s instead of running each one to its full local budget, which across retries
+ * would push the job past its timeout and cancel the report and trace uploads with it.
+ */
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+const ciEnv = process.env.CI;
+const isCI = !!ciEnv && ciEnv !== 'false' && ciEnv !== '0';
+const FRAME_POLL_MS = isCI ? 20_000 : 60_000;
+// A navigation plus up to two frame polls (enter, exit), with room for the tooltip's seeded row.
+const TEST_BUDGET_MS = isCI ? 90_000 : 180_000;
+
 // One painted frame of the cookie banner: its vertical offset and how opaque it was.
 interface BannerFrame {
   y: number;
+  opacity: number;
+}
+
+// The investment dialog's Ticker field reveal, and one painted frame of it.
+const TICKER_REVEAL = 'investment-ticker-reveal';
+interface RevealFrame {
+  margin: number;
   opacity: number;
 }
 
@@ -107,9 +132,8 @@ async function waitForFrame(
         frame = await frameAt(page, selector, keyframes, progress);
         return frame !== null;
       },
-      // The spec's own budget below: a first compile of the route plus the quick-add's first open can
-      // pass 30s on a dev server, and the animation cannot start before the surface mounts.
-      { timeout: 60_000, message: `no running "${keyframes}" animation on ${selector}` },
+      // The animation cannot start before the surface mounts; see FRAME_POLL_MS.
+      { timeout: FRAME_POLL_MS, message: `no running "${keyframes}" animation on ${selector}` },
     )
     .toBe(true);
   return frame as unknown as Frame;
@@ -235,12 +259,8 @@ async function checkSurface(page: Page, surface: Surface, reduced: boolean) {
 }
 
 test.describe('reduced motion (signed in)', () => {
-  /*
-   * A dev server compiling a route inside the test, plus the quick-add's first open, can pass 30s —
-   * and a test waits on up to two frames (enter, exit) after its navigation, so the budget covers a
-   * cold navigation plus both 60s frame polls. A warm run takes seconds.
-   */
-  test.setTimeout(180_000);
+  // See FRAME_POLL_MS / TEST_BUDGET_MS. A warm run takes seconds either way.
+  test.setTimeout(TEST_BUDGET_MS);
 
   for (const surface of [DIALOG, POPOVER, SHEET]) {
     for (const reduced of [true, false]) {
@@ -335,6 +355,72 @@ test.describe('reduced motion (signed in)', () => {
         expect(seenDisplaced).toEqual([]);
       } else {
         expect(seenDisplaced.length).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  for (const reduced of [true, false]) {
+    test(`the investment ticker reveal ${reduced ? 'does not slide under reduce' : 'slides without reduce'}`, async ({
+      page,
+    }) => {
+      /*
+       * The one kind of motion MotionConfig does NOT reduce: margin and padding are not positional
+       * values, so under `reduce` motion still tweens them. The Ticker field reveals beside Broker
+       * with `marginRight: -12 → 0` (absorbing the flex gap), and without its own per-value gate it
+       * slides 12px sideways while the rest of the reveal is instant. Sampled on every painted frame
+       * after picking a category that has a ticker, the same way as the banner.
+       */
+      await page.setViewportSize(DESKTOP);
+      await page.emulateMedia({ reducedMotion: reduced ? 'reduce' : 'no-preference' });
+      await page.goto(INVESTMENTS);
+      await page.getByTestId('entity-list-add').click();
+      const dialog = page.locator('[data-slot="dialog-content"]');
+      await expect(dialog).toBeVisible({ timeout: FRAME_POLL_MS });
+      // The category picker is the dialog's first combobox; no ticker field exists until one is chosen.
+      await dialog.getByRole('combobox').first().click();
+      await expect(page.getByTestId(TICKER_REVEAL)).toHaveCount(0);
+
+      await page.evaluate((testId) => {
+        const samples: RevealFrame[] = [];
+        (window as unknown as { __reveal: RevealFrame[] }).__reveal = samples;
+        let frames = 0;
+        // Read after each frame paints — see the banner sampler above for why not inside rAF.
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+          frames += 1;
+          const el = document.querySelector(`[data-testid="${testId}"]`);
+          if (el) {
+            const style = getComputedStyle(el);
+            samples.push({ margin: parseFloat(style.marginRight), opacity: Number(style.opacity) });
+          }
+          if (frames < 60) {
+            requestAnimationFrame(tick);
+          }
+        };
+        const tick = () => channel.port2.postMessage(null);
+        requestAnimationFrame(tick);
+      }, TICKER_REVEAL);
+      await page.getByRole('option', { name: /cedears/i }).click();
+      await expect(page.getByTestId(TICKER_REVEAL)).toBeVisible();
+      await expect
+        .poll(() =>
+          page.evaluate(() => (window as unknown as { __reveal: RevealFrame[] }).__reveal.length),
+        )
+        .toBeGreaterThan(30);
+
+      const samples = await page.evaluate(
+        () => (window as unknown as { __reveal: RevealFrame[] }).__reveal,
+      );
+      // It must arrive either way, or "never seen sliding" would pass on a field that never showed.
+      expect(
+        samples.some((frame) => frame.margin === 0 && frame.opacity === 1),
+        JSON.stringify(samples.at(-1)),
+      ).toBe(true);
+      const seenSliding = samples.filter((frame) => frame.margin !== 0 && frame.opacity > 0);
+      if (reduced) {
+        expect(seenSliding).toEqual([]);
+      } else {
+        expect(seenSliding.length).toBeGreaterThan(0);
       }
     });
   }
