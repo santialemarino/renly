@@ -64,8 +64,10 @@ export default async function PotPage({ params, searchParams }: PotPageProps) {
     getPotHoldings(potId),
     getPotOwnershipEvents(potId, resolvePageParam(query.page)),
     getPotSeries(potId),
-    getAccounts(),
-    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
+    // Both feed only the move-in picker and a movement's private leg: empty on error, like a user
+    // with nothing private to move, and the pot itself still renders.
+    getAccounts().catch(() => []),
+    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
     getSettings().catch(() => null),
   ]);
   if (!group || !holdings || !events || !series) notFound();
@@ -90,7 +92,7 @@ export default async function PotPage({ params, searchParams }: PotPageProps) {
         holdings={holdings}
         events={events}
         privateAccounts={accounts}
-        privateInvestments={investments.items}
+        privateInvestments={investments?.items ?? []}
       />
       <PotLedgerSection
         pot={pot}
