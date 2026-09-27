@@ -206,6 +206,26 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
       await expect(page.locator(NAV)).toHaveCount(0);
       await expect(hamburger).toBeFocused();
     });
+
+    test('the quick-add opened from the sheet returns to the hamburger', async ({ page }) => {
+      // The form's trigger lives in the sheet, which closes as the form opens — so by the time the
+      // form closes that trigger is gone, and the chain falls through to the sheet's own opener.
+      await page.goto(EXPENSES);
+      const hamburger = page.locator(TRIGGER);
+      await hamburger.click();
+      await page.getByTestId('quick-add-trigger').click();
+      await expect(page.getByTestId('expense-form-notes')).toBeVisible({
+        timeout: QUICK_ADD_OPEN_MS,
+      });
+      // Premises: the sheet (and the trigger with it) is gone, and the form stayed open.
+      await expect(page.locator(NAV)).toHaveCount(0);
+      await expect(page.getByTestId('quick-add-trigger')).toHaveCount(0);
+      await expect(dialog(page)).toHaveCount(1);
+
+      await page.keyboard.press('Escape');
+      await expect(dialog(page)).toHaveCount(0);
+      await expect(hamburger).toBeFocused();
+    });
   });
 });
 

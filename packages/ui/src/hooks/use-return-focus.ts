@@ -27,7 +27,8 @@ import * as React from 'react';
  *     was opened from a control inside the form it replaced, which has since unmounted. So each
  *     overlay keeps a CHAIN — its opener, then the chain of the overlay that opener sat in — and
  *     closing focuses the first link still in the document. A swapped form therefore returns to the
- *     button that opened the first one.
+ *     button that opened the first one, and the quick-add opened from the phone nav sheet (whose
+ *     trigger leaves with the sheet) returns to the hamburger that opened the sheet.
  *   * Focus that has already landed somewhere real is left alone. A swap mounts the incoming form
  *     while the outgoing one is still animating out, and the outgoing one's close fires later; pulling
  *     focus back to the page from under the new form would be the opposite of the fix.
