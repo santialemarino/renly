@@ -12,13 +12,17 @@ import * as React from 'react';
  * `open` prop), so the ref is null and focus fell to `<body>` on every close, twenty-odd tab stops
  * from where the reader was.
  *
- * So the content records its own opener and returns to it. Three cases decide the shape:
+ * So the content records its own opener and returns to it. Four cases decide the shape:
  *
- *   * The opener is what held focus when the content mounted, read in `onOpenAutoFocus` — dispatched
- *     before FocusScope moves focus inside, so `activeElement` is still the opener. When that is
- *     `<body>` (a trigger that disables itself while it loads, as the quick-add does, drops focus
- *     before the dialog exists; Safari never focuses a clicked button at all), the last element the
- *     reader focused or pressed stands in for it.
+ *   * The opener is recorded when the content ELEMENT mounts (the returned `ref`), once per opening —
+ *     not in Radix's `onOpenAutoFocus`, which FocusScope skips entirely when focus is already inside
+ *     the content. React applies `autoFocus` before that, so a dialog that focuses its own input (the
+ *     type-to-confirm deletes) never got the event and closed to `<body>`. A fresh mount also resets
+ *     the chain, so a later opening can never reuse an earlier opener.
+ *   * The opener is the element that held focus, or — when focus is already inside the content (that
+ *     `autoFocus`), or on `<body>` (a trigger that disables itself while it loads, as the quick-add
+ *     does; Safari never focuses a clicked button at all) — the most recent element the reader
+ *     focused or pressed OUTSIDE the content.
  *   * The opener may be GONE by the time the overlay closes: a swapped-in form (`useDeferredDialogSwap`)
  *     was opened from a control inside the form it replaced, which has since unmounted. So each
  *     overlay keeps a CHAIN — its opener, then the chain of the overlay that opener sat in — and
@@ -28,8 +32,8 @@ import * as React from 'react';
  *     while the outgoing one is still animating out, and the outgoing one's close fires later; pulling
  *     focus back to the page from under the new form would be the opposite of the fix.
  *
- * Returns the two handlers composed over the caller's own, which run first and may `preventDefault()`
- * to take over, exactly as with Radix's props.
+ * The close handler is composed over the caller's own, which runs first and may `preventDefault()` to
+ * take over, exactly as with Radix's prop.
  */
 
 // Radix renders every dialog and sheet content with this role.
@@ -38,17 +42,24 @@ const OVERLAY_SELECTOR = '[role="dialog"]';
 // skip link or a scroll target is where focus lands, not something that opened anything.
 const INTERACTIVE_SELECTOR =
   'a[href], button, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])';
+// How many recent interactions to remember — enough to see past an overlay's own autofocus.
+const RECENT_LIMIT = 10;
 
 // Each open overlay's chain, keyed by its content element, so an overlay opened from inside another
 // can inherit the outer one's.
 const returnChains = new WeakMap<Element, HTMLElement[]>();
-let lastInteracted: HTMLElement | null = null;
+// The last few elements focused or pressed, most recent last.
+const recent: HTMLElement[] = [];
 
 function rememberInteraction(event: Event) {
   const target = event.target;
   if (!(target instanceof Element)) return;
   const interactive = target.closest(INTERACTIVE_SELECTOR);
-  if (interactive instanceof HTMLElement) lastInteracted = interactive;
+  if (!(interactive instanceof HTMLElement)) return;
+  const index = recent.indexOf(interactive);
+  if (index !== -1) recent.splice(index, 1);
+  recent.push(interactive);
+  if (recent.length > RECENT_LIMIT) recent.shift();
 }
 
 /*
@@ -61,36 +72,50 @@ if (typeof document !== 'undefined') {
   document.addEventListener('pointerdown', rememberInteraction, true);
 }
 
-function openerOf(): HTMLElement | null {
+// What opened `content`: the focused element, or failing that the latest interaction outside it.
+function openerOf(content: Element): HTMLElement | null {
   const active = document.activeElement;
-  if (active instanceof HTMLElement && active !== document.body) return active;
-  return lastInteracted?.isConnected ? lastInteracted : null;
+  if (active instanceof HTMLElement && active !== document.body && !content.contains(active))
+    return active;
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    const element = recent[index];
+    if (element && element.isConnected && !content.contains(element)) return element;
+  }
+  return null;
 }
 
-interface ReturnFocusHandlers {
-  onOpenAutoFocus?: (event: Event) => void;
+interface ReturnFocusOptions<T extends HTMLElement> {
+  // The caller's own close handler, composed rather than replaced.
   onCloseAutoFocus?: (event: Event) => void;
+  // The caller's own ref to the content, forwarded by the returned ref.
+  ref?: React.Ref<T>;
 }
 
-export function useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus }: ReturnFocusHandlers) {
+export function useReturnFocus<T extends HTMLElement>({
+  onCloseAutoFocus,
+  ref: callerRef,
+}: ReturnFocusOptions<T>) {
   const chain = React.useRef<HTMLElement[]>([]);
+  const latestCallerRef = React.useRef(callerRef);
+  latestCallerRef.current = callerRef;
 
-  const handleOpenAutoFocus = React.useCallback(
-    (event: Event) => {
-      const opener = openerOf();
-      const outer = opener?.closest(OVERLAY_SELECTOR);
-      chain.current = opener ? [opener, ...((outer && returnChains.get(outer)) ?? [])] : [];
-      if (event.target instanceof Element) returnChains.set(event.target, chain.current);
-      onOpenAutoFocus?.(event);
-    },
-    [onOpenAutoFocus],
-  );
+  // Stable, so React calls it once per mount of the content element rather than on every render.
+  const ref = React.useCallback((content: T | null) => {
+    const forward = latestCallerRef.current;
+    if (typeof forward === 'function') forward(content);
+    else if (forward) forward.current = content;
+    if (!content) return;
+    const opener = openerOf(content);
+    const outer = opener?.closest(OVERLAY_SELECTOR);
+    chain.current = opener ? [opener, ...((outer && returnChains.get(outer)) ?? [])] : [];
+    returnChains.set(content, chain.current);
+  }, []);
 
   const handleCloseAutoFocus = React.useCallback(
     (event: Event) => {
       onCloseAutoFocus?.(event);
       if (event.defaultPrevented) return;
-      // Nothing recorded (the content mounted with focus already inside it): Radix's own behaviour.
+      // Nothing recorded (no opener could be found at all): Radix's own behaviour.
       if (chain.current.length === 0) return;
       event.preventDefault();
       const active = document.activeElement;
@@ -106,5 +131,5 @@ export function useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus }: ReturnFocu
     [onCloseAutoFocus],
   );
 
-  return { onOpenAutoFocus: handleOpenAutoFocus, onCloseAutoFocus: handleCloseAutoFocus };
+  return { ref, onCloseAutoFocus: handleCloseAutoFocus };
 }

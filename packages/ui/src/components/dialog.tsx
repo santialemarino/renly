@@ -45,8 +45,8 @@ function DialogContent({
   children,
   showCloseButton = true,
   closeOnClickOutside = true,
-  onOpenAutoFocus,
   onCloseAutoFocus,
+  ref,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -55,7 +55,7 @@ function DialogContent({
   const labels = useUiLabels();
   // Focus goes back to whatever opened the dialog — Radix only does that for its own Dialog.Trigger,
   // and nearly every dialog here is controlled. See useReturnFocus.
-  const returnFocus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus });
+  const returnFocus = useReturnFocus({ onCloseAutoFocus, ref });
 
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -65,6 +65,7 @@ function DialogContent({
           so its overlay sits on top of the previous content). */}
       <DialogOverlay />
       <DialogPrimitive.Content
+        {...props}
         data-slot="dialog-content"
         className={cn(
           /* max-h + overflow-y keep a tall dialog's footer reachable: without them a form taller
@@ -85,9 +86,8 @@ function DialogContent({
           }
           props.onInteractOutside?.(e);
         }}
-        onOpenAutoFocus={returnFocus.onOpenAutoFocus}
+        ref={returnFocus.ref}
         onCloseAutoFocus={returnFocus.onCloseAutoFocus}
-        {...props}
       >
         {children}
         {/* Close affordance follows the repo's icon-button focus convention (see ux-motion): no

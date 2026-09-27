@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useReturnFocus } from '@repo/ui/hooks';
 
 /*
- * `useReturnFocus`, the hook both base overlays (`DialogContent`, `SheetContent`) route their Radix
- * focus events through. Plain React over the real DOM — no Radix primitive — so, unlike its consumers,
- * it can be driven here: the overlay's content is a `role="dialog"` element and the two Radix events are
- * dispatched on it the way FocusScope dispatches them (open BEFORE focus moves inside, close AFTER the
- * content has left the document). The browser half — that the wrappers actually receive these events —
- * is `tests/e2e/focus-system.auth.spec.ts`.
+ * `useReturnFocus`, the hook both base overlays (`DialogContent`, `SheetContent`) hang their content
+ * ref and Radix's close event on. Plain React over the real DOM — no Radix primitive — so, unlike its
+ * consumers, it can be driven here: the overlay's content is a `role="dialog"` element, its mount is the
+ * ref being called with it, and the close is Radix's event fired AFTER the content has left the
+ * document. The browser half — that the wrappers really wire both — is
+ * `tests/e2e/focus-system.auth.spec.ts`.
  */
 
 function button(label: string, parent: HTMLElement = document.body): HTMLButtonElement {
@@ -33,10 +33,10 @@ function focusEvent(content: HTMLElement): Event {
   return event;
 }
 
-// Opens an overlay whose opener is whatever holds focus now, then moves focus inside it.
+// Mounts an overlay whose opener is whatever holds focus now, then moves focus inside it.
 function open(content: HTMLElement) {
   const { result } = renderHook(() => useReturnFocus({}));
-  result.current.onOpenAutoFocus(focusEvent(content));
+  result.current.ref(content);
   button('inside', content).focus();
   return result;
 }
@@ -139,7 +139,7 @@ describe('useReturnFocus', () => {
     const { result } = renderHook(() =>
       useReturnFocus({ onCloseAutoFocus: (event) => event.preventDefault() }),
     );
-    result.current.onOpenAutoFocus(focusEvent(content));
+    result.current.ref(content);
     button('inside', content).focus();
 
     close(content, result.current);
@@ -151,9 +151,56 @@ describe('useReturnFocus', () => {
     const { result } = renderHook(() => useReturnFocus({}));
     // Nothing focused and nothing pressed since the last test's DOM was cleared.
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    result.current.onOpenAutoFocus(focusEvent(content));
+    result.current.ref(content);
 
     const event = close(content, result.current);
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('finds the opener when the content already took focus with autoFocus', () => {
+    // React applies `autoFocus` before the overlay can look (the type-to-confirm deletes focus their
+    // input), and Radix then skips its open event entirely — so focus is INSIDE by the time we record.
+    const opener = button('delete');
+    opener.focus();
+    const content = overlay();
+    const input = document.createElement('input');
+    content.appendChild(input);
+    input.focus();
+    expect(content.contains(document.activeElement)).toBe(true);
+
+    const { result } = renderHook(() => useReturnFocus({}));
+    result.current.ref(content);
+    close(content, result.current);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('records a fresh opener on every opening', () => {
+    // The same dialog instance opened twice from two different buttons must go back to the second.
+    const first = button('first');
+    const second = button('second');
+    const { result } = renderHook(() => useReturnFocus({}));
+
+    first.focus();
+    const once = overlay();
+    result.current.ref(once);
+    close(once, result.current);
+    expect(document.activeElement).toBe(first);
+
+    second.focus();
+    const twice = overlay();
+    const input = document.createElement('input');
+    twice.appendChild(input);
+    input.focus();
+    result.current.ref(twice);
+    close(twice, result.current);
+    expect(document.activeElement).toBe(second);
+  });
+
+  it('forwards the caller’s ref', () => {
+    const content = overlay();
+    const callerRef = { current: null as HTMLElement | null };
+    const { result } = renderHook(() => useReturnFocus({ ref: callerRef }));
+    result.current.ref(content);
+    expect(callerRef.current).toBe(content);
   });
 });
