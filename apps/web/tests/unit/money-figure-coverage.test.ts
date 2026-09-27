@@ -19,9 +19,9 @@ import { describe, expect, it } from 'vitest';
  * A money call is followed OUT of the expression it sits in, through everything that hands its value
  * on unchanged, to where the value ends up:
  *   * pass-throughs: parentheses, a ternary's branches (not its condition), the value side of `&&` /
- *     `||` / `??`, a template, `String(...)`, `as` / `!`;
- *   * a callback's result: an arrow whose body is the value, when the arrow is a `.map(...)` argument
- *     (followed on from the `.map` call) or a column's `cell` renderer;
+ *     `||` / `??`, string `+`, a template, an array and its `.join(...)`, `String(...)`, `as` / `!`;
+ *   * a callback's result — a concise arrow body or a `return` in a block-bodied one — when the
+ *     callback is a `.map(...)` argument (followed on from the `.map` call) or a column's `cell`;
  *   * a variable: every reference to it in the scope that declares it is followed in turn;
  *   * display data: an object property named `value` or `cell`, which is how the app's stat lists,
  *     sample tables and detail dialogs carry what they then render.
@@ -46,10 +46,13 @@ const WEB = join(here, '..', '..');
 const MONEY_METHODS = new Set(['value', 'amount', 'signedValue']);
 const FORMATTER_FACTORIES = new Set(['useFormatters', 'getFormatters']);
 const DISPLAY_PROPERTIES = new Set(['value', 'cell']);
-const LOGICAL = new Set([
+// The binary operators whose result carries an operand's text on: the value side of a logical, and
+// string `+` (`fmt.amount(a) + ' ' + code`). A comparison consumes its operands instead.
+const PASSING_OPERATORS = new Set([
   ts.SyntaxKind.AmpersandAmpersandToken,
   ts.SyntaxKind.BarBarToken,
   ts.SyntaxKind.QuestionQuestionToken,
+  ts.SyntaxKind.PlusToken,
 ]);
 
 type Landing = 'wrapped' | 'raw' | 'none';
@@ -114,7 +117,18 @@ function passedTo(node: ts.Node): ts.Node | undefined {
   )
     return parent;
   if (ts.isConditionalExpression(parent) && parent.condition !== node) return parent;
-  if (ts.isBinaryExpression(parent) && LOGICAL.has(parent.operatorToken.kind)) return parent;
+  if (ts.isBinaryExpression(parent) && PASSING_OPERATORS.has(parent.operatorToken.kind))
+    return parent;
+  // An array of figures carries them on, and so does joining it: `[fmt.amount(a), code].join(' ')`.
+  if (ts.isArrayLiteralExpression(parent)) return parent;
+  if (
+    ts.isPropertyAccessExpression(parent) &&
+    parent.expression === node &&
+    parent.name.text === 'join' &&
+    ts.isCallExpression(parent.parent) &&
+    parent.parent.expression === parent
+  )
+    return parent.parent;
   if (
     ts.isCallExpression(parent) &&
     ts.isIdentifier(parent.expression) &&
@@ -155,16 +169,15 @@ function landing(start: ts.Node, file: ts.SourceFile, depth = 0): Landing {
   if (ts.isPropertyAssignment(parent) && parent.initializer === node) {
     return DISPLAY_PROPERTIES.has(parent.name.getText(file)) ? 'raw' : 'none';
   }
-  if (ts.isArrowFunction(parent) && parent.body === node) {
-    const holder = parent.parent;
-    if (ts.isPropertyAssignment(holder) && holder.name.getText(file) === 'cell') return 'raw';
-    if (
-      ts.isCallExpression(holder) &&
-      ts.isPropertyAccessExpression(holder.expression) &&
-      holder.expression.name.text === 'map'
-    )
-      return landing(holder, file, depth + 1);
-    return 'none';
+  // A callback's result: a concise arrow body, or a `return` inside a block-bodied callback.
+  if (ts.isArrowFunction(parent) && parent.body === node)
+    return callbackResult(parent, file, depth);
+  if (ts.isReturnStatement(parent) && parent.expression === node) {
+    let fn: ts.Node = parent.parent;
+    while (!ts.isFunctionLike(fn) && !ts.isSourceFile(fn)) fn = fn.parent;
+    return ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)
+      ? callbackResult(fn, file, depth)
+      : 'none';
   }
   if (
     ts.isVariableDeclaration(parent) &&
@@ -188,6 +201,24 @@ function landing(start: ts.Node, file: ts.SourceFile, depth = 0): Landing {
     visit(scopeOf(parent));
     return combine(references.map((reference) => landing(reference, file, depth + 1)));
   }
+  return 'none';
+}
+
+// Where a callback's result ends up: rendered when it is a column's `cell`, followed on from the call
+// when it is a `.map` callback, and nothing otherwise (a Recharts `formatter` returns a tooltip string).
+function callbackResult(
+  fn: ts.ArrowFunction | ts.FunctionExpression,
+  file: ts.SourceFile,
+  depth: number,
+): Landing {
+  const holder = fn.parent;
+  if (ts.isPropertyAssignment(holder) && holder.name.getText(file) === 'cell') return 'raw';
+  if (
+    ts.isCallExpression(holder) &&
+    ts.isPropertyAccessExpression(holder.expression) &&
+    holder.expression.name.text === 'map'
+  )
+    return landing(holder, file, depth + 1);
   return 'none';
 }
 
@@ -320,6 +351,9 @@ describe('the scanner itself', () => {
       '<p>{shown && fmt.signedValue(change)}</p>',
       '<p>{`${fmt.amount(total, code)} ${code}`}</p>',
       '<p>{String(fmt.amount(total, code))}</p>',
+      "<p>{fmt.amount(a.balance, a.currency) + ' ' + a.currency}</p>",
+      "<p>{[fmt.amount(total, code), code].join(' ')}</p>",
+      '<p>{rows.map((row) => { return fmt.amount(row.total, code); })}</p>',
       '<Row value={fmt.value(total)} />',
       '<ul>{rows.map((row) => <li key={row.id}>{fmt.value(row.total)}</li>)}</ul>',
       '<p>{rows.map((row) => fmt.amount(row.total, code))}</p>',
