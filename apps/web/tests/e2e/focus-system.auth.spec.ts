@@ -12,6 +12,7 @@ import {
 // Route literals mirror apps/web/config/routes.ts, like every spec's.
 const EXPENSES = '/expenses';
 const SUBSCRIPTIONS = '/subscriptions';
+const PAYMENT_OBLIGATIONS = '/payment-obligations';
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 800 };
 
@@ -29,12 +30,13 @@ const QUICK_ADD_OPEN_MS = 20_000;
  * here is controlled. The fix lives in the two base wrappers, so the cases below are one per PATH
  * into them rather than one per dialog: a plain controlled dialog closed three ways, a popover inside
  * it (Radix's own trigger path, which must keep working), a toolbar popover, the quick-add (whose
- * trigger disables itself while loading, so nothing holds focus when the dialog mounts), the quick-add
- * SWAP (the incoming form was opened from inside the outgoing one, which is gone by the time it
- * closes), a type-to-confirm delete (its input takes focus with `autoFocus`, which makes Radix skip its
- * open event) and the phone nav sheet (its hamburger sits outside any Dialog.Trigger).
- * `tests/unit/focus-system.test.ts` proves every Radix dialog in the codebase goes through those
- * wrappers; `use-return-focus.test.tsx` covers the chain logic case by case.
+ * trigger disables itself while loading, so nothing holds focus when the dialog mounts) and its swap,
+ * the same from the phone nav sheet, a type-to-confirm delete (its input takes focus with `autoFocus`,
+ * which makes Radix skip its open event), a follow-up dialog opened from a closing form (the only
+ * case that needs the opener CHAIN — the others are the recent-interaction scan) and the phone nav
+ * sheet (its hamburger sits outside any Dialog.Trigger). `tests/unit/focus-system.test.ts` proves
+ * every Radix dialog in the codebase goes through those wrappers; `use-return-focus.test.tsx` covers
+ * the hook's logic case by case.
  */
 test.describe('focus returns to what opened an overlay (signed in)', () => {
   const dialog = (page: Page) => page.getByRole('dialog');
@@ -175,6 +177,78 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
     }
   });
 
+  test('a follow-up dialog opened from a closing form returns to the form’s opener', async ({
+    page,
+  }) => {
+    /*
+     * The one path the opener CHAIN exists for. Saving a "mark paid" expense at a different amount
+     * than its obligation opens the amount-mismatch prompt while the expense form is still animating
+     * out with focus on its Save button — so the prompt's own opener is Save, which is gone by the
+     * time the prompt closes. Only the form's chain (its opener, the row's Mark paid) is left.
+     */
+    const marker = testMarker('focus-follow-up');
+    const token = await apiToken();
+    const api = await request.newContext({
+      baseURL: API_BASE,
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+    const created = await api.post('/payment-obligations', {
+      data: {
+        name: marker,
+        amount: '100.00',
+        currency: 'USD',
+        next_due_date: new Date().toISOString().slice(0, 10),
+        payment_method: 'cash',
+        // Recurring, so marking it paid advances it and its row (and Mark paid) stay on the page.
+        // A one-off would complete and leave the list, taking the opener with it.
+        recurrence: 'monthly',
+      },
+    });
+    expect(created.ok(), `seeding an obligation failed with ${created.status()}`).toBe(true);
+    const { id } = (await created.json()) as { id: number };
+
+    try {
+      await page.goto(PAYMENT_OBLIGATIONS);
+      // The row's first action is Mark paid.
+      const markPaid = page
+        .getByRole('row')
+        .filter({ hasText: marker })
+        .getByRole('button')
+        .first();
+      await markPaid.focus();
+      await page.keyboard.press('Enter');
+      const form = dialog(page);
+      await expect(page.getByTestId('expense-form-amount')).toBeVisible();
+
+      // The form opens with the obligation's amount and no date: pick today, change the amount.
+      await form.locator('button[aria-haspopup="dialog"]').first().click();
+      await page.locator('.rdp-today button').first().click();
+      const amount = page.getByTestId('expense-form-amount');
+      await amount.focus();
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.type('250');
+      await page.getByTestId('expense-form-notes').fill(marker);
+      await page.getByTestId('expense-form-submit').click();
+
+      // Premise: the prompt is up and the expense form has gone.
+      await expect(page.getByTestId('expense-form-notes')).toHaveCount(0);
+      await expect(dialog(page)).toHaveCount(1);
+
+      await page.keyboard.press('Escape');
+      await expect(dialog(page)).toHaveCount(0);
+      await expect(markPaid).toBeFocused();
+    } finally {
+      const listed = await api.get('/expenses', { params: { search: marker } });
+      const items = listed.ok()
+        ? (((await listed.json()) as { items: { id: number }[] }).items ?? [])
+        : [];
+      for (const expense of items) await api.delete(`/expenses/${expense.id}`);
+      await api.delete(`/payment-obligations/${id}`);
+      await api.dispose();
+    }
+  });
+
   test('a clear button’s keyboard cue is not its hover cue', async ({ page }) => {
     // The search field's clear ✕, one of the four icon buttons that used to scale on focus exactly
     // as on hover. It only joins the tab order once the field has a value.
@@ -208,8 +282,9 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
     });
 
     test('the quick-add opened from the sheet returns to the hamburger', async ({ page }) => {
-      // The form's trigger lives in the sheet, which closes as the form opens — so by the time the
-      // form closes that trigger is gone, and the chain falls through to the sheet's own opener.
+      // The form's trigger lives in the sheet, which is gone (trigger with it) before the form
+      // mounts; the trigger disabled itself while loading, so nothing held focus either. The
+      // recent-interaction scan skips the vanished trigger and finds the hamburger directly.
       await page.goto(EXPENSES);
       const hamburger = page.locator(TRIGGER);
       await hamburger.click();
