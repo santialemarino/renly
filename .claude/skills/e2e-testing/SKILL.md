@@ -277,7 +277,8 @@ on every PR, every night on `main`, and on demand — and decides at JOB level w
   - **Leave it off** for a contained UI change it verified in the browser, copy or style changes, a
     component used by one page, or API work covered by its own tests.
 - **The net.** Every night at 03:17 UTC on `main`. A red night opens one issue labelled `e2e-red` (or
-  comments on the one already open); the first green night closes it. On top of that, a full run at
+  comments on the one already open); the first green night closes it — or a manual run dispatched
+  with `report` ticked, which updates the issue the same way. On top of that, a full run at
   the end of every structured block of work, and for unstructured work the agent asks Santi.
 
 **While iterating, run targeted specs locally; the full suite runs in CI through the floor or the
