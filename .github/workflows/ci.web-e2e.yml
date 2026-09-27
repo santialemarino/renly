@@ -136,8 +136,9 @@ jobs:
         # The JWT secret the API signs with and NextAuth verifies with must be equal and 32+ chars;
         # the password is the throwaway account's. Both live only for this job. `add-mask` hides them
         # in the job LOG only: a failed test's trace (uploaded below) records the requests it made,
-        # so it can hold the password — which is harmless, because the account and the database it
-        # lives in are discarded with the runner.
+        # so it can hold the harness session's bearer token (specs read it from the saved session, and
+        # none sends the password) — which is harmless, because the account and the database it lives
+        # in are discarded with the runner.
         run: |
           secret="$(openssl rand -hex 32)"
           password="$(openssl rand -hex 16)"

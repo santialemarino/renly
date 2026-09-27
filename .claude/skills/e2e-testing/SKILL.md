@@ -86,8 +86,9 @@ placed in `apps/web/.env` looks configured and reaches nothing. They also stay o
 for the same reason the API's four `*_TEST_DATABASE_URL` vars do: they are per-developer test
 credentials rather than deploy-time configuration, and one of them is a real password.
 
-**`E2E_API_URL`** joins them, for the rare spec that asserts something the DOM cannot show — a figure
-the page abbreviates, or two endpoints that must agree. It defaults to `http://localhost:8000`, so it
+**`E2E_API_URL`** joins them. `globalSetup` reads it on every run to check the API is up before any
+test starts, and specs use it when they assert something the DOM cannot show — a figure the page
+abbreviates, or two endpoints that must agree — or seed data they are not testing. It defaults to `http://localhost:8000`, so it
 is optional, and it stays out of both env files for the same reason the two above do. A spec reaching
 the API gets its bearer token from `apiToken()` in `tests/e2e/helpers/api.ts` (which also exports
 `API_BASE`). That reads the token from the session globalSetup saved, via NextAuth's
@@ -339,8 +340,9 @@ One job, serial, Chromium only, built from the same pieces a developer uses:
    and videos only for tests that FAILED (they are `retain-on-failure`), plus the JSON results. To read
    a failure: download `playwright-report`, then `pnpm --filter web exec playwright show-report <dir>`.
    The per-run secrets are masked in the job LOG only; a failed test's trace records its requests and
-   can hold the harness password. That is harmless — the account and its database are discarded with
-   the runner — but it is why the password must stay per-run and throwaway.
+   can hold the harness session's bearer token (no spec sends the password — they read the token from
+   the saved session). That is harmless — the account and its database are discarded with the runner —
+   but it is why the harness account must stay per-run and throwaway.
 
 Browser binaries are cached on the lockfile hash; on a hit only the system dependencies install.
 
