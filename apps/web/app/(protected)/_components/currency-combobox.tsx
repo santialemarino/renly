@@ -279,9 +279,9 @@ export function CurrencyCombobox({
                     handleClear(e as unknown as React.MouseEvent);
                   }
                 }}
-                className="shrink-0 p-0.5 rounded text-muted-foreground opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100 focus-visible:scale-110"
+                className="group/currency-clear shrink-0 p-0.5 rounded text-muted-foreground opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100"
               >
-                <X className="size-3.5" />
+                <X className="size-3.5 group-focus-visible/currency-clear:animate-focus-bump" />
               </span>
             )}
             <ComboboxChevron open={open} />
