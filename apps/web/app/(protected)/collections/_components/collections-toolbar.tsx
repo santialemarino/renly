@@ -1,18 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus } from 'lucide-react';
-import { LayoutGroup, motion } from 'motion/react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { Button, SearchInput } from '@repo/ui/components';
 import { CollectionFormDialog } from '@/app/(protected)/collections/_components/collection-form-dialog';
+import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
-import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
-import { SEARCH_MAX } from '@/lib/constants/api-constants';
-import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 interface CollectionsToolbarProps {
   investments: { id: number; name: string }[];
@@ -29,63 +24,38 @@ export function CollectionsToolbar({
 }: CollectionsToolbarProps) {
   const t = useTranslations('collections');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { navigate } = useSearchParamsNavigation(ROUTES.collections);
   const [createOpen, setCreateOpen] = useState(false);
-  const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
   const nearLimit =
     collectionWarningPct !== null &&
     collectionCount >= maxCollections * (collectionWarningPct / 100);
   const atLimit = collectionCount >= maxCollections;
 
-  useEffect(() => {
-    const timer = setTimeout(() => navigate({ search }), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
-
   return (
     <div className="flex flex-col gap-y-2">
-      <LayoutGroup>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <motion.div
-            layout
-            transition={{ duration: ANIMATION_DEFAULT }}
-            className="min-w-0 flex-1"
-          >
-            <SearchInput
-              placeholder={t('toolbar.searchPlaceholder')}
-              value={search}
-              maxLength={SEARCH_MAX}
-              surface
-              onChange={(e) => setSearch(e.target.value)}
-              onClear={() => setSearch('')}
-            />
-          </motion.div>
+      <EntityListToolbar
+        route={ROUTES.collections}
+        searchPlaceholder={t('toolbar.searchPlaceholder')}
+        addLabel={t('toolbar.addCollection')}
+        onAdd={() => setCreateOpen(true)}
+        addDisabled={atLimit}
+      >
+        <CollectionFormDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          investments={investments}
+          onSuccess={() => router.refresh()}
+        />
+      </EntityListToolbar>
 
-          <motion.div layout transition={{ duration: ANIMATION_DEFAULT }}>
-            <Button blue onClick={() => setCreateOpen(true)} disabled={atLimit}>
-              <Plus className="size-4" />
-              {t('toolbar.addCollection')}
-            </Button>
-          </motion.div>
-        </div>
-      </LayoutGroup>
-
+      {/* Below the toolbar rather than inside it: the toolbar's row is for controls, and a hint in a
+          wrapping flex row would be laid out as one more item beside them. */}
       <WarningHint show={nearLimit && !atLimit} parentGap={8}>
         {t('softLimit.approaching', { count: collectionCount, max: maxCollections })}
       </WarningHint>
       <WarningHint show={atLimit} parentGap={8}>
         {t('softLimit.reached', { max: maxCollections })}
       </WarningHint>
-
-      <CollectionFormDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        investments={investments}
-        onSuccess={() => router.refresh()}
-      />
     </div>
   );
 }

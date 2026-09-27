@@ -15,9 +15,15 @@ function run(cmd, opts = {}) {
   return execSync(cmd, { stdio: 'inherit', cwd: ROOT, ...opts });
 }
 
+/*
+ * Over TCP rather than the container's Unix socket, because on a FRESH volume the image first runs a
+ * temporary server that listens on the socket only, creates the database, and then shuts down to
+ * restart for real. A socket check answers during that window, and the roles file then dies with
+ * "the database system is shutting down". Only the final server listens on TCP.
+ */
 function isPostgresReady() {
   try {
-    execSync(`docker exec ${CONTAINER} psql -U renly -d renly -c "SELECT 1"`, {
+    execSync(`docker exec ${CONTAINER} psql -h 127.0.0.1 -U renly -d renly -c "SELECT 1"`, {
       stdio: 'pipe',
       cwd: ROOT,
     });
