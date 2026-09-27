@@ -16,8 +16,11 @@ const ACCOUNTS = '/accounts';
  *
  *   * the marker goes in a free-text field, so it survives the round trip through the API and comes
  *     back on the list page as something a locator can find, with no id to thread through;
- *   * cleanup is driven through the same UI a user would use, so a spec that fails mid-flow leaves at
- *     most one identifiable row behind rather than a mystery.
+ *   * the flow a spec is TESTING goes through the UI, create and cleanup alike, so a spec that fails
+ *     mid-flow leaves at most one identifiable row behind rather than a mystery. Data it is NOT testing
+ *     (the group and collection a layout sweep needs on screen, say) may be seeded and removed through
+ *     the API instead, using `helpers/api.ts`. That is faster and deterministic, and it is still marked
+ *     and still removed.
  */
 
 // A value unique to this run, so a spec never matches a row another run (or a real user) created.
