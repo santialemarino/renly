@@ -215,6 +215,16 @@ export function PageSkeletonView({
     <div
       className={cn('flex flex-col flex-1 p-8', loose ? 'gap-y-6' : 'gap-y-4')}
       data-testid="page-skeleton"
+      /*
+       * Which skeleton this is, from its own props, so a test can tell two skeletons apart when their
+       * headings cannot (a detail and its wizard both open on a data title). Read by
+       * `loading-nested-routes.auth.spec.ts`, which derives the same fields from a `loading.tsx`.
+       */
+      data-body={body}
+      data-back-link={backLink}
+      data-loose={loose}
+      data-toolbar={toolbar === undefined ? 'none' : toolbar === 'add-only' ? 'add-only' : 'list'}
+      data-period={period?.placement ?? 'none'}
     >
       <p role="status" className="sr-only">
         {status}
