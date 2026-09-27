@@ -191,3 +191,94 @@ test.describe('loading states keep the layout (signed in)', () => {
     }
   }
 });
+
+/*
+ * Below the dashboards' header: where the first content lands, for a visitor with no currency cookie.
+ *
+ * That visitor sees each dashboard's "no common currency" warning (the page reads it off the missing
+ * cookie), and a loading state that reserved no line for it put the metric cards one warning lower
+ * once the page loaded — about 34px on the main and finance dashboards, which measuring only the
+ * picker never showed. The spec asserts that the metrics start where the placeholder's content did,
+ * and then that the placeholder did reserve the warning — so the case really is the no-cookie visitor.
+ *
+ * The main dashboard also opens with a first-run welcome for an account that has not finished
+ * onboarding — data no loading state can know — so this block marks the account onboarded for its own
+ * duration and restores whatever it found.
+ */
+const DASHBOARDS = TARGETS.filter((target) => target.real.includes('period'));
+
+test.describe('dashboard content stays put under the header (signed in)', () => {
+  test.describe.configure({ timeout: 120_000 });
+
+  let onboardedBefore: boolean | null = null;
+  const setOnboarded = async (value: boolean) => {
+    const token = await apiToken();
+    const context = await request.newContext({
+      baseURL: API_BASE,
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+    try {
+      const current = await context.get('/settings');
+      expect(current.ok(), 'reading settings failed').toBe(true);
+      const before = Boolean((await current.json()).onboarding_completed);
+      const updated = await context.put('/settings', { data: { onboarding_completed: value } });
+      expect(updated.ok(), `updating settings failed with ${updated.status()}`).toBe(true);
+      return before;
+    } finally {
+      await context.dispose();
+    }
+  };
+
+  test.beforeAll(async () => {
+    onboardedBefore = await setOnboarded(true);
+  });
+
+  // Never throws: a cleanup raising from `afterAll` would replace the failure that actually happened.
+  test.afterAll(async () => {
+    if (onboardedBefore === false) {
+      await setOnboarded(false).catch((error: Error) =>
+        console.warn(`e2e cleanup: restoring onboarding_completed failed (${error.message})`),
+      );
+    }
+  });
+
+  for (const locale of LOCALES) {
+    for (const width of WIDTHS) {
+      for (const target of DASHBOARDS) {
+        test(`${target.route} content at ${width}px in ${locale}`, async ({ page }) => {
+          // No currency cookie is set: the visitor this block is about.
+          await page
+            .context()
+            .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
+          await dismissAllHints(page);
+          await page.setViewportSize({ width, height: 900 });
+
+          const measured = await holdNavigation(
+            page,
+            target.route,
+            async () => {
+              await page.waitForTimeout(SETTLE_MS);
+              return {
+                content: await box(page, '[data-testid="page-skeleton-dashboard"]'),
+                reserved: await page.getByTestId('page-skeleton-notice').isVisible(),
+              };
+            },
+            async () => {
+              await page.waitForTimeout(SETTLE_MS);
+              return box(page, '[data-testid="dashboard-metrics"]');
+            },
+          );
+          test.skip(measured === null, NO_PREFETCH_REASON);
+
+          const { held, released: real } = measured!;
+          expect(
+            Math.abs(real.top - held.content.top),
+            `the metrics start ${real.top - held.content.top}px from where the loading state's content did`,
+          ).toBeLessThanOrEqual(TOLERANCE_PX);
+          // And the case really was the no-cookie visitor, whose warning the placeholder reserves.
+          expect(held.reserved, 'the loading state reserved no currency warning').toBe(true);
+        });
+      }
+    }
+  }
+});

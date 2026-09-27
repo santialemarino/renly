@@ -79,11 +79,13 @@ interface PageSkeletonProps extends PageSkeletonLayoutProps {
    */
   periodPicker?: PeriodPickerPlacement;
   /*
-   * The translation key of the warning a page shows under its header when the display currency is
-   * "original" — which is also what a visitor with no currency cookie gets. The page decides it from
-   * that cookie alone, so the loading state can too, and reserves the warning's line(s) when it will
-   * show. Its figure names the user's primary currency, which is a setting this state cannot read; a
-   * three-letter stand-in takes the same width, and it is never visible.
+   * The translation key of the warning a page shows when the display currency is "original" — which
+   * is also what a visitor with no currency cookie gets. The page decides it from that cookie alone, so
+   * the loading state can too, and reserves the warning's line(s) when it will show: under the header
+   * (the investor dashboard), or under the header ROW on a page whose period picker sits beside its
+   * header (the main and finance dashboards, which render it below that row). Its figure names the
+   * user's primary currency, a setting this state cannot read; a three-letter stand-in takes the same
+   * width, and it is never visible.
    */
   currencyFallback?: string;
 }
@@ -198,7 +200,9 @@ export function PageSkeletonView({
       <div className="flex flex-col gap-y-1">
         <h1 className="text-heading-2 text-foreground">{title}</h1>
         <Skeleton className="w-80 max-w-full h-6 rounded-md" />
-        {notice !== undefined && <NoticePlaceholder>{notice}</NoticePlaceholder>}
+        {notice !== undefined && period?.placement !== 'header' && (
+          <NoticePlaceholder>{notice}</NoticePlaceholder>
+        )}
       </div>
     ) : (
       <div className="flex flex-col gap-y-1">
@@ -233,6 +237,9 @@ export function PageSkeletonView({
         aria-busy="true"
         className="flex flex-col gap-y-4 animate-in fade-in fill-mode-backwards delay-150 duration-300"
       >
+        {notice !== undefined && period?.placement === 'header' && (
+          <NoticePlaceholder>{notice}</NoticePlaceholder>
+        )}
         {period?.placement === 'toolbar' && (
           // The investor dashboard's row (`InvestorDashboardAnimatedToolbar`): the search grows, and the
           // picker takes its own row until `xl`.
@@ -285,7 +292,7 @@ function SizedPlaceholder({ className, children }: SizedPlaceholderProps) {
  */
 function NoticePlaceholder({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative flex items-center gap-x-2">
+    <div className="relative flex items-center gap-x-2" data-testid="page-skeleton-notice">
       <span className="size-4 shrink-0" />
       <p className="invisible text-paragraph-xs whitespace-pre-line">{children}</p>
       <Skeleton className="absolute inset-0 rounded-md" />
@@ -471,7 +478,7 @@ function TableSkeleton() {
 // Stat tiles, then the wide chart and the two panels under it.
 function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-y-4">
+    <div className="flex flex-col gap-y-4" data-testid="page-skeleton-dashboard">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {Array.from({ length: DASHBOARD_TILES }, (_, i) => (
           <Skeleton key={i} className="h-28 rounded-1.5xl" />

@@ -175,6 +175,15 @@ describe('protected route loading coverage', () => {
     );
   });
 
+  it.each(PAGE_DIRS)('%s reserves its currency-fallback warning when it has one', (dir) => {
+    // The warning shows for every visitor without a currency cookie; unreserved, it pushes the page down.
+    const page = readFileSync(join(PROTECTED, dir, 'page.tsx'), 'utf8');
+    const loading = readFileSync(join(PROTECTED, dir, 'loading.tsx'), 'utf8');
+    expect(/\bcurrencyFallback="[^"]+"/.test(loading)).toBe(
+      page.includes("t.rich('currencyFallback'"),
+    );
+  });
+
   it.each(PAGE_DIRS)('%s names toolbar labels that exist in both locales', (dir) => {
     // A missing key renders its own path invisibly, sizing the placeholder by the wrong text.
     const loading = readFileSync(join(PROTECTED, dir, 'loading.tsx'), 'utf8');
