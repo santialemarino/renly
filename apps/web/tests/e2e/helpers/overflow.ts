@@ -22,17 +22,47 @@ import type { Page } from '@playwright/test';
  * A SCROLL container (`auto` / `scroll`) is not a clip: content past its edge is one scroll away, which
  * is how a wide table is meant to behave. So on each axis the walk up the ancestors stops at the first
  * scroll container — anything beyond it is about the scroller, not the text. Vertically only a real
- * clip counts: text taller than a box that is not clipping it is drawn in full.
+ * clip counts: text taller than a box that is not clipping it is drawn in full. And a box with no area
+ * that does not clip is not a box the text was laid out in: Recharts' `ResponsiveContainer` wraps every
+ * chart in a 0×0 `overflow: visible` div so it can measure its parent, and every axis label "ran out"
+ * of it while being drawn in full.
  *
  * Positions are read from a Range over the element's contents, i.e. from the laid-out TEXT, not from
  * the element's box — a clipped element's box is exactly as wide as the clip, which is the problem.
+ * The one exception is an element that clips ITSELF (`overflow: hidden` on the element, which is what
+ * `truncate` sets): what runs past its own edge is not drawn at all, so it cannot also escape an
+ * ancestor. That overflow is reported once, as "wider than its own box", and the ancestor walk carries
+ * on with the part that IS drawn — so a truncated name whose own box is inside its card reports only
+ * its own truncation, and one whose box is itself cut off by the card reports both.
+ *
+ * Each finding also says HOW the text is cut, for callers that allow a deliberate truncation (see
+ * `helpers/text-clipping.ts`): whether the element itself draws an ellipsis, and whether the page
+ * offers the full text some other way.
  */
+
+// How the page offers the full text of a cut-off element: the nearest `title` (the browser shows an
+// ancestor's title over its descendants too), or a Radix tooltip trigger (self or ancestor) — which
+// is only a CLAIM until the tooltip is opened and read, since a trigger can open nothing.
+export type FullTextCue = 'title' | 'tooltip' | null;
 
 export interface Clipping {
   // Position among the matched elements, and the text the reader was meant to see.
   index: number;
   text: string;
   reason: string;
+  // The only failure is the element's own box: nothing around it cuts it or is overprinted.
+  ownBoxOnly: boolean;
+  // The element truncates its own text with a visible ellipsis: a block container (not flex or grid,
+  // where `text-overflow` draws nothing) that clips on X, does not wrap, and sets `text-overflow:
+  // ellipsis` — what Tailwind's `truncate` produces on a block.
+  ellipsis: boolean;
+  cue: FullTextCue;
+}
+
+export interface FindClippingOptions {
+  // When set, every clipped element gets this attribute with its `index` as the value (and any left
+  // from an earlier call is removed first), so a caller can find it again — `[attr="3"]` — to hover it.
+  markAttribute?: string;
 }
 
 export interface ClippingReport {
@@ -61,9 +91,13 @@ export async function settle(page: Page): Promise<void> {
 }
 
 // One measurement of every visible element matching `selector`.
-export async function findClipping(page: Page, selector: string): Promise<ClippingReport> {
+export async function findClipping(
+  page: Page,
+  selector: string,
+  options: FindClippingOptions = {},
+): Promise<ClippingReport> {
   return page.evaluate(
-    ({ selector, tolerance }) => {
+    ({ selector, tolerance, markAttribute }) => {
       const label = (el: Element) => {
         const classes =
           typeof el.className === 'string' ? el.className.trim().split(/\s+/).slice(0, 4) : [];
@@ -82,20 +116,56 @@ export async function findClipping(page: Page, selector: string): Promise<Clippi
         return { left, top, right: left + el.clientWidth, bottom: top + el.clientHeight };
       };
 
+      const clips = (value: string) => value === 'hidden' || value === 'clip';
+      const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+      if (markAttribute) {
+        document
+          .querySelectorAll(`[${markAttribute}]`)
+          .forEach((el) => el.removeAttribute(markAttribute));
+      }
+
       const elements = [...document.querySelectorAll(selector)].filter(
         (el) => el.getClientRects().length > 0 && el.checkVisibility({ visibilityProperty: true }),
       );
-      const clipped: { index: number; text: string; reason: string }[] = [];
+      const clipped: {
+        index: number;
+        text: string;
+        reason: string;
+        ownBoxOnly: boolean;
+        ellipsis: boolean;
+        cue: 'title' | 'tooltip' | null;
+      }[] = [];
 
       elements.forEach((el, index) => {
         const range = document.createRange();
         range.selectNodeContents(el);
-        const text = range.getBoundingClientRect();
-        if (text.width === 0 && text.height === 0) return;
+        const measured = range.getBoundingClientRect();
+        if (measured.width === 0 && measured.height === 0) return;
+        const text = {
+          left: measured.left,
+          right: measured.right,
+          top: measured.top,
+          bottom: measured.bottom,
+        };
         const reasons: string[] = [];
+        const own = getComputedStyle(el);
 
-        if (hasBox(el) && el.scrollWidth > el.clientWidth + tolerance) {
+        const ownBox = hasBox(el) && el.scrollWidth > el.clientWidth + tolerance;
+        if (ownBox) {
           reasons.push(`wider than its own box (${el.scrollWidth}px > ${el.clientWidth}px)`);
+        }
+        // What an element clips itself is not drawn, so only the drawn part can escape further out.
+        if (hasBox(el)) {
+          const box = paddingBox(el);
+          if (clips(own.overflowX)) {
+            text.left = Math.max(text.left, box.left);
+            text.right = Math.min(text.right, box.right);
+          }
+          if (clips(own.overflowY)) {
+            text.top = Math.max(text.top, box.top);
+            text.bottom = Math.min(text.bottom, box.bottom);
+          }
         }
 
         let walkX = true;
@@ -104,12 +174,18 @@ export async function findClipping(page: Page, selector: string): Promise<Clippi
           if (hasBox(ancestor)) {
             const style = getComputedStyle(ancestor);
             const box = paddingBox(ancestor);
-            const clipsX = style.overflowX === 'hidden' || style.overflowX === 'clip';
-            const clipsY = style.overflowY === 'hidden' || style.overflowY === 'clip';
+            const clipsX = clips(style.overflowX);
+            const clipsY = clips(style.overflowY);
             // A scroller: what lies past its edge is reachable, so nothing from here out is a finding.
             if (!clipsX && style.overflowX !== 'visible') walkX = false;
             if (!clipsY && style.overflowY !== 'visible') walkY = false;
-            if (walkX && (text.right > box.right + tolerance || text.left < box.left - tolerance)) {
+            // A non-clipping box with no area holds nothing in it (see above).
+            const empty = !clipsX && (box.right - box.left === 0 || box.bottom - box.top === 0);
+            if (
+              walkX &&
+              !empty &&
+              (text.right > box.right + tolerance || text.left < box.left - tolerance)
+            ) {
               reasons.push(
                 clipsX
                   ? `cut off horizontally by ${label(ancestor)}`
@@ -131,13 +207,36 @@ export async function findClipping(page: Page, selector: string): Promise<Clippi
         }
 
         if (reasons.length > 0) {
-          clipped.push({ index, text: el.textContent ?? '', reason: reasons.join('; ') });
+          const display = own.display;
+          const ellipsis =
+            hasBox(el) &&
+            !/flex|grid/.test(display) &&
+            clips(own.overflowX) &&
+            own.textOverflow === 'ellipsis' &&
+            (own.whiteSpace === 'nowrap' || own.textWrapMode === 'nowrap');
+          const fullText = normalize(el.textContent ?? '');
+          const titled = el.closest('[title]');
+          const cue =
+            titled && normalize(titled.getAttribute('title') ?? '') === fullText
+              ? 'title'
+              : el.closest('[data-slot="tooltip-trigger"]')
+                ? 'tooltip'
+                : null;
+          if (markAttribute) el.setAttribute(markAttribute, String(index));
+          clipped.push({
+            index,
+            text: el.textContent ?? '',
+            reason: reasons.join('; '),
+            ownBoxOnly: ownBox && reasons.length === 1,
+            ellipsis,
+            cue,
+          });
         }
       });
 
       return { matched: elements.length, clipped };
     },
-    { selector, tolerance: TOLERANCE_PX },
+    { selector, tolerance: TOLERANCE_PX, markAttribute: options.markAttribute ?? null },
   );
 }
 
@@ -145,17 +244,23 @@ export async function findClipping(page: Page, selector: string): Promise<Clippi
  * The steady-state answer: measures after `settle`, and re-measures for a short while if anything is
  * clipped, because a layout still converging (a legend whose measured height is catching up with a
  * reflow) is not a defect. A clipping that survives the whole budget is.
+ *
+ * `isFinding` narrows what counts as "anything clipped" for that retry — a caller that allows some
+ * clippings (a deliberate truncation) would otherwise wait out the whole budget on every page that has
+ * one. The report still lists every clipping; the caller judges them.
  */
 export async function findSettledClipping(
   page: Page,
   selector: string,
   budgetMs = 3_000,
+  isFinding: (clipping: Clipping) => boolean = () => true,
+  options: FindClippingOptions = {},
 ): Promise<ClippingReport> {
   const deadline = Date.now() + budgetMs;
   for (;;) {
     await settle(page);
-    const report = await findClipping(page, selector);
-    if (report.clipped.length === 0 || Date.now() > deadline) return report;
+    const report = await findClipping(page, selector, options);
+    if (!report.clipped.some(isFinding) || Date.now() > deadline) return report;
     await page.waitForTimeout(200);
   }
 }
