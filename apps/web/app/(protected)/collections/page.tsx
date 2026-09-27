@@ -33,25 +33,32 @@ export default async function CollectionsPage({ searchParams }: CollectionsPageP
       sortBy: params.sort_by as 'name' | undefined,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),
-    getCollections(),
-    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
+    /*
+     * The unfiltered list only COUNTS (the limit warning, the first-run check) and the investments only
+     * feed the form's picker, so either failing costs that control rather than the page: the count
+     * falls back to the rows on screen (the API still enforces the cap), the first-run teaching is not
+     * shown on a count it cannot trust, and the picker is empty.
+     */
+    getCollections().catch(() => null),
+    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
     getSettings().catch(() => null),
   ]);
 
-  const investments = investmentsList.items.map((inv) => ({ id: inv.id, name: inv.name }));
+  const investments = (investmentsList?.items ?? []).map((inv) => ({ id: inv.id, name: inv.name }));
   const maxCollections = settings?.maxCollections ?? ENV_MAX_COLLECTIONS;
   const collectionWarningPct = settings?.collectionWarningPct ?? ENV_COLLECTION_WARNING_PCT;
 
   // Teach the empty state only during first-run and only when the user has no collections at all (the
   // unfiltered count) — a returning user or a filtered-empty search gets the plain message.
-  const firstRun = isFirstRunEmptyState(allCollections.length === 0, false, settings);
+  const firstRun =
+    allCollections !== null && isFirstRunEmptyState(allCollections.length === 0, false, settings);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <CollectionsToolbar
         investments={investments}
-        collectionCount={allCollections.length}
+        collectionCount={(allCollections ?? collections).length}
         maxCollections={maxCollections}
         collectionWarningPct={collectionWarningPct}
       />

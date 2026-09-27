@@ -49,7 +49,8 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
    * `showArchived: true`, since their pickers must be able to NAME an already-stored archived link;
    * the transfer pickers deliberately exclude archived accounts, so this call stays active-only).
    */
-  const allAccounts = await getAccounts();
+  // Only the transfer dialog reads it, so a failure leaves that dialog without options, not the page.
+  const allAccounts = await getAccounts().catch(() => []);
 
   /*
    * The groups the user belongs to, which is the ONE signal that turns the scope filter on — the same

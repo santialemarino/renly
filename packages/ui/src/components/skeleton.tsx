@@ -4,7 +4,10 @@ function Skeleton({ className, children, ...props }: React.ComponentProps<'div'>
   return (
     <div
       data-slot="skeleton"
-      className={cn('relative bg-accent animate-pulse rounded-full', className)}
+      className={cn(
+        'relative bg-accent animate-pulse motion-reduce:animate-none rounded-full',
+        className,
+      )}
       {...props}
     >
       <span className="invisible whitespace-pre-wrap">{children}</span>

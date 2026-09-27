@@ -19,6 +19,9 @@
         "label": "Go to Homepage"
       }
     },
+    "loading": {
+      "status": "Loading page…"
+    },
     "form": {
       "errors": {
         "required": "This field is required",

@@ -2,52 +2,28 @@ import { cookies, headers } from 'next/headers';
 import { getRequestConfig } from 'next-intl/server';
 
 import { isValidTimezone, TIMEZONE_COOKIE } from '@/lib/constants/timezones';
-import { DEFAULT_LOCALE, LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/lib/i18n/locales';
+import { withErrorBoundaryMessages } from '@/lib/i18n/error-boundary-messages';
+import { LOCALE_COOKIE, resolveLocale } from '@/lib/i18n/locales';
 
-function getLocaleFromCookie(cookieStore: Awaited<ReturnType<typeof cookies>>): string | null {
-  const stored = cookieStore.get(LOCALE_COOKIE)?.value;
-  if (!stored) return null;
-  if (SUPPORTED_LOCALES.includes(stored as (typeof SUPPORTED_LOCALES)[number])) {
-    return stored;
-  }
-  return null;
-}
-
-function getLocaleFromHeader(headersList: Headers): string | null {
+// The Accept-Language header as an ordered list of language tags, quality values dropped.
+function parseAcceptLanguage(headersList: Headers): string[] {
   const acceptLanguage = headersList.get('accept-language');
-  if (!acceptLanguage) return null;
+  if (!acceptLanguage) return [];
 
-  const languages = acceptLanguage
+  return acceptLanguage
     .split(',')
     .map((lang) => lang.split(';')[0]?.trim().toLowerCase())
     .filter((lang): lang is string => Boolean(lang));
-
-  for (const lang of languages) {
-    if (SUPPORTED_LOCALES.includes(lang as (typeof SUPPORTED_LOCALES)[number])) {
-      return lang;
-    }
-    const langPrefix = lang.split('-')[0];
-    if (
-      langPrefix &&
-      SUPPORTED_LOCALES.includes(langPrefix as (typeof SUPPORTED_LOCALES)[number])
-    ) {
-      return langPrefix;
-    }
-  }
-
-  return null;
 }
 
 export default getRequestConfig(async () => {
   const [cookieStore, headersList] = await Promise.all([cookies(), headers()]);
 
   // Cookie (set by saveLocalization + syncBrowserLanguage actions) wins over Accept-Language.
-  let locale =
-    getLocaleFromCookie(cookieStore) || getLocaleFromHeader(headersList) || DEFAULT_LOCALE;
-
-  if (!SUPPORTED_LOCALES.includes(locale as (typeof SUPPORTED_LOCALES)[number])) {
-    locale = DEFAULT_LOCALE;
-  }
+  const locale = resolveLocale(
+    cookieStore.get(LOCALE_COOKIE)?.value,
+    parseAcceptLanguage(headersList),
+  );
 
   // Timezone cookie (set by saveLocalization + syncBrowserTimezone) drives next-intl's timeZone,
   // which the formatters hook reads to render full ISO timestamps in the user's stored zone. When
@@ -58,6 +34,9 @@ export default getRequestConfig(async () => {
   return {
     locale,
     timeZone,
-    messages: (await import(`../translations/${locale}.json`)).default,
+    messages: withErrorBoundaryMessages(
+      (await import(`../translations/${locale}.json`)).default,
+      locale,
+    ),
   };
 });
