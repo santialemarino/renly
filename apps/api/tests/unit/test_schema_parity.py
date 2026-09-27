@@ -116,13 +116,16 @@ class TestScopedTablesCarryTheirGuards:
             assert f"REVOKE UPDATE ON {table} FROM renly_app" in text, table
             grant = re.search(rf"GRANT UPDATE \(([^)]*)\)\s*\n?\s*ON {table} TO renly_app", text)
             assert grant is not None, f"{table}: no per-column UPDATE grant"
-            # Exactly the four back-pointer columns, and `updated_at` deliberately absent: column
-            # privileges are checked against a statement's SET list and the trigger writes that one.
+            # Exactly the four back-pointer columns and the scope pair a move between scopes re-points,
+            # and never an amount or a date. `updated_at` is deliberately absent: column privileges are
+            # checked against a statement's SET list and the trigger writes that one.
             assert [c.strip() for c in grant.group(1).split(",")] == [
                 "adjustment_expense_id",
                 "adjustment_income_id",
                 "adjustment_shared_expense_id",
                 "adjustment_shared_income_id",
+                "user_id",
+                "pot_id",
             ], table
 
     def test_no_scoped_table_kept_its_old_owner_only_policy(self):

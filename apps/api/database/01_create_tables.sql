@@ -1997,13 +1997,17 @@ CREATE POLICY accounts_scope_write ON accounts FOR ALL
 -- needs only group membership and a visible, divided pot — so a policy keyed on app_can_write_pot would
 -- refuse the read-only co-owner the service admits, leaving two halves of one rule disagreeing.
 --
--- The FOR UPDATE policy exists only because the service patches its own back-pointer immediately after
--- inserting the row. Admitting a read-only seat to UPDATE the whole row would be a real widening — they
--- could rewrite a statement balance somebody else recorded, leaving the reconciliation claiming a
--- difference its adjustment does not match — so the verbs are capped by a COLUMN grant below. RLS
--- filters rows and never columns; only a REVOKE plus a per-column GRANT can say "this column and no
--- other". No WITH CHECK on the update: Postgres reuses the USING expression when one is absent, and
--- nothing the predicate reads is writable anyway.
+-- The FOR UPDATE policy serves two writes, and nothing else: the service patching its own back-pointer
+-- immediately after inserting the row, and an account moving into or out of a pot re-pointing its
+-- reconciliations' scope in the same statement set as the account. Admitting a read-only seat to
+-- UPDATE the whole row would be a real widening — they could rewrite a statement balance somebody
+-- else recorded, leaving the reconciliation claiming a difference its adjustment does not match — so
+-- the verbs are capped by a COLUMN grant below. RLS filters rows and never columns; only a REVOKE plus
+-- a per-column GRANT can say "these columns and no other". No WITH CHECK on the update: Postgres holds
+-- the NEW row to the USING expression when one is absent, which is exactly the bound a re-point needs —
+-- a reconciliation can leave only a scope its caller can see, and arrive only in one. (A statement that
+-- reads a column is also held to the read policy on both rows; one that reads none, such as an UPDATE
+-- with no WHERE, is bounded by this policy alone, which is why it carries the predicate itself.)
 ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_reconciliations FORCE ROW LEVEL SECURITY;
 CREATE POLICY account_reconciliations_scope_read ON account_reconciliations FOR SELECT
@@ -2014,10 +2018,11 @@ CREATE POLICY account_reconciliations_scope_update ON account_reconciliations FO
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
 CREATE POLICY account_reconciliations_scope_delete ON account_reconciliations FOR DELETE
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
--- The four back-pointer columns and nothing else: column privileges are checked against a statement's
--- SET list, and the BEFORE UPDATE trigger writes NEW.updated_at with no privilege of the invoking role.
+-- The four back-pointer columns and the scope pair, and never an amount or a date: column privileges
+-- are checked against a statement's SET list — whether or not it matches a row — and the BEFORE UPDATE
+-- trigger writes NEW.updated_at with no privilege of the invoking role.
 REVOKE UPDATE ON account_reconciliations FROM renly_app;
-GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_expense_id, adjustment_shared_income_id)
+GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_expense_id, adjustment_shared_income_id, user_id, pot_id)
   ON account_reconciliations TO renly_app;
 
 ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
