@@ -22,13 +22,14 @@ import * as React from 'react';
  *   * The opener is the element that held focus, or — when focus is already inside the content (that
  *     `autoFocus`), or on `<body>` (a trigger that disables itself while it loads, as the quick-add
  *     does; Safari never focuses a clicked button at all) — the most recent element the reader
- *     focused or pressed OUTSIDE the content.
- *   * The opener may be GONE by the time the overlay closes: a swapped-in form (`useDeferredDialogSwap`)
- *     was opened from a control inside the form it replaced, which has since unmounted. So each
- *     overlay keeps a CHAIN — its opener, then the chain of the overlay that opener sat in — and
- *     closing focuses the first link still in the document. A swapped form therefore returns to the
- *     button that opened the first one, and the quick-add opened from the phone nav sheet (whose
- *     trigger leaves with the sheet) returns to the hamburger that opened the sheet.
+ *     focused or pressed OUTSIDE the content, skipping any that have left the document. That scan is
+ *     what returns the phone quick-add to the hamburger: its trigger leaves with the nav sheet before
+ *     the form mounts, so the next interaction still in the page is the hamburger itself.
+ *   * The opener may be in the page when the overlay opens and GONE when it closes: a follow-up
+ *     dialog that mounts while the form before it is still animating out, with focus on that form's
+ *     button (the amount-mismatch prompt after an expense form's Save). So each overlay keeps a
+ *     CHAIN — its opener, then the chain of the overlay that opener sat in — and closing focuses the
+ *     first link still in the document: the prompt returns to whatever opened the form.
  *   * Focus that has already landed somewhere real is left alone. A swap mounts the incoming form
  *     while the outgoing one is still animating out, and the outgoing one's close fires later; pulling
  *     focus back to the page from under the new form would be the opposite of the fix.
@@ -101,11 +102,22 @@ export function useReturnFocus<T extends HTMLElement>({
   latestCallerRef.current = callerRef;
 
   // Stable, so React calls it once per mount of the content element rather than on every render.
+  // The content element the chain was recorded for.
+  const recordedFor = React.useRef<T | null>(null);
+
+  /*
+   * Records once per MOUNT of the content element. React calls a ref again on renders where the
+   * composed ref around it changes identity (Radix composes several), and re-recording then would
+   * overwrite the opener with whatever is focused by that time — a button in a follow-up dialog, an
+   * option in a portaled popover. So a call for the node already recorded is ignored; only a new
+   * node (a new opening) records again.
+   */
   const ref = React.useCallback((content: T | null) => {
     const forward = latestCallerRef.current;
     if (typeof forward === 'function') forward(content);
     else if (forward) forward.current = content;
-    if (!content) return;
+    if (!content || content === recordedFor.current) return;
+    recordedFor.current = content;
     const opener = openerOf(content);
     const outer = opener?.closest(OVERLAY_SELECTOR);
     chain.current = opener ? [opener, ...((outer && returnChains.get(outer)) ?? [])] : [];

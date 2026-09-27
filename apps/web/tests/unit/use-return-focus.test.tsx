@@ -82,7 +82,8 @@ describe('useReturnFocus', () => {
   });
 
   it('follows the outer overlay’s chain when the opener has gone', () => {
-    // A swap: the incoming form is opened from a control INSIDE the outgoing one, which then goes.
+    // A follow-up dialog (the amount-mismatch prompt) opened from a control INSIDE a form that is
+    // still closing, which then goes.
     const trigger = button('add');
     trigger.focus();
     const outgoing = overlay();
@@ -194,6 +195,24 @@ describe('useReturnFocus', () => {
     result.current.ref(twice);
     close(twice, result.current);
     expect(document.activeElement).toBe(second);
+  });
+
+  it('keeps the opener when the ref is called again for the same element', () => {
+    // React re-invokes a ref whose composed wrapper changed identity, on an ordinary re-render —
+    // by then focus is inside the dialog or in something it opened, and must not become the opener.
+    const opener = button('open');
+    opener.focus();
+    const content = overlay();
+    const handlers = open(content);
+    const elsewhere = button('a portaled option');
+    elsewhere.focus();
+    handlers.current.ref(null);
+    handlers.current.ref(content);
+    elsewhere.remove();
+    button('inside again', content).focus();
+
+    close(content, handlers.current);
+    expect(document.activeElement).toBe(opener);
   });
 
   it('forwards the caller’s ref', () => {
