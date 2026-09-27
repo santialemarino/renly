@@ -101,7 +101,6 @@ export function useReturnFocus<T extends HTMLElement>({
   const latestCallerRef = React.useRef(callerRef);
   latestCallerRef.current = callerRef;
 
-  // Stable, so React calls it once per mount of the content element rather than on every render.
   // The content element the chain was recorded for.
   const recordedFor = React.useRef<T | null>(null);
 
@@ -110,7 +109,8 @@ export function useReturnFocus<T extends HTMLElement>({
    * composed ref around it changes identity (Radix composes several), and re-recording then would
    * overwrite the opener with whatever is focused by that time — a button in a follow-up dialog, an
    * option in a portaled popover. So a call for the node already recorded is ignored; only a new
-   * node (a new opening) records again.
+   * node (a new opening) records again. That relies on the content unmounting on close, which Radix
+   * Presence does; a Content rendered with `forceMount` would keep its first opener for its lifetime.
    */
   const ref = React.useCallback((content: T | null) => {
     const forward = latestCallerRef.current;
