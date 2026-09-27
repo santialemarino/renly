@@ -178,7 +178,7 @@ function SettlementsSection({
                       exit={{ opacity: 0 }}
                       transition={{ duration: ANIMATION_FAST }}
                     >
-                      <Table>
+                      <Table label={t('settlements.title')}>
                         <TableHeader>
                           <TableRow>
                             <TableHead>{t('settlements.table.date')}</TableHead>
@@ -353,7 +353,7 @@ export function CreditCardsTable({
   return (
     <div className="flex flex-col gap-y-4">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-        <Table>
+        <Table label={t('title')}>
           <TableHeader>
             <TableRow>
               <TableHead className="w-6" />

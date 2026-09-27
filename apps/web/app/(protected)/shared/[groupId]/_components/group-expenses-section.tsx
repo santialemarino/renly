@@ -139,7 +139,7 @@ export function GroupExpensesSection({
       ) : (
         <div className="flex flex-col gap-y-4">
           <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-            <Table>
+            <Table label={t('expenses.title')}>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-32">{t('expenses.table.date')}</TableHead>

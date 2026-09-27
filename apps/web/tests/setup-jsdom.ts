@@ -8,3 +8,16 @@ import { afterEach } from 'vitest';
 afterEach(() => {
   cleanup();
 });
+
+/*
+ * jsdom has no layout, so it ships no ResizeObserver; every browser the app supports does. A no-op one
+ * lets components that measure themselves (the `Table` watches its own overflow) mount here — nothing
+ * ever resizes in jsdom, so an observer that never fires is exactly what a real one would do.
+ */
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
