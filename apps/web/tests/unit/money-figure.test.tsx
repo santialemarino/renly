@@ -38,9 +38,9 @@ function figures(container: HTMLElement): string[] {
 
 describe('MoneyFigure', () => {
   it('marks the figure and keeps it on one line', () => {
-    const { container } = render(<MoneyFigure>4,419,879.70</MoneyFigure>);
+    const { container } = render(<MoneyFigure>5,296,553.12</MoneyFigure>);
     const el = container.querySelector('[data-money]');
-    expect(el?.textContent).toBe('4,419,879.70');
+    expect(el?.textContent).toBe('5,296,553.12');
     expect(el?.className).toContain('whitespace-nowrap');
   });
 

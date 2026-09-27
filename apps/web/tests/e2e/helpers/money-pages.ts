@@ -23,6 +23,7 @@ export const MONEY_SWEEP_ROUTES = [
   '/investor-dashboard',
   '/payment-obligations',
   '/payments-calendar',
+  '/snapshots',
   '/subscriptions',
 ] as const;
 
@@ -32,8 +33,6 @@ export type MoneySweepRoute = (typeof MONEY_SWEEP_ROUTES)[number];
 export const MONEY_SWEEP_SKIPS: Record<string, string> = {
   '/investments':
     'its section rows render TableSectionRow, whose totals are empty for holdings (a holding has no money column on the list), so the page shows no figure to check',
-  '/snapshots':
-    'its figures are snapshot values, and a snapshot can only belong to an investment — which the API can archive but never delete, so a spec against a real account cannot seed one without leaving it behind',
   '/shared/[groupId]':
     'needs a group with shared money in it; seeding one means a second member and a settlement flow, which is its own fixture',
   '/shared/pots/[id]': 'needs a pot, which needs a group — same fixture as /shared/[groupId]',

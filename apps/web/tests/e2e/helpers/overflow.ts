@@ -16,7 +16,7 @@ import type { Page } from '@playwright/test';
  *     and the card around the row, are what it escapes. Measured on the pre-fix dashboard: at 1024px
  *     "-3,923,637.12" ran out of its card and over the next one, with every own-box check passing;
  *   * an ancestor with `overflow: hidden` / `clip` cuts the text off. This is the one that turned
- *     4,419,879.70 into "4,419,879.7": the figure in the last card ran past it and the page's
+ *     5,296,553.12 into "5,296,553.": the figure in the last card ran past it and the page's
  *     `<main className="overflow-x-hidden">` hid the tail, with no ellipsis to say a digit was missing.
  *
  * A SCROLL container (`auto` / `scroll`) is not a clip: content past its edge is one scroll away, which

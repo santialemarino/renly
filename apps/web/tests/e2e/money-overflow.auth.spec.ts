@@ -15,21 +15,21 @@ import { findSettledClipping } from './helpers/overflow';
  *
  * The defect this pins printed a DIFFERENT number rather than a broken one: at 1024px the dashboard's
  * five cards were ~130px wide, the figures ran past them, and the page's `overflow-x-hidden` hid the
- * tail — "4,419,879.7" for 4,419,879.70, "5,296,553." for 5,296,553.12 — with no ellipsis, so nothing
- * said a digit was missing. Every figure is marked `data-money` by `MoneyFigure`, and the harness in
+ * tail — "5,296,553." for 5,296,553.12 — with no ellipsis, so nothing said a digit was missing. Every figure is marked `data-money` by `MoneyFigure`, and the harness in
  * `helpers/overflow.ts` checks each one against its own box, the box it sits in, and every clipping
  * ancestor.
  *
  * Three things keep the sweep from passing vacuously, which is the failure it would otherwise have:
  *   * the seed carries figures long enough to overflow (see `helpers/money-seed.ts`) — the harness
  *     account's own may all be short;
- *   * every page must show at least one marked figure, so a page whose marker went missing fails
- *     here instead of passing with nothing checked;
+ *   * every page must show at least one marked figure, and every donut page at least one legend
+ *     name, so a page whose marker or legend went missing fails here instead of passing with nothing
+ *     checked;
  *   * the page list is derived — `tests/unit/money-sweep-coverage.test.ts` fails when a page that
  *     renders money is neither swept nor skipped with a reason.
  *
  * And one thing beyond "not clipped": a typical long figure (up to thirteen characters, like
- * -3,923,637.12) renders at its full design size. `MoneyFigure fit` would otherwise make the headline
+ * -3,923,637.12) renders at its full design size. `MetricCard`'s fit would otherwise make the headline
  * cards pass at any column count by shrinking the digits — legible, but not the layout's job done.
  * Only a figure too long for any card (the seed's 123,456,789,012.34) may shrink.
  */
@@ -38,6 +38,23 @@ import { findSettledClipping } from './helpers/overflow';
 const TYPICAL_FIGURE_CHARS = 13;
 // Tall enough that the headline cards and the donut are on screen together at every width.
 const SWEEP_HEIGHT = 1000;
+
+/*
+ * The time budget, which has to fit inside CI's 30-minute e2e job next to every other spec.
+ *
+ * One test per locale sweeps all thirteen pages, so a budget covers a whole sweep: locally 600s, because
+ * a cold dev server compiles each route on first visit (45s for one was measured); in CI 240s, since the
+ * production build compiles nothing and a green sweep takes about a minute there. Retries are OFF for
+ * this file: the harness already re-measures a layout that is still settling, so a retry could only
+ * repeat a real finding at the cost of another whole sweep. Worst case in CI is therefore 2 × 240s =
+ * 8 minutes, however broken the pages are.
+ */
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+const ciEnv = process.env.CI;
+const isCI = !!ciEnv && ciEnv !== 'false' && ciEnv !== '0';
+const SWEEP_BUDGET_MS = isCI ? 240_000 : 600_000;
+
+test.describe.configure({ retries: 0 });
 
 let seed: MoneySeed;
 
@@ -75,8 +92,7 @@ async function shrunkTypicalFigures(page: Page): Promise<string[]> {
 
 for (const locale of ['en', 'es'] as const) {
   test(`no money figure is clipped, at any width (${locale})`, async ({ page }) => {
-    // 12 pages × 8 widths, each measured at rest; a cold `.next` also compiles every route once.
-    test.setTimeout(600_000);
+    test.setTimeout(SWEEP_BUDGET_MS);
     await page
       .context()
       .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
@@ -103,6 +119,7 @@ for (const locale of ['en', 'es'] as const) {
 
         if (LEGEND_ROUTES.includes(route)) {
           const legend = await findSettledClipping(page, '[data-testid="chart-legend-label"]');
+          if (legend.matched === 0) failures.push(`${where}: no legend name on the page`);
           legend.clipped.forEach((c) =>
             failures.push(`${where}: legend "${c.text}" — ${c.reason}`),
           );
