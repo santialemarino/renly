@@ -107,7 +107,9 @@ async function waitForFrame(
         frame = await frameAt(page, selector, keyframes, progress);
         return frame !== null;
       },
-      { timeout: 20_000, message: `no running "${keyframes}" animation on ${selector}` },
+      // The spec's own budget below: a first compile of the route plus the quick-add's first open can
+      // pass 30s on a dev server, and the animation cannot start before the surface mounts.
+      { timeout: 60_000, message: `no running "${keyframes}" animation on ${selector}` },
     )
     .toBe(true);
   return frame as unknown as Frame;
@@ -233,8 +235,12 @@ async function checkSurface(page: Page, surface: Surface, reduced: boolean) {
 }
 
 test.describe('reduced motion (signed in)', () => {
-  // A dev server compiling a route inside the test, plus the quick-add's first open, can pass 30s.
-  test.setTimeout(90_000);
+  /*
+   * A dev server compiling a route inside the test, plus the quick-add's first open, can pass 30s —
+   * and a test waits on up to two frames (enter, exit) after its navigation, so the budget covers a
+   * cold navigation plus both 60s frame polls. A warm run takes seconds.
+   */
+  test.setTimeout(180_000);
 
   for (const surface of [DIALOG, POPOVER, SHEET]) {
     for (const reduced of [true, false]) {
@@ -316,6 +322,15 @@ test.describe('reduced motion (signed in)', () => {
         () => (window as unknown as { __banner: BannerFrame[] }).__banner,
       );
       const seenDisplaced = samples.filter((frame) => frame.y !== 0 && frame.opacity > 0);
+      /*
+       * And it must actually ARRIVE: a banner that never became visible is never seen displaced
+       * either, so without this the reduce case passes on a banner stuck transparent. Sixty frames is
+       * about a second, well past its ANIMATION_DEFAULT fade.
+       */
+      expect(
+        samples.some((frame) => frame.y === 0 && frame.opacity === 1),
+        JSON.stringify(samples.at(-1)),
+      ).toBe(true);
       if (reduced) {
         expect(seenDisplaced).toEqual([]);
       } else {
