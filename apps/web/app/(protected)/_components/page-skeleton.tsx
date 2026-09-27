@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
 import { buttonVariants, Skeleton } from '@repo/ui/components';
@@ -10,7 +11,9 @@ import {
   TOOLBAR_ROW,
   TOOLBAR_SEARCH,
 } from '@/components/entity-list-toolbar-layout';
+import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { PERIOD_PRESETS } from '@/lib/constants/period-presets';
+import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { formatPresetLabel } from '@/lib/utils/period-presets';
 
 // How many placeholder rows a table body shows — enough to fill a laptop viewport, no more.
@@ -20,6 +23,8 @@ const DASHBOARD_TILES = 4;
 const FORM_FIELDS = 4;
 
 export type PageSkeletonBody = 'table' | 'dashboard' | 'form' | 'sections';
+
+export type PeriodPickerPlacement = 'header' | 'toolbar';
 
 /*
  * One control of a list toolbar, by the kind of control it is and the text it shows. The text is what
@@ -66,9 +71,21 @@ interface PageSkeletonProps extends PageSkeletonLayoutProps {
   // The list toolbar under the header, with translation keys for its labels — or `'add-only'` for
   // the groups page's lone button.
   toolbar?: ToolbarShape | 'add-only';
-  // The dashboards' period picker beside the header (stacked under it below `sm`). Its labels come
-  // from `<namespace>.period` and the default presets, so the placeholder is as wide as the picker.
-  periodPicker?: boolean;
+  /*
+   * Where the page renders `DashboardPeriodPicker`: `'header'` beside the header (stacked under it
+   * below `sm`, the finance and main dashboards), or `'toolbar'` in a search + picker row under it (the
+   * investor dashboard). Its labels come from `<namespace>.period` and the default presets, so the
+   * placeholder is as wide as the picker.
+   */
+  periodPicker?: PeriodPickerPlacement;
+  /*
+   * The translation key of the warning a page shows under its header when the display currency is
+   * "original" — which is also what a visitor with no currency cookie gets. The page decides it from
+   * that cookie alone, so the loading state can too, and reserves the warning's line(s) when it will
+   * show. Its figure names the user's primary currency, which is a setting this state cannot read; a
+   * three-letter stand-in takes the same width, and it is never visible.
+   */
+  currencyFallback?: string;
 }
 
 // What each route's `loading.tsx` renders: resolves the copy, then draws the view below.
@@ -76,10 +93,15 @@ export async function PageSkeleton({
   namespace,
   subtitleIsData = false,
   toolbar,
-  periodPicker = false,
+  periodPicker,
+  currencyFallback,
   ...layout
 }: PageSkeletonProps) {
   const tAll = await getTranslations();
+  const savedCurrency = (await cookies()).get(ACTIVE_CURRENCY_COOKIE)?.value;
+  const showsCurrencyFallback =
+    currencyFallback !== undefined &&
+    (savedCurrency === undefined || savedCurrency === ORIGINAL_CURRENCY);
   const t = namespace ? await getTranslations(namespace) : null;
 
   const resolve = (control: ToolbarControl): ToolbarControl =>
@@ -100,6 +122,7 @@ export async function PageSkeleton({
             }),
           ),
           custom: t('period.custom'),
+          placement: periodPicker,
         }
       : undefined;
 
@@ -114,6 +137,14 @@ export async function PageSkeleton({
           : { filters: toolbar.filters?.map(resolve), actions: toolbar.actions?.map(resolve) }
       }
       period={period}
+      notice={
+        showsCurrencyFallback
+          ? tAll.rich(currencyFallback, {
+              currency: FALLBACK_PRIMARY_CURRENCY,
+              bold: (chunks) => <strong>{chunks}</strong>,
+            })
+          : undefined
+      }
       {...layout}
     />
   );
@@ -128,8 +159,10 @@ interface PageSkeletonViewProps extends PageSkeletonLayoutProps {
   subtitle?: string;
   // The list toolbar, its labels already translated.
   toolbar?: ToolbarShape | 'add-only';
-  // The period picker's labels, already translated.
-  period?: { presets: string[]; custom: string };
+  // A warning the page shows under its header, whose line(s) the placeholder reserves.
+  notice?: React.ReactNode;
+  // The period picker's labels, already translated, and where the page renders it.
+  period?: { presets: string[]; custom: string; placement: PeriodPickerPlacement };
 }
 
 /*
@@ -155,6 +188,7 @@ export function PageSkeletonView({
   toolbar,
   loose = false,
   period,
+  notice,
   body,
 }: PageSkeletonViewProps) {
   const header =
@@ -164,6 +198,7 @@ export function PageSkeletonView({
       <div className="flex flex-col gap-y-1">
         <h1 className="text-heading-2 text-foreground">{title}</h1>
         <Skeleton className="w-80 max-w-full h-6 rounded-md" />
+        {notice !== undefined && <NoticePlaceholder>{notice}</NoticePlaceholder>}
       </div>
     ) : (
       <div className="flex flex-col gap-y-1">
@@ -181,11 +216,15 @@ export function PageSkeletonView({
         {status}
       </p>
       {backLink && <Skeleton className="w-40 h-5 rounded-md" />}
-      {period ? (
+      {period?.placement === 'header' ? (
         // The dashboards' header row, with the classes the pages give it.
         <div className="flex flex-col gap-y-4 sm:flex-row sm:items-start sm:justify-between">
           {header}
-          <PeriodPickerSkeleton presets={period.presets} custom={period.custom} />
+          <PeriodPickerSkeleton
+            presets={period.presets}
+            custom={period.custom}
+            className="sm:max-w-md"
+          />
         </div>
       ) : (
         header
@@ -194,6 +233,18 @@ export function PageSkeletonView({
         aria-busy="true"
         className="flex flex-col gap-y-4 animate-in fade-in fill-mode-backwards delay-150 duration-300"
       >
+        {period?.placement === 'toolbar' && (
+          // The investor dashboard's row (`InvestorDashboardAnimatedToolbar`): the search grows, and the
+          // picker takes its own row until `xl`.
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+            <div className="min-w-0 flex-1">
+              <Skeleton className="h-9 rounded-lg" />
+            </div>
+            <div className="basis-full xl:basis-auto">
+              <PeriodPickerSkeleton presets={period.presets} custom={period.custom} />
+            </div>
+          </div>
+        )}
         {toolbar === 'add-only' && <AddOnlyToolbarSkeleton />}
         {toolbar && toolbar !== 'add-only' && <ToolbarSkeleton {...toolbar} />}
         {body === 'table' && <TableSkeleton />}
@@ -224,6 +275,20 @@ function SizedPlaceholder({ className, children }: SizedPlaceholderProps) {
         {children}
       </span>
       <Skeleton className="absolute inset-0 rounded-[inherit]" />
+    </div>
+  );
+}
+
+/*
+ * A `WarningHint`'s line(s) under a header: its icon box and its text, invisible and free to wrap at
+ * the column's width exactly as the real warning does, under a Skeleton.
+ */
+function NoticePlaceholder({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative flex items-center gap-x-2">
+      <span className="size-4 shrink-0" />
+      <p className="invisible text-paragraph-xs whitespace-pre-line">{children}</p>
+      <Skeleton className="absolute inset-0 rounded-md" />
     </div>
   );
 }
@@ -349,10 +414,17 @@ function AddOnlyToolbarSkeleton() {
  * `PillToggleGroup` of `h-8 px-2` items that never shrink) and the `h-9 px-3` custom-range button,
  * each in a `flex-1` item like the real ones, each sized by its real labels.
  */
-function PeriodPickerSkeleton({ presets, custom }: { presets: string[]; custom: string }) {
+interface PeriodPickerSkeletonProps {
+  presets: string[];
+  custom: string;
+  // What the page passes as the picker's own `className`.
+  className?: string;
+}
+
+function PeriodPickerSkeleton({ presets, custom, className }: PeriodPickerSkeletonProps) {
   return (
     <div
-      className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:max-w-md"
+      className={cn('flex flex-wrap items-center gap-x-2 gap-y-2', className)}
       data-testid="page-skeleton-period"
     >
       <div className="flex-1">

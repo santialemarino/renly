@@ -44,4 +44,21 @@ describe('PageSkeletonView', () => {
 
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
+
+  it('reserves a header warning only when told to, and never shows its text', () => {
+    const { rerender } = render(
+      <PageSkeletonView
+        status="Loading"
+        title="Dashboard"
+        notice="Showing values in ARS."
+        body="dashboard"
+      />,
+    );
+    // The text sizes the placeholder but must not be readable (its figure is a stand-in); jsdom loads
+    // no stylesheet, so the class is what can be asserted.
+    expect(screen.getByText('Showing values in ARS.')).toHaveClass('invisible');
+
+    rerender(<PageSkeletonView status="Loading" title="Dashboard" body="dashboard" />);
+    expect(screen.queryByText('Showing values in ARS.')).not.toBeInTheDocument();
+  });
 });
