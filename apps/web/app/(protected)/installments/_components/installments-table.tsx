@@ -177,8 +177,8 @@ export function InstallmentsTable({
                           installmentDisplay,
                           isConverted ? activeCurrency : inst.currency,
                         )}
+                        {currencySuffix}
                       </MoneyFigure>
-                      {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
                       <div>
@@ -187,8 +187,8 @@ export function InstallmentsTable({
                             String(totalToPay),
                             isConverted ? activeCurrency : inst.currency,
                           )}
+                          {currencySuffix}
                         </MoneyFigure>
-                        {currencySuffix}
                       </div>
                       {interestAmount !== null && (
                         <div className="text-paragraph-xs">

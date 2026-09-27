@@ -192,11 +192,11 @@ export function CreditCardReconciliationsSection({
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
                                 <MoneyFigure>
-                                  {fmt.amount(statement.computedBalance, statement.currency)}
-                                </MoneyFigure>{' '}
-                                <span className="text-paragraph-xs text-muted-foreground">
-                                  {statement.currency}
-                                </span>
+                                  {fmt.amount(statement.computedBalance, statement.currency)}{' '}
+                                  <span className="text-paragraph-xs text-muted-foreground">
+                                    {statement.currency}
+                                  </span>
+                                </MoneyFigure>
                               </TableCell>
                               <TableCell>
                                 {status === 'reconciled' && (

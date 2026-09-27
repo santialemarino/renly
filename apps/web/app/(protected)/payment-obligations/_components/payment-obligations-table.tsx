@@ -228,9 +228,9 @@ export function PaymentObligationsTable({
                     </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
                       <MoneyFigure>
-                        {fmt.amount(displayAmount, o.convertedAmount ? activeCurrency : o.currency)}
-                      </MoneyFigure>{' '}
-                      {o.convertedAmount ? '' : o.currency}
+                        {fmt.amount(displayAmount, o.convertedAmount ? activeCurrency : o.currency)}{' '}
+                        {o.convertedAmount ? '' : o.currency}
+                      </MoneyFigure>
                     </TableCell>
                     <TableCell>{fmt.date(o.nextDueDate)}</TableCell>
                     <TableCell>

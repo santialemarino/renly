@@ -427,12 +427,12 @@ export function CreditCardsTable({
                         <div className="flex flex-col gap-y-0.5">
                           {card.balances.map((bucket) => (
                             <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
-                              <MoneyFigure>
+                              <MoneyFigure className="flex items-baseline gap-x-1.5">
                                 {fmt.amount(bucket.balance, bucket.currency)}
+                                <span className="text-paragraph-xs text-muted-foreground">
+                                  {bucket.currency}
+                                </span>
                               </MoneyFigure>
-                              <span className="text-paragraph-xs text-muted-foreground">
-                                {bucket.currency}
-                              </span>
                             </span>
                           ))}
                         </div>

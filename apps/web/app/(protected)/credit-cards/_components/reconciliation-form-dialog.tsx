@@ -141,11 +141,11 @@ export function ReconciliationFormDialog({
               <span className="text-paragraph-sm-medium">{t('form.computedBalance')}</span>
               <span className="text-paragraph tabular-nums">
                 <MoneyFigure>
-                  {fmt.amount(statement.computedBalance, statement.currency)}
-                </MoneyFigure>{' '}
-                <span className="text-paragraph-xs text-muted-foreground">
-                  {statement.currency}
-                </span>
+                  {fmt.amount(statement.computedBalance, statement.currency)}{' '}
+                  <span className="text-paragraph-xs text-muted-foreground">
+                    {statement.currency}
+                  </span>
+                </MoneyFigure>
               </span>
               <span className="text-paragraph-xs text-muted-foreground">
                 {t('form.computedBalanceHint')}
@@ -175,16 +175,12 @@ export function ReconciliationFormDialog({
                 <span className="text-paragraph-xs-medium text-muted-foreground">
                   {t('form.difference')}
                 </span>
-                <span className="text-paragraph tabular-nums">
-                  {diff === 0 ? (
-                    '0'
-                  ) : (
-                    <MoneyFigure>{fmt.amount(String(diff), statement.currency)}</MoneyFigure>
-                  )}{' '}
+                <MoneyFigure className="text-paragraph">
+                  {diff === 0 ? '0' : fmt.amount(String(diff), statement.currency)}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {statement.currency}
                   </span>
-                </span>
+                </MoneyFigure>
                 <span className="text-paragraph-xs text-muted-foreground">
                   {diffSide === 'charge' &&
                     t('form.differenceChargePreview', {

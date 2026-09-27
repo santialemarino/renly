@@ -134,21 +134,17 @@ export async function PaymentsCalendarList({
                           )}
                       </div>
                     </div>
-                    <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
-                      <span>
-                        <MoneyFigure>
-                          {fmt.amount(
-                            displayAmount,
-                            item.convertedAmount ? activeCurrency : item.currency,
-                          )}
-                        </MoneyFigure>
-                      </span>
+                    <MoneyFigure className="flex items-baseline gap-x-1.5 text-paragraph-sm">
+                      {fmt.amount(
+                        displayAmount,
+                        item.convertedAmount ? activeCurrency : item.currency,
+                      )}
                       {showOriginalCurrency && (
                         <span className="text-paragraph-xs text-muted-foreground">
                           {item.currency}
                         </span>
                       )}
-                    </div>
+                    </MoneyFigure>
                   </div>
                 );
                 // Paid rows are clickable — open the linked expense's edit dialog inline

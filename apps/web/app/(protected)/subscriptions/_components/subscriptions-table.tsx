@@ -157,8 +157,8 @@ export function SubscriptionsTable({
                           displayAmount,
                           sub.convertedAmount ? activeCurrency : sub.currency,
                         )}
-                      </MoneyFigure>{' '}
-                      {sub.convertedAmount ? '' : sub.currency}
+                        {sub.convertedAmount ? '' : ` ${sub.currency}`}
+                      </MoneyFigure>
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>
                     <TableCell>{fmt.date(sub.nextBillingDate)}</TableCell>

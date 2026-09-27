@@ -224,10 +224,12 @@ export function AccountReconcileDialog({
                   <span className="text-muted-foreground">{t('form.computedBalanceLoading')}</span>
                 ) : (
                   <>
-                    <MoneyFigure>{fmt.amount(computedBalance, account.currency)}</MoneyFigure>{' '}
-                    <span className="text-paragraph-xs text-muted-foreground">
-                      {account.currency}
-                    </span>
+                    <MoneyFigure>
+                      {fmt.amount(computedBalance, account.currency)}{' '}
+                      <span className="text-paragraph-xs text-muted-foreground">
+                        {account.currency}
+                      </span>
+                    </MoneyFigure>
                   </>
                 )}
               </span>
@@ -263,16 +265,12 @@ export function AccountReconcileDialog({
                 <span className="text-paragraph-xs-medium text-muted-foreground">
                   {t('form.difference')}
                 </span>
-                <span className="text-paragraph tabular-nums">
-                  {diff === 0 ? (
-                    '0'
-                  ) : (
-                    <MoneyFigure>{fmt.amount(String(diff), account.currency)}</MoneyFigure>
-                  )}{' '}
+                <MoneyFigure className="text-paragraph">
+                  {diff === 0 ? '0' : fmt.amount(String(diff), account.currency)}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {account.currency}
                   </span>
-                </span>
+                </MoneyFigure>
                 <span className="text-paragraph-xs text-muted-foreground">
                   {diffSide === 'income' &&
                     t('form.differenceIncomePreview', {
