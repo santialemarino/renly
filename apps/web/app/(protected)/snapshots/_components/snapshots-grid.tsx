@@ -16,6 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { EmptyState } from '@/components/empty-state';
@@ -241,9 +242,10 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                 <TableRow key={entry.key} className="group">
                   <TableCell className="sticky left-0 z-10 bg-background">
                     <div className="flex flex-col">
-                      <span className="text-paragraph-sm-medium truncate max-w-[200px]">
-                        {row.name}
-                      </span>
+                      <TruncatingTooltip
+                        text={row.name}
+                        className="max-w-[200px] text-paragraph-sm-medium"
+                      />
                       <span className="text-paragraph-xs text-muted-foreground">
                         {row.baseCurrency}
                       </span>

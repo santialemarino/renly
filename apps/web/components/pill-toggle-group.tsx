@@ -21,7 +21,15 @@ interface PillToggleGroupProps {
   className?: string;
 }
 
-// Blue pill-style toggle group used across the dashboard (period picker, distribution, currency).
+/*
+ * Blue pill-style toggle group used across the dashboard (period picker, distribution, currency).
+ *
+ * `shrink-0` is load-bearing. The root needs `overflow-hidden` to clip the items' backgrounds to the
+ * pill, and an element with `overflow` other than visible has an automatic minimum size of ZERO in a
+ * flex row — so beside a title in a card header the group shrank below its own labels and cut them
+ * off mid-word ("Por colección" lost 19px at 390px). Not shrinking, the labels always show whole and
+ * the row around it has to make room, which is the layout's job and not the control's.
+ */
 export function PillToggleGroup({
   items,
   value,
@@ -41,7 +49,7 @@ export function PillToggleGroup({
       variant="outline"
       size="sm"
       className={cn(
-        'border border-border bg-white rounded-full overflow-hidden shadow-xs',
+        'shrink-0 border border-border bg-white rounded-full overflow-hidden shadow-xs',
         className,
       )}
     >

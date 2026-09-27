@@ -26,6 +26,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { CreditCardArchiveDialog } from '@/app/(protected)/credit-cards/_components/credit-card-archive-dialog';
 import { CreditCardDeleteDialog } from '@/app/(protected)/credit-cards/_components/credit-card-delete-dialog';
 import { CreditCardReconciliationsSection } from '@/app/(protected)/credit-cards/_components/credit-card-reconciliations-section';
@@ -223,11 +224,17 @@ function SettlementsSection({
                                   visible instead of write-only. An em dash means the settlement was
                                   recorded without one: the card debt dropped and no cash was
                                   recorded leaving. */}
-                              <TableCell className="max-w-40 truncate text-muted-foreground">
-                                {s.accountName ?? '—'}
+                              <TableCell className="text-muted-foreground">
+                                <TruncatingTooltip
+                                  text={s.accountName ?? '—'}
+                                  className="block max-w-40"
+                                />
                               </TableCell>
-                              <TableCell className="max-w-48 truncate text-muted-foreground">
-                                {s.notes ?? '—'}
+                              <TableCell className="text-muted-foreground">
+                                <TruncatingTooltip
+                                  text={s.notes ?? '—'}
+                                  className="block max-w-48"
+                                />
                               </TableCell>
                               <TableCell>
                                 <RowActionButton

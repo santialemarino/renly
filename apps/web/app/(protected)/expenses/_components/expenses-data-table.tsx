@@ -19,6 +19,7 @@ import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
 } from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
@@ -374,8 +375,8 @@ function ExpenseRow({
       <TableCell>
         {expense.paymentMethod ? t(`paymentMethods.${expense.paymentMethod}`) : '—'}
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {expense.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={expense.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <RowActions

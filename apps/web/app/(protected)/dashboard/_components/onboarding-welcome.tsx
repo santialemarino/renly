@@ -74,7 +74,7 @@ function OnboardingStep({
       <div className="flex flex-col flex-1 min-w-0 gap-y-0.5">
         <span
           className={cn(
-            'flex items-center gap-x-2 text-paragraph-sm-medium',
+            'flex flex-wrap items-center gap-x-2 text-paragraph-sm-medium',
             done && 'text-muted-foreground',
           )}
         >

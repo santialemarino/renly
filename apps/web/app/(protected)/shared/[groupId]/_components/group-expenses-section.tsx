@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { SharedExpenseFormDialog } from '@/app/(protected)/_components/shared-expense-form-dialog';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { deleteSharedExpense } from '@/app/(protected)/shared/shared-expense-actions';
 import { expensePayerDisplay } from '@/app/(protected)/shared/shared-expense-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -267,8 +268,8 @@ function ExpenseRow({
             ? t('expenses.table.jointNamed', { account: payer.accountName })
             : t('expenses.table.joint')}
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {expense.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={expense.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">

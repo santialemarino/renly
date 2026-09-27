@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { SettlementLegDialog } from '@/app/(protected)/shared/[groupId]/_components/settlement-leg-dialog';
 import {
   confirmSettlement,
@@ -285,8 +286,8 @@ function SettlementRow({
           {t(`settlements.status.${settlement.status}`)}
         </Badge>
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {settlement.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={settlement.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">

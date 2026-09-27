@@ -14,6 +14,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { MoneyFigure } from '@/components/money-figure';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -157,8 +158,8 @@ export function AccountLedgerTable({
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-48 truncate text-paragraph-sm text-muted-foreground">
-                      {movement.notes ?? '—'}
+                    <TableCell className="text-paragraph-sm text-muted-foreground">
+                      <TruncatingTooltip text={movement.notes ?? '—'} className="block max-w-48" />
                     </TableCell>
                     <TableCell className="text-right">
                       <SignedAmountCell

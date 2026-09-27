@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { SharedIncomeFormDialog } from '@/app/(protected)/_components/shared-income-form-dialog';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { deleteSharedIncome } from '@/app/(protected)/shared/shared-income-actions';
 import { incomeHolderDisplay } from '@/app/(protected)/shared/shared-income-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -258,8 +259,11 @@ function IncomeRow({
           </span>
         )}
       </TableCell>
-      <TableCell className="max-w-40 truncate text-paragraph-sm">
-        {income.sourceInvestmentName ?? t('income.table.noSource')}
+      <TableCell className="text-paragraph-sm">
+        <TruncatingTooltip
+          text={income.sourceInvestmentName ?? t('income.table.noSource')}
+          className="block max-w-40"
+        />
       </TableCell>
       <TableCell className="text-paragraph-sm">
         {holder.kind === 'member'
@@ -268,8 +272,8 @@ function IncomeRow({
             ? t('income.table.jointNamed', { account: holder.accountName })
             : t('income.table.joint')}
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {income.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={income.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">

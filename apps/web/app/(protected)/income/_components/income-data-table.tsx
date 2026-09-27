@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { IncomeFormDialog } from '@/app/(protected)/_components/income-form-dialog';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
 import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
@@ -292,8 +293,8 @@ function IncomeRow({
         )}
       </TableCell>
       <TableCell>{entry.category ? tCommon(`categories.${entry.category}`) : '—'}</TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {entry.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={entry.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <RowActions

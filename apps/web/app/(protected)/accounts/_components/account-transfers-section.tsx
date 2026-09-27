@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { deleteTransfer, fetchAccountTransfers } from '@/app/(protected)/accounts/account-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionButton } from '@/components/row-action-button';
@@ -242,8 +243,11 @@ export function AccountTransfersSection({
                                     }
                                   />
                                 </TableCell>
-                                <TableCell className="max-w-48 truncate text-paragraph-sm text-muted-foreground">
-                                  {transfer.notes ?? '—'}
+                                <TableCell className="text-paragraph-sm text-muted-foreground">
+                                  <TruncatingTooltip
+                                    text={transfer.notes ?? '—'}
+                                    className="block max-w-48"
+                                  />
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <RowActionButton

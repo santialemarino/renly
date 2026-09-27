@@ -6,6 +6,7 @@ import { FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { CollectionDeleteFormDialog } from '@/app/(protected)/collections/_components/collection-delete-form-dialog';
 import { CollectionFormDialog } from '@/app/(protected)/collections/_components/collection-form-dialog';
 import { RowActionButton } from '@/components/row-action-button';
@@ -134,8 +135,11 @@ function CollectionRow({
             ? `${collection.targetPercentage}%`
             : t('table.noTarget')}
         </TableCell>
-        <TableCell className="max-w-md text-paragraph-sm text-muted-foreground truncate">
-          {investmentNames || t('table.noInvestments')}
+        <TableCell className="text-paragraph-sm text-muted-foreground">
+          <TruncatingTooltip
+            text={investmentNames || t('table.noInvestments')}
+            className="block max-w-md"
+          />
         </TableCell>
         <TableCell className="text-center">
           <div className="flex items-center justify-center gap-x-1">
