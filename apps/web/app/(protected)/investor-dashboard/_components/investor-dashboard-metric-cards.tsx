@@ -29,7 +29,7 @@ export function InvestorDashboardMetricCards({
   const t = useTranslations('investorDashboard');
 
   return (
-    <MetricCardGrid count={4}>
+    <MetricCardGrid count={4} testId="dashboard-metrics">
       {/* Total Value */}
       <MetricCard
         label={t(hasPeriod ? 'cards.periodEndValue' : 'cards.totalValue')}

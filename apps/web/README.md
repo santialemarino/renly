@@ -46,7 +46,7 @@ For full conventions (selectors, auth, fixtures, `playwright-cli` workflow), see
 
 ## Structure
 
-- **`app/`** — App Router: `(auth)/` (login, signup), `(protected)/` (dashboard, etc.). One `page.tsx` per route; route-specific components in `_components/` next to the page.
+- **`app/`** — App Router: `(auth)/` (login, signup), `(protected)/` (dashboard, etc.). One `page.tsx` per route; route-specific components in `_components/` next to the page. Every protected route also has a `loading.tsx` rendering the shared `PageSkeleton` (a unit test derives the route list and fails on a missing one), and a failed read lands in an error boundary drawn inside its own surface — each route group has an `error.tsx`, `app/error.tsx` catches the group layouts and `app/global-error.tsx` the root layout — all translated, with a retry that re-fetches the server data. Each protected page's `lib/api` reads are classified (a unit test fails on an unclassified bare read); the error boundaries' copy lives in `translations/error-boundary/`.
 - **`app/` brand assets** — Next file-convention metadata: `icon.svg` + `favicon.ico` + `apple-icon.png` (the R-monogram favicons), `manifest.ts` (PWA manifest), and `opengraph-image.tsx` (the social share card, drawn with `next/og` and the bundled Plus Jakarta Sans subset in `app/_og-fonts/`). Next auto-wires these into `<head>`; the root `layout.tsx` sets `metadataBase` (from `NEXTAUTH_URL`), Open Graph/Twitter tags, and the `theme-color`.
 - **`lib/`** — Auth, API client helpers, shared utils (e.g. `lib/auth.ts`, `lib/auth-api.ts`, `lib/utils/page.tsx` for metadata).
 - **`config/`** — `routes.ts` for `ROUTES`, `AUTH_ROUTES`, `LOGIN_ROUTE`; use these instead of hardcoding paths.

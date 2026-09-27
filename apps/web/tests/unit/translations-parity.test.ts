@@ -6,7 +6,10 @@ import type { ProseSectionData } from '@/app/(public)/_components/prose-section'
 import { SIDEBAR_NAV_KEYS } from '@/config/nav';
 import { HELP_ANCHORS } from '@/config/routes';
 import { ENTRY_TYPES } from '@/lib/constants/entries';
+import { withErrorBoundaryMessages } from '@/lib/i18n/error-boundary-messages';
 import en from '../../translations/en.json';
+import ebEn from '../../translations/error-boundary/en.json';
+import ebEs from '../../translations/error-boundary/es.json';
 import es from '../../translations/es.json';
 
 /*
@@ -67,6 +70,30 @@ describe('translation keyset parity', () => {
 
   it('shares the same top-level namespaces', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(es).sort());
+  });
+});
+
+/*
+ * The error boundaries' copy lives in its own file per locale (so `app/global-error.tsx` can import it
+ * statically) and is merged into `common` for every other render. Its two files must agree with each
+ * other, and it must exist in exactly ONE place: a second copy left in the main files would be shadowed
+ * by the merge and drift silently.
+ */
+describe('error-boundary messages', () => {
+  it('has the same keys in both locales', () => {
+    expect(flattenKeys(ebEs).sort()).toEqual(flattenKeys(ebEn).sort());
+  });
+
+  it('is not also declared in the main translation files', () => {
+    expect('errorBoundary' in en.common).toBe(false);
+    expect('errorBoundary' in es.common).toBe(false);
+  });
+
+  it('is merged into common for every locale', () => {
+    expect(withErrorBoundaryMessages(en, 'en').common.errorBoundary).toEqual(ebEn);
+    expect(withErrorBoundaryMessages(es, 'es').common.errorBoundary).toEqual(ebEs);
+    // The rest of `common` survives the merge.
+    expect(withErrorBoundaryMessages(en, 'en').common.goToDashboard).toBe(en.common.goToDashboard);
   });
 });
 

@@ -117,32 +117,28 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
     endDate,
   };
 
+  /*
+   * The two option lists — the smart search's investments and collections, which also name a
+   * single-collection filter in the subtitle — sit OUTSIDE the figures' try: a failure there costs the
+   * search its suggestions (and the subtitle its name, which then falls back to the unfiltered one),
+   * not the whole dashboard.
+   */
+  const optionsPromise = Promise.all([
+    getCollections().catch(() => []),
+    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
+  ]);
+
   // Fetch all data in parallel.
-  let metrics,
-    evolution,
-    categoryAllocation,
-    collectionAllocation,
-    investmentsSummary,
-    collections,
-    investmentsList;
+  let metrics, evolution, categoryAllocation, collectionAllocation, investmentsSummary;
   try {
-    [
-      metrics,
-      evolution,
-      categoryAllocation,
-      collectionAllocation,
-      investmentsSummary,
-      collections,
-      investmentsList,
-    ] = await Promise.all([
-      getPortfolioMetrics(filterParams),
-      getPortfolioEvolution(filterParams),
-      getAllocation(filterParams),
-      getAllocationByCollection(filterParams),
-      getInvestmentsSummary(filterParams),
-      getCollections(),
-      getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
-    ]);
+    [metrics, evolution, categoryAllocation, collectionAllocation, investmentsSummary] =
+      await Promise.all([
+        getPortfolioMetrics(filterParams),
+        getPortfolioEvolution(filterParams),
+        getAllocation(filterParams),
+        getAllocationByCollection(filterParams),
+        getInvestmentsSummary(filterParams),
+      ]);
   } catch {
     return (
       <div className="flex flex-col flex-1 p-8 gap-y-2">
@@ -151,6 +147,8 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
       </div>
     );
   }
+
+  const [collections, investmentsList] = await optionsPromise;
 
   // For single investment drill-down, fetch detailed metrics.
   const singleInvestmentId = isSingleInvestment ? investmentIds[0] : undefined;
@@ -178,10 +176,12 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   }
 
   // Build searchable investments list for the smart search.
-  const searchableInvestments = investmentsList.items.map((inv: { id: number; name: string }) => ({
-    id: inv.id,
-    name: inv.name,
-  }));
+  const searchableInvestments = (investmentsList?.items ?? []).map(
+    (inv: { id: number; name: string }) => ({
+      id: inv.id,
+      name: inv.name,
+    }),
+  );
 
   // Collect skipped investments (same list from any endpoint — use metrics as source).
   const skippedInvestments = metrics.skippedInvestments;

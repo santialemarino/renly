@@ -59,6 +59,32 @@ export type LanguageMode = (typeof LANGUAGE_MODES)[number];
 export const LOCALE_COOKIE = 'NEXT_LOCALE';
 export const LOCALE_COOKIE_MAX_AGE = COOKIE_MAX_AGE_1_YEAR;
 
+// Whether a string is one of the supported locale codes.
+export function isSupportedLocale(value: string | null | undefined): value is Locale {
+  return SUPPORTED_LOCALES.includes(value as Locale);
+}
+
+/*
+ * The one rule for which locale a request renders in: the locale cookie when it names a supported
+ * locale, else the first of the visitor's languages that is supported — exactly, or by its language
+ * prefix ('es-AR' → 'es') — else the default. `i18n/request.ts` feeds it the cookie and the parsed
+ * Accept-Language header; `app/global-error.tsx`, which renders with no server context at all, feeds it
+ * `document.cookie` and `navigator.languages`. One function, so the two can never pick differently.
+ */
+export function resolveLocale(
+  cookieValue: string | null | undefined,
+  languages: readonly string[],
+): Locale {
+  if (isSupportedLocale(cookieValue)) return cookieValue;
+  for (const raw of languages) {
+    const lang = raw.trim().toLowerCase();
+    if (isSupportedLocale(lang)) return lang;
+    const prefix = lang.split('-')[0];
+    if (isSupportedLocale(prefix)) return prefix;
+  }
+  return DEFAULT_LOCALE;
+}
+
 // Maps a browser BCP47 string (e.g. 'es-AR', 'en-US', 'pt-BR') to a supported locale by stripping the country suffix. Falls back to DEFAULT_LOCALE when the language prefix isn't supported.
 export function mapBrowserLanguageToSupported(bcp47: string): Locale {
   const prefix = bcp47.toLowerCase().split('-')[0];

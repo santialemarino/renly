@@ -86,7 +86,10 @@ export function DashboardPeriodPicker({
 
   return (
     <LayoutGroup>
-      <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-2', className)}>
+      <div
+        className={cn('flex flex-wrap items-center gap-x-2 gap-y-2', className)}
+        data-testid="dashboard-period-picker"
+      >
         <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="flex-1">
           <PillToggleGroup
             items={presets.map((preset) => ({

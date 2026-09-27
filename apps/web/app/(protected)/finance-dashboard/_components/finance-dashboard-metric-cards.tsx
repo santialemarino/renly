@@ -18,7 +18,7 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
   const t = useTranslations('financeDashboard');
 
   return (
-    <MetricCardGrid count={4}>
+    <MetricCardGrid count={4} testId="dashboard-metrics">
       {/* Total Income */}
       <MetricCard
         label={t('cards.totalIncome')}
