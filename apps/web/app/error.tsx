@@ -9,8 +9,8 @@ interface RootErrorProps {
 }
 
 /*
- * The boundary for everything the root layout wraps that has no nearer one: the auth and public pages,
- * and the three route-group LAYOUTS — a layout's own error.tsx sits inside it, so a failure in the
+ * The boundary for what the root layout wraps that no nearer boundary can catch: the three route-group
+ * LAYOUTS themselves. A segment's own error.tsx sits inside its layout, so a failure in, say, the
  * protected layout lands here rather than in `(protected)/error.tsx`. The root layout still renders
  * around it, so the copy is translated and `<html lang>` is set; there is no nav, hence the home link.
  */
