@@ -174,3 +174,5 @@ Failures are logged but never propagated — the scheduler continues running oth
 5. Always set `misfire_grace_time=MISFIRE_GRACE_SECONDS, coalesce=True` (the in-memory store makes a stricter grace unsafe; jobs must be idempotent so a coalesced late run is fine).
 6. For jobs that should run on startup, pass `next_run_time=datetime.now()`.
 7. Add a configuration constant at the top of the file for any schedule parameters.
+
+<!-- throwaway docs-only change for the U33a gate proof -->
