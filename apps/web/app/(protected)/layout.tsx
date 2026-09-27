@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { LanguageAutoSync } from '@/app/(protected)/_components/language-auto-sync';
 import { MobileNavBar } from '@/app/(protected)/_components/mobile-nav-bar';
+import { QuickAddProvider } from '@/app/(protected)/_components/quick-add';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { SkipLink } from '@/components/skip-link';
@@ -85,21 +86,31 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           <LanguageAutoSync storedLanguage={settings.language} storedMode={settings.languageMode} />
         </>
       )}
-      <AppSidebar
-        notifications={notifications?.items ?? []}
-        unreadNotifications={notifications?.unread ?? 0}
-        displayCurrencies={displayCurrencies}
-        activeCurrency={activeCurrency}
-        supportedCurrencies={supportedCurrencies}
-        currencyCollapsed={currencyCollapsed}
+      {/*
+       * The quick-add's forms are owned HERE, beside the sidebar rather than inside it: below `md` the
+       * sidebar is a Sheet that unmounts when it closes, and opening a form closes it. The sidebar
+       * keeps only the trigger, which reaches this owner through context. Its pre-fill inputs cost
+       * nothing extra — they are fields of the settings read above.
+       */}
+      <QuickAddProvider
         primaryCurrency={primary}
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
+        supportedCurrencies={supportedCurrencies}
         timeZone={settings?.timezone ?? undefined}
-        isAdmin={session.user.isAdmin}
-        signupMode={signupMode}
-        initialExpanded={initialExpanded}
-        showDisclosureToggle={showDisclosureToggle}
-      />
+      >
+        <AppSidebar
+          notifications={notifications?.items ?? []}
+          unreadNotifications={notifications?.unread ?? 0}
+          displayCurrencies={displayCurrencies}
+          activeCurrency={activeCurrency}
+          supportedCurrencies={supportedCurrencies}
+          currencyCollapsed={currencyCollapsed}
+          isAdmin={session.user.isAdmin}
+          signupMode={signupMode}
+          initialExpanded={initialExpanded}
+          showDisclosureToggle={showDisclosureToggle}
+        />
+      </QuickAddProvider>
       {/*
        * `SidebarInset` is a plain column (see its definition) and this `<main>` is the page's only
        * one — it used to be nested inside a second `<main>` that `SidebarInset` rendered itself,
