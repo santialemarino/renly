@@ -1,6 +1,7 @@
 {
   "common": {
     "appName": "Renly",
+    "skipToContent": "Saltar al contenido principal",
     "potDefaultLabel": "Dinero compartido",
     "sampleData": {
       "banner": "Estos son datos de ejemplo para mostrarte cómo funciona. Agregá los tuyos para reemplazarlos.",

@@ -81,9 +81,9 @@ export function ComboboxMultiSelect({
                       <button
                         type="button"
                         onClick={() => onToggle(id)}
-                        className="rounded-full p-0.5 text-muted-foreground transition-[opacity,transform,color] duration-150 hover:scale-110 hover:text-destructive focus-visible:outline-none focus-visible:scale-110"
+                        className="group/chip-remove rounded-full p-0.5 text-muted-foreground transition-[opacity,transform,color] duration-150 hover:scale-110 hover:text-destructive focus-visible:outline-none"
                       >
-                        <X className="size-3" />
+                        <X className="size-3 group-focus-visible/chip-remove:animate-focus-bump" />
                       </button>
                     </motion.span>
                   ))}
@@ -102,8 +102,8 @@ export function ComboboxMultiSelect({
               'h-9 w-full justify-between gap-x-2 border-border px-3 shadow-xs',
               'text-paragraph-sm font-normal',
               selectedIds.length > 0 ? 'text-foreground' : 'text-muted-foreground',
-              'hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+              'hover:border-border-3',
+              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
               surface ? 'bg-background' : 'bg-input',
             )}
           >

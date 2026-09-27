@@ -86,12 +86,12 @@ export function StyledHint({
           <button
             onClick={onDismiss}
             className={cn(
-              'shrink-0 ml-auto p-0.5 rounded opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100 focus-visible:scale-110',
+              'group/hint-dismiss shrink-0 ml-auto p-0.5 rounded opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100',
               textColor,
             )}
             aria-label={tCommon('dismiss')}
           >
-            <X className="size-3.5" />
+            <X className="size-3.5 group-focus-visible/hint-dismiss:animate-focus-bump" />
           </button>
         )}
       </div>

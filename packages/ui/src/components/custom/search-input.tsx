@@ -41,13 +41,13 @@ function SearchInput({ className, containerClassName, onClear, ...props }: Searc
             }}
             tabIndex={hasValue ? 0 : -1}
             className={cn(
-              'p-0.5 rounded text-muted-foreground transition-[opacity,transform] duration-150 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100 focus-visible:scale-110',
+              'group/search-clear p-0.5 rounded text-muted-foreground transition-[opacity,transform] duration-150 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100',
               hasValue
                 ? 'opacity-50 hover:opacity-100 scale-100'
                 : 'opacity-0 scale-75 pointer-events-none',
             )}
           >
-            <X className="size-3.5" />
+            <X className="size-3.5 group-focus-visible/search-clear:animate-focus-bump" />
           </button>
         ) : undefined
       }

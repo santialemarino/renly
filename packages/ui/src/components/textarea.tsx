@@ -16,7 +16,7 @@ function Textarea({
         'focus-visible:ring-[3px]',
         blue
           ? 'border-blue-800/50 focus-visible:border-blue-800 focus-visible:ring-blue-800/30'
-          : 'border-border focus-visible:border-ring focus-visible:ring-ring/50',
+          : 'border-border focus-visible:border-ring focus-visible:ring-ring',
         className,
       )}
       {...props}

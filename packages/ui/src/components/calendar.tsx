@@ -188,7 +188,7 @@ function CalendarDayButton({
         'group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-20',
         blue
           ? 'group-data-[focused=true]/day:border-blue-700 group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-blue-700/30'
-          : 'group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50',
+          : 'group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring',
         'data-[range-middle=true]:text-foreground',
         blue
           ? [
