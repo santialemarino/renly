@@ -3,17 +3,18 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 
-import { Button, useSidebar } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { useSidebar } from '@repo/ui/components';
 import { PRIVATE_SCOPE } from '@/app/(protected)/_components/entry-scope-field';
 import type { LinkedPlanMismatch } from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
 import {
   getQuickAddContext,
   type QuickAddContext,
 } from '@/app/(protected)/_components/quick-add-actions';
+import {
+  QuickAddControlsContext,
+  type QuickAddControls,
+} from '@/app/(protected)/_components/quick-add-context';
 import type { EntryType } from '@/lib/constants/entries';
 import {
   toTypeHandover,
@@ -29,15 +30,17 @@ import { todayInTimezone } from '@/lib/utils/dates';
  * The five dialogs, loaded on demand — the ONE place in the app that does this, and for a measured
  * reason.
  *
- * The quick-add's trigger lives in the sidebar, which is part of the protected LAYOUT, so a static
- * import would put every entry form in the client graph of all twenty-odd protected routes. Measured
- * on the production build, per route, static → dynamic: `/dashboard` 1680 → 1560 KiB, `/notifications`
- * 1326 → 1206 KiB, `/snapshots` 1346 → 1254 KiB. Two of those three render no entry form at all.
+ * This owner is rendered by the protected LAYOUT, so a static import would put every entry form in
+ * the client graph of all twenty-odd protected routes. Measured on the production build, per route,
+ * static → dynamic: `/dashboard` 1680 → 1560 KiB, `/notifications` 1326 → 1206 KiB, `/snapshots`
+ * 1346 → 1254 KiB. Two of those three render no entry form at all.
  *
  * Deferring costs the user nothing, which is what makes it the right trade rather than a compromise:
  * `handleOpen` already awaits six reads before it opens anything, with the trigger in its loading
- * state, so the chunks arrive alongside a wait that was already happening. `ssr: false` because
- * nothing here renders until a click.
+ * state, so the chunks arrive alongside a wait that was already happening. And the dialogs are not
+ * RENDERED until that first open (`hasOpened` below): a `dynamic` component starts fetching its chunk
+ * the moment it renders, even closed, so rendering them up front would download every form on every
+ * protected page load. `ssr: false` because nothing here renders until a click.
  */
 const loadExpenseForm = () => import('@/app/(protected)/_components/expense-form-dialog');
 const loadIncomeForm = () => import('@/app/(protected)/_components/income-form-dialog');
@@ -110,7 +113,9 @@ type QuickAddDraft =
   | { type: 'expense'; scope: string; prefill?: ExpenseHandover }
   | { type: 'income'; scope: string; prefill?: IncomeHandover };
 
-interface QuickAddProps {
+interface QuickAddProviderProps {
+  // The tree that renders the trigger (the sidebar). The forms are rendered BESIDE it, never in it.
+  children: React.ReactNode;
   // The entry currency to open on, before the supported-set check — see quickAddCurrency.
   primaryCurrency: string;
   preferredCurrencies?: string[];
@@ -123,28 +128,39 @@ interface QuickAddProps {
  * The global quick-add (X4): an expense or a piece of income, from anywhere, with everything pre-filled
  * that honestly can be.
  *
- * It owns three things and nothing else — the trigger, the two swaps, and the pre-fill. The forms are
+ * It owns three things and nothing else — the open, the two swaps, and the pre-fill. The forms are
  * the app's OWN four entry dialogs, unchanged. That is the whole design: a leaner form here would be a
  * second place an expense is created, and every rule the real one carries (the novel-currency confirm,
  * the auto-charge duplicate warning, the cycle-advance preview, a linked plan's funding account, the
  * split rows, the payer refusal) would be either absent or duplicated. "Quick" is delivered by reach
  * and pre-fill, not by dropping fields.
  *
- * It lives in the sidebar because the app has no top bar: every protected page owns its full vertical
- * space and renders its own PageHeader, so the sidebar is the persistent shell — the same reasoning the
- * notification bell records.
+ * Its button is NOT here: `QuickAddTrigger` sits in the sidebar and reaches this through
+ * `QuickAddControlsContext`. The split is what makes the quick-add work on a phone at all. Below `md`
+ * the sidebar is a Sheet, opening a form has to close it (it would otherwise sit behind the dialog
+ * with its own overlay), and a closed Sheet is UNMOUNTED — so forms owned inside it were unmounted
+ * with it, about 300ms after they appeared. The protected layout renders this owner around the
+ * sidebar, which puts the dialogs beside the Sheet rather than in it; a unit test
+ * (`tests/unit/quick-add-ownership.test.ts`) holds that shape.
  */
-export function QuickAdd({
+export function QuickAddProvider({
+  children,
   primaryCurrency,
   preferredCurrencies,
   supportedCurrencies,
   timeZone,
-}: QuickAddProps) {
-  const t = useTranslations('sidebar');
+}: QuickAddProviderProps) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState<QuickAddContext>(EMPTY_CONTEXT);
+  /*
+   * Whether the reader has opened the quick-add at all. Until then no dialog renders, so no form chunk
+   * is fetched on a page load; `handleOpen` preloads them all before setting it, so the first open is
+   * as instant as the ones after it. It never goes back to false: the forms stay mounted (closed)
+   * afterwards, which keeps their exit animations and every later swap instant.
+   */
+  const [hasOpened, setHasOpened] = useState(false);
   // Amount-mismatch follow-up, held here so the prompt survives the entry form's close animation.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
   const {
@@ -200,8 +216,10 @@ export function QuickAdd({
     ]);
     setLoading(false);
     setContext(loaded);
-    // Closes the mobile sheet, which would otherwise sit behind the dialog with its own overlay. A
-    // no-op on desktop, where the sidebar is never a sheet.
+    setHasOpened(true);
+    // Closes the mobile sheet, which would otherwise sit behind the dialog with its own overlay — safe
+    // only because the forms are owned out here, so the sheet unmounting takes nothing of ours with
+    // it. A no-op on desktop, where the sidebar is never a sheet.
     setOpenMobile(false);
     start({
       type: 'expense',
@@ -230,125 +248,107 @@ export function QuickAdd({
     );
   }
 
+  // What the trigger reads. Rebuilt every render, so `open` always closes over the current props.
+  const controls: QuickAddControls = { open: handleOpen, loading };
+
   return (
-    <>
-      <Button
-        blue
-        size="lg"
-        onClick={handleOpen}
-        disabled={loading}
-        aria-haspopup="dialog"
-        data-testid="quick-add-trigger"
-        className="w-full justify-center gap-2 [&_svg]:size-5 text-paragraph-medium"
-      >
-        {/* Both icons share one grid cell, so the swap crossfades instead of reflowing the label. */}
-        <span className="grid shrink-0">
-          <Plus
-            className={cn(
-              'col-start-1 row-start-1 transition-all duration-200',
-              loading ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-            )}
+    <QuickAddControlsContext.Provider value={controls}>
+      {children}
+
+      {hasOpened && (
+        <>
+          <ExpenseFormDialog
+            open={open && draft.type === 'expense' && draft.scope === PRIVATE_SCOPE}
+            onOpenChange={setOpen}
+            preferredCurrencies={preferredCurrencies}
+            supportedCurrencies={supportedCurrencies}
+            creditCards={context.creditCards}
+            accounts={context.accounts}
+            activeObligations={context.obligations}
+            activeSubscriptions={context.subscriptions}
+            activeInstallments={context.installments}
+            scopeGroups={context.groups}
+            onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
+            onEntryTypeChange={swapEntryType}
+            prefill={expensePrefill}
+            prefillAccountId={prefillAccountId}
+            onSuccess={() => router.refresh()}
+            onLinkedPlanSave={(values, plan) =>
+              setMismatch({
+                type: plan.type,
+                planId: plan.id,
+                planName: plan.name,
+                enteredAmount: values.amount,
+                currentAmount: plan.amount,
+                currency: plan.currency,
+              })
+            }
           />
-          <Loader2
-            className={cn(
-              'col-start-1 row-start-1 animate-spin transition-all duration-200',
-              loading ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-            )}
+
+          <IncomeFormDialog
+            open={open && draft.type === 'income' && draft.scope === PRIVATE_SCOPE}
+            onOpenChange={setOpen}
+            preferredCurrencies={preferredCurrencies}
+            supportedCurrencies={supportedCurrencies}
+            accounts={context.accounts}
+            scopeGroups={context.groups}
+            onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
+            onEntryTypeChange={swapEntryType}
+            prefill={incomePrefill}
+            prefillAccountId={prefillAccountId}
+            onSuccess={() => router.refresh()}
           />
-        </span>
-        <span>{t('nav.quickAdd')}</span>
-      </Button>
 
-      <ExpenseFormDialog
-        open={open && draft.type === 'expense' && draft.scope === PRIVATE_SCOPE}
-        onOpenChange={setOpen}
-        preferredCurrencies={preferredCurrencies}
-        supportedCurrencies={supportedCurrencies}
-        creditCards={context.creditCards}
-        accounts={context.accounts}
-        activeObligations={context.obligations}
-        activeSubscriptions={context.subscriptions}
-        activeInstallments={context.installments}
-        scopeGroups={context.groups}
-        onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
-        onEntryTypeChange={swapEntryType}
-        prefill={expensePrefill}
-        prefillAccountId={prefillAccountId}
-        onSuccess={() => router.refresh()}
-        onLinkedPlanSave={(values, plan) =>
-          setMismatch({
-            type: plan.type,
-            planId: plan.id,
-            planName: plan.name,
-            enteredAmount: values.amount,
-            currentAmount: plan.amount,
-            currency: plan.currency,
-          })
-        }
-      />
+          {/*
+           * Each shared form is mounted only once its own scope AND type are what the draft names. The
+           * dialog reads that group's shared accounts when it opens, so mounting one per group up front
+           * would be a request each for a form the user has not asked for.
+           */}
+          {scopedGroup && draft.type === 'expense' && (
+            <SharedExpenseFormDialog
+              open={open}
+              onOpenChange={setOpen}
+              group={scopedGroup}
+              prefill={expensePrefill}
+              accounts={context.accounts}
+              creditCards={context.creditCards}
+              preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
+              timeZone={timeZone}
+              scopeGroups={context.groups}
+              onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
+              onEntryTypeChange={swapEntryType}
+              onSuccess={() => router.refresh()}
+            />
+          )}
 
-      <IncomeFormDialog
-        open={open && draft.type === 'income' && draft.scope === PRIVATE_SCOPE}
-        onOpenChange={setOpen}
-        preferredCurrencies={preferredCurrencies}
-        supportedCurrencies={supportedCurrencies}
-        accounts={context.accounts}
-        scopeGroups={context.groups}
-        onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
-        onEntryTypeChange={swapEntryType}
-        prefill={incomePrefill}
-        prefillAccountId={prefillAccountId}
-        onSuccess={() => router.refresh()}
-      />
+          {scopedGroup && draft.type === 'income' && (
+            <SharedIncomeFormDialog
+              open={open}
+              onOpenChange={setOpen}
+              group={scopedGroup}
+              prefill={incomePrefill}
+              accounts={context.accounts}
+              preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
+              timeZone={timeZone}
+              scopeGroups={context.groups}
+              onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
+              onEntryTypeChange={swapEntryType}
+              onSuccess={() => router.refresh()}
+            />
+          )}
 
-      {/*
-       * Each shared form is mounted only once its own scope AND type are what the draft names. The
-       * dialog reads that group's shared accounts when it opens, so mounting one per group up front
-       * would be a request each for a form the user has not asked for.
-       */}
-      {scopedGroup && draft.type === 'expense' && (
-        <SharedExpenseFormDialog
-          open={open}
-          onOpenChange={setOpen}
-          group={scopedGroup}
-          prefill={expensePrefill}
-          accounts={context.accounts}
-          creditCards={context.creditCards}
-          preferredCurrencies={preferredCurrencies}
-          supportedCurrencies={supportedCurrencies}
-          timeZone={timeZone}
-          scopeGroups={context.groups}
-          onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
-          onEntryTypeChange={swapEntryType}
-          onSuccess={() => router.refresh()}
-        />
+          <LinkedPlanAmountMismatchDialog
+            mismatch={mismatch}
+            onClose={() => setMismatch(null)}
+            onConfirmed={() => {
+              setMismatch(null);
+              router.refresh();
+            }}
+          />
+        </>
       )}
-
-      {scopedGroup && draft.type === 'income' && (
-        <SharedIncomeFormDialog
-          open={open}
-          onOpenChange={setOpen}
-          group={scopedGroup}
-          prefill={incomePrefill}
-          accounts={context.accounts}
-          preferredCurrencies={preferredCurrencies}
-          supportedCurrencies={supportedCurrencies}
-          timeZone={timeZone}
-          scopeGroups={context.groups}
-          onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
-          onEntryTypeChange={swapEntryType}
-          onSuccess={() => router.refresh()}
-        />
-      )}
-
-      <LinkedPlanAmountMismatchDialog
-        mismatch={mismatch}
-        onClose={() => setMismatch(null)}
-        onConfirmed={() => {
-          setMismatch(null);
-          router.refresh();
-        }}
-      />
-    </>
+    </QuickAddControlsContext.Provider>
   );
 }

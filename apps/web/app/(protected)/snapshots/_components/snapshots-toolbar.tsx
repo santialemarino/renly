@@ -1,24 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
-import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { Button, SearchInput } from '@repo/ui/components';
+import { Button } from '@repo/ui/components';
 import { refreshPrices } from '@/app/(protected)/snapshots/snapshots-actions';
 import { CategorySelect } from '@/components/category-select';
 import { CollectionMultiSelect } from '@/components/collection-multi-select';
+import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ScopePill } from '@/components/scope-pill';
 import { SegmentedPills } from '@/components/segmented-pills';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SnapshotGridInterval } from '@/lib/api/snapshots';
 import type { ListScope } from '@/lib/api/types';
-import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
-import { CATEGORY_ALL, SEARCH_MAX } from '@/lib/constants/api-constants';
+import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 
@@ -37,8 +36,12 @@ export function SnapshotsToolbar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { navigate } = useSearchParamsNavigation(ROUTES.snapshots);
-  const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [refreshing, setRefreshing] = useState(false);
+
+  const selectedCollectionIds = searchParams.getAll('collection_ids').map(Number).filter(Boolean);
+  const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
+  const scope = resolveListScope(searchParams.get('scope') ?? undefined);
+  const interval = resolveGridInterval(searchParams.get('interval') ?? undefined);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -52,17 +55,6 @@ export function SnapshotsToolbar({
       setRefreshing(false);
     }
   }
-
-  const selectedCollectionIds = searchParams.getAll('collection_ids').map(Number).filter(Boolean);
-  const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
-  const scope = resolveListScope(searchParams.get('scope') ?? undefined);
-  const interval = resolveGridInterval(searchParams.get('interval') ?? undefined);
-
-  useEffect(() => {
-    const timer = setTimeout(() => navigate({ search }), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
 
   function handleCollectionToggle(collectionId: number) {
     const next = selectedCollectionIds.includes(collectionId)
@@ -85,24 +77,11 @@ export function SnapshotsToolbar({
   }
 
   return (
-    <LayoutGroup>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-0 flex-1">
-          <SearchInput
-            placeholder={t('toolbar.searchPlaceholder')}
-            value={search}
-            maxLength={SEARCH_MAX}
-            surface
-            onChange={(e) => setSearch(e.target.value)}
-            onClear={() => setSearch('')}
-          />
-        </motion.div>
-
-        <motion.div
-          layout
-          transition={{ duration: ANIMATION_DEFAULT }}
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto"
-        >
+    <EntityListToolbar
+      route={ROUTES.snapshots}
+      searchPlaceholder={t('toolbar.searchPlaceholder')}
+      filters={
+        <>
           {showScope && <ScopePill value={scope} onChange={handleScopeChange} />}
           {/*
            * The column grid, as a TOGGLE rather than something derived: this grid mixes private
@@ -132,24 +111,19 @@ export function SnapshotsToolbar({
             surface
             className="min-w-fit flex-1"
           />
-        </motion.div>
-
-        <motion.div
-          layout
-          transition={{ duration: ANIMATION_DEFAULT }}
-          className="basis-full lg:basis-auto"
+        </>
+      }
+      trailing={
+        <Button
+          variant="outline"
+          disabled={refreshing}
+          onClick={handleRefresh}
+          className="min-w-fit flex-1 gap-x-1.5"
         >
-          <Button
-            variant="outline"
-            disabled={refreshing}
-            onClick={handleRefresh}
-            className="w-full lg:w-auto gap-x-1.5"
-          >
-            <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? t('toolbar.refreshing') : t('toolbar.refresh')}
-          </Button>
-        </motion.div>
-      </div>
-    </LayoutGroup>
+          <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? t('toolbar.refreshing') : t('toolbar.refresh')}
+        </Button>
+      }
+    />
   );
 }
