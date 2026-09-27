@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
-import { e2eCredentials } from './helpers/auth';
+import { API_BASE, apiToken } from './helpers/api';
 import { testMarker } from './helpers/factories';
 import { listPages } from './helpers/list-pages';
 
@@ -21,9 +21,6 @@ import { listPages } from './helpers/list-pages';
  * because Spanish labels are 20-30% longer, which is where a row that fits in English stops fitting.
  */
 
-// eslint-disable-next-line turbo/no-undeclared-env-vars
-const API_BASE = process.env.E2E_API_URL || 'http://localhost:8000';
-
 const WIDTHS = [390, 1024, 1280] as const;
 const LOCALES = ['en', 'es'] as const;
 const PAGES = listPages();
@@ -34,16 +31,6 @@ interface Fixture {
   groupId: number;
 }
 
-// Logs into the API directly for its own bearer token — the browser's NextAuth cookie lives on the
-// web origin, which the API never sees.
-async function apiToken(request: APIRequestContext): Promise<string> {
-  const credentials = e2eCredentials();
-  if (credentials === null) throw new Error('E2E_EMAIL / E2E_PASSWORD are required for this spec');
-  const response = await request.post(`${API_BASE}/auth/login`, { data: credentials });
-  expect(response.ok(), `login to ${API_BASE} failed with ${response.status()}`).toBe(true);
-  return (await response.json()).access_token;
-}
-
 /*
  * The fullest toolbar the app has, whatever account runs this: /snapshots shows its scope filter only
  * to a member of some group and its collections filter only when a collection exists. Without both,
@@ -51,7 +38,7 @@ async function apiToken(request: APIRequestContext): Promise<string> {
  * its own, marked, and deletes them afterwards.
  */
 async function seed(request: APIRequestContext): Promise<Fixture> {
-  const token = await apiToken(request);
+  const token = await apiToken();
   const headers = { Authorization: `Bearer ${token}` };
   const marker = testMarker('toolbar');
   const collection = await request.post(`${API_BASE}/collections`, {
