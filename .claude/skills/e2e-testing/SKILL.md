@@ -175,6 +175,9 @@ cleanup alike. Data it is NOT testing, such as the group and collection a layout
 may be seeded and removed through the API (`helpers/api.ts`), which is faster and deterministic, and it
 is still marked. Either way, clean up in a `finally` or an `afterAll`, and make the cleanup a no-op when
 the row is already gone so it is safe to call unconditionally.
+A spec that temporarily changes ACCOUNT STATE rather than adding a row (a setting such as
+`onboarding_completed`) reads the value first and restores it in `afterAll` — and a run killed before
+`afterAll` can leave it changed, so check that setting on the account before trusting the next run.
 
 **A round trip is ONE test, not two.** Splitting create and delete across tests makes the second depend
 on the first having run — which `workers: 1` happens to guarantee today and no spec should rely on.

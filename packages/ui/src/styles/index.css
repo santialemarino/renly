@@ -31,7 +31,10 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.985 0 0);
   --input-readonly: oklch(0.94 0 0);
-  --ring: oklch(0.87 0 0);
+  /* The neutral focus ring, drawn SOLID (`ring-ring`, never `ring-ring/<alpha>`). Dark enough to clear
+     WCAG 1.4.11's 3:1 on every surface a ring sits on (4.7:1 on background, 4.3:1 on muted), where the
+     old 0.87 at half alpha measured 1.2:1. Hover borders use `border-3`, the old value, not this. */
+  --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.648 0.217 37.071);
   --chart-2: oklch(0.605 0.107 184.17);
   --chart-3: oklch(0.397 0.07 227.19);
@@ -44,7 +47,7 @@
   --sidebar-accent: oklch(0.92 0 0);
   --sidebar-accent-foreground: oklch(0.145 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.869 0 0);
+  --sidebar-ring: var(--ring);
 
   /* Unofficial variables implemented by the design system */
   --body-background: oklch(1 0 0);

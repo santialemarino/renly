@@ -49,7 +49,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           'transition-[border-color,box-shadow] duration-200 ease-in-out',
           blue
             ? 'focus-within:border-blue-700 focus-within:ring-[3px] focus-within:ring-blue-700/30'
-            : 'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
+            : 'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring',
           hasError &&
             'border-destructive focus-within:border-destructive focus-within:ring-destructive/30',
           containerClassName,
@@ -101,11 +101,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             aria-label={passwordToggleLabel}
             aria-pressed={showPassword}
             className={cn(
-              // Bump (scale-110) on both hover and focus-visible — matches the icon-button idiom in
-              // search-input / currency-combobox and replaces the default browser focus outline.
-              // The color shift is hover-only (animated via transition-all) so hover reads distinct
-              // from keyboard focus; the blue eye darkens blue-800→blue-900 like the blue button.
-              'absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all outline-none hover:scale-110 focus-visible:scale-110',
+              // Hover grows the eye (scale-110) and shifts its color; keyboard focus plays the icon-button
+              // focus-bump on the icon instead (ux-motion's `group/<name>` idiom), so the two read
+              // differently and the native outline is replaced. The blue eye darkens blue-800→blue-900
+              // like the blue button.
+              'group/password-toggle absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all outline-none hover:scale-110',
               hasError
                 ? 'text-destructive'
                 : blue || blueEye
@@ -113,7 +113,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                   : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <span className="grid">
+            <span className="grid group-focus-visible/password-toggle:animate-focus-bump">
               <Eye
                 className={cn(
                   'col-start-1 row-start-1 size-4 transition-all duration-200',

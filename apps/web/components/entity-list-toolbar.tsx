@@ -6,6 +6,13 @@ import { Archive, Plus } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
 
 import { Button, Pill, SearchInput } from '@repo/ui/components';
+import {
+  TOOLBAR_ACTIONS,
+  TOOLBAR_FILTERS,
+  TOOLBAR_ITEM,
+  TOOLBAR_ROW,
+  TOOLBAR_SEARCH,
+} from '@/components/entity-list-toolbar-layout';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { SEARCH_MAX } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
@@ -90,10 +97,7 @@ export function EntityListToolbar({
 
   return (
     <LayoutGroup>
-      <div
-        className="flex flex-wrap items-center gap-x-3 gap-y-2"
-        data-testid="entity-list-toolbar"
-      >
+      <div className={TOOLBAR_ROW} data-testid="entity-list-toolbar">
         {/*
          * `min-w-48` and not `min-w-0`, matching `SearchInput`'s own container minimum.
          *
@@ -103,7 +107,7 @@ export function EntityListToolbar({
          * filter — a 14px overlap, with the input's background painting over the control's border.
          * With the minimum stated, the row wraps instead, which `flex-wrap` was already there for.
          */}
-        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-48 flex-1">
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className={TOOLBAR_SEARCH}>
           <SearchInput
             placeholder={searchPlaceholder}
             value={search}
@@ -118,23 +122,19 @@ export function EntityListToolbar({
           <motion.div
             layout
             transition={{ duration: ANIMATION_DEFAULT }}
-            className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto"
+            className={TOOLBAR_FILTERS}
           >
             {filters}
           </motion.div>
         )}
 
-        <motion.div
-          layout
-          transition={{ duration: ANIMATION_DEFAULT }}
-          className="flex flex-wrap basis-full md:basis-auto items-center gap-x-3 gap-y-2"
-        >
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className={TOOLBAR_ACTIONS}>
           {showArchivedLabel && (
             <Pill
               active={showArchived}
               aria-pressed={showArchived}
               onClick={() => navigate({ show_archived: showArchived ? null : 'true' })}
-              className="min-w-fit flex-1"
+              className={TOOLBAR_ITEM}
             >
               <Archive className="size-4" />
               {showArchivedLabel}
@@ -148,7 +148,7 @@ export function EntityListToolbar({
               blue
               onClick={onAdd}
               disabled={addDisabled}
-              className="min-w-fit flex-1"
+              className={TOOLBAR_ITEM}
               data-testid="entity-list-add"
             >
               <Plus className="size-4" />

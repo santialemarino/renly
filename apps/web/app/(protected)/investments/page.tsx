@@ -60,7 +60,8 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
       sortBy: params.sort_by as 'name' | 'category' | 'base_currency' | 'broker' | undefined,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),
-    getCollections(),
+    // The collection filter's options and the form's picker: empty on error, the list still renders.
+    getCollections().catch(() => []),
     getSettings().catch(() => null),
     getSupportedCurrencies().catch(() => undefined),
     /*

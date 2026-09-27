@@ -65,12 +65,13 @@ export function FilterCombobox({
         <PopoverTrigger asChild>
           <Button
             variant="outline"
+            data-testid="filter-combobox-trigger"
             className={cn(
               'h-9 w-full justify-between px-3 gap-x-2 border-border shadow-xs',
               'text-paragraph-sm font-normal',
               isAll ? 'text-muted-foreground' : 'text-foreground',
-              'hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+              'hover:border-border-3',
+              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
               surface ? 'bg-background' : 'bg-input',
             )}
           >

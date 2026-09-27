@@ -77,7 +77,8 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
       sortBy: params.sort_by,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),
-    getCollections(),
+    // The collection filter's options only: empty on error, the grid still renders.
+    getCollections().catch(() => []),
     /*
      * The groups the user belongs to, which is the ONE signal that turns the scope filter on — the
      * same one the entry forms' scope control uses (X3). Read separately from `sections` on purpose:

@@ -1,6 +1,7 @@
 {
   "common": {
     "appName": "Renly",
+    "skipToContent": "Skip to main content",
     "potDefaultLabel": "Shared money",
     "sampleData": {
       "banner": "This is sample data to show you around. Add your own to replace it.",
@@ -17,6 +18,9 @@
       "cta": {
         "label": "Go to Homepage"
       }
+    },
+    "loading": {
+      "status": "Loading page…"
     },
     "form": {
       "errors": {

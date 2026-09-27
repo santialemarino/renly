@@ -24,23 +24,43 @@ const here = dirname(fileURLToPath(import.meta.url));
 const WEB = join(here, '..', '..');
 const PROTECTED = join(WEB, 'app', '(protected)');
 
+// A route group — a `(name)` folder, which wraps its pages without adding a URL segment.
+const isRouteGroup = (name: string) => /^\(.+\)$/.test(name);
+
+// Whether a folder is a page's: it holds a page.tsx itself, or one inside a route group of its own
+// (a detail page moved into `(hub)/` still owns its folder's `_components`, and nothing above it does).
+function isPageFolder(dir: string): boolean {
+  if (existsSync(join(dir, 'page.tsx'))) return true;
+  return readdirSync(dir).some(
+    (entry) => isRouteGroup(entry) && existsSync(join(dir, entry, 'page.tsx')),
+  );
+}
+
 function tsxUnder(dir: string, stopAtPages: boolean): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      if (stopAtPages && existsSync(join(full, 'page.tsx'))) continue;
+      if (stopAtPages && isPageFolder(full)) continue;
       out.push(...tsxUnder(full, stopAtPages));
     } else if (entry.endsWith('.tsx')) out.push(full);
   }
   return out;
 }
 
-// Every page folder under (protected), as its route pattern.
+/*
+ * Every page folder under (protected), as its route pattern. Route-group segments are dropped, as in
+ * the URL: a list page whose details live under it sits in one (`accounts/(list)/page.tsx`, so its
+ * loading state wraps only that page) and still serves `/accounts`.
+ */
 function pageRoutes(dir = PROTECTED): [string, string][] {
   const out: [string, string][] = [];
-  if (existsSync(join(dir, 'page.tsx')))
-    out.push([`/${relative(PROTECTED, dir).split(sep).join('/')}`, dir]);
+  if (existsSync(join(dir, 'page.tsx'))) {
+    const segments = relative(PROTECTED, dir)
+      .split(sep)
+      .filter((segment) => !isRouteGroup(segment));
+    out.push([`/${segments.join('/')}`, dir]);
+  }
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory() && !entry.startsWith('_')) out.push(...pageRoutes(full));
@@ -60,11 +80,21 @@ function moneyTags(): string[] {
   return [...tags];
 }
 
+/*
+ * The files a page renders from: its own folder, stopping at nested pages — and, for a page inside a
+ * route group, the section folder around the group too, since that is where its `_components` stay.
+ */
+function pageFiles(dir: string): string[] {
+  const files = tsxUnder(dir, true);
+  const name = dir.split(sep).pop() ?? '';
+  return isRouteGroup(name) ? [...files, ...tsxUnder(dirname(dir), true)] : files;
+}
+
 function moneyBearingRoutes(): string[] {
   const tags = moneyTags();
   const renders = (source: string) => tags.some((tag) => new RegExp(`<${tag}\\b`).test(source));
   return pageRoutes()
-    .filter(([, dir]) => tsxUnder(dir, true).some((file) => renders(readFileSync(file, 'utf8'))))
+    .filter(([, dir]) => pageFiles(dir).some((file) => renders(readFileSync(file, 'utf8'))))
     .map(([route]) => route)
     .sort();
 }

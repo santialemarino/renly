@@ -84,8 +84,8 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
               'transition-[border-color,box-shadow] duration-200 ease-in-out',
               surface ? 'bg-background' : 'bg-input',
               // Default state: regular border, hover hint, blue ring on focus-visible.
-              'border-border hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+              'border-border hover:border-border-3',
+              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
               // Aria-invalid: red border, no ring (override Button's built-in aria-invalid:ring-3).
               'aria-invalid:border-destructive aria-invalid:ring-0',
               // Aria-invalid + focus-visible: red ring restored (compound variant wins via specificity).

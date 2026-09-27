@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 
 import { cn } from '@repo/ui/lib';
+import { useReturnFocus } from '../hooks/use-return-focus';
 import { useUiLabels } from './ui-labels';
 
 const Sheet = SheetPrimitive.Root;
@@ -58,16 +59,20 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ComponentRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = 'right', className, children, ...props }, ref) => {
+>(({ side = 'right', className, children, onCloseAutoFocus, ...props }, ref) => {
   const labels = useUiLabels();
+  // Focus goes back to whatever opened the sheet: the nav sheet is controlled, and its hamburger sits
+  // outside any Dialog.Trigger, so Radix alone returns it to <body>. See useReturnFocus.
+  const returnFocus = useReturnFocus({ onCloseAutoFocus, ref });
 
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
-        ref={ref}
-        className={cn(sheetVariants({ side }), className)}
         {...props}
+        className={cn(sheetVariants({ side }), className)}
+        ref={returnFocus.ref}
+        onCloseAutoFocus={returnFocus.onCloseAutoFocus}
       >
         {children}
         <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">

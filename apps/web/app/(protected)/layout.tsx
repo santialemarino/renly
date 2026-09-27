@@ -7,7 +7,8 @@ import { MobileNavBar } from '@/app/(protected)/_components/mobile-nav-bar';
 import { QuickAddProvider } from '@/app/(protected)/_components/quick-add';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
-import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
+import { SkipLink } from '@/components/skip-link';
+import { MAIN_CONTENT_ID, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getNotifications } from '@/lib/api/notifications';
@@ -77,6 +78,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <SidebarProvider>
+      {/* First in the DOM so it is the first Tab stop, ahead of the whole sidebar. */}
+      <SkipLink />
       {settings && (
         <>
           <TimezoneAutoSync storedTimezone={settings.timezone} storedMode={settings.timezoneMode} />
@@ -117,7 +120,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
        */}
       <SidebarInset className="min-w-0">
         <MobileNavBar />
-        <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden">{children}</main>
+        <main
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="flex-1 flex flex-col min-w-0 overflow-x-hidden outline-none"
+        >
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -149,7 +149,7 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
             disabled={disabled}
             className={cn(
               'group/button h-9 w-full justify-between px-3 gap-x-2 border-border shadow-xs text-paragraph-sm font-normal',
-              'hover:border-ring hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+              'hover:border-border-3 hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
               'aria-invalid:border-destructive aria-invalid:ring-destructive/20',
               selected ? 'text-foreground' : 'text-muted-foreground',
               surface ? 'bg-background' : 'bg-input',

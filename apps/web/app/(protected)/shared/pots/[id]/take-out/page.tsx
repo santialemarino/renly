@@ -53,7 +53,8 @@ export default async function TakeOutPage({ params, searchParams }: TakeOutPageP
   const [group, holdings, accounts, settings] = await Promise.all([
     getGroup(pot.groupId),
     getPotHoldings(potId),
-    getAccounts(),
+    // The private leg's picker only: empty on error (the picker says so), the take-out still renders.
+    getAccounts().catch(() => []),
     getSettings().catch(() => null),
   ]);
   if (!group || !holdings) notFound();
