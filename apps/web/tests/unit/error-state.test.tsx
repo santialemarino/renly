@@ -4,8 +4,8 @@ import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorState } from '@/components/error-state';
-import en from '../../translations/en.json';
-import es from '../../translations/es.json';
+import en from '../../translations/error-boundary/en.json';
+import es from '../../translations/error-boundary/es.json';
 
 /*
  * What every error boundary renders, and the one thing its retry has to do.
@@ -24,12 +24,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 function renderIn(locale: 'en' | 'es', props: { showHomeLink?: boolean } = {}) {
-  const messages = { en, es }[locale];
+  const errorBoundary = { en, es }[locale];
   const reset = vi.fn();
   render(
     <NextIntlClientProvider
       locale={locale}
-      messages={{ common: { errorBoundary: messages.common.errorBoundary } }}
+      messages={{ common: { errorBoundary } }}
       onError={() => {}}
     >
       <ErrorState reset={reset} {...props} />
@@ -46,7 +46,7 @@ describe('ErrorState', () => {
   it.each(['en', 'es'] as const)(
     'renders its copy in %s from the error namespace alone',
     (locale) => {
-      const copy = { en, es }[locale].common.errorBoundary;
+      const copy = { en, es }[locale];
       renderIn(locale, { showHomeLink: true });
 
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(copy.title);
@@ -67,7 +67,7 @@ describe('ErrorState', () => {
     // reset() alone re-renders the payload the router already holds — the error — so a retry that
     // skips the refresh fails again forever; a refresh without reset() leaves the boundary up.
     const { reset } = renderIn('en');
-    await userEvent.click(screen.getByRole('button', { name: en.common.errorBoundary.retry }));
+    await userEvent.click(screen.getByRole('button', { name: en.retry }));
 
     expect(router.refresh).toHaveBeenCalledTimes(1);
     expect(reset).toHaveBeenCalledTimes(1);

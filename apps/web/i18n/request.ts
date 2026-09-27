@@ -2,6 +2,7 @@ import { cookies, headers } from 'next/headers';
 import { getRequestConfig } from 'next-intl/server';
 
 import { isValidTimezone, TIMEZONE_COOKIE } from '@/lib/constants/timezones';
+import { withErrorBoundaryMessages } from '@/lib/i18n/error-boundary-messages';
 import { LOCALE_COOKIE, resolveLocale } from '@/lib/i18n/locales';
 
 // The Accept-Language header as an ordered list of language tags, quality values dropped.
@@ -33,6 +34,9 @@ export default getRequestConfig(async () => {
   return {
     locale,
     timeZone,
-    messages: (await import(`../translations/${locale}.json`)).default,
+    messages: withErrorBoundaryMessages(
+      (await import(`../translations/${locale}.json`)).default,
+      locale,
+    ),
   };
 });
