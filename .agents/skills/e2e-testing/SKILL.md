@@ -13,7 +13,7 @@ Three layers, independent:
 
 1. **Test library (`@playwright/test`).** Tests live in `apps/web/tests/e2e/`, run with `pnpm test:e2e` from `apps/web/` or via `pnpm --filter web test:e2e` from the repo root. Configured in `apps/web/playwright.config.ts`. This is the deterministic verification contract.
 2. **CLI (`@playwright/cli`).** Installed globally on the dev machine. Use during feature implementation to drive a real browser, verify behavior, capture screenshots and videos. Does not produce committed tests by itself; the agent uses it to verify what was built and then writes a corresponding `.spec.ts` if a persistent test is warranted.
-3. **CI workflow.** Not yet implemented. Future plan documented at the end of this file under "Future: CI integration."
+3. **CI workflow.** `.github/workflows/ci.web-e2e.yml` runs the whole suite against a production build — on a PR when it touches the floor or carries the `run-e2e` label, every night on `main`, and on demand. See "CI" at the end of this file.
 
 ## When to write a Playwright test
 
@@ -86,13 +86,17 @@ placed in `apps/web/.env` looks configured and reaches nothing. They also stay o
 for the same reason the API's four `*_TEST_DATABASE_URL` vars do: they are per-developer test
 credentials rather than deploy-time configuration, and one of them is a real password.
 
-**`E2E_API_URL`** joins them, for the rare spec that asserts something the DOM cannot show — a figure
-the page abbreviates, or two endpoints that must agree. It defaults to `http://localhost:8000`, so it
+**`E2E_API_URL`** joins them. `globalSetup` reads it on every run to check the API is up before any
+test starts, and specs use it when they assert something the DOM cannot show — a figure the page
+abbreviates, or two endpoints that must agree — or seed data they are not testing. It defaults to `http://localhost:8000`, so it
 is optional, and it stays out of both env files for the same reason the two above do. A spec reaching
-the API has to log in for its OWN bearer token: the browser's session is a NextAuth cookie on the web
-origin, which the API never sees, so a request context cannot borrow it.
+the API gets its bearer token from `apiToken()` in `tests/e2e/helpers/api.ts` (which also exports
+`API_BASE`). That reads the token from the session globalSetup saved, via NextAuth's
+`/api/auth/session`, and never calls `POST /auth/login`. The API allows five logins a minute, and
+Playwright restarts the worker after every failed test, re-running each `beforeAll`. A spec that logged
+in there turned a handful of real failures into a wall of `429`s that hid the regression.
 
-**`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings.
+**`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings. In CI the config also adds the `github` and `json` reporters (see "CI").
 
 ## Conventions
 
@@ -166,9 +170,11 @@ history — so it must also never depend on, or leave behind, a row of its own. 
 `apps/web/tests/e2e/helpers/factories.ts` and the pattern is a **marker**: a per-run unique string
 written into a free-text field (an expense's notes), with every assertion and every cleanup scoped to
 the row carrying it. That is what removes the need for an id, since the marker comes back on the list
-page as something a locator can find. Clean up through the same UI a user would use, in a `finally` or
-an `afterAll`, and make the cleanup a no-op when the row is already gone so it is safe to call
-unconditionally.
+page as something a locator can find. The flow a spec is TESTING goes through the UI, create and
+cleanup alike. Data it is NOT testing, such as the group and collection a layout sweep needs on screen,
+may be seeded and removed through the API (`helpers/api.ts`), which is faster and deterministic, and it
+is still marked. Either way, clean up in a `finally` or an `afterAll`, and make the cleanup a no-op when
+the row is already gone so it is safe to call unconditionally.
 
 **A round trip is ONE test, not two.** Splitting create and delete across tests makes the second depend
 on the first having run — which `workers: 1` happens to guarantee today and no spec should rely on.
@@ -256,43 +262,89 @@ After each command, the CLI outputs a snapshot of the current page state with el
 
 **Refs are stable across actions within a session.** Once you've snapshotted a page, you can chain `click e15` → `fill e22 "value"` → `click e30` without re-running `snapshot` between them — the refs keep pointing to the same elements. Only re-snapshot when the page itself changes (navigation, dialog open/close, dynamic content load).
 
-## Future: CI integration
+## CI
 
-Not yet implemented. When the user is ready, the plan is:
+`.github/workflows/ci.web-e2e.yml` runs the whole suite in one job, `e2e-web`. The workflow triggers
+on every PR, every night on `main`, and on demand — and decides at JOB level whether `e2e-web` runs.
 
-**Phase 1: Manual trigger (workflow_dispatch).**
+### When the suite runs
 
-- Create `.github/workflows/ci.web-e2e.yml`.
-- Trigger: `on: workflow_dispatch` only — runs only when the user clicks "Run workflow" in the Actions tab.
-- Job steps:
-  1. Checkout the repo.
-  2. Set up Node 22 (matches root `package.json` `engines.node: >=22`) and pnpm.
-  3. Set up Postgres as a service container with the same image used in `pnpm db:init`.
-  4. Install dependencies with `pnpm install --frozen-lockfile`.
-  5. Run `pnpm db:init` to apply schema.
-  6. Start the API in background: `cd apps/api && uv run uvicorn app.main:app --port 8000 &`.
-  7. Start the web in background: `cd apps/web && pnpm build && pnpm start &`.
-  8. Wait for both to be healthy (curl loop).
-  9. Install Playwright browsers: `pnpm --filter web exec playwright install chromium`.
-  10. Run tests: `pnpm --filter web test:e2e`.
-  11. Upload artifacts (screenshots, videos, traces, HTML report) regardless of outcome.
-- Iterate on the workflow until 3-5 consecutive runs are clean.
+- **The floor, always.** A `changes` job lists the PR's files and sets `floor` when it touches the
+  schema or migrations (`apps/api/database/**`, `apps/api/migrations/**`, `apps/api/alembic.ini`), a
+  dependency manifest or lockfile (`pnpm-lock.yaml`, any `package.json`, `pnpm-workspace.yaml`,
+  `apps/api/pyproject.toml`, `apps/api/uv.lock`, `.nvmrc`), or the harness itself (the workflow,
+  `playwright.config.ts`, `tests/e2e/**`, `scripts/db-init.mjs`, `docker-compose.yml`). Those are
+  changes whose breakage no per-page browser check would see.
+- **Judgment, by label.** Any other PR runs the suite when it carries the `run-e2e` label (adding the
+  label starts a run). The label is read live from the PR, not from the run's event, so re-running an
+  older run sees the labels the PR has now. The agent that opens the PR decides:
+  - **Add `run-e2e`** when the change touches a full user flow (auth, entry forms and the quick-add,
+    reconciliation, shared money, the wizards), a shared primitive many pages use, money or
+    currency conversion on the API — or anything the agent did NOT verify in the browser itself.
+  - **Leave it off** for a contained UI change it verified in the browser, copy or style changes, a
+    component used by one page, or API work covered by its own tests.
+- **The net.** Every night at 03:17 UTC on `main`. A red night — a failure, or a run that did not
+  finish (a timeout reports as cancelled) — opens one issue labelled `e2e-red` (or comments on the
+  one already open); the first green night closes it. A manual run dispatched ON `main` with `report`
+  ticked updates the issue the same way; on any other branch it never touches it. On top of that, a
+  full run at the end of every structured block of work, and for unstructured work the agent asks
+  Santi.
 
-**Phase 2: Automatic on PRs.**
+**While iterating, run targeted specs locally; the full suite runs in CI through the floor or the
+label.**
 
-- Add `pull_request` to the trigger: `on: [workflow_dispatch, pull_request]`.
-- Filter by paths so the workflow only runs when `apps/web/**` or `playwright.config.ts` or `tests/e2e/**` changed.
-- Add a step that posts a sticky comment on the PR with embedded screenshots and a link to the HTML report. Use `marocchino/sticky-pull-request-comment` or equivalent.
-- Continue tuning until stable enough to be a required check.
+`e2e-required` is the check to mark REQUIRED (a repository setting, not something the workflow
+decides). It reports on every run and fails only when a job it needs failed or was cancelled, so a PR
+whose gate skipped `e2e-web` passes. The gate lives in the job rather than in `on.paths` because a
+workflow skipped by a path filter leaves a required check pending forever.
 
-**Decisions already made for the CI work:**
+### What the job does
 
-- Start with `workflow_dispatch` (manual) before going automatic.
-- One job, serial execution, chromium only at the start.
-- Artifacts always uploaded, even on success — gives the user the screenshots embedded in the PR comment in Phase 2.
-- Use the same Postgres image and schema init flow as local `pnpm db:init`. Do not invent a separate CI-only setup.
+One job, serial, Chromium only, built from the same pieces a developer uses:
 
-When picking this work up, read this section in full first, then proceed.
+1. **Database:** `pnpm db:init`, unchanged — compose's Postgres image, `00_roles.sql`,
+   `01_create_tables.sql`, an Alembic stamp. No CI-only schema path.
+2. **Web:** a PRODUCTION build (`pnpm build:ui`, `pnpm build:web`, then `pnpm --filter web start`), so
+   no test's budget is spent compiling a route on first request — the cause of every cold-start
+   timeout the specs' comments describe. The API runs under `uvicorn` on the `renly_app` /
+   `renly_admin` role split, with `EMAIL_PROVIDER=console` and a JWT / NextAuth secret generated per
+   run.
+3. **Exchange rates** are seeded before any API starts (it caches what it reads): today's, as the
+   fallback a provider outage would otherwise leave missing, and a set three months back that no live
+   fetch writes. The startup fetch still runs and simply replaces today's rows.
+4. **The harness account** is a throwaway `@example.com` user with a per-run password, registered
+   against a short-lived `SIGNUP_MODE=open` API that is stopped before the real one starts — the
+   invite-gate spec needs the launch default, `invite`. It is then verified in SQL and given what the
+   authenticated specs assume of a lived-in account: two display currencies (ARS + USD); a card owing
+   a USD and an ARS charge from three months ago plus a USD one from today; and 30 past-dated expenses
+   (so `/expenses` renders its pager, and an expense a spec adds today still lands on page one). The
+   card holds BOTH currencies because the conversion-basis spec checks each display currency, and a
+   bucket already in the display currency never converts — each pass needs one in the other
+   currency, dated where the rate differs from today's. **A new spec that assumes account data adds
+   it to this step.**
+5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200. Locally,
+   `globalSetup` makes the same check first and fails at once with "start the web and API servers"
+   when either is not running (a port that refuses the connection); a server that is up but slow — a
+   cold `next dev` compile — gets a warning and the run carries on.
+6. **Run:** `pnpm --filter web test:e2e` with `CI=true` (so `forbidOnly` + `retries: 2`), plus two
+   reporters the config adds only in CI — `github`, which annotates the PR diff at each failure, and
+   `json`, written to `test-results/results.json`.
+7. **Require a full run:** a step reads that JSON against the spec files ON DISK and fails the job
+   unless every `*.auth.spec.ts` executed a test in `chromium-authenticated`, every other `*.spec.ts`
+   executed one in `chromium`, and nothing skipped. Each is a way the suite exits 0 on less than
+   itself: unset credentials drop the authenticated project, a `testMatch` that stops matching leaves
+   it running nothing, and a missing seed makes the conversion-basis spec skip. So **no spec may skip
+   in CI** — a spec that genuinely cannot run there has to be made to run, not skipped.
+8. **Artifacts** (14 days, uploaded on every run): the HTML report (`playwright-report`), the API and
+   web server logs (`e2e-server-logs`), and `playwright-test-results` — which holds traces, screenshots
+   and videos only for tests that FAILED (they are `retain-on-failure`), plus the JSON results. To read
+   a failure: download `playwright-report`, then `pnpm --filter web exec playwright show-report <dir>`.
+   The per-run secrets are masked in the job LOG only; a failed test's trace records its requests and
+   can hold the harness session's bearer token (no spec sends the password — they read the token from
+   the saved session). That is harmless — the account and its database are discarded with the runner —
+   but it is why the harness account must stay per-run and throwaway.
+
+Browser binaries are cached on the lockfile hash; on a hit only the system dependencies install.
 
 ## Glossary
 

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { chromium, type FullConfig } from '@playwright/test';
 
+import { API_BASE } from './helpers/api';
 import { AUTH_STATE_PATH, e2eCredentials } from './helpers/auth';
 
 // Route literals mirror apps/web/config/routes.ts. Kept local like the two logged-out specs' — the
@@ -12,6 +13,51 @@ const PROTECTED_PATH = '/dashboard';
 // Long enough for a cold dev server's first compile of /login, short enough that a wrong password
 // fails the run in seconds rather than making it look hung.
 const LOGIN_TIMEOUT_MS = 15_000;
+
+// How long the preflight waits for a response before it stops waiting. Not a verdict: a server that
+// accepted the connection is up however long it takes to answer.
+const PREFLIGHT_TIMEOUT_MS = 10_000;
+
+/*
+ * Checks that the web app and the API are both running before any spec does. The suite never starts
+ * them itself, and without this a forgotten server surfaces as every spec timing out on its first
+ * navigation — a minute of failures that name the symptom and not the cause.
+ *
+ * Only a failure to CONNECT means "not running" (the port is closed, the host does not resolve), and
+ * only that fails the run. A server that accepted the connection and has not answered within the
+ * budget is up and busy — a cold `next dev` spends 20s and more compiling its first route — so a
+ * timeout is reported and the run carries on: the specs' own budgets judge a slow page, and a
+ * preflight that called it "down" would abort exactly the run that was about to work. ANY response
+ * counts as up: this asks whether something is listening, not whether it is healthy. It runs for the
+ * logged-out specs too, because the signup page they visit asks the API for its mode.
+ */
+async function preflight(baseURL: string) {
+  const targets = [
+    { name: 'web app', url: baseURL },
+    { name: 'API', url: `${API_BASE}/health` },
+  ];
+  const down: string[] = [];
+  for (const { name, url } of targets) {
+    try {
+      await fetch(url, { signal: AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS), redirect: 'manual' });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        console.warn(
+          `E2E preflight: the ${name} at ${url} accepted the connection but has not answered in ` +
+            `${PREFLIGHT_TIMEOUT_MS / 1000}s (a cold compile?). Continuing.`,
+        );
+      } else {
+        down.push(`the ${name} at ${url}`);
+      }
+    }
+  }
+  if (down.length > 0) {
+    throw new Error(
+      `E2E preflight: nothing is listening at ${down.join(' or ')}. Start the web and API servers ` +
+        `(\`pnpm dev\` from the repo root), or point PLAYWRIGHT_BASE_URL / E2E_API_URL at them.`,
+    );
+  }
+}
 
 /*
  * Authenticates once for the whole run and saves the browser state to tests/e2e/.auth (gitignored),
@@ -27,10 +73,13 @@ const LOGIN_TIMEOUT_MS = 15_000;
  * for reasons that look unrelated.
  *
  * Credentials come from E2E_EMAIL / E2E_PASSWORD. When they are unset the whole authenticated project
- * is skipped by the config, so this never runs — the same env-gating the API's integration suites use,
- * so a fresh clone's `pnpm test:e2e` still passes on the logged-out specs alone.
+ * is skipped by the config and this stops after the preflight — the same env-gating the API's
+ * integration suites use, so a fresh clone's `pnpm test:e2e` still passes on the logged-out specs.
  */
 async function globalSetup(config: FullConfig) {
+  const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3000';
+  await preflight(baseURL);
+
   const credentials = e2eCredentials();
   if (!credentials) return;
 
@@ -39,7 +88,6 @@ async function globalSetup(config: FullConfig) {
   if (existsSync(AUTH_STATE_PATH)) rmSync(AUTH_STATE_PATH);
   mkdirSync(dirname(AUTH_STATE_PATH), { recursive: true });
 
-  const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3000';
   const browser = await chromium.launch();
   const page = await browser.newPage({ baseURL });
 

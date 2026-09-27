@@ -197,6 +197,8 @@ Apply `api`, `web`, or both depending on which apps the PR touches. These are in
 
 **Other labels:** `integration` (external service), `not-a-bug fix` (styling/UX fixes that aren't bugs).
 
+**`run-e2e`:** add it when the change needs the full Playwright suite in CI and does not already touch the e2e floor. The `e2e-testing` skill ("CI" → "When the suite runs") has the rubric for when it does.
+
 ## Example
 
 **Title:** `Implement iOS Shortcut Integration with Currency Config & Expense Source Tracking`

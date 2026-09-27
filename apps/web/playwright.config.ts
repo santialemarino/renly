@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { WEB_BASE } from './tests/e2e/helpers/api';
 import { AUTH_STATE_PATH, e2eCredentials } from './tests/e2e/helpers/auth';
 
 // `process.env.CI` arrives as a string — treat `"false"` and `"0"` as opt-outs so an explicit
@@ -8,10 +9,8 @@ import { AUTH_STATE_PATH, e2eCredentials } from './tests/e2e/helpers/auth';
 const ciEnv = process.env.CI;
 const isCI = !!ciEnv && ciEnv !== 'false' && ciEnv !== '0';
 
-// `||` (not `??`) so an empty `PLAYWRIGHT_BASE_URL=""` falls back to the default instead of
-// producing an unusable empty baseURL.
-// eslint-disable-next-line turbo/no-undeclared-env-vars
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+// One definition, shared with the API helper so the browser and the specs' session reads agree.
+const baseURL = WEB_BASE;
 
 /*
  * The authenticated project runs only when E2E_EMAIL / E2E_PASSWORD name a real account — the same
@@ -22,7 +21,8 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const authenticated = e2eCredentials() !== null;
 
 // Playwright configuration for the Renly web app.
-// Tests live under tests/e2e/ and run against a local dev server on port 3000.
+// Tests live under tests/e2e/ and run against an already-running web app (a local dev server on port
+// 3000 by default, a production build in CI) — globalSetup fails fast when nothing answers there.
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
@@ -31,7 +31,16 @@ export default defineConfig({
   // Single worker by default so files run serially too — `fullyParallel: false` only disables
   // intra-file parallelism. Bump this once the suite is large and tests are proven independent.
   workers: 1,
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  /*
+   * CI adds two: `github` turns each failure into an annotation on the PR's diff, and `json` writes
+   * the results the workflow checks after the run — that every spec file executed in its project and
+   * that nothing skipped: the ways a run can go green on less than the whole suite.
+   */
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ...(isCI ? ([['github'], ['json', { outputFile: 'test-results/results.json' }]] as const) : []),
+  ],
   outputDir: 'test-results',
   // Logs in once and saves the state the authenticated project loads. A no-op when unconfigured.
   globalSetup: './tests/e2e/global-setup.ts',

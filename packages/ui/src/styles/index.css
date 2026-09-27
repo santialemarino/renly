@@ -182,6 +182,48 @@
   }
 }
 
+/*
+ * Reduced motion for every tw-animate-css enter/exit — the open/close of the Dialog, Popover, Select,
+ * Tooltip and Sheet, and of any primitive or element that uses the family later. Gated by FAMILY rather
+ * than by component: every zoom-*, slide-*, and spin-* utility only sets a --tw-enter-* / --tw-exit-*
+ * variable, and the one pair of keyframes (`enter` / `exit`, run by animate-in / animate-out) is what
+ * reads them into a transform. Resetting those variables on the animated element turns every such
+ * animation into opacity-only, whichever utilities or variants built it; no component needs its own
+ * gate. The variables are registered `inherits: false`, so they must be reset on the element that
+ * carries the animation, which is exactly what the selectors match.
+ *
+ * Unlayered and attribute-substring, for the same reasons as the Collapsible gate above: it beats every
+ * `@layer utilities` rule regardless of specificity, and it matches `animate-in` under any variant
+ * (`data-[state=open]:animate-in`, bare, group-…). The animation itself is kept, not removed: Radix
+ * Presence waits for `animationend` to unmount a closing primitive, and the fade is the feedback.
+ *
+ * An enter/exit with no fade of its own (the Sheet panel's slide, a bare zoom-in icon) would otherwise
+ * keep nothing visible: it would pop in, and on close sit motionless for its full duration and then
+ * vanish. Those get a fade instead, so each one still reads as an opacity-only transition. One that
+ * already sets its own opacity (`fade-in-0`, `fade-out-0`) keeps it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [class*='animate-in'],
+  [class*='animate-out'] {
+    --tw-enter-scale: 1;
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-enter-rotate: 0;
+    --tw-exit-scale: 1;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+    --tw-exit-rotate: 0;
+  }
+
+  [class*='animate-in']:not([class*='fade-in']) {
+    --tw-enter-opacity: 0;
+  }
+
+  [class*='animate-out']:not([class*='fade-out']) {
+    --tw-exit-opacity: 0;
+  }
+}
+
 @layer utilities {
   /* Safe area, number inputs, scrollbar hide */
   .min-h-safe-bottom {

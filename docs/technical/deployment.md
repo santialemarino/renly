@@ -184,5 +184,9 @@ go-live as an additional layer.
 
 ## CI
 
-`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on every PR. They are not
-deploy pipelines — wiring a deploy step is done against the chosen host at go-live.
+`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app.
+`ci.web-e2e.yml` runs the Playwright suite against compose's Postgres (built by `pnpm db:init`), the
+API and a production web build: on a PR that touches its floor paths or carries the `run-e2e` label,
+every night on `main`, and on demand. Its `e2e-required` job is the one to mark as a required check.
+The `e2e-testing` skill describes the job. None of them is a deploy pipeline — wiring a deploy step is
+done against the chosen host at go-live.
