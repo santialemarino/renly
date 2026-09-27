@@ -31,14 +31,16 @@ import { todayInTimezone } from '@/lib/utils/dates';
  * reason.
  *
  * This owner is rendered by the protected LAYOUT, so a static import would put every entry form in
- * the client graph of all twenty-odd protected routes. Measured
- * on the production build, per route, static → dynamic: `/dashboard` 1680 → 1560 KiB, `/notifications`
- * 1326 → 1206 KiB, `/snapshots` 1346 → 1254 KiB. Two of those three render no entry form at all.
+ * the client graph of all twenty-odd protected routes. Measured on the production build, per route,
+ * static → dynamic: `/dashboard` 1680 → 1560 KiB, `/notifications` 1326 → 1206 KiB, `/snapshots`
+ * 1346 → 1254 KiB. Two of those three render no entry form at all.
  *
  * Deferring costs the user nothing, which is what makes it the right trade rather than a compromise:
  * `handleOpen` already awaits six reads before it opens anything, with the trigger in its loading
- * state, so the chunks arrive alongside a wait that was already happening. `ssr: false` because
- * nothing here renders until a click.
+ * state, so the chunks arrive alongside a wait that was already happening. And the dialogs are not
+ * RENDERED until that first open (`hasOpened` below): a `dynamic` component starts fetching its chunk
+ * the moment it renders, even closed, so rendering them up front would download every form on every
+ * protected page load. `ssr: false` because nothing here renders until a click.
  */
 const loadExpenseForm = () => import('@/app/(protected)/_components/expense-form-dialog');
 const loadIncomeForm = () => import('@/app/(protected)/_components/income-form-dialog');
@@ -152,6 +154,13 @@ export function QuickAddProvider({
   const { setOpenMobile } = useSidebar();
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState<QuickAddContext>(EMPTY_CONTEXT);
+  /*
+   * Whether the reader has opened the quick-add at all. Until then no dialog renders, so no form chunk
+   * is fetched on a page load; `handleOpen` preloads them all before setting it, so the first open is
+   * as instant as the ones after it. It never goes back to false: the forms stay mounted (closed)
+   * afterwards, which keeps their exit animations and every later swap instant.
+   */
+  const [hasOpened, setHasOpened] = useState(false);
   // Amount-mismatch follow-up, held here so the prompt survives the entry form's close animation.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
   const {
@@ -207,6 +216,7 @@ export function QuickAddProvider({
     ]);
     setLoading(false);
     setContext(loaded);
+    setHasOpened(true);
     // Closes the mobile sheet, which would otherwise sit behind the dialog with its own overlay — safe
     // only because the forms are owned out here, so the sheet unmounting takes nothing of ours with
     // it. A no-op on desktop, where the sidebar is never a sheet.
@@ -245,96 +255,100 @@ export function QuickAddProvider({
     <QuickAddControlsContext.Provider value={controls}>
       {children}
 
-      <ExpenseFormDialog
-        open={open && draft.type === 'expense' && draft.scope === PRIVATE_SCOPE}
-        onOpenChange={setOpen}
-        preferredCurrencies={preferredCurrencies}
-        supportedCurrencies={supportedCurrencies}
-        creditCards={context.creditCards}
-        accounts={context.accounts}
-        activeObligations={context.obligations}
-        activeSubscriptions={context.subscriptions}
-        activeInstallments={context.installments}
-        scopeGroups={context.groups}
-        onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
-        onEntryTypeChange={swapEntryType}
-        prefill={expensePrefill}
-        prefillAccountId={prefillAccountId}
-        onSuccess={() => router.refresh()}
-        onLinkedPlanSave={(values, plan) =>
-          setMismatch({
-            type: plan.type,
-            planId: plan.id,
-            planName: plan.name,
-            enteredAmount: values.amount,
-            currentAmount: plan.amount,
-            currency: plan.currency,
-          })
-        }
-      />
+      {hasOpened && (
+        <>
+          <ExpenseFormDialog
+            open={open && draft.type === 'expense' && draft.scope === PRIVATE_SCOPE}
+            onOpenChange={setOpen}
+            preferredCurrencies={preferredCurrencies}
+            supportedCurrencies={supportedCurrencies}
+            creditCards={context.creditCards}
+            accounts={context.accounts}
+            activeObligations={context.obligations}
+            activeSubscriptions={context.subscriptions}
+            activeInstallments={context.installments}
+            scopeGroups={context.groups}
+            onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
+            onEntryTypeChange={swapEntryType}
+            prefill={expensePrefill}
+            prefillAccountId={prefillAccountId}
+            onSuccess={() => router.refresh()}
+            onLinkedPlanSave={(values, plan) =>
+              setMismatch({
+                type: plan.type,
+                planId: plan.id,
+                planName: plan.name,
+                enteredAmount: values.amount,
+                currentAmount: plan.amount,
+                currency: plan.currency,
+              })
+            }
+          />
 
-      <IncomeFormDialog
-        open={open && draft.type === 'income' && draft.scope === PRIVATE_SCOPE}
-        onOpenChange={setOpen}
-        preferredCurrencies={preferredCurrencies}
-        supportedCurrencies={supportedCurrencies}
-        accounts={context.accounts}
-        scopeGroups={context.groups}
-        onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
-        onEntryTypeChange={swapEntryType}
-        prefill={incomePrefill}
-        prefillAccountId={prefillAccountId}
-        onSuccess={() => router.refresh()}
-      />
+          <IncomeFormDialog
+            open={open && draft.type === 'income' && draft.scope === PRIVATE_SCOPE}
+            onOpenChange={setOpen}
+            preferredCurrencies={preferredCurrencies}
+            supportedCurrencies={supportedCurrencies}
+            accounts={context.accounts}
+            scopeGroups={context.groups}
+            onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
+            onEntryTypeChange={swapEntryType}
+            prefill={incomePrefill}
+            prefillAccountId={prefillAccountId}
+            onSuccess={() => router.refresh()}
+          />
 
-      {/*
-       * Each shared form is mounted only once its own scope AND type are what the draft names. The
-       * dialog reads that group's shared accounts when it opens, so mounting one per group up front
-       * would be a request each for a form the user has not asked for.
-       */}
-      {scopedGroup && draft.type === 'expense' && (
-        <SharedExpenseFormDialog
-          open={open}
-          onOpenChange={setOpen}
-          group={scopedGroup}
-          prefill={expensePrefill}
-          accounts={context.accounts}
-          creditCards={context.creditCards}
-          preferredCurrencies={preferredCurrencies}
-          supportedCurrencies={supportedCurrencies}
-          timeZone={timeZone}
-          scopeGroups={context.groups}
-          onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
-          onEntryTypeChange={swapEntryType}
-          onSuccess={() => router.refresh()}
-        />
+          {/*
+           * Each shared form is mounted only once its own scope AND type are what the draft names. The
+           * dialog reads that group's shared accounts when it opens, so mounting one per group up front
+           * would be a request each for a form the user has not asked for.
+           */}
+          {scopedGroup && draft.type === 'expense' && (
+            <SharedExpenseFormDialog
+              open={open}
+              onOpenChange={setOpen}
+              group={scopedGroup}
+              prefill={expensePrefill}
+              accounts={context.accounts}
+              creditCards={context.creditCards}
+              preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
+              timeZone={timeZone}
+              scopeGroups={context.groups}
+              onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
+              onEntryTypeChange={swapEntryType}
+              onSuccess={() => router.refresh()}
+            />
+          )}
+
+          {scopedGroup && draft.type === 'income' && (
+            <SharedIncomeFormDialog
+              open={open}
+              onOpenChange={setOpen}
+              group={scopedGroup}
+              prefill={incomePrefill}
+              accounts={context.accounts}
+              preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
+              timeZone={timeZone}
+              scopeGroups={context.groups}
+              onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
+              onEntryTypeChange={swapEntryType}
+              onSuccess={() => router.refresh()}
+            />
+          )}
+
+          <LinkedPlanAmountMismatchDialog
+            mismatch={mismatch}
+            onClose={() => setMismatch(null)}
+            onConfirmed={() => {
+              setMismatch(null);
+              router.refresh();
+            }}
+          />
+        </>
       )}
-
-      {scopedGroup && draft.type === 'income' && (
-        <SharedIncomeFormDialog
-          open={open}
-          onOpenChange={setOpen}
-          group={scopedGroup}
-          prefill={incomePrefill}
-          accounts={context.accounts}
-          preferredCurrencies={preferredCurrencies}
-          supportedCurrencies={supportedCurrencies}
-          timeZone={timeZone}
-          scopeGroups={context.groups}
-          onScopeChange={(scope, values) => swapTo({ type: 'income', scope, prefill: values })}
-          onEntryTypeChange={swapEntryType}
-          onSuccess={() => router.refresh()}
-        />
-      )}
-
-      <LinkedPlanAmountMismatchDialog
-        mismatch={mismatch}
-        onClose={() => setMismatch(null)}
-        onConfirmed={() => {
-          setMismatch(null);
-          router.refresh();
-        }}
-      />
     </QuickAddControlsContext.Provider>
   );
 }

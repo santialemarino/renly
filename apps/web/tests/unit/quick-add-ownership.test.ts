@@ -26,7 +26,14 @@ import { describe, expect, it } from 'vitest';
  *     exposed to a closed Sheet.
  *
  * JSX is matched as parsed opening tags, never by grepping names: a comment, a string or a closing tag
- * that mentions `ExpenseFormDialog` is not a render of it, and a regex cannot tell them apart.
+ * that mentions `ExpenseFormDialog` is not a render of it, and a regex cannot tell them apart. A tag
+ * is resolved through the file's own imports, so an aliased import (`ExpenseFormDialog as Form`) is
+ * still the form, and "inside a sidebar component" covers JSX passed in a PROP as well as in children
+ * (`<AppSidebar footer={<ExpenseFormDialog />} />`).
+ *
+ * NOT covered, stated rather than implied: a form handed over as a component VALUE rather than as
+ * JSX (`<AppSidebar dialog={ExpenseFormDialog} />`, or via a variable), since nothing in the element
+ * tree names it — the e2e spec at a phone width is what catches that.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,8 +57,8 @@ interface Module {
   specifiers: string[];
   // Only the `import('…')` ones.
   dynamicSpecifiers: string[];
-  // Local names bound by a named import, keyed by name, valued by the specifier they came from.
-  namedImports: Map<string, string>;
+  // Local names bound by a named import, keyed by the LOCAL name (an alias, when there is one).
+  namedImports: Map<string, { specifier: string; imported: string }>;
   exports: string[];
   // Every JSX element, as its tag name plus the tag names of every element nested inside it.
   elements: { tag: string; descendants: string[] }[];
@@ -109,7 +116,12 @@ function parse(path: string): Module {
       mod.specifiers.push(specifier);
       const bindings = node.importClause?.namedBindings;
       if (bindings && ts.isNamedImports(bindings)) {
-        bindings.elements.forEach((element) => mod.namedImports.set(element.name.text, specifier));
+        bindings.elements.forEach((element) =>
+          mod.namedImports.set(element.name.text, {
+            specifier,
+            imported: (element.propertyName ?? element.name).text,
+          }),
+        );
       }
     }
     if (
@@ -141,7 +153,8 @@ function parse(path: string): Module {
       mod.elements.push({ tag: tagName(node.openingElement), descendants: tagsWithin(node) });
     }
     if (ts.isJsxSelfClosingElement(node)) {
-      mod.elements.push({ tag: tagName(node), descendants: [] });
+      // Its descendants are whatever JSX its attributes carry — a form passed in a prop.
+      mod.elements.push({ tag: tagName(node), descendants: tagsWithin(node) });
     }
     if (
       ts.isJsxAttribute(node) &&
@@ -188,12 +201,20 @@ function closure(roots: string[]): Set<string> {
   return seen;
 }
 
-// The modules that render the base Sheet-capable `<Sidebar>` imported from @repo/ui.
+// The file a tag's component comes from, when the module imports it from an app-local path.
+function tagSource(mod: Module, tag: string): string | null {
+  const binding = mod.namedImports.get(tag);
+  return binding ? resolveSpecifier(mod.path, binding.specifier) : null;
+}
+
+// Whether `tag`, in `mod`, is the base Sheet-capable `<Sidebar>` from @repo/ui, under any local name.
+function isSheetTag(mod: Module, tag: string): boolean {
+  const binding = mod.namedImports.get(tag);
+  return binding?.specifier === UI_COMPONENTS && binding.imported === SHEET_COMPONENT;
+}
+
 const SIDEBAR_ROOTS = [...MODULES.values()]
-  .filter(
-    (mod) =>
-      mod.namedImports.get(SHEET_COMPONENT) === UI_COMPONENTS && rendersTag(mod, SHEET_COMPONENT),
-  )
+  .filter((mod) => mod.elements.some((el) => isSheetTag(mod, el.tag)))
   .map((mod) => mod.path);
 const SIDEBAR_TREE = closure(SIDEBAR_ROOTS);
 
@@ -222,6 +243,12 @@ const OWNED_DIALOGS = [
 ];
 // The component names those modules export — what a render of one of them has to spell as its tag.
 const OWNED_DIALOG_NAMES = new Set(OWNED_DIALOGS.flatMap((path) => MODULES.get(path)!.exports));
+
+// Whether `tag`, in `mod`, renders an owned dialog: imported from one under any local name, or spelled
+// with one's exported name.
+function isOwnedDialogTag(mod: Module, tag: string): boolean {
+  return OWNED_DIALOGS.includes(tagSource(mod, tag) ?? '') || OWNED_DIALOG_NAMES.has(tag);
+}
 
 describe('the quick-add forms are owned outside the sidebar', () => {
   it('derives a population worth checking', () => {
@@ -264,7 +291,7 @@ describe('the quick-add forms are owned outside the sidebar', () => {
   it('renders no owned dialog in any sidebar module', () => {
     const offenders = [...SIDEBAR_TREE].flatMap((path) =>
       (MODULES.get(path)?.elements ?? [])
-        .filter((el) => OWNED_DIALOG_NAMES.has(el.tag))
+        .filter((el) => isOwnedDialogTag(MODULES.get(path)!, el.tag))
         .map((el) => `${rel(path)}: <${el.tag}>`),
     );
     expect(offenders).toEqual([]);
@@ -273,13 +300,17 @@ describe('the quick-add forms are owned outside the sidebar', () => {
   it('passes no owned dialog INTO the sidebar as a child', () => {
     // A module outside the tree can still put a form inside the Sheet by nesting it under a sidebar
     // component — the import walk above cannot see that, the element tree can.
-    const sidebarComponents = new Set(
-      [...SIDEBAR_TREE].flatMap((path) => MODULES.get(path)?.exports ?? []).concat(SHEET_COMPONENT),
+    const sidebarExports = new Set(
+      [...SIDEBAR_TREE].flatMap((path) => MODULES.get(path)?.exports ?? []),
     );
+    const isSidebarTag = (mod: Module, tag: string) =>
+      isSheetTag(mod, tag) ||
+      SIDEBAR_TREE.has(tagSource(mod, tag) ?? '') ||
+      sidebarExports.has(tag);
     const offenders = [...MODULES.values()].flatMap((mod) =>
       mod.elements
-        .filter((el) => sidebarComponents.has(el.tag))
-        .flatMap((el) => el.descendants.filter((tag) => OWNED_DIALOG_NAMES.has(tag)))
+        .filter((el) => isSidebarTag(mod, el.tag))
+        .flatMap((el) => el.descendants.filter((tag) => isOwnedDialogTag(mod, tag)))
         .map((tag) => `${rel(mod.path)}: <${tag}> inside a sidebar component`),
     );
     expect(offenders).toEqual([]);
