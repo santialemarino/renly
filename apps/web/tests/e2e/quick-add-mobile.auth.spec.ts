@@ -1,12 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE, apiToken } from './helpers/api';
-import {
-  createExpenseViaQuickAdd,
-  deleteExpenseByMarker,
-  expenseRow,
-  testMarker,
-} from './helpers/factories';
+import { deleteExpenseByMarker, expenseRow, testMarker } from './helpers/factories';
 
 // Route literals mirror apps/web/config/routes.ts, kept local like every spec's. /snapshots rather
 // than the dashboard, which auto-starts the welcome tour on an account that has not finished
@@ -47,6 +42,15 @@ const OUTLAST_MS = 1_000;
  */
 const QUICK_ADD_OPEN_MS = 20_000;
 
+// The `id` each entry form's `<form>` carries, as it appears in the compiled chunk that ships it — how
+// a fetched script is recognised as a form chunk.
+const FORM_CHUNK_MARKERS = [
+  '"expense-form"',
+  '"income-form"',
+  '"shared-expense-form"',
+  '"shared-income-form"',
+];
+
 const TYPE_INCOME = /^(Income|Ingreso)$/;
 const TYPE_EXPENSE = /^(Expense|Gasto)$/;
 
@@ -82,6 +86,33 @@ async function expectFormSurvives(page: Page, form: string, probe: string) {
   await expect(notes).toHaveValue(probe);
 }
 
+/*
+ * Records which form chunks the page fetches, from the moment it is called. Every JS response body is
+ * read and checked for a form's id; `seen()` waits for the reads still in flight before answering, so
+ * a chunk that arrived just before the question is not missed.
+ */
+function watchFormChunks(page: Page) {
+  const found = new Set<string>();
+  const reads: Promise<void>[] = [];
+  page.on('response', (response) => {
+    if (!new URL(response.url()).pathname.endsWith('.js')) return;
+    reads.push(
+      response
+        .text()
+        .then((body) =>
+          FORM_CHUNK_MARKERS.filter((m) => body.includes(m)).forEach((m) => found.add(m)),
+        )
+        .catch(() => undefined),
+    );
+  });
+  return {
+    seen: async () => {
+      await Promise.all(reads);
+      return [...found];
+    },
+  };
+}
+
 // Swaps the open form's entry TYPE through its own toggle — the expense ↔ income swap.
 async function swapType(page: Page, type: RegExp) {
   await dialogs(page).getByRole('radio', { name: type }).click();
@@ -110,9 +141,11 @@ async function swapScope(page: Page, groupName: string | null) {
 test.describe('quick-add forms outlive the mobile sheet (signed in)', () => {
   const groupName = testMarker('quick-add-group');
   let groupId: number | null = null;
+  // Read once and reused by the teardown, so the cleanup cannot fail on a second read and leak the group.
+  let token = '';
 
   test.beforeAll(async ({ request }) => {
-    const token = await apiToken(request);
+    token = await apiToken();
     const response = await request.post(`${API_BASE}/groups`, {
       headers: { Authorization: `Bearer ${token}` },
       data: { name: groupName, kind: 'other' },
@@ -123,7 +156,6 @@ test.describe('quick-add forms outlive the mobile sheet (signed in)', () => {
 
   test.afterAll(async ({ request }) => {
     if (groupId === null) return;
-    const token = await apiToken(request);
     await request.delete(`${API_BASE}/groups/${groupId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -159,18 +191,52 @@ test.describe('quick-add forms outlive the mobile sheet (signed in)', () => {
     try {
       await page.setViewportSize(PHONE);
       await page.goto(START);
-      await page.locator(HAMBURGER).click();
-      await expect(page.locator(NAV)).toBeVisible();
+      await openFromSheet(page);
 
-      // The factory clicks the trigger, fills the amount and notes, submits, and waits for the form to
-      // close as the save's acknowledgement. On the broken shape it fails at the fill: the form it is
-      // typing into has already been unmounted with the sheet.
-      await createExpenseViaQuickAdd(page, marker, '42.50');
+      /*
+       * The survival check comes BEFORE any typing, and that order is the test. On the old shape the
+       * form lived about 300ms after appearing — enough for a fast fill and submit to land inside it,
+       * so a flow that typed straight away passed on the very bug. Waiting out the sheet first means
+       * the save below can only happen in a form that outlived it.
+       */
+      await expectFormSurvives(page, EXPENSE_FORM, marker);
+
+      await page.getByTestId('expense-form-amount').fill('42.50');
+      await page.getByTestId('expense-form-submit').click();
+      // The dialog closing is the save's own acknowledgement — the submit handler closes it only after
+      // the action resolves.
+      await expect(page.getByTestId('expense-form-notes')).toBeHidden();
 
       await page.goto(EXPENSES);
       await expect(expenseRow(page, marker)).toHaveCount(1);
     } finally {
       await deleteExpenseByMarker(page, marker);
+    }
+  });
+
+  test('no form chunk downloads before the first open, at either width', async ({ page }) => {
+    /*
+     * The forms are `next/dynamic` so they stay out of every protected page's bundle — but a dynamic
+     * component fetches its chunk as soon as it RENDERS, open or not. Rendered from page load, they
+     * downloaded on every protected page at every width; the owner now renders them only after the
+     * first open. The second half is the premise: the same watcher does see the chunks once the
+     * quick-add is opened, so an empty first answer means "not fetched", not "not recognisable".
+     */
+    for (const viewport of [PHONE, DESKTOP]) {
+      await page.setViewportSize(viewport);
+      const chunks = watchFormChunks(page);
+      await page.goto(START, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(OUTLAST_MS);
+      expect(await chunks.seen(), `form chunks fetched at load, width ${viewport.width}`).toEqual(
+        [],
+      );
+
+      if (viewport === PHONE) await openFromSheet(page);
+      else await page.getByTestId('quick-add-trigger').click();
+      await expect(page.locator(EXPENSE_FORM)).toBeVisible({ timeout: QUICK_ADD_OPEN_MS });
+      expect(await chunks.seen()).toContain('"expense-form"');
+      await page.keyboard.press('Escape');
+      await expect(dialogs(page)).toHaveCount(0);
     }
   });
 
