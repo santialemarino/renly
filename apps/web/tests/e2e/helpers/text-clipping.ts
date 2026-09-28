@@ -22,9 +22,16 @@ import { findSettledClipping, type Clipping, type ClippingReport } from './overf
  *      whose tooltip, once opened, reads the whole text (`tooltipShowsFullText` opens it — a trigger
  *      is only a claim). An `aria-label` does not count: the DOM already gives assistive tech the
  *      whole text, and what the truncation hides it hides from SIGHTED readers, whom only a visible
- *      cue reaches.
+ *      cue reaches;
+ *   4. the box still shows a real part of the text: at least `MIN_VISIBLE_EM` ems of its own font
+ *      size. A name squeezed to two letters and an ellipsis is hidden, not truncated, whatever its
+ *      tooltip says — which is what a shrink-0 badge beside it did on /payments-calendar in Spanish.
  * `tests/e2e/truncation-rule.spec.ts` pins each clause against a page built to break it.
  */
+
+// Six ems is about eight characters of body text: enough to tell two names apart. The narrowest
+// deliberate truncation in the app (a sidebar item's label) shows about eight and a half.
+export const MIN_VISIBLE_EM = 6;
 
 export const TEXT_PROBE_ATTRIBUTE = 'data-text-probe';
 // Set by the harness on each clipped element, so a tooltip cue can be hovered and read.
@@ -59,17 +66,23 @@ export async function markTextElements(page: Page): Promise<void> {
   }, TEXT_PROBE_ATTRIBUTE);
 }
 
-// Clauses 1-3 of the rule above, as far as the DOM alone can answer them. A `tooltip` cue still has to
+// Clauses 1-4 of the rule above, as far as the DOM alone can answer them. A `tooltip` cue still has to
 // pass `tooltipShowsFullText`.
 export function isAllowedTruncation(clipping: Clipping): boolean {
-  return clipping.ownBoxOnly && clipping.ellipsis && clipping.cue !== null;
+  return (
+    clipping.ownBoxOnly &&
+    clipping.ellipsis &&
+    clipping.cue !== null &&
+    clipping.visibleEm >= MIN_VISIBLE_EM
+  );
 }
 
 // Why a clipping is a finding, in the rule's terms.
 export function describeFinding(clipping: Clipping): string {
   if (!clipping.ownBoxOnly) return clipping.reason;
   if (!clipping.ellipsis) return `${clipping.reason}, cut with no ellipsis`;
-  return `${clipping.reason}, truncated with no full-text cue`;
+  if (clipping.cue === null) return `${clipping.reason}, truncated with no full-text cue`;
+  return `${clipping.reason}, squeezed to ${clipping.visibleEm.toFixed(1)}em (under ${MIN_VISIBLE_EM}em shows almost nothing)`;
 }
 
 // Every text element on the page, measured once the layout has settled. The retry only waits on
@@ -91,8 +104,15 @@ export async function tooltipShowsFullText(page: Page, clipping: Clipping): Prom
   const target = page.locator(`[${CLIPPED_MARK_ATTRIBUTE}="${clipping.index}"]`);
   const fullText = clipping.text.replace(/\s+/g, ' ').trim();
   const tooltip = page.getByRole('tooltip');
-  // Centred first, so a fixed bar at the viewport's edge (the cookie notice) is never over it.
-  await target.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
+  /*
+   * The cookie notice is fixed over the bottom of the viewport, and a row near the end of a page
+   * cannot scroll out from under it. It is hidden for the hover only — its own copy is page text the
+   * sweep measures like any other.
+   */
+  const notice = page.getByTestId('cookie-consent');
+  await notice.evaluateAll((els) =>
+    els.forEach((el) => ((el as HTMLElement).style.visibility = 'hidden')),
+  );
   await target.hover();
   let shown = true;
   try {
@@ -108,5 +128,8 @@ export async function tooltipShowsFullText(page: Page, clipping: Clipping): Prom
   await page.mouse.move(0, 0);
   await page.mouse.move(1, 1);
   await expect(tooltip).toHaveCount(0);
+  await notice.evaluateAll((els) =>
+    els.forEach((el) => ((el as HTMLElement).style.visibility = '')),
+  );
   return shown;
 }

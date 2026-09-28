@@ -57,6 +57,9 @@ export interface Clipping {
   // ellipsis` — what Tailwind's `truncate` produces on a block.
   ellipsis: boolean;
   cue: FullTextCue;
+  // How much of the text the element's own box shows, in ems of its own font size: a 14px name in a
+  // 28px box shows 2em — about two letters.
+  visibleEm: number;
 }
 
 export interface FindClippingOptions {
@@ -135,6 +138,7 @@ export async function findClipping(
         ownBoxOnly: boolean;
         ellipsis: boolean;
         cue: 'title' | 'tooltip' | null;
+        visibleEm: number;
       }[] = [];
 
       elements.forEach((el, index) => {
@@ -230,6 +234,7 @@ export async function findClipping(
             ownBoxOnly: ownBox && reasons.length === 1,
             ellipsis,
             cue,
+            visibleEm: hasBox(el) ? el.clientWidth / parseFloat(own.fontSize) : 0,
           });
         }
       });

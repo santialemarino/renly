@@ -4,6 +4,7 @@ import type { Clipping } from './helpers/overflow';
 import {
   findClippedText,
   isAllowedTruncation,
+  MIN_VISIBLE_EM,
   tooltipShowsFullText,
 } from './helpers/text-clipping';
 
@@ -61,6 +62,7 @@ test.describe('what counts as an allowed truncation', () => {
     await render(page, `<div class="truncate" title="${LONG}">${LONG}</div>`);
     const clipping = await onlyClipping(page);
     expect(clipping).toMatchObject({ ownBoxOnly: true, ellipsis: true, cue: 'title' });
+    expect(clipping!.visibleEm).toBeGreaterThanOrEqual(MIN_VISIBLE_EM);
     expect(isAllowedTruncation(clipping!)).toBe(true);
   });
 
@@ -115,6 +117,15 @@ test.describe('what counts as an allowed truncation', () => {
     );
     const clipping = await onlyClipping(page);
     expect(clipping).toMatchObject({ ellipsis: true, cue: 'title', ownBoxOnly: false });
+    expect(isAllowedTruncation(clipping!)).toBe(false);
+  });
+
+  test('a truncation squeezed to a few letters is a finding, cue or not', async ({ page }) => {
+    // 28px at 14px is 2em: an ellipsis and a letter or two. The same text in the 120px card passes.
+    await render(page, `<div class="truncate" style="width: 28px" title="${LONG}">${LONG}</div>`);
+    const clipping = await onlyClipping(page);
+    expect(clipping).toMatchObject({ ownBoxOnly: true, ellipsis: true, cue: 'title' });
+    expect(clipping!.visibleEm).toBeLessThan(MIN_VISIBLE_EM);
     expect(isAllowedTruncation(clipping!)).toBe(false);
   });
 
