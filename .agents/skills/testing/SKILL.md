@@ -129,6 +129,15 @@ pnpm test:e2e        # Playwright E2E
   - `test_shared_account_reconciliation.py` — the two `RLS_TEST_*` vars. A pot's account becoming
     reconcilable: which row a reconciliation locks (a locking read is governed by the UPDATE policy), who
     may write one, and the column grant that caps what an update may touch.
+  - `test_rls_account_scope_move.py` — the two `RLS_TEST_*` vars. Moving an account into a pot and back
+    through the service as `renly_app`, with and without reconciliations (whose denormalized scope must
+    follow it), and the row policy bounding every re-point at both ends — in two statement shapes, because
+    a statement that reads a column is also held to the READ policy, which masks a broken update policy.
+  - `test_update_column_privileges.py` — the two `RLS_TEST_*` vars. Every UPDATE the application can
+    issue, DERIVED from `app/` (Core `update()`, upserts, ORM attribute writes on typed rows, raw SQL),
+    held to what `renly_app` may update in the catalogue — a table granted per column refuses a statement
+    naming any other column, as the request role only. The derivation itself is pinned without a
+    database by `tests/unit/test_update_write_derivation.py`; its header says what it cannot see.
 - **Which role each URL names.** `RLS_TEST_DATABASE_URL` is `renly_app`; every other var, including
   `RLS_TEST_ADMIN_DATABASE_URL`, is `renly_admin` — never the owner, which under FORCE reads nothing when
   it is a NOSUPERUSER and everything when it is a superuser, so neither exercises what the suites assert.

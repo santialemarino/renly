@@ -77,7 +77,11 @@ non-obvious and each silent when wrong:
   only `REVOKE UPDATE ON <table>` plus `GRANT UPDATE (<column>)` can. The difference is visible at
   runtime: a policy refuses by returning "nothing changed", a grant refuses with a permission error.
   Grant the narrowest column set that is actually written — a column a trigger maintains needs no grant,
-  because column privileges are checked against the statement's own SET list.
+  because column privileges are checked against the statement's own SET list. "Actually written" means
+  by EVERY path, including one that re-points a denormalized child when its parent changes scope: the
+  check runs per statement, so a statement naming an ungranted column is refused even when it matches no
+  row. `tests/integration/test_update_column_privileges.py` derives the application's writes and fails
+  on any the grant does not cover.
 
 And the discipline that keeps the pair honest: **prove a clause is load-bearing by constructing the row
 that would need it** and watching which layer refuses. A clause that looks subsumed by a helper often is
