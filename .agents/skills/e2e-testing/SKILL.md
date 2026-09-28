@@ -72,6 +72,19 @@ pnpm dev
 
 If `pnpm dev` settles on a port other than 3000 (e.g. Next auto-bumps to 3001 when 3000 is busy), pass `PLAYWRIGHT_BASE_URL=http://localhost:<port>` when running tests. An empty `PLAYWRIGHT_BASE_URL=""` falls back to the default.
 
+**While iterating, run only what the change touches**, and read the failure as it happens:
+
+```bash
+pnpm test:e2e tests/e2e/a11y-routes.spec.ts --reporter=line -x   # one spec, stop at the first failure
+pnpm test:e2e --grep "@a11y" --reporter=line                     # every spec with a tag
+pnpm test:e2e --grep "/expenses" --reporter=line                 # tests whose title matches
+pnpm test:e2e --last-failed --reporter=line                      # re-run only what failed last time
+```
+
+`--reporter=line` prints one line per test and the full error at the failure, instead of the list
+reporter's wall; `-x` (`--max-failures=1`) stops the run there. The full suite is not run locally —
+CI runs it (see "CI").
+
 **To run the AUTHENTICATED specs, name an account:**
 
 ```bash
@@ -186,6 +199,56 @@ on the first having run — which `workers: 1` happens to guarantee today and no
 
 `tests/e2e/helpers/overflow.ts` answers one question for any selector: is any matching element's text cut off? It checks the element's own box (`scrollWidth > clientWidth`, which is also what a `truncate` ellipsis looks like), the box an inline element's text sits in, and every `overflow: hidden` / `clip` ancestor — stopping at a scroll container, since content past a scroller's edge is one scroll away. It measures the laid-out TEXT through a Range, because a clipped element's own box is exactly as wide as the clip. Use `findSettledClipping(page, selector)` (it waits for fonts and animations, and re-measures briefly while a layout converges), and always check `matched` as well as `clipped`: an empty page has nothing clipped. The money sweep is the reference use — `[data-money]` on every money page, at eight widths, in both locales, with the page list derived by a unit test.
 
+### Accessibility (axe)
+
+Every page and every kind of overlay is scanned by axe (`@axe-core/playwright`), zero tolerance, in
+both locales. The pieces:
+
+- **The fixture — `tests/e2e/helpers/axe.ts`.** Import `test`/`expect` from it instead of
+  `@playwright/test` and the test gets `makeAxeBuilder()`: an `AxeBuilder` preset to the tags
+  `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa, best-practice`. `best-practice` is deliberate — it
+  holds `page-has-heading-one`, `region` and `landmark-unique`, the class the first audit found. Hand
+  the results to `expectNoA11yViolations(page, results, testInfo, name, { wholePage })`: it attaches
+  the full result as JSON to the report, then fails on any violation, printing one line per rule with
+  every element it fired on. A whole-page scan also checks that every tag the project decided on
+  reached axe: asked for in the run, and carried by at least one rule in the result — so a tag
+  dropped from the builder or renamed by an axe upgrade goes red by name.
+  `openForScan(page, path, locale)` loads a page in a locale, refuses a redirect (it would scan
+  another page under this name), waits for the cookie banner (every test context is a first visit,
+  so it is on every page), and then for the page to be still for a moment — no animation running and
+  no element mid-fade, including motion/react's own-loop fades that Web Animations cannot see. A
+  dialog or a banner mid-fade has half-contrast text, and a scan that catches it fails on some runs
+  only. It then fails if the not-found page or an error boundary rendered instead of the page; only
+  the two not-found targets pass `{ notFound: true }`, which REQUIRES the not-found page.
+- **The route sweep — `a11y-routes.spec.ts` (signed out) and `a11y-routes.auth.spec.ts` (signed
+  in).** The route list is DERIVED from `config/routes.ts` in `helpers/a11y-routes.ts`.
+  `tests/unit/a11y-sweep-coverage.test.ts` walks every `page.tsx` and fails unless its route is
+  swept or skipped there with a reason — so a new route in `ROUTES` is swept with no edit, and a new
+  dynamic page fails until it gets an entry. **A dynamic route must be seeded into a state in which
+  it renders**, not merely given an id: the pot flows `notFound()` unless the pot is priced and
+  divided (and buy-out needs a second active seat), so the signed-in spec seeds a pot holding an
+  account, an opening division between two seats, and a live group invite (the `/join` preview, also
+  scanned signed out). The token-gated auth forms are scanned too: `/reset-password?token=…` renders
+  its form for any token, and `/signup?invite=…` needs a live invite — CI seeds one in SQL and passes
+  it as `E2E_SIGNUP_INVITE_TOKEN` (a shell var like `E2E_EMAIL`, so it stays out of the env files);
+  without it that one case skips locally.
+- **Open states — `a11y-overlays.auth.spec.ts`.** A page scan cannot see an overlay (unmounted until
+  opened, and once open Radix hides the rest of the page), so one of each KIND is opened and scanned
+  with `include()`: a dialog, a `FormCombobox` popover, a type-to-confirm delete, the nav sheet. The
+  phone width is scanned only where the layout differs (the top bar and its sheet). A new overlay kind
+  gets a case there; a new instance of an existing kind is covered by its base component.
+- **The allow-list — `tests/e2e/helpers/a11y-allowlist.ts`, kept as short as possible (one entry today).** The ONLY way a
+  finding is tolerated: one entry per `rule` + `selector`, with a `reason` and a `revisitBy` date.
+  It suppresses that rule on the elements that selector matches — never `disableRules` (a rule
+  everywhere) and never `exclude()` (every rule on an element). The selector must be built from
+  `[data-testid="…"]` / `[data-slot="…"]`, and `tests/unit/a11y-allowlist.test.ts` fails once the
+  date passes or once nothing in the source renders the attribute any more. Fix the defect first; an
+  entry is for a finding that genuinely cannot be fixed yet.
+
+All of them carry the `@a11y` tag (`--grep @a11y`), and they run in the normal suite, so
+`e2e-required` fails on them wherever the suite runs. **A defect axe reports on every page lives in
+a base component — fix it there** (`packages/ui` or `components/`), not at one call site.
+
 ### Headless vs headed
 
 Headless by default. Pass `--headed` (or use `pnpm test:e2e:headed`) when visual inspection is needed during development.
@@ -236,7 +299,7 @@ Defaults in `playwright.config.ts` are usually sufficient. If a specific test ne
 
 4. If the flow has issues, iterate on the code, refresh, re-verify.
 5. When satisfied, capture the final screenshots needed for the PR (see `pr-format` skill).
-6. Decide if a `.spec.ts` is warranted (see "When to write a Playwright test" above). If yes, write it now, then run `pnpm test:e2e` to confirm it passes.
+6. Decide if a `.spec.ts` is warranted (see "When to write a Playwright test" above). If yes, write it now, then run that spec (`pnpm test:e2e <file> --reporter=line`) to confirm it passes — three runs in a row before trusting it.
 
 ### Session management
 

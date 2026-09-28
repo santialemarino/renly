@@ -42,6 +42,12 @@ export function SampleIncomeTable() {
   });
 
   return (
-    <SampleDataTable entity="income" columns={columns} rows={sampleIncome} getDetail={getDetail} />
+    <SampleDataTable
+      label={t('title')}
+      entity="income"
+      columns={columns}
+      rows={sampleIncome}
+      getDetail={getDetail}
+    />
   );
 }

@@ -186,13 +186,16 @@
     "cookieConsent": {
       "message": "Renly usa cookies esenciales para mantener tu sesión y recordar tus preferencias.\nNo las usamos para publicidad ni seguimiento de terceros.",
       "accept": "Entendido",
-      "learnMore": "Política de Privacidad"
+      "learnMore": "Política de Privacidad",
+      "label": "Aviso de cookies"
     },
     "publicHeader": {
       "login": "Iniciar sesión",
-      "signup": "Crear cuenta"
+      "signup": "Crear cuenta",
+      "navLabel": "Cuenta"
     },
     "publicFooter": {
+      "navLabel": "Ayuda y legales",
       "tagline": "Finanzas personales para inversores argentinos.",
       "disclaimerShort": "Renly es una herramienta informativa y no brinda asesoramiento financiero.",
       "links": {
@@ -215,6 +218,10 @@
       "none": "Ninguna",
       "noneForCurrency": "Sin cuentas en {currency}",
       "archived": "{name} (archivada)"
+    },
+    "expandRow": {
+      "details": "Detalle",
+      "toggle": "Detalle de {name}"
     },
     "lockedRow": {
       "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
@@ -1231,6 +1238,7 @@
         "sharedExpense": "Compartido con {group}"
       },
       "table": {
+        "title": "Movimientos",
         "date": "Fecha",
         "movement": "Movimiento",
         "notes": "Notas",
@@ -3667,6 +3675,7 @@
         "ignore": "No importar"
       },
       "preview": {
+        "title": "Filas a importar",
         "summary": "{total, plural, one {# fila} other {# filas}}",
         "valid": "{count} para importar",
         "duplicate": "{count, plural, one {# duplicada} other {# duplicadas}}",

@@ -244,6 +244,20 @@ jobs:
               '{date: $d, amount: $a, currency: "ARS", payment_method: "cash"}')" > /dev/null
           done
 
+          # A live signup invite, so the accessibility sweep scans the invited registration form and
+          # not only the invite-only notice. The API stores only an invite's SHA-256 and emails the raw
+          # token, so a run cannot ask for one: it is minted here, its hash inserted, and the raw value
+          # handed to the suite as E2E_SIGNUP_INVITE_TOKEN. The address is not the harness account's,
+          # so nothing a spec does ever consumes it.
+          invite_token="$(openssl rand -hex 24)"
+          echo "::add-mask::$invite_token"
+          invite_hash="$(printf '%s' "$invite_token" | sha256sum | cut -d' ' -f1)"
+          docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly -c "
+            insert into invites (email, token_hash, invited_by, expires_at)
+            select 'e2e-invited@example.com', '$invite_hash', id, (now() at time zone 'utc') + interval '30 days'
+            from users where email = '$E2E_EMAIL'"
+          echo "E2E_SIGNUP_INVITE_TOKEN=$invite_token" >> "$GITHUB_ENV"
+
           kill "$(cat /tmp/api-signup.pid)"
           timeout 30 bash -c 'while curl -s http://localhost:8000/health > /dev/null; do sleep 1; done'
 

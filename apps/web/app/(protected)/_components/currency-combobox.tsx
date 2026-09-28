@@ -86,6 +86,8 @@ function getCurrencyFlag(code: string): string | null {
 }
 
 interface CurrencyComboboxProps {
+  // The trigger's id, so a `<Label htmlFor>` beside the combobox names it.
+  id?: string;
   value: string | null;
   exclude: string[];
   placeholder: string;
@@ -105,6 +107,7 @@ interface CurrencyComboboxProps {
   'data-testid'?: string;
 }
 export function CurrencyCombobox({
+  id,
   value,
   exclude,
   placeholder,
@@ -206,125 +209,132 @@ export function CurrencyCombobox({
     );
   }
 
+  const clearable = !!onClear && !!value;
+
   return (
-    <Popover open={disabled ? false : open} onOpenChange={disabled ? undefined : setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={disabled}
-          data-testid={testId}
-          onKeyDown={(e) => {
-            if (e.key === 'Backspace' && value && onClear) {
-              e.preventDefault();
-              setClearing(true);
-              setTimeout(() => {
-                onClear();
-                setClearing(false);
-              }, CLEAR_ANIMATION_MS);
-              return;
-            }
-            if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
-            const ch = e.key.toUpperCase();
-            typeaheadBuffer.current += ch;
-            if (typeaheadTimer.current) clearTimeout(typeaheadTimer.current);
-            typeaheadTimer.current = setTimeout(() => {
-              typeaheadBuffer.current = '';
-            }, 500);
-            const prefix = typeaheadBuffer.current;
-            const match = allCurrencies.find(
-              (c) => !exclude.includes(c.code) && c.code.startsWith(prefix),
-            );
-            if (match) onChange(match.code);
-          }}
-          className={cn(
-            'w-full min-w-0 justify-between px-3 group shadow-xs hover:border-border-3 has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring text-paragraph-sm font-normal',
-            // Same affordance as every other dropdown trigger (Select, category, etc.): shadow-xs,
-            // px-3, the text-paragraph-sm token, a hover border highlight, and a muted fill on hover
-            // (Button's outline base supplies hover:bg-muted / aria-expanded:bg-muted once the
-            // static-bg override is dropped).
-            surface ? 'bg-background' : 'bg-input dark:bg-input',
-            hasError &&
-              'border-destructive hover:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
-          )}
-        >
-          {value ? (
-            <span
-              className={cn(
-                'inline-flex min-w-0 items-center gap-x-2 overflow-hidden text-foreground transition-opacity duration-100',
-                clearing && 'opacity-0',
-              )}
-            >
-              <span className="shrink-0 text-paragraph-xs font-mono">{value}</span>
-              {!compact && (
-                <span className="text-paragraph-sm truncate">{getCurrencyName(value)}</span>
-              )}
-              {getCurrencyFlag(value) && <span className="shrink-0">{getCurrencyFlag(value)}</span>}
-            </span>
-          ) : (
-            <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
-              {placeholder}
-            </span>
-          )}
-          <span className="inline-flex shrink-0 items-center gap-x-1 ml-auto">
-            {onClear && value && (
+    <div className="relative w-full min-w-0">
+      <Popover open={disabled ? false : open} onOpenChange={disabled ? undefined : setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            size="lg"
+            disabled={disabled}
+            data-testid={testId}
+            onKeyDown={(e) => {
+              if (e.key === 'Backspace' && value && onClear) {
+                e.preventDefault();
+                setClearing(true);
+                setTimeout(() => {
+                  onClear();
+                  setClearing(false);
+                }, CLEAR_ANIMATION_MS);
+                return;
+              }
+              if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+              const ch = e.key.toUpperCase();
+              typeaheadBuffer.current += ch;
+              if (typeaheadTimer.current) clearTimeout(typeaheadTimer.current);
+              typeaheadTimer.current = setTimeout(() => {
+                typeaheadBuffer.current = '';
+              }, 500);
+              const prefix = typeaheadBuffer.current;
+              const match = allCurrencies.find(
+                (c) => !exclude.includes(c.code) && c.code.startsWith(prefix),
+              );
+              if (match) onChange(match.code);
+            }}
+            className={cn(
+              'w-full min-w-0 justify-between px-3 group shadow-xs hover:border-border-3 has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring text-paragraph-sm font-normal',
+              // Same affordance as every other dropdown trigger (Select, category, etc.): shadow-xs,
+              // px-3, the text-paragraph-sm token, a hover border highlight, and a muted fill on hover
+              // (Button's outline base supplies hover:bg-muted / aria-expanded:bg-muted once the
+              // static-bg override is dropped).
+              surface ? 'bg-background' : 'bg-input dark:bg-input',
+              hasError &&
+                'border-destructive hover:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
+            )}
+          >
+            {value ? (
               <span
-                role="button"
-                aria-label={tCommon('ui.clear')}
-                tabIndex={0}
-                onClick={handleClear}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleClear(e as unknown as React.MouseEvent);
-                  }
-                }}
-                className="group/currency-clear shrink-0 p-0.5 rounded text-muted-foreground opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100"
+                className={cn(
+                  'inline-flex min-w-0 items-center gap-x-2 overflow-hidden text-foreground transition-opacity duration-100',
+                  clearing && 'opacity-0',
+                )}
               >
-                <X className="size-3.5 group-focus-visible/currency-clear:animate-focus-bump" />
+                <span className="shrink-0 text-paragraph-xs font-mono">{value}</span>
+                {!compact && (
+                  <span className="text-paragraph-sm truncate">{getCurrencyName(value)}</span>
+                )}
+                {getCurrencyFlag(value) && (
+                  <span className="shrink-0">{getCurrencyFlag(value)}</span>
+                )}
+              </span>
+            ) : (
+              <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
+                {placeholder}
               </span>
             )}
-            <ComboboxChevron open={open} />
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-(--radix-popover-trigger-width) p-0"
-        align="start"
-        sideOffset={8}
-      >
-        <Command shouldFilter={false} className="gap-y-2">
-          <CommandInput
-            autoFocus
-            value={search}
-            onValueChange={handleSearch}
-            placeholder={compact ? 'Search...' : searchPlaceholder}
-          />
-          <Separator />
-          <CommandList
-            ref={listRef}
-            className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
-            onWheel={(e) => e.stopPropagation()}
+            <span className="inline-flex shrink-0 items-center gap-x-1 ml-auto">
+              {/* Room for the clear button, which sits over this spot rather than inside the trigger. */}
+              {clearable && <span aria-hidden className="size-6 shrink-0" />}
+              <ComboboxChevron open={open} />
+            </span>
+          </Button>
+        </PopoverTrigger>
+        {/*
+         * The clear ✕ is the trigger's SIBLING, laid over the space reserved above: a button inside a
+         * button is not allowed (axe's `nested-interactive`), and a screen reader flattens it into the
+         * trigger's name. `size-6` is the 24px WCAG 2.5.8 asks of a target; the icon stays 14px.
+         */}
+        {clearable && (
+          <button
+            type="button"
+            aria-label={tCommon('ui.clear')}
+            onClick={handleClear}
+            className="group/currency-clear absolute right-8 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100"
           >
-            <CommandEmpty>{noResults}</CommandEmpty>
-            {filteredPinned.length > 0 && (
-              <CommandGroup heading={t('pinnedGroupLabel')}>
-                {filteredPinned.map((c) => renderCurrencyItem(c))}
-              </CommandGroup>
-            )}
-            {filteredPreferred.length > 0 && (
-              <CommandGroup heading={t('preferredGroupLabel')}>
-                {filteredPreferred.map((c) => renderCurrencyItem(c))}
-              </CommandGroup>
-            )}
-            {filteredOther.length > 0 && (
-              <CommandGroup heading={t('otherGroupLabel')}>
-                {filteredOther.map((c) => renderCurrencyItem(c))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+            <X className="size-3.5 group-focus-visible/currency-clear:animate-focus-bump" />
+          </button>
+        )}
+        <PopoverContent
+          className="w-(--radix-popover-trigger-width) p-0"
+          align="start"
+          sideOffset={8}
+        >
+          <Command shouldFilter={false} className="gap-y-2">
+            <CommandInput
+              autoFocus
+              value={search}
+              onValueChange={handleSearch}
+              placeholder={compact ? 'Search...' : searchPlaceholder}
+            />
+            <Separator />
+            <CommandList
+              ref={listRef}
+              className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+              onWheel={(e) => e.stopPropagation()}
+            >
+              <CommandEmpty>{noResults}</CommandEmpty>
+              {filteredPinned.length > 0 && (
+                <CommandGroup heading={t('pinnedGroupLabel')}>
+                  {filteredPinned.map((c) => renderCurrencyItem(c))}
+                </CommandGroup>
+              )}
+              {filteredPreferred.length > 0 && (
+                <CommandGroup heading={t('preferredGroupLabel')}>
+                  {filteredPreferred.map((c) => renderCurrencyItem(c))}
+                </CommandGroup>
+              )}
+              {filteredOther.length > 0 && (
+                <CommandGroup heading={t('otherGroupLabel')}>
+                  {filteredOther.map((c) => renderCurrencyItem(c))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }

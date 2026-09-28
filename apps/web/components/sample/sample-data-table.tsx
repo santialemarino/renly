@@ -27,6 +27,8 @@ export interface SampleColumn<T> {
 }
 
 interface SampleDataTableProps<T extends { id: number }> {
+  // The table's name — the section's, as the real table it stands in for carries.
+  label: string;
   entity: SampleEntity;
   columns: SampleColumn<T>[];
   rows: T[];
@@ -37,6 +39,7 @@ interface SampleDataTableProps<T extends { id: number }> {
 // examples (with a Clear that retires just this section's sample) plus a table mirroring the real
 // one's columns. The rows are the client fixture — "View" opens a read-only detail, nothing hits the API.
 export function SampleDataTable<T extends { id: number }>({
+  label,
   entity,
   columns,
   rows,
@@ -63,7 +66,8 @@ export function SampleDataTable<T extends { id: number }>({
   return (
     <div className="flex flex-col gap-y-3">
       <div className="flex items-center justify-between p-3 gap-x-3 bg-blue-800/5 border border-blue-800/15 rounded-xl">
-        <span className="flex items-center gap-x-2 text-paragraph-sm text-muted-foreground">
+        {/* neutral-600, not muted-foreground: on the banner's blue tint muted measured 4.2:1. */}
+        <span className="flex items-center gap-x-2 text-paragraph-sm text-neutral-600">
           <Sparkles className="size-4 shrink-0 text-blue-800" />
           {t('banner')}
         </span>
@@ -78,7 +82,7 @@ export function SampleDataTable<T extends { id: number }>({
         </Button>
       </div>
 
-      <Table>
+      <Table label={label}>
         <TableHeader>
           <TableRow>
             {columns.map((col) => (

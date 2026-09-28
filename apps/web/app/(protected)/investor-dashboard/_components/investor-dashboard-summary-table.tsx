@@ -72,7 +72,7 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
       </CardHeader>
       <CardContent className="px-6 pb-6">
         {hasData ? (
-          <Table>
+          <Table label={t('investmentsTable.title')}>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('investmentsTable.name')}</TableHead>

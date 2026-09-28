@@ -57,7 +57,7 @@ export function AdminFeedback({ feedback, total, page, pageSize }: AdminFeedback
   return (
     <div className="flex flex-col w-full max-w-4xl gap-y-6">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-        <Table>
+        <Table label={t('title')}>
           <TableHeader>
             <TableRow>
               <TableHead>{t('table.from')}</TableHead>

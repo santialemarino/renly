@@ -175,7 +175,7 @@ function PotsTable({ pots }: { pots: Pot[] }) {
   const tCommon = useTranslations('common');
 
   return (
-    <Table>
+    <Table label={t('pots.title')}>
       <TableHeader>
         <TableRow>
           <TableHead>{t('pots.table.name')}</TableHead>

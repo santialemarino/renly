@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
@@ -36,6 +36,7 @@ export function CurrencySwitcher({
   const setActiveCurrency = useCurrencyStore((s) => s.setActiveCurrency);
   const [activeCurrency, setActive] = useState(initialActive);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const contentId = useId();
 
   // Measure content height for smooth container resize.
   const contentRef = useRef<HTMLDivElement>(null);
@@ -90,14 +91,24 @@ export function CurrencySwitcher({
     />
   );
 
+  /*
+   * A disclosure: the name says what it discloses and `aria-expanded` which way it is, so the name is
+   * the same in both states. It controls the switcher's own panel, the one element present in both
+   * states (the collapsed and expanded bodies swap). The icon is `blue-600`, which clears 3:1 on the
+   * panel's `blue-50` (WCAG 1.4.11); the `blue-400` it had measured 2.4:1.
+   */
   const chevron = (
     <button
+      type="button"
+      aria-label={t('currency.label')}
+      aria-expanded={!collapsed}
+      aria-controls={contentId}
       onClick={handleToggleCollapse}
       className="group/currency-collapse shrink-0 cursor-pointer focus-visible:outline-none"
     >
       <ChevronRight
         className={cn(
-          'size-4 text-blue-400 transition-transform duration-200',
+          'size-4 text-blue-600 transition-transform duration-200',
           'group-focus-visible/currency-collapse:animate-focus-bump',
           !collapsed && 'rotate-90',
         )}
@@ -111,7 +122,7 @@ export function CurrencySwitcher({
       className="overflow-hidden bg-blue-50 rounded-lg transition-[height] duration-200 ease-in-out"
       style={{ height: contentHeight }}
     >
-      <div ref={contentRef} className="p-3">
+      <div ref={contentRef} id={contentId} className="p-3">
         <AnimatePresence mode="wait" initial={false}>
           {collapsed ? (
             <motion.div
@@ -157,7 +168,8 @@ export function CurrencySwitcher({
                 <div className="ml-auto">{chevron}</div>
               </div>
               {pillToggle}
-              <span className="text-paragraph-xs text-blue-400">* {t('currency.note')}</span>
+              {/* `blue-600` on `blue-50` is 4.8:1, past the 4.5:1 this 12px text needs. */}
+              <span className="text-paragraph-xs text-blue-600">* {t('currency.note')}</span>
             </motion.div>
           )}
         </AnimatePresence>

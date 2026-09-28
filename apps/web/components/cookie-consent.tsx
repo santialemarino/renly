@@ -41,7 +41,13 @@ export function CookieConsent() {
           {/* pointer-events-none on the full-width container + pointer-events-auto on the card so the
               banner's transparent edges don't intercept clicks over the sidebar footer (the card and
               its button stay interactive). */}
-          <div className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg pointer-events-auto sm:flex-row sm:w-fit sm:max-w-full sm:items-center sm:gap-x-4">
+          {/* A named `section` is a region landmark: the banner is rendered beside the page's own
+              landmarks rather than inside any of them, so without one its text and button belong to
+              no landmark at all and a reader moving by landmarks never reaches them. */}
+          <section
+            aria-label={t('label')}
+            className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg pointer-events-auto sm:flex-row sm:w-fit sm:max-w-full sm:items-center sm:gap-x-4"
+          >
             <p className="text-paragraph-sm text-muted-foreground whitespace-pre-line">
               {t('message')}{' '}
               <InlineLink href={ROUTES.privacy} color="blue">
@@ -51,7 +57,7 @@ export function CookieConsent() {
             <Button blue size="sm" className="shrink-0 w-full sm:w-auto" onClick={handleDismiss}>
               {t('accept')}
             </Button>
-          </div>
+          </section>
         </motion.div>
       )}
     </AnimatePresence>

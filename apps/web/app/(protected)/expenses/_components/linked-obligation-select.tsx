@@ -24,6 +24,8 @@ import { useFormatters } from '@/lib/i18n/formatters';
 export type MatchStatus = 'match' | 'mismatch' | 'unknown';
 
 interface LinkedObligationSelectProps {
+  // The id `FormControl` hands its child, forwarded to the trigger so the field's label names it.
+  id?: string;
   obligations: PaymentObligation[];
   value: number | null;
   disabled?: boolean;
@@ -107,6 +109,7 @@ function ObligationRowContent({
 }
 
 export function LinkedObligationSelect({
+  id,
   obligations,
   value,
   disabled,
@@ -179,6 +182,7 @@ export function LinkedObligationSelect({
 
   return (
     <FormCombobox
+      id={id}
       value={value !== null ? String(value) : NONE_VALUE}
       onValueChange={(v) => onChange(v === NONE_VALUE ? null : Number(v))}
       disabled={disabled}

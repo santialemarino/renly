@@ -51,6 +51,7 @@ export function SampleExpensesTable() {
 
   return (
     <SampleDataTable
+      label={t('title')}
       entity="expenses"
       columns={columns}
       rows={sampleExpenses}
