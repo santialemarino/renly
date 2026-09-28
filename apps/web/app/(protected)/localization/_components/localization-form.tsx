@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
@@ -36,6 +37,8 @@ interface LocalizationFormProps {
 
 export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
   const t = useTranslations('localization');
+  // Ties each field's `Label` to its control, so the control is named by what the label says.
+  const fieldId = useId();
   const router = useRouter();
 
   const initialTimezoneMode =
@@ -154,6 +157,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
               control={control}
               render={({ field }) => (
                 <PillToggleGroup
+                  ariaLabel={t('form.languageMode.label')}
                   items={languageModeItems}
                   value={field.value}
                   onValueChange={handleLanguageModeChange}
@@ -165,7 +169,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
           <Separator />
 
           <div className="flex flex-col gap-y-2">
-            <Label>{t('form.language.label')}</Label>
+            <Label htmlFor={`${fieldId}-language`}>{t('form.language.label')}</Label>
             <Hint>
               {currentLanguageMode === LANGUAGE_MODE_AUTO
                 ? t('form.language.hintAuto')
@@ -176,6 +180,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
               control={control}
               render={({ field }) => (
                 <FormCombobox
+                  id={`${fieldId}-language`}
                   surface
                   value={field.value}
                   onValueChange={handleLanguageChange}
@@ -200,6 +205,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
               control={control}
               render={({ field }) => (
                 <PillToggleGroup
+                  ariaLabel={t('form.timezoneMode.label')}
                   items={timezoneModeItems}
                   value={field.value}
                   onValueChange={handleTimezoneModeChange}
@@ -211,7 +217,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
           <Separator />
 
           <div className="flex flex-col gap-y-2">
-            <Label>{t('form.timezone.label')}</Label>
+            <Label htmlFor={`${fieldId}-timezone`}>{t('form.timezone.label')}</Label>
             <Hint>
               {currentTimezoneMode === TIMEZONE_MODE_AUTO
                 ? t('form.timezone.hintAuto')
@@ -222,6 +228,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
               control={control}
               render={({ field }) => (
                 <TimezoneCombobox
+                  id={`${fieldId}-timezone`}
                   value={field.value || null}
                   placeholder={t('form.timezone.placeholder')}
                   searchPlaceholder={t('form.timezone.searchPlaceholder')}

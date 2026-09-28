@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
@@ -38,6 +39,8 @@ interface PreferencesFormProps {
 
 export function PreferencesForm({ initialSettings, supportedCurrencies }: PreferencesFormProps) {
   const t = useTranslations('preferences');
+  // Ties each field's `Label` to its control, so the control is named by what the label says.
+  const fieldId = useId();
   const tCommon = useTranslations('common');
   const router = useRouter();
 
@@ -144,7 +147,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
 
           <div className="flex flex-col gap-y-2">
             <div className="flex items-center gap-x-2">
-              <Label>{t('form.primaryCurrency.label')}</Label>
+              <Label htmlFor={`${fieldId}-primary`}>{t('form.primaryCurrency.label')}</Label>
               <AnimatePresence>
                 {primaryUnsupported && (
                   <motion.div
@@ -164,6 +167,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
               control={control}
               render={({ field }) => (
                 <CurrencyCombobox
+                  id={`${fieldId}-primary`}
                   value={field.value ?? null}
                   exclude={secondaryCurrency ? [secondaryCurrency] : []}
                   preferredCurrencies={livePreferredCurrencies}
@@ -183,7 +187,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
 
           <div className="flex flex-col gap-y-2">
             <div className="flex items-center gap-x-2">
-              <Label>{t('form.secondaryCurrency.label')}</Label>
+              <Label htmlFor={`${fieldId}-secondary`}>{t('form.secondaryCurrency.label')}</Label>
               <AnimatePresence>
                 {secondaryUnsupported && (
                   <motion.div
@@ -203,6 +207,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
               control={control}
               render={({ field }) => (
                 <CurrencyCombobox
+                  id={`${fieldId}-secondary`}
                   value={field.value ?? null}
                   exclude={primaryCurrency ? [primaryCurrency] : []}
                   preferredCurrencies={livePreferredCurrencies}
@@ -230,13 +235,14 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
           <Separator />
 
           <div className="flex flex-col gap-y-2">
-            <Label>{t('form.dollarRate.label')}</Label>
+            <Label htmlFor={`${fieldId}-dollar-rate`}>{t('form.dollarRate.label')}</Label>
             <Hint>{t('form.dollarRate.hint')}</Hint>
             <Controller
               name="dollarRatePreference"
               control={control}
               render={({ field }) => (
                 <FormCombobox
+                  id={`${fieldId}-dollar-rate`}
                   surface
                   value={field.value ?? DOLLAR_RATE_DEFAULT}
                   onValueChange={field.onChange}
@@ -255,7 +261,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
           <Separator />
 
           <div className="flex flex-col gap-y-2">
-            <Label>{t('form.preferredCurrencies.label')}</Label>
+            <Label htmlFor={`${fieldId}-preferred`}>{t('form.preferredCurrencies.label')}</Label>
             <Hint>{t('form.preferredCurrencies.hint')}</Hint>
             <Controller
               name="preferredCurrencies"
@@ -263,6 +269,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
               render={({ field }) => (
                 <Input
                   {...field}
+                  id={`${fieldId}-preferred`}
                   surface
                   placeholder={ENV_PREFERRED || t('form.preferredCurrencies.inputPlaceholder')}
                   onChange={(e) => field.onChange(e.target.value.toUpperCase())}
@@ -300,6 +307,8 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
                         {...field}
                         surface
                         placeholder={localizePreset(ENV_PRESET_CODES[i]?.code, yearSuffix)}
+                        // Four slots under one label: each is named by it plus its position.
+                        aria-label={`${t('form.periodPresets.label')} ${i + 1}`}
                         aria-invalid={!!fieldState.error}
                         containerClassName="text-center"
                         className="uppercase"

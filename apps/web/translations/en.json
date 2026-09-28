@@ -219,6 +219,10 @@
       "noneForCurrency": "No {currency} accounts",
       "archived": "{name} (archived)"
     },
+    "expandRow": {
+      "details": "Details",
+      "toggle": "Details for {name}"
+    },
     "lockedRow": {
       "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
       "sharedExpense": "This is your share of a shared expense. Edit or remove it from the group it belongs to.",

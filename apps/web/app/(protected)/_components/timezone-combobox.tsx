@@ -19,6 +19,8 @@ import { ComboboxChevron } from '@/components/combobox-chevron';
 import { formatIanaTimezone, IANA_TIMEZONES } from '@/lib/constants/timezones';
 
 interface TimezoneComboboxProps {
+  // The trigger's id, so a `<Label htmlFor>` beside the combobox names it.
+  id?: string;
   value: string | null;
   placeholder: string;
   searchPlaceholder: string;
@@ -30,6 +32,7 @@ interface TimezoneComboboxProps {
 }
 
 export function TimezoneCombobox({
+  id,
   value,
   placeholder,
   searchPlaceholder,
@@ -65,6 +68,7 @@ export function TimezoneCombobox({
     <Popover open={disabled ? false : open} onOpenChange={disabled ? undefined : setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           size="lg"
           disabled={disabled}

@@ -219,6 +219,10 @@
       "noneForCurrency": "Sin cuentas en {currency}",
       "archived": "{name} (archivada)"
     },
+    "expandRow": {
+      "details": "Detalle",
+      "toggle": "Detalle de {name}"
+    },
     "lockedRow": {
       "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
       "sharedExpense": "Esta es tu parte de un gasto compartido. Editalo o eliminalo desde el grupo al que pertenece.",

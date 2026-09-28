@@ -29,6 +29,8 @@ export type LinkedSubInstallmentValue =
   | { kind: 'installment'; id: number };
 
 interface LinkedSubInstallmentSelectProps {
+  // The id `FormControl` hands its child, forwarded to the trigger so the field's label names it.
+  id?: string;
   subscriptions: Subscription[];
   installments: Installment[];
   value: LinkedSubInstallmentValue | null;
@@ -126,6 +128,7 @@ function dotColorClass(status: MatchStatus, isSelected: boolean): string {
 }
 
 export function LinkedSubInstallmentSelect({
+  id,
   subscriptions,
   installments,
   value,
@@ -281,6 +284,7 @@ export function LinkedSubInstallmentSelect({
 
   return (
     <FormCombobox
+      id={id}
       value={encodeValue(value)}
       onValueChange={(v) => onChange(decodeValue(v))}
       placeholder={t('form.linkedSubInstallment.placeholder')}

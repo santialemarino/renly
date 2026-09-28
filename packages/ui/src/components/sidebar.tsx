@@ -245,6 +245,13 @@ function Sidebar({
           className,
         )}
         style={style}
+        /*
+         * The app's navigation landmark on desktop, named like the Sheet it becomes on a phone. Without
+         * a landmark, everything the column holds — the brand, the currency switcher, every nav item —
+         * sat outside all of them (axe's `region`), so a reader moving by landmark could not reach it.
+         */
+        role="navigation"
+        aria-label={labels.sidebarTitle}
         {...props}
         id={sidebarId}
       >
