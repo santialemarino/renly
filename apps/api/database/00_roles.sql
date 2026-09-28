@@ -21,8 +21,8 @@
 --     it at runtime. Created by whoever provisions the database, not here;
 --   * renly_admin — BYPASSRLS, a member of the owner. DATABASE_ADMIN_URL, migrations, backups, forks;
 --   * renly_app — NOBYPASSRLS, DML grants only. DATABASE_URL, every request connection;
---   * renly_policy_definer — NOLOGIN, BYPASSRLS, SELECT on exactly the tables the SECURITY DEFINER
---     policy helpers read. It owns those helpers and nothing else (see 01_create_tables.sql).
+--   * renly_policy_definer — NOLOGIN, BYPASSRLS, SELECT on exactly what the SECURITY DEFINER
+--     functions read. It owns those functions and nothing else (see 01_create_tables.sql).
 --
 -- The passwords are local-dev defaults; production provisions both login roles with real secrets.
 
@@ -41,8 +41,9 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- NOLOGIN: nothing ever connects as it. It exists so the three policy helpers run as a role that
--- bypasses RLS WITHOUT being the table owner — under FORCE the owner is subject to the policies,
+-- NOLOGIN: nothing ever connects as it. It exists so the SECURITY DEFINER functions (the three policy
+-- helpers and the reconciliation-scope trigger function) run as a role that bypasses RLS WITHOUT
+-- being the table owner — under FORCE the owner is subject to the policies,
 -- and a helper running as the owner re-enters the very policy that called it (group_members'
 -- policy calls app_is_group_member, which reads group_members) until the stack runs out.
 DO $$ BEGIN
