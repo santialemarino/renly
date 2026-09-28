@@ -22,17 +22,19 @@ import type { Page } from '@playwright/test';
  * A SCROLL container (`auto` / `scroll`) is not a clip: content past its edge is one scroll away, which
  * is how a wide table is meant to behave. So on each axis the walk up the ancestors stops at the first
  * scroll container — anything beyond it is about the scroller, not the text. Vertically only a real
- * clip counts: text taller than a box that is not clipping it is drawn in full. And a box with no area
- * that does not clip is not a box the text was laid out in: Recharts' `ResponsiveContainer` wraps every
- * chart in a 0×0 `overflow: visible` div so it can measure its parent, and every axis label "ran out"
- * of it while being drawn in full.
+ * clip counts: text taller than a box that is not clipping it is drawn in full. And a box that is 0×0
+ * — BOTH sides zero — and does not clip is not a box the text was laid out in: Recharts'
+ * `ResponsiveContainer` wraps every chart in one so it can measure its parent, and every axis label
+ * "ran out" of it while being drawn in full. A box with ONE side zero is a real box: a flex item
+ * squeezed to no width by a sibling that will not shrink, or a zero-height wrapper, still has text
+ * running out of it.
  *
  * Positions are read from a Range over the element's contents, i.e. from the laid-out TEXT, not from
  * the element's box — a clipped element's box is exactly as wide as the clip, which is the problem.
  * The one exception is an element that clips ITSELF (`overflow: hidden` on the element, which is what
  * `truncate` sets): what runs past its own edge is not drawn at all, so it cannot also escape an
- * ancestor. That overflow is reported once, as "wider than its own box", and the ancestor walk carries
- * on with the part that IS drawn — so a truncated name whose own box is inside its card reports only
+ * ancestor. That overflow is reported once, on each axis the element clips — "wider than its own box",
+ * "taller than its own box" — and the ancestor walk carries on with the part that IS drawn — so a truncated name whose own box is inside its card reports only
  * its own truncation, and one whose box is itself cut off by the card reports both.
  *
  * Each finding also says HOW the text is cut, for callers that allow a deliberate truncation (see
@@ -159,6 +161,11 @@ export async function findClipping(
         if (ownBox) {
           reasons.push(`wider than its own box (${el.scrollWidth}px > ${el.clientWidth}px)`);
         }
+        // Vertically only a real clip counts, as for ancestors: the clamp below hides it from the walk,
+        // so it is reported here.
+        if (hasBox(el) && clips(own.overflowY) && el.scrollHeight > el.clientHeight + tolerance) {
+          reasons.push(`taller than its own box (${el.scrollHeight}px > ${el.clientHeight}px)`);
+        }
         // What an element clips itself is not drawn, so only the drawn part can escape further out.
         if (hasBox(el)) {
           const box = paddingBox(el);
@@ -183,8 +190,8 @@ export async function findClipping(
             // A scroller: what lies past its edge is reachable, so nothing from here out is a finding.
             if (!clipsX && style.overflowX !== 'visible') walkX = false;
             if (!clipsY && style.overflowY !== 'visible') walkY = false;
-            // A non-clipping box with no area holds nothing in it (see above).
-            const empty = !clipsX && (box.right - box.left === 0 || box.bottom - box.top === 0);
+            // A non-clipping 0×0 box holds nothing in it (see above).
+            const empty = !clipsX && box.right - box.left === 0 && box.bottom - box.top === 0;
             if (
               walkX &&
               !empty &&
