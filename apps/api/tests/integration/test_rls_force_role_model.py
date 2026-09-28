@@ -249,6 +249,26 @@ class TestThePolicyHelpersRunAsTheDefinerRole:
         assert {name: owner for name, owner in owners.items() if owner != _DEFINER} == {}
 
     @pytest.mark.asyncio
+    async def test_every_security_definer_function_pins_its_search_path(self, admin):
+        # A SECURITY DEFINER body runs with its owner's bypass but, unless it pins its own search_path,
+        # resolves every unqualified name on the CALLER's — so a caller who put a schema of their own
+        # first could shadow `group_members` or `accounts` with a table they wrote. Derived from prosecdef
+        # like the owner check above, and held to the one value the schema uses: `public` first, and
+        # `pg_temp` named last so a temporary table cannot be searched ahead of it either.
+        rows = (
+            await admin.execute(
+                text(
+                    "SELECT p.proname, p.proconfig FROM pg_proc p"
+                    " JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.prosecdef"
+                )
+            )
+        ).all()
+        configs = {name: list(config or []) for name, config in rows}
+        assert _HELPERS <= set(configs), f"a helper is missing or no longer SECURITY DEFINER: {sorted(configs)}"
+        unpinned = {name: config for name, config in configs.items() if "search_path=public, pg_temp" not in config}
+        assert unpinned == {}
+
+    @pytest.mark.asyncio
     async def test_the_definer_role_bypasses_rls_but_can_neither_log_in_nor_supersede(self, admin):
         # BYPASSRLS is the point: it is what stops a helper re-entering the policy that called it.
         # NOLOGIN and NOSUPERUSER are what keep that bypass from being usable as anything else.

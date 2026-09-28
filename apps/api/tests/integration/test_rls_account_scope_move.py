@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import DBAPIError, IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -32,8 +32,12 @@ from app.services import pot_service
 # is not its account's. Each refusal below is a row the policies ADMIT — so it is the trigger's refusal
 # or nothing, and each asserts the trigger's own message so a refusal from anywhere else does not pass
 # for it — and between them they differ from the account in the user alone, the pot alone, and both,
-# so a trigger comparing only one of the two columns is caught. The positive paths prove what the
-# trigger leaves alone: the account move, and a view-only member reconciling the pot's account (§34).
+# so a trigger that COMPARES only one of the two columns is caught. Which columns it FIRES on is a
+# separate fact, pinned by an update setting pot_id alone and one setting user_id alone. The trigger
+# runs AFTER the row, so a row the policies refuse is refused by them first and alike whatever account
+# it names — one test asserts that the refusal says nothing about an account its caller cannot see.
+# The positive paths prove what the trigger leaves alone: the account move, and a view-only member
+# reconciling the pot's account (§34).
 #
 # The owner's superuser-ness does not enter into any of it: renly_app is never the owner, so its
 # grants and its policies apply to it either way. Gated on the same two vars as the other RLS suites.
@@ -65,8 +69,9 @@ _REFUSED = "must sit in its account's scope"
 
 # Seeds a group whose owner may write one pot (`pot`) and is denied view of a second (`hidden`), three
 # private accounts — two of the owner's, one reconciled twice and one never, and one of the outsider's,
-# reconciled once — and a second group, which the owner is not in, whose one pot (`joint`) holds an
-# account reconciled once and grants the viewer VIEW only. Nothing links any of them, so the move's own
+# reconciled once — and a second group, which the owner is not in, whose pot `joint` holds an
+# account reconciled once and grants the viewer VIEW only, beside a second pot (`joint_other`) the
+# viewer may also view, so a re-point can change pot_id alone and stay inside what the policies admit. Nothing links any of them, so the move's own
 # refusals stay out of the way. Every reconciliation carries a zero difference, which is what a movable
 # account can hold: one with a difference has an adjustment row, and an account with a linked entry is
 # refused the move outright.
@@ -89,7 +94,7 @@ async def seeded():
         # that this caller is refused it, and the joint pot's that its caller may view and not write.
         for group_name, seat_holder, pot_rows in (
             (_GROUPS[0], "owner", (("pot", True, True, True), ("hidden", False, False, False))),
-            (_GROUPS[1], "viewer", (("joint", True, True, False),)),
+            (_GROUPS[1], "viewer", (("joint", True, True, False), ("joint_other", False, True, False))),
         ):
             group = (
                 await s.execute(
@@ -149,6 +154,7 @@ async def seeded():
         "pot": pots["pot"],
         "hidden": pots["hidden"],
         "joint": pots["joint"],
+        "joint_other": pots["joint_other"],
         "accounts": accounts,
         "sessionmaker": app_sessionmaker,
         "admin_sessionmaker": admin_sessionmaker,
@@ -226,12 +232,13 @@ class TestMovingAnAccountBetweenScopes:
 # new row different policies check. A statement that READS a column (any WHERE naming one, as
 # move_to_scope's does) also holds its new row to the SELECT policy; one that reads none is bounded by
 # the UPDATE policy's own check. Into the visible pot the policies admit both shapes, so the trigger is
-# the only refusal; into the hidden pot they would refuse too, and the message is what says the
-# trigger — which runs first, as a BEFORE ROW trigger does — is the one that answered.
+# the only refusal. Into the hidden pot the policies refuse, and they answer first: the trigger runs
+# AFTER the row, so it never judges a row the policies turned away.
 _RE_POINT = {
     "reading a column": "UPDATE account_reconciliations SET user_id = NULL, pot_id = :p WHERE account_id IS NOT NULL",
     "reading none": "UPDATE account_reconciliations SET user_id = NULL, pot_id = :p",
 }
+_RE_POINT_REFUSAL = {"pot": (IntegrityError, _REFUSED), "hidden": (ProgrammingError, "row-level security")}
 
 
 # The mirror pair for the OLD row: with a column read, the SELECT policy filters the outsider's row as
@@ -282,11 +289,65 @@ class TestAReconciliationSitsInItsAccountsScope:
         # The owner's own reconciliations, re-pointed into a pot while their account stays private.
         # Neither statement names an account: the caller's only visible reconciliations are their own.
         owner = seeded["users"]["owner"]
+        error, message = _RE_POINT_REFUSAL[destination]
         async with _as(seeded, "owner") as s:
-            with pytest.raises(IntegrityError, match=_REFUSED):
+            with pytest.raises(error, match=message):
                 await s.execute(text(_RE_POINT[shape]), {"p": seeded[destination]})
             await s.rollback()
         assert (await _scopes(seeded, "reconciled"))[1] == [(owner, None)] * len(_RECONCILED_DATES)
+
+    @pytest.mark.asyncio
+    async def test_a_re_point_setting_only_pot_id_is_refused(self, seeded):
+        # The trigger must fire on pot_id by itself. The viewer moves the joint pot's reconciliation to
+        # the other pot they can see — admitted by the policies, since both scopes are visible to them —
+        # while the account stays in the first pot.
+        joint, account = seeded["joint"], seeded["accounts"]["joint"]
+        async with _as(seeded, "viewer") as s:
+            with pytest.raises(IntegrityError, match=_REFUSED):
+                await s.execute(
+                    text("UPDATE account_reconciliations SET pot_id = :p WHERE account_id = :a"), {"p": seeded["joint_other"], "a": account}
+                )
+            await s.rollback()
+        assert (await _scopes(seeded, "joint"))[1] == [(None, joint)]
+
+    @pytest.mark.asyncio
+    async def test_a_re_point_setting_only_user_id_is_refused(self, seeded):
+        # The trigger must fire on user_id by itself. The only user_id write the policies admit is the
+        # caller naming themselves, so the row has to have drifted from its account first — which only an
+        # account-side write can do, and the admin session does here. Re-asserting the caller's own name
+        # on it is then admitted by the policies and refused by the trigger.
+        owner, outsider = seeded["users"]["owner"], seeded["users"]["outsider"]
+        account = seeded["accounts"]["reconciled"]
+        async with seeded["admin_sessionmaker"]() as admin:
+            await admin.execute(text("UPDATE accounts SET user_id = :u WHERE id = :a"), {"u": outsider, "a": account})
+            await admin.commit()
+        async with _as(seeded, "owner") as s:
+            with pytest.raises(IntegrityError, match=_REFUSED):
+                await s.execute(text("UPDATE account_reconciliations SET user_id = :u WHERE account_id = :a"), {"u": owner, "a": account})
+            await s.rollback()
+        assert await _scopes(seeded, "reconciled") == ((outsider, None), [(owner, None)] * len(_RECONCILED_DATES))
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_says_nothing_about_an_account_its_caller_cannot_see(self, seeded):
+        # Guessing the scope of an account the caller cannot see — right and wrong, as a user and as a pot
+        # — must be refused the same way. Were the trigger to run ahead of the policies, a right guess
+        # would pass it and reach the policy (42501) while a wrong one stopped at it (23514), and the
+        # SQLSTATE alone would confirm who holds the account.
+        outsider, joint = seeded["users"]["outsider"], seeded["joint"]
+        probes = {
+            "user, right": ("foreign", (outsider, None)),
+            "user, wrong": ("joint", (outsider, None)),
+            "pot, right": ("joint", (None, joint)),
+            "pot, wrong": ("foreign", (None, joint)),
+        }
+        states = {}
+        for probe, (account_key, pair) in probes.items():
+            async with _as(seeded, "owner") as s:
+                with pytest.raises(DBAPIError) as refused:
+                    await _insert(s, seeded, account_key, pair, "owner")
+                states[probe] = refused.value.orig.sqlstate
+                await s.rollback()
+        assert states == dict.fromkeys(probes, "42501")
 
     @pytest.mark.asyncio
     async def test_a_view_only_member_cannot_file_a_pots_reconciliation_under_their_own_name(self, seeded):
