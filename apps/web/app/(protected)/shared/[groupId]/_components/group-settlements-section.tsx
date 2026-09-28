@@ -33,6 +33,7 @@ import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { GroupSettlement } from '@/lib/api/group-settlements';
@@ -285,8 +286,8 @@ function SettlementRow({
           {t(`settlements.status.${settlement.status}`)}
         </Badge>
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {settlement.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={settlement.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">

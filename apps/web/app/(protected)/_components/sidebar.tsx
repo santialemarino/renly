@@ -46,9 +46,9 @@ import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switche
 import { FeedbackDialog } from '@/app/(protected)/_components/feedback-dialog';
 import { NotificationBell } from '@/app/(protected)/_components/notification-bell';
 import { QuickAddTrigger } from '@/app/(protected)/_components/quick-add-trigger';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import {
   ADMIN_GROUP,

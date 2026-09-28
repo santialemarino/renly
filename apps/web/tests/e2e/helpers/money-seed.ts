@@ -20,8 +20,9 @@ import { testMarker } from './factories';
  *     Supermercado", …), because the finance legend truncated all six of six at 390px;
  *   * two holdings in the categories with the longest Spanish names ("Obligaciones Negociables",
  *     "Bonos Soberanos"), for the investor dashboard's figures and its donut legend;
- *   * one expense on a card, for a card balance; and a subscription, an installment plan and an
- *     obligation due NEXT month, so the scheduler never turns them into expenses mid-run.
+ *   * one expense on a card, for a card balance and a card due-date row on the payments calendar;
+ *     and a subscription, an installment plan and an obligation due NEXT month, so the scheduler
+ *     never turns them into expenses mid-run.
  *
  * Every deletable row is named or noted with a per-run marker starting `e2e-money-`, and removed in
  * `cleanup`. A run that is KILLED never reaches `cleanup`, so the seed also begins by deleting every row
@@ -190,10 +191,13 @@ export async function seedMoney(): Promise<MoneySeed> {
       opening_balance: OPENING_BALANCE,
       opening_date: isoDate(today),
     });
+    // Closing on the 31st (the month's last day) and due on the 10th: the bill due NEXT month is the
+    // statement closing at the end of THIS one, which holds today's charge whatever today is — so the
+    // payments calendar's month shows a card due-date row, with the card's marker-long name beside it.
     const cardId = await create('/credit-cards', {
       name: marker,
-      closing_day: 20,
-      due_day: 5,
+      closing_day: 31,
+      due_day: 10,
       currency,
     });
     for (const [category, amount] of EXPENSES) {

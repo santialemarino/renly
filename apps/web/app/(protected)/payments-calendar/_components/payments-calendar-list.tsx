@@ -4,6 +4,7 @@ import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_components/linked-expense-edit-trigger';
 import { MoneyFigure } from '@/components/money-figure';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
@@ -107,7 +108,13 @@ export async function PaymentsCalendarList({
                       item.isPaid && 'hover:bg-muted/40 transition-colors',
                     )}
                   >
-                    <div className="flex min-w-0 items-center gap-x-3">
+                    {/*
+                     * The name wins: it keeps at least `basis-40` of the row, and when the badge
+                     * leaves it less ("Vencimiento de tarjeta" is ~2.75x "Card due") it wraps onto its
+                     * own line under the badge instead of being squeezed. Past that it truncates,
+                     * with the full name in a tooltip.
+                     */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                       {item.isPaid ? (
                         <Badge
                           variant="default"
@@ -120,8 +127,8 @@ export async function PaymentsCalendarList({
                           {t(`types.${item.type}`)}
                         </Badge>
                       )}
-                      <div className="flex min-w-0 flex-col">
-                        <div className="text-paragraph-sm-medium truncate">{item.name}</div>
+                      <div className="flex min-w-0 flex-1 basis-40 flex-col">
+                        <TruncatingTooltip text={item.name} className="text-paragraph-sm-medium" />
                         {item.type === 'installment' &&
                           item.cuotaIndex !== null &&
                           item.installmentsCount !== null && (

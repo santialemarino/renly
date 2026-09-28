@@ -24,6 +24,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortIcon } from '@/components/sort-icon';
 import { TableSectionRow } from '@/components/table-section-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
@@ -241,9 +242,10 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                 <TableRow key={entry.key} className="group">
                   <TableCell className="sticky left-0 z-10 bg-background">
                     <div className="flex flex-col">
-                      <span className="text-paragraph-sm-medium truncate max-w-[200px]">
-                        {row.name}
-                      </span>
+                      <TruncatingTooltip
+                        text={row.name}
+                        className="max-w-[200px] text-paragraph-sm-medium"
+                      />
                       <span className="text-paragraph-xs text-muted-foreground">
                         {row.baseCurrency}
                       </span>

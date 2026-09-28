@@ -18,6 +18,7 @@ import { MoneyFigure } from '@/components/money-figure';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { accountLedgerPath } from '@/config/routes';
 import type { AccountMovement, AccountMovementList } from '@/lib/api/account-movements';
 import type { MovementKind } from '@/lib/constants/accounts';
@@ -157,8 +158,8 @@ export function AccountLedgerTable({
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-48 truncate text-paragraph-sm text-muted-foreground">
-                      {movement.notes ?? '—'}
+                    <TableCell className="text-paragraph-sm text-muted-foreground">
+                      <TruncatingTooltip text={movement.notes ?? '—'} className="block max-w-48" />
                     </TableCell>
                     <TableCell className="text-right">
                       <SignedAmountCell
