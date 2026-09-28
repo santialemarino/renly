@@ -6,12 +6,12 @@ import { FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { CollectionDeleteFormDialog } from '@/app/(protected)/collections/_components/collection-delete-form-dialog';
 import { CollectionFormDialog } from '@/app/(protected)/collections/_components/collection-form-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SortOrder } from '@/lib/api/types';

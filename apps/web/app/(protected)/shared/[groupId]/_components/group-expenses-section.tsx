@@ -16,7 +16,6 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { SharedExpenseFormDialog } from '@/app/(protected)/_components/shared-expense-form-dialog';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { deleteSharedExpense } from '@/app/(protected)/shared/shared-expense-actions';
 import { expensePayerDisplay } from '@/app/(protected)/shared/shared-expense-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -26,6 +25,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';

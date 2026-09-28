@@ -26,7 +26,6 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { CreditCardArchiveDialog } from '@/app/(protected)/credit-cards/_components/credit-card-archive-dialog';
 import { CreditCardDeleteDialog } from '@/app/(protected)/credit-cards/_components/credit-card-delete-dialog';
 import { CreditCardReconciliationsSection } from '@/app/(protected)/credit-cards/_components/credit-card-reconciliations-section';
@@ -41,6 +40,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';

@@ -18,6 +18,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
 interface FilterComboboxProps {
@@ -76,14 +77,12 @@ export function FilterCombobox({
             )}
           >
             {/*
-             * The label truncates in its own span: `truncate` on the flex row around it draws no
-             * ellipsis (the text is just cut), and the title gives the whole label back.
+             * The label truncates in its own block: `truncate` on the flex row around it draws no
+             * ellipsis (the text is just cut). The tooltip gives the whole label back, only when cut.
              */}
             <span className="flex min-w-0 items-center gap-x-2">
               <Icon className="size-4 shrink-0" />
-              <span className="truncate" title={label}>
-                {label}
-              </span>
+              <TruncatingTooltip text={label} className="block" />
             </span>
             <ComboboxChevron open={open} />
           </Button>

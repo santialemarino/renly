@@ -20,6 +20,7 @@ import {
 import { ConceptHint } from '@/components/concept-hint';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { HELP_ANCHORS } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type {
@@ -263,11 +264,14 @@ function BucketCard({
           const memberStanding = balanceStanding(balance.amount);
           return (
             <div key={balance.memberId} className="flex items-baseline justify-between gap-x-3">
-              <dt className="min-w-0 truncate text-paragraph-sm text-foreground">
-                {balance.displayName}
+              {/*
+               * The name truncates on its own, with the full name in a tooltip, and "(you)" stays
+               * whole beside it: truncating the pair cut the tag first and gave no way to read either.
+               */}
+              <dt className="flex min-w-0 items-baseline gap-x-1 text-paragraph-sm text-foreground">
+                <TruncatingTooltip text={balance.displayName} className="min-w-0" />
                 {balance.isSelf && (
-                  <span className="text-paragraph-xs text-muted-foreground">
-                    {' '}
+                  <span className="shrink-0 text-paragraph-xs text-muted-foreground">
                     {t('members.you')}
                   </span>
                 )}

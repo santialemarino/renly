@@ -14,11 +14,11 @@ import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { MoneyFigure } from '@/components/money-figure';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { accountLedgerPath } from '@/config/routes';
 import type { AccountMovement, AccountMovementList } from '@/lib/api/account-movements';
 import type { MovementKind } from '@/lib/constants/accounts';

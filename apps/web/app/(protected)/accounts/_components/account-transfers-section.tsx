@@ -15,12 +15,12 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { deleteTransfer, fetchAccountTransfers } from '@/app/(protected)/accounts/account-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { Account } from '@/lib/api/accounts';
 import type { Transfer } from '@/lib/api/transfers';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';

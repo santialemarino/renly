@@ -16,7 +16,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { EmptyState } from '@/components/empty-state';
@@ -25,6 +24,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortIcon } from '@/components/sort-icon';
 import { TableSectionRow } from '@/components/table-section-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';

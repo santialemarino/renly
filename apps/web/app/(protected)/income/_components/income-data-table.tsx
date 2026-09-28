@@ -15,7 +15,6 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { IncomeFormDialog } from '@/app/(protected)/_components/income-form-dialog';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
 import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
@@ -24,6 +23,7 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
 import { TableSectionRow } from '@/components/table-section-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';

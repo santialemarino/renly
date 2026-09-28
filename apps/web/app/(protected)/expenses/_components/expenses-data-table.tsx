@@ -19,7 +19,6 @@ import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
 } from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
@@ -28,6 +27,7 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
 import { TableSectionRow } from '@/components/table-section-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';

@@ -15,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { SettlementLegDialog } from '@/app/(protected)/shared/[groupId]/_components/settlement-leg-dialog';
 import {
   confirmSettlement,
@@ -34,6 +33,7 @@ import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { GroupSettlement } from '@/lib/api/group-settlements';

@@ -2,9 +2,9 @@ import { getTranslations } from 'next-intl/server';
 
 import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_components/linked-expense-edit-trigger';
 import { MoneyFigure } from '@/components/money-figure';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
