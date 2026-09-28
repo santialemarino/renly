@@ -213,7 +213,10 @@ both locales. The pieces:
   every element it fired on. A whole-page scan also checks the preset really ran (`target-size` is
   only in `wcag22aa`, `page-has-heading-one` only in `best-practice`). `openForScan(page, path,
 locale)` loads a page in a locale, refuses a redirect (it would scan another page under this name)
-  and waits for fonts and animations — a dialog mid-fade has half-contrast text.
+  waits for the cookie banner (every test context is a first visit, so it is on every page), and
+  then for the page to be still for a moment — no animation running and no element mid-fade,
+  including motion/react's own-loop fades that Web Animations cannot see. A dialog or a banner
+  mid-fade has half-contrast text, and a scan that catches it fails on some runs only.
 - **The route sweep — `a11y-routes.spec.ts` (signed out) and `a11y-routes.auth.spec.ts` (signed
   in).** The route list is DERIVED from `config/routes.ts` in `helpers/a11y-routes.ts`; the dynamic
   routes are reached with ids the signed-in spec seeds through the API. `tests/unit/a11y-sweep-coverage.test.ts`
@@ -224,7 +227,7 @@ locale)` loads a page in a locale, refuses a redirect (it would scan another pag
   with `include()`: a dialog, a `FormCombobox` popover, a type-to-confirm delete, the nav sheet. The
   phone width is scanned only where the layout differs (the top bar and its sheet). A new overlay kind
   gets a case there; a new instance of an existing kind is covered by its base component.
-- **The allow-list — `tests/e2e/helpers/a11y-allowlist.ts`, empty by default.** The ONLY way a
+- **The allow-list — `tests/e2e/helpers/a11y-allowlist.ts`, kept as short as possible.** The ONLY way a
   finding is tolerated: one entry per `rule` + `selector`, with a `reason` and a `revisitBy` date.
   It suppresses that rule on the elements that selector matches — never `disableRules` (a rule
   everywhere) and never `exclude()` (every rule on an element). The selector must be built from
