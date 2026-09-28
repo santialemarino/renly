@@ -101,10 +101,10 @@ export async function findClippedText(page: Page): Promise<ClippingReport> {
 /*
  * How many visible text elements the page's OWN content holds — inside `<main>`. The report's `matched`
  * counts the sidebar, the header and the cookie notice too, which are on every page, so it can never
- * be zero; a page whose content failed to render would pass a check on it. Call after
- * `findClippedText`, which tags the elements.
+ * be zero; a page whose content failed to render would pass a check on it. Tags the page first.
  */
 export async function countTextInMain(page: Page): Promise<number> {
+  await markTextElements(page);
   return page.evaluate(
     (attribute) =>
       [...document.querySelectorAll(`main [${attribute}]`)].filter(
@@ -112,6 +112,22 @@ export async function countTextInMain(page: Page): Promise<number> {
       ).length,
     TEXT_PROBE_ATTRIBUTE,
   );
+}
+
+/*
+ * Waits until the page's own content is on screen: its loading skeleton gone and text of its own
+ * inside `<main>`. `goto` resolves on the document's load, and behind a loading screen the content
+ * streams in AFTER that — measured then, a page is its skeleton, or an empty main between the two,
+ * and every check passes on it. Returns false when the content never came, so the caller reports it.
+ */
+export async function waitForPageContent(page: Page, timeout = 15_000): Promise<boolean> {
+  try {
+    await expect(page.getByTestId('page-skeleton')).toHaveCount(0, { timeout });
+    await expect.poll(() => countTextInMain(page), { timeout }).toBeGreaterThan(0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Opens the tooltip on a clipped element (found by the mark the harness left) and checks it reads the

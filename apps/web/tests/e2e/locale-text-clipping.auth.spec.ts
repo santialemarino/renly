@@ -8,6 +8,7 @@ import {
   findClippedText,
   isAllowedTruncation,
   tooltipShowsFullText,
+  waitForPageContent,
 } from './helpers/text-clipping';
 import { TEXT_SWEEP_WIDTHS, textSweepRoutes } from './helpers/text-pages';
 
@@ -85,6 +86,10 @@ for (const locale of ['es', 'en'] as const) {
     for (const route of textSweepRoutes()) {
       await page.setViewportSize({ width: Math.max(...TEXT_SWEEP_WIDTHS), height: SWEEP_HEIGHT });
       await page.goto(url(route), { timeout: NAVIGATION_TIMEOUT_MS });
+      if (!(await waitForPageContent(page))) {
+        failures.push(`${route}: its own content never rendered inside <main>`);
+        continue;
+      }
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
 
       for (const width of TEXT_SWEEP_WIDTHS) {
