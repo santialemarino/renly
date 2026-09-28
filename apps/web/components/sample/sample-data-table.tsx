@@ -66,7 +66,8 @@ export function SampleDataTable<T extends { id: number }>({
   return (
     <div className="flex flex-col gap-y-3">
       <div className="flex items-center justify-between p-3 gap-x-3 bg-blue-800/5 border border-blue-800/15 rounded-xl">
-        <span className="flex items-center gap-x-2 text-paragraph-sm text-muted-foreground">
+        {/* neutral-600, not muted-foreground: on the banner's blue tint muted measured 4.2:1. */}
+        <span className="flex items-center gap-x-2 text-paragraph-sm text-neutral-600">
           <Sparkles className="size-4 shrink-0 text-blue-800" />
           {t('banner')}
         </span>
