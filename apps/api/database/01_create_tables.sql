@@ -2042,6 +2042,12 @@ GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_exp
 -- and a lookup filtered by the caller's policies would find nothing and wave it through. An account that
 -- does not exist at all is left to the foreign key, whose error names the real problem. The message
 -- names only what the caller wrote, never the account's actual scope.
+--
+-- AFTER the row, not BEFORE, and that is what keeps the definer's view from leaking. A BEFORE ROW trigger
+-- runs ahead of the policies' WITH CHECK, so on a row the policies would refuse anyway its answer would
+-- come first — and "refused by the policy" versus "refused by this trigger" would tell a caller whether
+-- their guess at the scope of an account they cannot see was right. Run after, it only ever judges rows
+-- the policies have already admitted, whose scope the caller can see, so it says nothing they don't know.
 CREATE OR REPLACE FUNCTION app_reconciliation_follows_account() RETURNS TRIGGER
   LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = public, pg_temp
@@ -2067,7 +2073,7 @@ CREATE OR REPLACE FUNCTION app_reconciliation_follows_account() RETURNS TRIGGER
 REVOKE ALL ON FUNCTION app_reconciliation_follows_account() FROM PUBLIC;
 
 CREATE TRIGGER trg_account_reconciliations_follow_account
-  BEFORE INSERT OR UPDATE OF user_id, pot_id, account_id ON account_reconciliations
+  AFTER INSERT OR UPDATE OF user_id, pot_id, account_id ON account_reconciliations
   FOR EACH ROW EXECUTE FUNCTION app_reconciliation_follows_account();
 
 ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;

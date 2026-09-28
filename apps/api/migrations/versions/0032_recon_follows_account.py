@@ -59,10 +59,12 @@ CREATE OR REPLACE FUNCTION app_reconciliation_follows_account() RETURNS TRIGGER
 # The row policies check a reconciliation against its CALLER and never against its account, so as the
 # request role a view-only co-owner could re-point a pot's reconciliation into their own private scope
 # (0031 granted the scope pair for account moves), record a pot-scoped one naming another user's private
-# account, or a private one on a pot's account. A BEFORE INSERT / UPDATE OF user_id, pot_id, account_id
+# account, or a private one on a pot's account. An AFTER INSERT / UPDATE OF user_id, pot_id, account_id
 # trigger refuses any row whose scope is not its account's, so a scope change happens only by moving the
 # account — which needs pot write access — and the move re-points the children after the account, in the
-# same transaction, where the lookup already reads the new scope.
+# same transaction, where the lookup already reads the new scope. AFTER rather than BEFORE so it only
+# judges rows the policies already admitted: ahead of their WITH CHECK, which error answered would tell a
+# caller whether a guess at the scope of an account they cannot see was right.
 #
 # SECURITY DEFINER because the account may be one the caller cannot see, and owned by
 # renly_policy_definer with SELECT on the three columns it reads, for the reason 0030 gives: a function
@@ -78,7 +80,7 @@ def upgrade() -> None:
     op.execute("REVOKE ALL ON FUNCTION app_reconciliation_follows_account() FROM PUBLIC")
     op.execute(
         "CREATE TRIGGER trg_account_reconciliations_follow_account"
-        " BEFORE INSERT OR UPDATE OF user_id, pot_id, account_id ON account_reconciliations"
+        " AFTER INSERT OR UPDATE OF user_id, pot_id, account_id ON account_reconciliations"
         " FOR EACH ROW EXECUTE FUNCTION app_reconciliation_follows_account()"
     )
     op.execute(f"GRANT SELECT {_READS} TO renly_policy_definer")
