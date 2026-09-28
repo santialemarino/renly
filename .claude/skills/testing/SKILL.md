@@ -115,8 +115,8 @@ pnpm test:e2e        # Playwright E2E
   - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue), the roles carry the attributes the model depends on, the
-    `SECURITY DEFINER` helpers are owned by `renly_policy_definer` and it reads only what they read,
-    tables a migration creates reach `renly_app` with their grants, and `row_security = off` is the loud
+    `SECURITY DEFINER` functions are owned by `renly_policy_definer` and it reads only what they read
+    (table and column grants alike) and each pins its `search_path`, tables a migration creates reach `renly_app` with their grants, and `row_security = off` is the loud
     guard. It also reads a group and a pot as `renly_app` under a NOSUPERUSER owner — directly when the
     database's owner is one, and otherwise by re-owning the owner's objects to a throwaway role inside a
     rolled-back transaction, because a superuser owner hides the defect it pins.
@@ -131,8 +131,11 @@ pnpm test:e2e        # Playwright E2E
     may write one, and the column grant that caps what an update may touch.
   - `test_rls_account_scope_move.py` — the two `RLS_TEST_*` vars. Moving an account into a pot and back
     through the service as `renly_app`, with and without reconciliations (whose denormalized scope must
-    follow it), and the row policy bounding every re-point at both ends — in two statement shapes, because
-    a statement that reads a column is also held to the READ policy, which masks a broken update policy.
+    follow it), and the trigger holding every reconciliation to its account's scope: each refused row is
+    one the policies admit, and between them they differ from the account in the user alone, the pot
+    alone and both, so a trigger comparing one column is caught; an update naming each column alone
+    pins which columns it fires on; and a refusal is proven identical whatever an unseen account holds,
+    because the trigger runs after the policies. A view-only member still reconciles.
   - `test_update_column_privileges.py` — the two `RLS_TEST_*` vars. Every UPDATE the application can
     issue, DERIVED from `app/` (Core `update()`, upserts, ORM attribute writes on typed rows, raw SQL),
     held to what `renly_app` may update in the catalogue — a table granted per column refuses a statement

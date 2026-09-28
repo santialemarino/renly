@@ -187,7 +187,7 @@ A second, database-enforced isolation layer (SEC-15) sits under the application'
 - **Restricted request role** (`DATABASE_URL`, `renly_app`): `NOBYPASSRLS`, not the table owner. Every HTTP request connects as this role, so all policies apply.
 - **Privileged admin role** (`DATABASE_ADMIN_URL`, `renly_admin`): `BYPASSRLS`, not a superuser, a member of the owner. Used only for work with no user context — the scheduler, notification dispatch, Alembic migrations, and pre-auth lookups (login, register, API-key verification).
 - **The owner** (`renly`) owns the tables and nothing connects as it. Every policied table is `ENABLE`d **and `FORCE`d**, so owning a table is no exemption: a NOSUPERUSER owner (the production shape) reads nothing without a user context. (A superuser bypasses RLS regardless, which is why the owner must not be one — see `deployment.md` → Roles.)
-- **The policy-helper role** (`renly_policy_definer`): `NOLOGIN`, `BYPASSRLS`, `SELECT` on exactly `pots`, `group_members` and `pot_member_permissions`. It owns the three `SECURITY DEFINER` helpers below and nothing else.
+- **The policy-helper role** (`renly_policy_definer`): `NOLOGIN`, `BYPASSRLS`, `SELECT` on exactly `pots`, `group_members` and `pot_member_permissions`, plus the `id`, `user_id` and `pot_id` columns of `accounts`. It owns four `SECURITY DEFINER` functions and nothing else: the three policy helpers below, and the trigger function that holds every account reconciliation to its account's scope.
 
 ### Per-request user context
 

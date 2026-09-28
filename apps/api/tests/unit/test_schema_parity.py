@@ -59,7 +59,7 @@ class TestFunctionBodiesMatchTheirMigration:
         # Without this, a regex that quietly stopped matching would make the test above vacuously
         # pass — the failure mode where a guard is green because it is checking nothing.
         names = set(_schema_functions())
-        assert {"app_current_user_id", "app_is_group_member", "app_can_view_pot", "app_can_write_pot"} <= names
+        assert {"app_current_user_id", "app_is_group_member", "app_can_view_pot", "app_can_write_pot", "app_reconciliation_follows_account"} <= names
 
 
 class TestScopedTablesCarryTheirGuards:
