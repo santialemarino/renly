@@ -44,7 +44,9 @@ describe('the text sweep’s page list', () => {
   });
 
   it('gives every swept dynamic route a URL', () => {
-    expect(resolvedDynamic).toContain('/accounts/[id]');
+    expect(resolvedDynamic).toEqual(
+      expect.arrayContaining(['/accounts/[id]', '/shared/[groupId]', '/shared/pots/[id]']),
+    );
     expect(
       swept.filter((route) => route.includes('[') && !resolvedDynamic.includes(route)),
     ).toEqual([]);

@@ -98,6 +98,22 @@ export async function findClippedText(page: Page): Promise<ClippingReport> {
   );
 }
 
+/*
+ * How many visible text elements the page's OWN content holds — inside `<main>`. The report's `matched`
+ * counts the sidebar, the header and the cookie notice too, which are on every page, so it can never
+ * be zero; a page whose content failed to render would pass a check on it. Call after
+ * `findClippedText`, which tags the elements.
+ */
+export async function countTextInMain(page: Page): Promise<number> {
+  return page.evaluate(
+    (attribute) =>
+      [...document.querySelectorAll(`main [${attribute}]`)].filter(
+        (el) => el.getClientRects().length > 0 && el.checkVisibility({ visibilityProperty: true }),
+      ).length,
+    TEXT_PROBE_ATTRIBUTE,
+  );
+}
+
 // Opens the tooltip on a clipped element (found by the mark the harness left) and checks it reads the
 // element's whole text; then closes it, so it is not measured as page text afterwards.
 export async function tooltipShowsFullText(page: Page, clipping: Clipping): Promise<boolean> {

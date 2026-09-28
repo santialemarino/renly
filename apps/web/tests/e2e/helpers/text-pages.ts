@@ -21,13 +21,10 @@ export const TEXT_SWEEP_SKIPS: Record<string, string> = {
   '/admin':
     'admin-only: the harness account is not an admin, so the page is a 404 (and in open signup mode it is a 404 for everyone)',
   '/admin/feedback': 'admin-only, like /admin',
-  '/shared/[groupId]':
-    'needs a group with shared money in it, which needs a second member — the fixture the money sweep is waiting on too (U12b)',
-  '/shared/[groupId]/share': 'needs a group, like /shared/[groupId]',
-  '/shared/pots/[id]': 'needs a pot, which needs a group',
-  '/shared/pots/[id]/buy-out': 'needs a pot, which needs a group',
-  '/shared/pots/[id]/contribute': 'needs a pot, which needs a group',
-  '/shared/pots/[id]/take-out': 'needs a pot, which needs a group',
+  '/shared/pots/[id]/buy-out':
+    'a 404 unless the pot is priced — holdings moved in and an opening ownership recorded, which is the money fixture (U12b), not a group seed',
+  '/shared/pots/[id]/contribute': 'a 404 unless the pot is priced, like /shared/pots/[id]/buy-out',
+  '/shared/pots/[id]/take-out': 'a 404 unless the pot is priced, like /shared/pots/[id]/buy-out',
 };
 
 // Every page under (protected), as its route pattern: route groups dropped, dynamic segments kept.
