@@ -210,24 +210,34 @@ both locales. The pieces:
   holds `page-has-heading-one`, `region` and `landmark-unique`, the class the first audit found. Hand
   the results to `expectNoA11yViolations(page, results, testInfo, name, { wholePage })`: it attaches
   the full result as JSON to the report, then fails on any violation, printing one line per rule with
-  every element it fired on. A whole-page scan also checks the preset really ran (`target-size` is
-  only in `wcag22aa`, `page-has-heading-one` only in `best-practice`). `openForScan(page, path,
-locale)` loads a page in a locale, refuses a redirect (it would scan another page under this name)
-  waits for the cookie banner (every test context is a first visit, so it is on every page), and
-  then for the page to be still for a moment — no animation running and no element mid-fade,
-  including motion/react's own-loop fades that Web Animations cannot see. A dialog or a banner
-  mid-fade has half-contrast text, and a scan that catches it fails on some runs only.
+  every element it fired on. A whole-page scan also checks that every tag the project decided on
+  reached axe: asked for in the run, and carried by at least one rule in the result — so a tag
+  dropped from the builder or renamed by an axe upgrade goes red by name.
+  `openForScan(page, path, locale)` loads a page in a locale, refuses a redirect (it would scan
+  another page under this name), waits for the cookie banner (every test context is a first visit,
+  so it is on every page), and then for the page to be still for a moment — no animation running and
+  no element mid-fade, including motion/react's own-loop fades that Web Animations cannot see. A
+  dialog or a banner mid-fade has half-contrast text, and a scan that catches it fails on some runs
+  only. It then fails if the not-found page or an error boundary rendered instead of the page; only
+  the two not-found targets pass `{ notFound: true }`, which REQUIRES the not-found page.
 - **The route sweep — `a11y-routes.spec.ts` (signed out) and `a11y-routes.auth.spec.ts` (signed
-  in).** The route list is DERIVED from `config/routes.ts` in `helpers/a11y-routes.ts`; the dynamic
-  routes are reached with ids the signed-in spec seeds through the API. `tests/unit/a11y-sweep-coverage.test.ts`
-  walks every `page.tsx` and fails unless its route is swept or skipped there with a reason — so a new
-  route in `ROUTES` is swept with no edit, and a new dynamic page fails until it gets an entry.
+  in).** The route list is DERIVED from `config/routes.ts` in `helpers/a11y-routes.ts`.
+  `tests/unit/a11y-sweep-coverage.test.ts` walks every `page.tsx` and fails unless its route is
+  swept or skipped there with a reason — so a new route in `ROUTES` is swept with no edit, and a new
+  dynamic page fails until it gets an entry. **A dynamic route must be seeded into a state in which
+  it renders**, not merely given an id: the pot flows `notFound()` unless the pot is priced and
+  divided (and buy-out needs a second active seat), so the signed-in spec seeds a pot holding an
+  account, an opening division between two seats, and a live group invite (the `/join` preview, also
+  scanned signed out). The token-gated auth forms are scanned too: `/reset-password?token=…` renders
+  its form for any token, and `/signup?invite=…` needs a live invite — CI seeds one in SQL and passes
+  it as `E2E_SIGNUP_INVITE_TOKEN` (a shell var like `E2E_EMAIL`, so it stays out of the env files);
+  without it that one case skips locally.
 - **Open states — `a11y-overlays.auth.spec.ts`.** A page scan cannot see an overlay (unmounted until
   opened, and once open Radix hides the rest of the page), so one of each KIND is opened and scanned
   with `include()`: a dialog, a `FormCombobox` popover, a type-to-confirm delete, the nav sheet. The
   phone width is scanned only where the layout differs (the top bar and its sheet). A new overlay kind
   gets a case there; a new instance of an existing kind is covered by its base component.
-- **The allow-list — `tests/e2e/helpers/a11y-allowlist.ts`, kept as short as possible.** The ONLY way a
+- **The allow-list — `tests/e2e/helpers/a11y-allowlist.ts`, kept as short as possible (one entry today).** The ONLY way a
   finding is tolerated: one entry per `rule` + `selector`, with a `reason` and a `revisitBy` date.
   It suppresses that rule on the elements that selector matches — never `disableRules` (a rule
   everywhere) and never `exclude()` (every rule on an element). The selector must be built from

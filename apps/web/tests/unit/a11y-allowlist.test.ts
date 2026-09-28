@@ -13,9 +13,9 @@ import {
  * The accessibility allow-list stays honest: no entry outlives its date, and none points at an element
  * nothing renders any more. See `tests/e2e/helpers/a11y-allowlist.ts` for why each rule exists.
  *
- * The list is empty, so checking only the real entries would pass whatever the validator did. The
- * first block therefore drives the validator with entries built to break each rule, and the second
- * runs it on the real list.
+ * The real list is short and every entry in it is valid, so checking only the real entries would pass
+ * whatever the validator did. The first block therefore drives the validator with entries built to
+ * break each rule, and the second runs it on the real list.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

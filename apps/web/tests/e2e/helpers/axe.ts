@@ -33,24 +33,57 @@ export const AXE_TAGS = [
 ] as const;
 
 /*
- * Rules a whole-page scan must have RUN, whether they passed, failed, could not decide, or found
- * nothing to check. Each stands for one part of the preset: `target-size` exists only under
- * `wcag22aa`, `page-has-heading-one` only under `best-practice`. If a tag stops reaching axe — a typo, an
- * axe upgrade renaming it — the scan still returns zero violations, just over fewer rules, and this is
- * what notices.
+ * The tag set the project DECIDED on (P2-D1), kept apart from `AXE_TAGS` on purpose: the check below
+ * compares what the scan actually ran against THIS list, so editing the builder's tags — dropping one,
+ * mistyping one — goes red instead of quietly moving the check along with it. The two lists must be
+ * changed together, deliberately.
  */
-const RULES_THE_PRESET_RUNS = ['target-size', 'page-has-heading-one', 'color-contrast'] as const;
+const DECIDED_TAGS = [
+  'wcag2a',
+  'wcag2aa',
+  'wcag21a',
+  'wcag21aa',
+  'wcag22aa',
+  'best-practice',
+] as const;
+
+/*
+ * The decided tags a whole-page scan did NOT reach, derived from the result itself. A tag counts as
+ * reached when axe was asked for it (`toolOptions.runOnly`) and at least one rule carrying it appears
+ * in the result — passed, failed, undecided or inapplicable, since every rule that ran lands in one of
+ * the four. A tag that stops reaching axe (dropped from the builder, renamed by an axe upgrade) still
+ * leaves a result with zero violations, just over fewer rules; this is what notices.
+ */
+function unreachedTags(results: AxeResults): string[] {
+  const asked = new Set<string>(
+    (results.toolOptions.runOnly as { values?: string[] } | undefined)?.values ?? [],
+  );
+  const carried = new Set(
+    [
+      ...results.passes,
+      ...results.violations,
+      ...results.incomplete,
+      ...results.inapplicable,
+    ].flatMap((rule) => rule.tags),
+  );
+  return DECIDED_TAGS.filter((tag) => !asked.has(tag) || !carried.has(tag));
+}
 
 /*
  * `nextjs-portal` is the dev server's own overlay (the route indicator, the error toasts). It is not
  * part of the app and a production build never renders it, so it is left out of every scan — the one
  * standing exclusion, and not an exception: nothing the app ships is inside it.
  */
+export function presetAxeBuilder(page: Page): AxeBuilder {
+  return new AxeBuilder({ page }).withTags([...AXE_TAGS]).exclude('nextjs-portal');
+}
+
+// The fixture most specs use; `presetAxeBuilder` directly is for a page from a context of its own.
 export const test = base.extend<{ makeAxeBuilder: () => AxeBuilder }>({
   // `provide` is Playwright's `use` callback, renamed so the React hooks lint rule does not take it
   // for React's `use`.
   makeAxeBuilder: async ({ page }, provide) => {
-    await provide(() => new AxeBuilder({ page }).withTags([...AXE_TAGS]).exclude('nextjs-portal'));
+    await provide(() => presetAxeBuilder(page));
   },
 });
 
@@ -99,12 +132,27 @@ export async function settleForScan(page: Page): Promise<void> {
 const QUIET_MS = 400;
 const SETTLE_TIMEOUT_MS = 8_000;
 
+// What the app renders instead of a page: the not-found screen and the error boundary (`ErrorState`,
+// which every error boundary and `global-error` render).
+const NOT_FOUND = '[data-testid="not-found"]';
+const ERROR_BOUNDARY = '[data-testid="error-boundary"]';
+
 /*
- * Loads `path` in `locale` and waits until it can be scanned. Fails when the app sent the visit
- * somewhere else — a redirect would scan a different page under this one's name — or rendered the
- * other language.
+ * Loads `path` in `locale` and waits until it can be scanned. Fails when the scan would be about a
+ * different page than the one it names:
+ *   * the app redirected the visit elsewhere;
+ *   * it rendered the other language;
+ *   * it rendered the not-found screen or an error boundary INSTEAD of the page — a route whose seed no
+ *     longer satisfies it (`notFound()` on a pot that cannot be bought out) passes a scan of the 404
+ *     off as a scan of the page. Only the two not-found targets pass `notFound: true`, and for them the
+ *     not-found screen is REQUIRED, so they cannot silently become a scan of something else either.
  */
-export async function openForScan(page: Page, path: string, locale: 'en' | 'es'): Promise<void> {
+export async function openForScan(
+  page: Page,
+  path: string,
+  locale: 'en' | 'es',
+  { notFound = false }: { notFound?: boolean } = {},
+): Promise<void> {
   await page
     .context()
     .addCookies([
@@ -117,6 +165,16 @@ export async function openForScan(page: Page, path: string, locale: 'en' | 'es')
   // from an effect after hydration; waiting for it makes each scan include it, and not half-faded.
   await page.getByTestId('cookie-consent').waitFor();
   await settleForScan(page);
+  expect(
+    await page.locator(ERROR_BOUNDARY).count(),
+    `${path} rendered the error boundary, not the page`,
+  ).toBe(0);
+  expect(
+    await page.locator(NOT_FOUND).count(),
+    notFound
+      ? `${path} was expected to render the not-found page`
+      : `${path} rendered the not-found page, not the page`,
+  ).toBe(notFound ? 1 : 0);
 }
 
 // A file-safe attachment name for a path and locale, e.g. `shared_pots_12-es`.
@@ -180,18 +238,7 @@ export async function expectNoA11yViolations(
   });
 
   if (wholePage) {
-    const ran = new Set(
-      [
-        ...results.passes,
-        ...results.violations,
-        ...results.incomplete,
-        ...results.inapplicable,
-      ].map((rule) => rule.id),
-    );
-    expect(
-      RULES_THE_PRESET_RUNS.filter((rule) => !ran.has(rule)),
-      'the axe preset no longer runs these rules — a tag stopped reaching axe',
-    ).toEqual([]);
+    expect(unreachedTags(results), 'these decided axe tags did not reach the scan').toEqual([]);
   }
 
   expect(summarize(await unexcused(page, results.violations)), `axe violations on ${name}`).toEqual(

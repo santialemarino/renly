@@ -15,7 +15,7 @@
  *     to take the name tomorrow;
  *   * the rule, the reason and the date are real values, not placeholders.
  *
- * Empty is its expected state; every entry below is a debt with a date.
+ * It should stay as short as it can; each entry below is a debt with a date.
  */
 
 export interface A11yAllowListEntry {
