@@ -27,7 +27,7 @@ export const SIGNED_OUT_ROUTES: readonly string[] = [...PUBLIC_ROUTES, ...AUTH_R
 // Pages the sweep does not scan, each with the reason — never silently.
 export const A11Y_SWEEP_SKIPS: Record<string, string> = {
   [ROUTES.admin]:
-    'admin-only: the harness account is not an admin, so this route shows it the not-found page (scanned at UNKNOWN_ROUTE) and the invite admin itself would go unscanned — a scan here would pass without checking the page it names',
+    'admin-only: the harness account is not an admin, so this route shows it the in-app not-found page (scanned at IN_APP_NOT_FOUND_ROUTE) and the invite admin itself would go unscanned — a scan here would pass without checking the page it names',
   [ROUTES.adminFeedback]:
     'admin-only, for the same reason as /admin: the harness account gets the not-found page, never the feedback admin',
 };
@@ -63,7 +63,11 @@ export const DYNAMIC_ROUTES: Record<string, (ids: A11ySeedIds) => string> = {
   '/shared/pots/[id]/take-out': ({ potId }) => sharedTakeOutPath(potId),
 };
 
-// A path no route answers, for the not-found page each surface renders.
+// A path no route answers: the root not-found, rendered under the root layout alone.
 export const UNKNOWN_ROUTE = '/this-route-does-not-exist';
+
+// A real route whose page calls `notFound()` (no pot has this id): the not-found rendered INSIDE the
+// app shell, a different render from UNKNOWN_ROUTE's, with the protected layout's landmarks around it.
+export const IN_APP_NOT_FOUND_ROUTE = sharedPotPath(999_999);
 
 export const A11Y_LOCALES = ['en', 'es'] as const;

@@ -3,6 +3,7 @@ import { request as playwrightRequest, type APIRequestContext } from '@playwrigh
 import {
   A11Y_LOCALES,
   DYNAMIC_ROUTES,
+  IN_APP_NOT_FOUND_ROUTE,
   SIGNED_IN_ROUTES,
   UNKNOWN_ROUTE,
   type A11ySeedIds,
@@ -13,7 +14,8 @@ import { testMarker } from './helpers/factories';
 
 /*
  * Every page a signed-in reader can open, scanned by axe in both languages: each protected route, the
- * public pages (whose header changes once signed in), the invite landing, the not-found page, and the
+ * public pages (whose header changes once signed in), the invite landing, both not-found renders (an
+ * unmatched URL, and a `notFound()` inside the app shell), and the
  * dynamic routes — an account's ledger, a group's hub and share flow, a pot and its three flows. Zero
  * tolerance; see `helpers/axe.ts`. The list is derived (`helpers/a11y-routes.ts`, checked by
  * `tests/unit/a11y-sweep-coverage.test.ts`).
@@ -115,10 +117,9 @@ test.afterAll(async () => {
 
 test.describe('accessibility sweep (signed in)', { tag: '@a11y' }, () => {
   const targets: [string, () => string][] = [
-    ...[...SIGNED_IN_ROUTES, UNKNOWN_ROUTE].map((route): [string, () => string] => [
-      route,
-      () => route,
-    ]),
+    ...[...SIGNED_IN_ROUTES, UNKNOWN_ROUTE, IN_APP_NOT_FOUND_ROUTE].map(
+      (route): [string, () => string] => [route, () => route],
+    ),
     ...Object.entries(DYNAMIC_ROUTES).map(([pattern, url]): [string, () => string] => [
       pattern,
       () => url(ids),

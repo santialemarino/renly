@@ -61,7 +61,43 @@ export { expect };
 export async function settleForScan(page: Page): Promise<void> {
   await page.waitForLoadState('load');
   await settle(page);
+  /*
+   * Two things `settle` cannot see. motion/react runs some animations on its own frame loop rather
+   * than as Web Animations, and some content mounts AFTER load — the cookie banner appears from an
+   * effect, then slides and fades in. Scanned mid-fade, its text sits at a fraction of its contrast
+   * and axe reports that, on some runs and not others. So the page must be QUIET for a whole window:
+   * no element at an inline opacity strictly between 0 and 1 (a fade in flight; nothing at rest looks
+   * like that) and no finite animation running, twice in a row, QUIET_MS apart.
+   */
+  const moving = () =>
+    page.evaluate(
+      () =>
+        [...document.querySelectorAll<HTMLElement>('[style*="opacity"]')].filter((element) => {
+          const opacity = Number(element.style.opacity);
+          return opacity > 0 && opacity < 1;
+        }).length +
+        document
+          .getAnimations()
+          .filter(
+            (animation) =>
+              animation.playState === 'running' &&
+              animation.effect?.getComputedTiming().endTime !== Infinity,
+          ).length,
+    );
+  const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+  let quietSince: number | null = null;
+  while (Date.now() < deadline) {
+    if ((await moving()) > 0) quietSince = null;
+    else if (quietSince === null) quietSince = Date.now();
+    else if (Date.now() - quietSince >= QUIET_MS) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`the page never stopped animating within ${SETTLE_TIMEOUT_MS}ms`);
 }
+
+// How long the page must be still before a scan, and how long to wait for that.
+const QUIET_MS = 400;
+const SETTLE_TIMEOUT_MS = 8_000;
 
 /*
  * Loads `path` in `locale` and waits until it can be scanned. Fails when the app sent the visit
@@ -77,6 +113,9 @@ export async function openForScan(page: Page, path: string, locale: 'en' | 'es')
   await page.goto(path);
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
   expect(new URL(page.url()).pathname, `${path} redirected`).toBe(new URL(path, WEB_BASE).pathname);
+  // Every test context is a first visit, so the cookie banner is part of every page scanned. It mounts
+  // from an effect after hydration; waiting for it makes each scan include it, and not half-faded.
+  await page.getByTestId('cookie-consent').waitFor();
   await settleForScan(page);
 }
 

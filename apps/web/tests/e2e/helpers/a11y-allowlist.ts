@@ -15,7 +15,7 @@
  *     to take the name tomorrow;
  *   * the rule, the reason and the date are real values, not placeholders.
  *
- * It is empty, and that is its expected state.
+ * Empty is its expected state; every entry below is a debt with a date.
  */
 
 export interface A11yAllowListEntry {
@@ -29,7 +29,15 @@ export interface A11yAllowListEntry {
   revisitBy: string;
 }
 
-export const A11Y_ALLOW_LIST: readonly A11yAllowListEntry[] = [];
+export const A11Y_ALLOW_LIST: readonly A11yAllowListEntry[] = [
+  {
+    rule: 'scrollable-region-focusable',
+    selector: '[data-slot="command-list"]',
+    reason:
+      'cmdk renders its listbox with a hardcoded tabIndex={-1}, after the props, so no caller can make it a Tab stop. Every combobox moves focus INTO the list when it opens and the arrow keys move the active option, which scrolls it, so a keyboard reaches every row. Fix by replacing cmdk or overriding the attribute on mount.',
+    revisitBy: '2026-12-31',
+  },
+];
 
 // The attribute forms an entry's selector may be built from, and how each is written in source.
 const SELECTOR_ATTRIBUTE = /\[(data-testid|data-slot)="([^"]+)"\]/g;
