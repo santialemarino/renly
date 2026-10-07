@@ -19,10 +19,11 @@ import { findSettledClipping, type Clipping, type ClippingReport } from './overf
  *      sets `text-overflow: ellipsis`, i.e. `truncate` on a block. `truncate` on a FLEX container
  *      draws no ellipsis — the text is simply cut — so it does not count;
  *   3. the page offers the full text (`cue`): a `title` equal to the whole text, or a tooltip trigger
- *      whose tooltip, once opened, reads the whole text (`tooltipShowsFullText` opens it — a trigger
- *      is only a claim). An `aria-label` does not count: the DOM already gives assistive tech the
- *      whole text, and what the truncation hides it hides from SIGHTED readers, whom only a visible
- *      cue reaches;
+ *      whose tooltip, once opened, reads the whole text (`tooltipShowsFullText` opens it by hover and
+ *      `tooltipOpensFromKeyboard` by focus — a trigger is only a claim, and a hover-only tooltip
+ *      leaves keyboard users without the text). An `aria-label` does not count: the DOM already
+ *      gives assistive tech the whole text, and what the truncation hides it hides from SIGHTED
+ *      readers, whom only a visible cue reaches;
  *   4. the box still shows a real part of the text: at least `MIN_VISIBLE_EM` ems of its own font
  *      size. A name squeezed to two letters and an ellipsis is hidden, not truncated, whatever its
  *      tooltip says — which is what a shrink-0 badge beside it did on /payments-calendar in Spanish.
@@ -164,4 +165,100 @@ export async function tooltipShowsFullText(page: Page, clipping: Clipping): Prom
     els.forEach((el) => ((el as HTMLElement).style.visibility = '')),
   );
   return shown;
+}
+
+const KEYBOARD_STOP_ATTRIBUTE = 'data-text-keyboard-stop';
+
+/*
+ * The same tooltip, reached from the KEYBOARD (WCAG 2.1.1 and 1.4.13): the clipped element — or, when
+ * it sits inside a link or a button, that element — is in the tab order, focusing it opens the tooltip
+ * with the whole text, and Escape closes it. Returns why it failed, or null.
+ *
+ * Focus is moved by script right after a key press, which the browser treats as keyboard focus
+ * (`:focus-visible`) — the focus a Tab gives, without walking the page's whole tab order. That the
+ * element really is IN the tab order is read from `tabIndex`, the browser's own answer.
+ */
+export async function tooltipOpensFromKeyboard(
+  page: Page,
+  clipping: Clipping,
+): Promise<string | null> {
+  const target = page.locator(`[${CLIPPED_MARK_ATTRIBUTE}="${clipping.index}"]`);
+  const fullText = clipping.text.replace(/\s+/g, ' ').trim();
+  const tooltip = page.getByRole('tooltip');
+  const reachable = await target.evaluate((element, attribute) => {
+    for (let node: HTMLElement | null = element as HTMLElement; node; node = node.parentElement) {
+      if (node.tabIndex >= 0) {
+        node.setAttribute(attribute, '');
+        return true;
+      }
+    }
+    return false;
+  }, KEYBOARD_STOP_ATTRIBUTE);
+  if (!reachable) return 'truncated, and neither it nor anything around it is in the tab order';
+
+  const stop = page.locator(`[${KEYBOARD_STOP_ATTRIBUTE}]`);
+  try {
+    await page.keyboard.press('Shift');
+    await stop.focus();
+    try {
+      await expect(tooltip).toHaveText(fullText, { timeout: 2_000 });
+    } catch {
+      return 'truncated, and keyboard focus does not open a tooltip with the full text';
+    }
+    await page.keyboard.press('Escape');
+    try {
+      await expect(tooltip).toHaveCount(0, { timeout: 2_000 });
+    } catch {
+      return 'truncated, and Escape does not close its tooltip';
+    }
+    return null;
+  } finally {
+    await stop.evaluate((element, attribute) => {
+      (element as HTMLElement).blur();
+      element.removeAttribute(attribute);
+    }, KEYBOARD_STOP_ATTRIBUTE);
+    await expect(tooltip).toHaveCount(0);
+  }
+}
+
+// The page's `TruncatingTooltip` texts, by what the keyboard should do with each, and what is wrong.
+export interface TruncationTabStops {
+  fits: number;
+  standalone: number;
+  nested: number;
+  findings: string[];
+}
+
+/*
+ * Every `TruncatingTooltip` on screen (`data-truncating-tooltip`), held to its tab-stop contract: text
+ * that fits is NOT a tab stop (it has nothing to reveal); cut text is one, unless something around it
+ * already is — then it must not be, since a focusable inside a link or a button is a nested, empty
+ * extra stop (axe's `nested-interactive`). "Something around it is a stop" is the browser's
+ * `tabIndex >= 0`, not the component's own selector, so the check does not borrow the logic it checks.
+ */
+export async function checkTruncationTabStops(page: Page): Promise<TruncationTabStops> {
+  return page.evaluate(() => {
+    const result = { fits: 0, standalone: 0, nested: 0, findings: [] as string[] };
+    document.querySelectorAll<HTMLElement>('[data-truncating-tooltip]').forEach((el) => {
+      if (el.getClientRects().length === 0) return;
+      const text = (el.textContent ?? '').trim();
+      let insideStop = false;
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        if (node.tabIndex >= 0) insideStop = true;
+      }
+      if (el.scrollWidth <= el.clientWidth) {
+        result.fits += 1;
+        if (el.tabIndex >= 0) result.findings.push(`"${text}" fits, and is still a tab stop`);
+      } else if (insideStop) {
+        result.nested += 1;
+        if (el.tabIndex >= 0)
+          result.findings.push(`"${text}" is a tab stop nested inside another tab stop`);
+      } else {
+        result.standalone += 1;
+        if (el.tabIndex < 0)
+          result.findings.push(`"${text}" is truncated, and the keyboard cannot reach it`);
+      }
+    });
+    return result;
+  });
 }

@@ -3,10 +3,12 @@ import { expect, test } from '@playwright/test';
 import { seedGroup, type GroupSeed } from './helpers/group-seed';
 import { seedMoney, type MoneySeed } from './helpers/money-seed';
 import {
+  checkTruncationTabStops,
   countTextInMain,
   describeFinding,
   findClippedText,
   isAllowedTruncation,
+  tooltipOpensFromKeyboard,
   tooltipShowsFullText,
   waitForPageContent,
 } from './helpers/text-clipping';
@@ -83,6 +85,7 @@ for (const locale of ['es', 'en'] as const) {
       .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
 
     const failures: string[] = [];
+    const stops = { fits: 0, standalone: 0, nested: 0 };
     for (const route of textSweepRoutes()) {
       await page.setViewportSize({ width: Math.max(...TEXT_SWEEP_WIDTHS), height: SWEEP_HEIGHT });
       await page.goto(url(route), { timeout: NAVIGATION_TIMEOUT_MS });
@@ -116,15 +119,33 @@ for (const locale of ['es', 'en'] as const) {
         for (const clipping of report.clipped) {
           if (!isAllowedTruncation(clipping)) {
             failures.push(`${where}: "${clipping.text}" — ${describeFinding(clipping)}`);
-          } else if (clipping.cue === 'tooltip' && !(await tooltipShowsFullText(page, clipping))) {
-            failures.push(
-              `${where}: "${clipping.text}" — truncated, and its tooltip does not show the full text`,
-            );
+          } else if (clipping.cue === 'tooltip') {
+            if (!(await tooltipShowsFullText(page, clipping))) {
+              failures.push(
+                `${where}: "${clipping.text}" — truncated, and its tooltip does not show the full text`,
+              );
+            }
+            const keyboard = await tooltipOpensFromKeyboard(page, clipping);
+            if (keyboard) failures.push(`${where}: "${clipping.text}" — ${keyboard}`);
           }
         }
+
+        const tabStops = await checkTruncationTabStops(page);
+        stops.fits += tabStops.fits;
+        stops.standalone += tabStops.standalone;
+        stops.nested += tabStops.nested;
+        failures.push(...tabStops.findings.map((finding) => `${where}: ${finding}`));
       }
     }
 
     expect(failures).toEqual([]);
+    /*
+     * The tab-stop contract ran on real cases of each kind it rules on — text that fits, cut text on
+     * its own, cut text inside a link or a button — so a sweep that met none cannot pass it.
+     */
+    console.log(`truncating tooltips checked (${locale}): ${JSON.stringify(stops)}`);
+    expect(stops.fits).toBeGreaterThan(0);
+    expect(stops.standalone).toBeGreaterThan(0);
+    expect(stops.nested).toBeGreaterThan(0);
   });
 }

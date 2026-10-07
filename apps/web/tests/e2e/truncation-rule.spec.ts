@@ -2,9 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 
 import type { Clipping } from './helpers/overflow';
 import {
+  checkTruncationTabStops,
   findClippedText,
   isAllowedTruncation,
   MIN_VISIBLE_EM,
+  tooltipOpensFromKeyboard,
   tooltipShowsFullText,
 } from './helpers/text-clipping';
 
@@ -32,8 +34,9 @@ async function render(page: Page, body: string): Promise<void> {
     </style></head>
     <body><div class="card">${body}</div>
     <script>
+      const hide = () => document.querySelectorAll('[role="tooltip"]').forEach((tip) => tip.remove());
       document.querySelectorAll('[data-slot="tooltip-trigger"]').forEach((trigger) => {
-        trigger.addEventListener('mouseenter', () => {
+        const show = () => {
           const text = trigger.dataset.tooltipText;
           if (text === undefined) return;
           const tip = document.createElement('div');
@@ -41,10 +44,17 @@ async function render(page: Page, body: string): Promise<void> {
           tip.textContent = text;
           tip.style.cssText = 'position:fixed;left:300px;top:300px';
           document.body.appendChild(tip);
+        };
+        trigger.addEventListener('mouseenter', show);
+        trigger.addEventListener('mouseleave', hide);
+        // Opt-in focus wiring, on the trigger or on the button around it, like TruncatingTooltip's.
+        if (!('tooltipOnFocus' in trigger.dataset)) return;
+        const host = trigger.closest('button') ?? trigger;
+        host.addEventListener('focus', show);
+        host.addEventListener('blur', hide);
+        host.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && !('tooltipKeepsOnEscape' in trigger.dataset)) hide();
         });
-        trigger.addEventListener('mouseleave', () =>
-          document.querySelectorAll('[role="tooltip"]').forEach((tip) => tip.remove()),
-        );
       });
     </script></body></html>`);
 }
@@ -174,5 +184,80 @@ test.describe('a tooltip cue is only a claim until it is opened', () => {
     );
     const clipping = (await onlyClipping(page))!;
     expect(await tooltipShowsFullText(page, clipping)).toBe(false);
+  });
+});
+
+test.describe('a tooltip cue has to be reachable from the keyboard too', () => {
+  // A trigger carrying the long text, with the stand-in's attributes added.
+  const trigger = (attributes: string) =>
+    `<div class="truncate" data-slot="tooltip-trigger" data-tooltip-text="${LONG}" ${attributes}>${LONG}</div>`;
+  const inButton = (inner: string) =>
+    `<button style="display: block; width: 120px; padding: 0">${inner}</button>`;
+
+  test('a focusable trigger that opens on focus and closes on Escape passes', async ({ page }) => {
+    await render(page, trigger('tabindex="0" data-tooltip-on-focus'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toBeNull();
+  });
+
+  test('a trigger inside a button passes when the button’s focus opens it', async ({ page }) => {
+    await render(page, inButton(trigger('data-tooltip-on-focus')));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toBeNull();
+  });
+
+  test('a trigger nothing can focus fails', async ({ page }) => {
+    await render(page, trigger('data-tooltip-on-focus'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
+  });
+
+  test('a hover-only tooltip on a focusable trigger fails', async ({ page }) => {
+    await render(page, trigger('tabindex="0"'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(
+      /keyboard focus does not open/,
+    );
+  });
+
+  test('a tooltip Escape cannot dismiss fails', async ({ page }) => {
+    await render(page, trigger('tabindex="0" data-tooltip-on-focus data-tooltip-keeps-on-escape'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(
+      /Escape does not close/,
+    );
+  });
+});
+
+test.describe('a truncating tooltip is a tab stop only while cut, and never a nested one', () => {
+  const span = (text: string, attributes = '') =>
+    `<span class="truncate" style="display: block" data-truncating-tooltip ${attributes}>${text}</span>`;
+  const inButton = (inner: string) =>
+    `<button style="display: block; width: 120px">${inner}</button>`;
+
+  test('the right stops pass, and each kind is counted', async ({ page }) => {
+    await render(page, span('Visa') + span(LONG, 'tabindex="0"') + inButton(span(LONG)));
+    expect(await checkTruncationTabStops(page)).toEqual({
+      fits: 1,
+      standalone: 1,
+      nested: 1,
+      findings: [],
+    });
+  });
+
+  test('text that fits and is a stop is a finding', async ({ page }) => {
+    await render(page, span('Visa', 'tabindex="0"'));
+    expect((await checkTruncationTabStops(page)).findings).toEqual([
+      '"Visa" fits, and is still a tab stop',
+    ]);
+  });
+
+  test('cut text the keyboard cannot reach is a finding', async ({ page }) => {
+    await render(page, span(LONG));
+    expect((await checkTruncationTabStops(page)).findings).toEqual([
+      `"${LONG}" is truncated, and the keyboard cannot reach it`,
+    ]);
+  });
+
+  test('cut text that is a stop inside a button is a finding', async ({ page }) => {
+    await render(page, inButton(span(LONG, 'tabindex="0"')));
+    expect((await checkTruncationTabStops(page)).findings).toEqual([
+      `"${LONG}" is a tab stop nested inside another tab stop`,
+    ]);
   });
 });
