@@ -64,6 +64,32 @@ After implementation and before committing, audit every changed or created file 
 - **Env vars:** every new `process.env.NEXT_PUBLIC_*` read on the web or `os.getenv(...)` read on the API must have a matching entry in `.env.example` (in the right topical position) AND in `.env` (the gitignored local-dev copy). PR body must call them out under an `**Env vars:**` sub-section.
 - **Docs and memory** updated per section 4 below.
 
+**Guard self-check (before opening the PR — every new or edited test, guard or CI step):** apply the general
+guard checklist first (prove it fails: mutate the covered code, watch it go red for the reason it names, restore
+from your own byte copy with `cmp` — never `git checkout`; a fixture that can express the failure; a derived
+population printed once and not empty; a browser guard proven to be on the page it names; stated invariants and
+numbers verified, not recalled). Then the Renly-specific traps that have each shipped a vacuous guard or a real
+incident:
+
+- **Databases:** every `alembic`, `pytest`, `uvicorn` or DB script sets BOTH `DATABASE_URL` and
+  `DATABASE_ADMIN_URL` to the throwaway clone — `migrations/env.py` and parts of the API connect with the admin
+  URL, and a worktree's copied `apps/api/.env` points it at the dev DB. Integration suites need all four
+  `*_TEST_DATABASE_URL` vars with the roles the `testing` skill names, or they skip silently.
+- **e2e pages:** list pages with nested routes live in route groups (`accounts/(list)/`, `shared/(groups)/`, …) —
+  derive routes with `(group)` segments dropped; protected pages stream behind a `loading.tsx` skeleton — measure
+  only after the real content replaced it; refuse the not-found and error-boundary screens; seed through
+  `apiToken()` in `tests/e2e/helpers/api.ts` (the saved session — never a per-worker `/auth/login`, which hits the
+  login rate limit and turns real failures into 429s); a flow that 404s without data (pot buy-out/contribute/
+  take-out need a priced, divided pot) needs that data seeded or the scan checks the 404.
+- **Shared e2e helpers:** `tests/e2e/helpers/overflow.ts` backs the money sweep — an edit to it (or to any helper
+  under `tests/e2e/helpers/`) re-runs every spec that imports it, and adds a case pinning the behaviour it changed.
+- **RLS and roles:** a new `SECURITY DEFINER` function is owned by `renly_policy_definer` with `SELECT` on exactly
+  what it reads, pins `search_path`, and revokes `EXECUTE` from PUBLIC; an invariant trigger that refuses rows runs
+  AFTER the row policies — a BEFORE trigger's error code can reveal rows the caller cannot see; a new UPDATE on a
+  table granted per column needs its column grant (`test_update_column_privileges` derives the writes).
+- **e2e in CI:** verify full suites on GitHub (`run-e2e` label per the `e2e-testing` rubric); locally run only the
+  affected specs.
+
 ## 4. Keep docs and memory current
 
 Docs describe **how things work now**, not “what we changed” (no changelog-style “this works like this now” in READMEs).
