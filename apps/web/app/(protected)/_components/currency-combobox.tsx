@@ -209,7 +209,8 @@ export function CurrencyCombobox({
     );
   }
 
-  const clearable = !!onClear && !!value;
+  // Never on a disabled combobox: the ✕ sits outside the trigger, so the trigger's `disabled` does not reach it.
+  const clearable = !!onClear && !!value && !disabled;
 
   return (
     <div className="relative w-full min-w-0">
