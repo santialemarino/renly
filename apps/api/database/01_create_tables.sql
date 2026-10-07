@@ -2037,6 +2037,15 @@ GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_exp
 -- write access, and the move re-points the children in a later statement of the same transaction —
 -- by which point this lookup already reads the account's new scope.
 --
+-- What it checks is the row against the account AS COMMITTED when it runs: it reads the account without
+-- a lock, so on its own it does not hold across concurrent transactions. One that inserts a private
+-- reconciliation, uncommitted, while another moves the account into a pot and re-points its children
+-- (matching none, since the new row is invisible to it) would both commit and leave the reconciliation
+-- private on a pot's account. That "always" holds at the API level because the services serialise both
+-- sides on the same row first: a reconcile takes lock_private (the account, FOR UPDATE) or the pot's
+-- lock, and a move locks the pot and then updates the account, so one waits for the other and the
+-- second's write is judged against the first's committed scope.
+--
 -- SECURITY DEFINER, owned by renly_policy_definer (the handover block after app_is_group_member()),
 -- because the account a row names may be one its caller cannot see — that is the second case above —
 -- and a lookup filtered by the caller's policies would find nothing and wave it through. An account that
