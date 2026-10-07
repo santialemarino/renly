@@ -94,6 +94,11 @@ E2E_EMAIL=you@example.com E2E_PASSWORD=... pnpm test:e2e
 Without both, the `chromium-authenticated` project does not exist and only the signed-out specs run —
 the suite still exits 0. See "Auth and storage state" below.
 
+**To also scan the admin pages, name an admin account** with `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`
+(shell vars, like the two above). An account becomes an admin only in SQL, against the database the
+API under test uses (a throwaway clone, never a shared dev database):
+`update users set is_admin = true where email = '<admin email>';`. Without them the admin scans skip.
+
 **They are shell vars, and deliberately NOT in `.env`.** Playwright reads no dotenv file, so a value
 placed in `apps/web/.env` looks configured and reaches nothing. They also stay out of `.env.example`
 for the same reason the API's four `*_TEST_DATABASE_URL` vars do: they are per-developer test
@@ -174,6 +179,14 @@ an unauthenticated state instead makes every authenticated spec fail as a redire
 confusing failures away from the one real cause. Delete any stale state file before starting, so a
 failed setup cannot leave the previous run's session for the next one to load.
 
+**A second saved session, for the admin pages.** With `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` set,
+globalSetup signs that account in the same way and saves `tests/e2e/.auth/admin-storage-state.json`
+(`ADMIN_AUTH_STATE_PATH`), after checking it really is an admin (an admin page that renders the
+not-found page fails setup by name). A spec that needs it loads it with
+`test.use({ storageState: ADMIN_AUTH_STATE_PATH })` inside a `describe` that skips when
+`e2eAdminCredentials()` is null. It is a separate account rather than the harness one made admin, so
+every other spec keeps seeing a regular user.
+
 Login flow tests are the exception to reusing the state — they exercise the UI auth path.
 
 ### Seed data
@@ -212,7 +225,13 @@ both locales. The pieces:
   the full result as JSON to the report, then fails on any violation, printing one line per rule with
   every element it fired on. A whole-page scan also checks that every tag the project decided on
   reached axe: asked for in the run, and carried by at least one rule in the result — so a tag
-  dropped from the builder or renamed by an axe upgrade goes red by name.
+  dropped from the builder or renamed by an axe upgrade goes red by name. A decided tag that NO
+  runnable rule carries yet stays in the preset but sits in `NOT_YET_RUNNABLE` with its measured
+  reason, spared only the "carried" half: `wcag21a`, whose one rule in axe-core 4.13
+  (`label-content-name-mismatch`) is `experimental`, and a tag-selected run skips experimental rules.
+  The scan fails once an exempt tag DOES appear in a result, so the exemption is removed the day an
+  axe upgrade makes it runnable. Check a tag against the installed axe (`axe.getRules([tag])` and each
+  rule's `experimental` tag) before deciding it is unreachable.
   `openForScan(page, path, locale)` loads a page in a locale, refuses a redirect (it would scan
   another page under this name), waits for the cookie banner (every test context is a first visit,
   so it is on every page), and then for the page to be still for a moment — no animation running and
@@ -232,6 +251,13 @@ both locales. The pieces:
   its form for any token, and `/signup?invite=…` needs a live invite — CI seeds one in SQL and passes
   it as `E2E_SIGNUP_INVITE_TOKEN` (a shell var like `E2E_EMAIL`, so it stays out of the env files);
   without it that one case skips locally.
+- **The admin pages — scanned with an admin session.** `/admin` and `/admin/feedback` show anyone
+  without `users.is_admin` the not-found page, so the harness account cannot reach them.
+  `ADMIN_ROUTES` (every protected route under `/admin`, derived) is scanned in
+  `a11y-routes.auth.spec.ts` with a second saved session (see "Auth and storage state"), and each scan
+  checks a premise of the page's own content (the invite form, the feedback table) on top of
+  `openForScan` refusing the not-found page. The coverage test fails if an admin page is missing from
+  `ADMIN_ROUTES` or lands in the harness sweep.
 - **Open states — `a11y-overlays.auth.spec.ts`.** A page scan cannot see an overlay (unmounted until
   opened, and once open Radix hides the rest of the page), so one of each KIND is opened and scanned
   with `include()`: a dialog, a `FormCombobox` popover, a type-to-confirm delete, the nav sheet. The
@@ -391,7 +417,9 @@ One job, serial, Chromium only, built from the same pieces a developer uses:
    card holds BOTH currencies because the conversion-basis spec checks each display currency, and a
    bucket already in the display currency never converts — each pass needs one in the other
    currency, dated where the rate differs from today's. **A new spec that assumes account data adds
-   it to this step.**
+   it to this step.** The same step registers the ADMIN account (`E2E_ADMIN_EMAIL`, per-run
+   `E2E_ADMIN_PASSWORD`), verifies it and sets `is_admin` in SQL, and inserts one feedback row per
+   category so `/admin/feedback` renders its table; the signup invite it seeds is what `/admin` lists.
 5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200. Locally,
    `globalSetup` makes the same check first and fails at once with "start the web and API servers"
    when either is not running (a port that refuses the connection); a server that is up but slow — a
