@@ -2,6 +2,7 @@ import { request as playwrightRequest, type APIRequestContext } from '@playwrigh
 
 import {
   A11Y_LOCALES,
+  ADMIN_ROUTES,
   DYNAMIC_ROUTES,
   IN_APP_NOT_FOUND_ROUTE,
   SIGNED_IN_ROUTES,
@@ -9,6 +10,7 @@ import {
   type A11ySeedIds,
 } from './helpers/a11y-routes';
 import { API_BASE, apiToken } from './helpers/api';
+import { ADMIN_AUTH_STATE_PATH, e2eAdminCredentials } from './helpers/auth';
 import {
   expect,
   expectNoA11yViolations,
@@ -38,6 +40,10 @@ import { testMarker } from './helpers/factories';
  * division, then the holding, then the pot, the group and the accounts. A run killed before its cleanup
  * leaves rows under that prefix, which the next run removes first by the same route. Desktop width: the
  * layout that changes on a phone is scanned by `a11y-overlays.auth.spec.ts`.
+ *
+ * The admin pages render only for an admin, so they are scanned with a second session — the admin
+ * account globalSetup signs in from E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD. Without those (a local run
+ * with no admin account) those scans skip; CI seeds the account and refuses skips.
  */
 
 const MARKER_PREFIX = 'e2e-a11y-';
@@ -261,5 +267,41 @@ test.describe('accessibility sweep (signed in)', { tag: '@a11y' }, () => {
         await context.close();
       }
     });
+  }
+});
+
+/*
+ * What each admin page shows only when it rendered its content, not just its frame: the invite form,
+ * and the feedback table (CI seeds feedback, so the table and its category badges are in the scan
+ * rather than the empty state). `openForScan` already refuses the not-found page a non-admin gets.
+ */
+const ADMIN_PREMISES: Record<string, string> = {
+  '/admin': '[data-testid="admin-invite-email"]',
+  '/admin/feedback': 'table',
+};
+
+test.describe('accessibility sweep (admin)', { tag: '@a11y' }, () => {
+  test.skip(
+    e2eAdminCredentials() === null,
+    'E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD are unset (CI seeds an admin account)',
+  );
+  test.use({ storageState: ADMIN_AUTH_STATE_PATH });
+
+  for (const locale of A11Y_LOCALES) {
+    for (const route of ADMIN_ROUTES) {
+      test(`${route} has no axe violations (${locale}, admin)`, async ({
+        page,
+        makeAxeBuilder,
+      }, info) => {
+        await openForScan(page, route, locale);
+        const premise = ADMIN_PREMISES[route];
+        expect(premise, `${route} has no premise in ADMIN_PREMISES`).toBeDefined();
+        await expect(page.locator(premise as string).first()).toBeVisible();
+        const results = await makeAxeBuilder().analyze();
+        await expectNoA11yViolations(page, results, info, scanName(`${route}-admin`, locale), {
+          wholePage: true,
+        });
+      });
+    }
   }
 });

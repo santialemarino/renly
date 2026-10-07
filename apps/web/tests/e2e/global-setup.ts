@@ -1,14 +1,25 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { chromium, type FullConfig } from '@playwright/test';
+import { chromium, type Browser, type FullConfig } from '@playwright/test';
 
 import { API_BASE } from './helpers/api';
-import { AUTH_STATE_PATH, e2eCredentials } from './helpers/auth';
+import {
+  ADMIN_AUTH_STATE_PATH,
+  AUTH_STATE_PATH,
+  e2eAdminCredentials,
+  e2eCredentials,
+  type E2ECredentials,
+} from './helpers/auth';
 
 // Route literals mirror apps/web/config/routes.ts. Kept local like the two logged-out specs' — the
 // Playwright loader resolves no build-time path aliases.
 const LOGIN = '/login';
 const PROTECTED_PATH = '/dashboard';
+// An admin-only page and what it ends in: its invite form for an admin, the not-found page for anyone
+// without `users.is_admin` (or for everyone when the API is not in invite mode).
+const ADMIN_PATH = '/admin';
+const ADMIN_CONTENT = '[data-testid="admin-invite-email"]';
+const NOT_FOUND = '[data-testid="not-found"]';
 
 // Long enough for a cold dev server's first compile of /login, short enough that a wrong password
 // fails the run in seconds rather than making it look hung.
@@ -75,21 +86,56 @@ async function preflight(baseURL: string) {
  * Credentials come from E2E_EMAIL / E2E_PASSWORD. When they are unset the whole authenticated project
  * is skipped by the config and this stops after the preflight — the same env-gating the API's
  * integration suites use, so a fresh clone's `pnpm test:e2e` still passes on the logged-out specs.
+ * E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD add a second session, for the admin pages (see
+ * `ADMIN_AUTH_STATE_PATH`); unset, only the admin scans skip.
  */
 async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3000';
   await preflight(baseURL);
 
   const credentials = e2eCredentials();
+  // A stale state file from a previous run must never survive a failed setup: a spec would load it
+  // and fail against whatever session it happens to hold. Both go, whichever accounts are set now.
+  for (const path of [AUTH_STATE_PATH, ADMIN_AUTH_STATE_PATH]) {
+    if (existsSync(path)) rmSync(path);
+  }
   if (!credentials) return;
-
-  // A stale state file from a previous run must never survive a failed setup: the authenticated
-  // project would load it and fail against whatever session it happens to hold.
-  if (existsSync(AUTH_STATE_PATH)) rmSync(AUTH_STATE_PATH);
   mkdirSync(dirname(AUTH_STATE_PATH), { recursive: true });
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ baseURL });
+  try {
+    await signIn(browser, baseURL, credentials, AUTH_STATE_PATH, 'E2E_EMAIL / E2E_PASSWORD');
+    const admin = e2eAdminCredentials();
+    if (admin) {
+      await signIn(
+        browser,
+        baseURL,
+        admin,
+        ADMIN_AUTH_STATE_PATH,
+        'E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD',
+        {
+          mustBeAdmin: true,
+        },
+      );
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
+// Signs one account in through the form, verifies the session, and saves it to `statePath`. An admin
+// session is also checked to BE one: an account without `is_admin` gets the not-found page on every
+// admin route, and each admin scan would fail on that instead of on this one stated cause.
+async function signIn(
+  browser: Browser,
+  baseURL: string,
+  credentials: E2ECredentials,
+  statePath: string,
+  envNames: string,
+  { mustBeAdmin = false }: { mustBeAdmin?: boolean } = {},
+) {
+  const context = await browser.newContext({ baseURL });
+  const page = await context.newPage();
 
   try {
     await page.goto(LOGIN);
@@ -114,7 +160,7 @@ async function globalSetup(config: FullConfig) {
     } catch {
       throw new Error(
         `E2E login was rejected for ${credentials.email}: the form stayed on ${LOGIN}. ` +
-          `Check E2E_EMAIL / E2E_PASSWORD, and that the app at ${baseURL} can reach the API.`,
+          `Check ${envNames}, and that the app at ${baseURL} can reach the API.`,
       );
     }
 
@@ -127,9 +173,28 @@ async function globalSetup(config: FullConfig) {
       );
     }
 
-    await page.context().storageState({ path: AUTH_STATE_PATH });
+    if (mustBeAdmin) {
+      await page.goto(ADMIN_PATH);
+      /*
+       * Wait for the page to END in one of its two outcomes, not for `load`: the route streams behind
+       * a skeleton, and a `notFound()` there is swapped in after hydration — at `load` neither the
+       * not-found page nor the form is on screen yet, and a count taken then passes for anyone.
+       */
+      await page.locator(`${NOT_FOUND}, ${ADMIN_CONTENT}`).first().waitFor({
+        timeout: LOGIN_TIMEOUT_MS,
+      });
+      if ((await page.locator(NOT_FOUND).count()) > 0) {
+        throw new Error(
+          `E2E admin account ${credentials.email} is not an admin: ${ADMIN_PATH} rendered the ` +
+            `not-found page. Set users.is_admin for it in the database the API uses (and run the ` +
+            `API with SIGNUP_MODE=invite, the only mode with an invite admin).`,
+        );
+      }
+    }
+
+    await context.storageState({ path: statePath });
   } finally {
-    await browser.close();
+    await context.close();
   }
 }
 

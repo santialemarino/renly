@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { ALL_ROUTE_PATHS } from '@/config/routes';
 import {
   A11Y_SWEEP_SKIPS,
+  ADMIN_ROUTES,
   DYNAMIC_ROUTES,
   SIGNED_IN_ROUTES,
   SIGNED_OUT_ROUTES,
@@ -44,6 +45,7 @@ describe('the accessibility sweep’s page list', () => {
   const swept = new Set([
     ...SIGNED_OUT_ROUTES,
     ...SIGNED_IN_ROUTES,
+    ...ADMIN_ROUTES,
     ...Object.keys(DYNAMIC_ROUTES),
   ]);
   const skipped = Object.keys(A11Y_SWEEP_SKIPS);
@@ -69,6 +71,15 @@ describe('the accessibility sweep’s page list', () => {
 
   it('gives every skip a reason', () => {
     expect(Object.entries(A11Y_SWEEP_SKIPS).filter(([, reason]) => reason.length < 40)).toEqual([]);
+  });
+
+  it('scans every admin page, and only those, with the admin session', () => {
+    // The harness account gets the not-found page on an admin route, so a scan of one in the signed-in
+    // sweep would pass without checking the page it names; each must be in ADMIN_ROUTES instead.
+    const adminPages = pages.filter((route) => route === '/admin' || route.startsWith('/admin/'));
+    expect(adminPages.length).toBeGreaterThan(0);
+    expect([...ADMIN_ROUTES].sort()).toEqual(adminPages);
+    expect(SIGNED_IN_ROUTES.filter((route) => ADMIN_ROUTES.includes(route))).toEqual([]);
   });
 
   it('takes the static routes from config/routes.ts, not a list of its own', () => {
