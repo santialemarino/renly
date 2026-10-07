@@ -33,7 +33,8 @@ from app.services import pot_service
 # or nothing, and each asserts the trigger's own message so a refusal from anywhere else does not pass
 # for it — and between them they differ from the account in the user alone, the pot alone, and both,
 # so a trigger that COMPARES only one of the two columns is caught. Which columns it FIRES on is a
-# separate fact, pinned by an update setting pot_id alone and one setting user_id alone. The trigger
+# separate fact, pinned by an update setting each of its three columns alone — pot_id and user_id as
+# the request role, account_id as the admin role, since renly_app may not update it. The trigger
 # runs AFTER the row, so a row the policies refuse is refused by them first and alike whatever account
 # it names — one test asserts that the refusal says nothing about an account its caller cannot see.
 # The positive paths prove what the trigger leaves alone: the account move, and a view-only member
@@ -326,6 +327,26 @@ class TestAReconciliationSitsInItsAccountsScope:
                 await s.execute(text("UPDATE account_reconciliations SET user_id = :u WHERE account_id = :a"), {"u": owner, "a": account})
             await s.rollback()
         assert await _scopes(seeded, "reconciled") == ((outsider, None), [(owner, None)] * len(_RECONCILED_DATES))
+
+    @pytest.mark.asyncio
+    async def test_a_re_point_setting_only_account_id_is_refused(self, seeded):
+        # The trigger must fire on account_id by itself. renly_app is not granted UPDATE on it, so only the
+        # admin role can issue this write — and the trigger holds for every role. The positive control
+        # first: one of the owner's reconciliations moved to the owner's other private account stays in
+        # its scope and is admitted, so what is refused is the destination and not the verb. Then the
+        # outsider's reconciliation moved onto the owner's account, whose scope differs in the user.
+        owner, outsider = seeded["users"]["owner"], seeded["users"]["outsider"]
+        accounts = seeded["accounts"]
+        statement = "UPDATE account_reconciliations SET account_id = :to WHERE account_id = :a AND as_of_date = :d"
+        async with seeded["admin_sessionmaker"]() as admin:
+            moved = await admin.execute(text(statement), {"to": accounts["bare"], "a": accounts["reconciled"], "d": _RECONCILED_DATES[1]})
+            assert moved.rowcount == 1
+            with pytest.raises(IntegrityError, match=_REFUSED):
+                await admin.execute(text(statement), {"to": accounts["bare"], "a": accounts["foreign"], "d": _RECONCILED_DATES[0]})
+            await admin.rollback()
+        assert (await _scopes(seeded, "foreign"))[1] == [(outsider, None)]
+        assert (await _scopes(seeded, "bare"))[1] == []
+        assert (await _scopes(seeded, "reconciled"))[1] == [(owner, None)] * len(_RECONCILED_DATES)
 
     @pytest.mark.asyncio
     async def test_a_refusal_says_nothing_about_an_account_its_caller_cannot_see(self, seeded):
