@@ -48,25 +48,60 @@ const DECIDED_TAGS = [
 ] as const;
 
 /*
+ * Decided tags that no rule axe runs carries YET, each with the rule that holds it back. They stay in
+ * `AXE_TAGS`, so the day axe ships a runnable rule under one it runs with no edit here; they are only
+ * spared the "reached" half of the check below, since no scan can reach them today.
+ *
+ * Measured against axe-core 4.13.0's rule metadata: the ONLY rule tagged `wcag21a` is
+ * `label-content-name-mismatch` (WCAG 2.5.3), and it is also tagged `experimental`. A run selected by
+ * tags (`withTags`, i.e. `runOnly: { type: 'tag' }`) excludes every `experimental` rule unless
+ * `experimental` is itself one of the tags, so that rule never runs and `wcag21a` appears in no result.
+ *
+ * The exemption cannot outlive its reason: a whole-page scan in which an exempt tag DOES appear fails
+ * by name (see `outlivedExemptions`), so an axe upgrade that promotes the rule out of `experimental`
+ * removes this entry the same day.
+ */
+const NOT_YET_RUNNABLE: Partial<Record<(typeof DECIDED_TAGS)[number], string>> = {
+  wcag21a:
+    'label-content-name-mismatch is its only rule in axe-core 4.13.0, and it is experimental',
+};
+
+// The tags asked for (`toolOptions.runOnly`) and the tags carried by the rules that ran — passed,
+// failed, undecided or inapplicable, since every rule that ran lands in one of the four.
+function tagsOf(results: AxeResults): { asked: Set<string>; carried: Set<string> } {
+  return {
+    asked: new Set<string>(
+      (results.toolOptions.runOnly as { values?: string[] } | undefined)?.values ?? [],
+    ),
+    carried: new Set(
+      [
+        ...results.passes,
+        ...results.violations,
+        ...results.incomplete,
+        ...results.inapplicable,
+      ].flatMap((rule) => rule.tags),
+    ),
+  };
+}
+
+/*
  * The decided tags a whole-page scan did NOT reach, derived from the result itself. A tag counts as
- * reached when axe was asked for it (`toolOptions.runOnly`) and at least one rule carrying it appears
- * in the result — passed, failed, undecided or inapplicable, since every rule that ran lands in one of
- * the four. A tag that stops reaching axe (dropped from the builder, renamed by an axe upgrade) still
- * leaves a result with zero violations, just over fewer rules; this is what notices.
+ * reached when axe was asked for it and at least one rule carrying it ran. A tag that stops reaching
+ * axe (dropped from the builder, renamed by an axe upgrade) still leaves a result with zero violations,
+ * just over fewer rules; this is what notices. Every decided tag must be ASKED for, exempt or not; an
+ * exempt one is spared only the "ran" half.
  */
 function unreachedTags(results: AxeResults): string[] {
-  const asked = new Set<string>(
-    (results.toolOptions.runOnly as { values?: string[] } | undefined)?.values ?? [],
+  const { asked, carried } = tagsOf(results);
+  return DECIDED_TAGS.filter(
+    (tag) => !asked.has(tag) || (!carried.has(tag) && !(tag in NOT_YET_RUNNABLE)),
   );
-  const carried = new Set(
-    [
-      ...results.passes,
-      ...results.violations,
-      ...results.incomplete,
-      ...results.inapplicable,
-    ].flatMap((rule) => rule.tags),
-  );
-  return DECIDED_TAGS.filter((tag) => !asked.has(tag) || !carried.has(tag));
+}
+
+// The exempt tags a scan reached after all: each one's exemption has outlived its reason.
+function outlivedExemptions(results: AxeResults): string[] {
+  const { carried } = tagsOf(results);
+  return Object.keys(NOT_YET_RUNNABLE).filter((tag) => carried.has(tag));
 }
 
 /*
@@ -239,6 +274,10 @@ export async function expectNoA11yViolations(
 
   if (wholePage) {
     expect(unreachedTags(results), 'these decided axe tags did not reach the scan').toEqual([]);
+    expect(
+      outlivedExemptions(results),
+      'these axe tags now reach the scan: remove them from NOT_YET_RUNNABLE in helpers/axe.ts',
+    ).toEqual([]);
   }
 
   expect(summarize(await unexcused(page, results.violations)), `axe violations on ${name}`).toEqual(
