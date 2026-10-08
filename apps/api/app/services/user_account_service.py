@@ -81,7 +81,8 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # "was this the group's only account-holder" stops being answerable.
     orphan_group_ids = await group_repository.list_orphaned_group_ids(admin_session, user.id)
     # Everything those groups' pots hold is re-pointed to this user as PRIVATE, before anything is
-    # deleted. Three reasons it has to happen here and in this order:
+    # deleted — parents and their scope-denormalized children together, so no row is left naming a pot
+    # its parent has left. Three reasons it has to happen here and in this order:
     #   * every pot_id foreign key is ON DELETE RESTRICT, so deleting an orphaned group that still
     #     owns holdings would simply fail — and CASCADE would have been far worse, destroying real
     #     money records to satisfy a cleanup;
@@ -113,5 +114,9 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # The orphaned groups go LAST, for the same fail-benign reason inverted: dropping them before the
     # account and then failing the account delete would destroy a live user's groups, whereas failing
     # here leaves unreachable rows — which is precisely the state that existed before this cleanup.
+    # Both partial failures are benign only because the absorption above moved every child with its
+    # parent: a failure after its commit leaves a live user holding private accounts and investments
+    # whose whole history is private too, and pots nothing names any more, so the groups can still be
+    # deleted later.
     await group_repository.delete_by_ids(admin_session, orphan_group_ids)
     await admin_session.commit()
