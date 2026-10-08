@@ -141,8 +141,10 @@ async def count_by_scope(
     return [(row[0], None, None, int(row[1])) for row in result.all()]
 
 
-# The ids of every investment a set of pots holds, locked, so the set a re-point moves cannot change
-# between this read and the move. Ordered by id so two callers take the locks in the same order.
+# The ids of every investment a set of pots holds, locked, so the rows read cannot leave or change before the
+# move (rows inserted into the pots meanwhile are not blocked). The lock also conflicts with the key lock
+# a concurrent snapshot or transaction insert takes on its parent, so such an insert waits and lands after the move.
+# Ordered by id so two callers take the locks in the same order.
 async def list_ids_by_pots_for_update(session: AsyncSession, pot_ids: list[int]) -> list[int]:
     if not pot_ids:
         return []

@@ -62,8 +62,10 @@ async def list_by_user(
     return capped(list(result.scalars().all()), limit, "accounts")
 
 
-# The ids of every account a set of pots holds, locked, so the set a re-point moves cannot change
-# between this read and the move. Ordered by id so two callers take the locks in the same order.
+# The ids of every account a set of pots holds, locked, so the rows read cannot leave or change before the
+# move (rows inserted into the pots meanwhile are not blocked). The lock also conflicts with the key lock
+# a concurrent reconciliation or transfer insert takes on its parent, so such an insert waits and lands after the move.
+# Ordered by id so two callers take the locks in the same order.
 async def list_ids_by_pots_for_update(session: AsyncSession, pot_ids: list[int]) -> list[int]:
     if not pot_ids:
         return []
@@ -165,8 +167,8 @@ async def delete(session: AsyncSession, account: Account) -> None:
 #
 # A transfer follows its legs, matched on EITHER one. That is consistent only because both legs always
 # land in one scope: a caller moves either a whole pot's accounts (absorption on account deletion) or
-# accounts carrying no transfer at all (move_holdings refuses them), so on that path the statement
-# matches no row.
+# accounts carrying no transfer at all (move_holdings and contributing a holding refuse them), so on
+# those paths the statement matches no row.
 async def move_to_scope(session: AsyncSession, ids: list[int], *, pot_id: int | None, user_id: int | None) -> int:
     if not ids:
         return 0
