@@ -13,6 +13,9 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'turbo.json'
+      # Cross-app parity tests (`*.cross-app.test.ts`) read the API app's source, so an API-only change
+      # can break this suite. Widening the filter costs ~2 min of parallel runner time, no wall-clock.
+      - 'apps/api/**'
   workflow_dispatch:
 
 jobs:

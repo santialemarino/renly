@@ -42,6 +42,11 @@ dev = ["ruff>=0.8.0"]
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
+[tool.pytest.ini_options]
+# `cross_app` marks a test module that reads the WEB app's source (parity tests). The pre-commit hook runs
+# these on every commit, whichever app is staged; `tests/unit/test_cross_app_tag.py` derives the set.
+markers = ["cross_app: reads apps/web source; runs on every commit (scripts/pre-commit.sh)"]
+
 [tool.ruff]
 line-length = 150
 target-version = "py313"

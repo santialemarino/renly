@@ -25,7 +25,7 @@ export const API_MAX_PAGE = 1_000_000;
 // --- DB constraints (expenses / income) ---
 
 // The cap on EVERY free-text `notes` field, not only an expense's: the API puts `max_length=500` on the
-// notes of every request schema, and `notes-cap.test.ts` holds each web form to it.
+// notes of every request schema, and `notes-cap.cross-app.test.ts` holds each web form to it.
 export const EXPENSE_NOTES_MAX = 500;
 export const CREDIT_CARD_NAME_MAX = 100;
 

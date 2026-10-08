@@ -12,6 +12,7 @@
     "check-types": "next typegen && tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:cross-app": "vitest run .cross-app.test",
     "test:e2e": "playwright test",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:headed": "playwright test --headed",

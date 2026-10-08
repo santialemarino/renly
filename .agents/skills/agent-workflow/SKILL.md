@@ -24,7 +24,7 @@ Use **api-\*** skills when touching the backend; **web-\*** when touching the fr
 
 ## 2. Lints and checks before commit
 
-Before committing (or suggesting a commit), ensure lints and checks pass. The repo runs them on every commit via Husky (lint-staged, `pnpm check:api`, `pnpm check:web`), so the tree should stay green — but don’t leave broken state or rely on “fix later.” If you’re about to commit, run from repo root:
+Before committing (or suggesting a commit), ensure lints and checks pass. The repo runs them on every commit via Husky, scoped to what is staged (`scripts/pre-commit.sh`: lint-staged, then each app's check and tests when that app is staged, plus both apps' cross-app tests — see the `testing` skill), so the tree should stay green — but don’t leave broken state or rely on “fix later.” If you’re about to commit, run from repo root:
 
 - `pnpm lint` (and fix if needed)
 - `pnpm format:check` (or `pnpm format` to fix)
@@ -63,6 +63,8 @@ After implementation and before committing, audit every changed or created file 
 - **No dead imports** from deleted files.
 - **Env vars:** every new `process.env.NEXT_PUBLIC_*` read on the web or `os.getenv(...)` read on the API must have a matching entry in `.env.example` (in the right topical position) AND in `.env` (the gitignored local-dev copy). PR body must call them out under an `**Env vars:**` sub-section.
 - **Docs and memory** updated per section 4 below.
+
+**A proposed new guard or sweep states its CI and local run time next to its value**, so the cost is decided, not discovered.
 
 **Guard self-check (before opening the PR — every new or edited test, guard or CI step):** apply the general
 guard checklist first (prove it fails: mutate the covered code, watch it go red for the reason it names, restore
