@@ -2,15 +2,17 @@
 # Pre-commit hook body (called from .husky/pre-commit). Runs lint-staged, then only the checks the
 # staged paths can affect:
 #   - apps/api/** or docs/public/api-reference.md (the API suite reads it)  -> check:api + test:api
-#   - apps/web/**, packages/**, root package.json / pnpm-lock.yaml / pnpm-workspace.yaml / turbo.json /
-#     tsconfig*                                                              -> check:web + test:web
+#   - apps/web/**, packages/**, pnpm-lock.yaml / pnpm-workspace.yaml / turbo.json / tsconfig*
+#                                                                            -> check:web + test:web
 #   - docs/**, .claude/**, .agents/**, .github/**, *.md, LICENSE             -> nothing beyond lint-staged
-#   - anything else (root config, scripts, .husky, docker, ...)              -> everything
+#   - anything else (root package.json — it holds both apps' scripts and the lint-staged config —,
+#     root config, scripts, .husky, docker, ...)                           -> everything
 # Whenever any code is staged, the cross-app tests of the side NOT fully run still run: they read the
 # other app's source, so a change to one app can break the other's. Each app's suite derives which of
 # its tests are cross-app and fails when one is untagged (see the testing skill).
 #
-# PRE_COMMIT_DRY_RUN=1 prints the plan for the current staged set without running anything.
+# PRE_COMMIT_DRY_RUN=1 prints the plan for the current staged set without running anything, then FAILS
+# so a dry run left exported can never let a commit through unchecked.
 set -euo pipefail
 
 run() {
@@ -24,7 +26,7 @@ code=0
 while IFS= read -r path; do
   case "$path" in
     apps/api/* | docs/public/api-reference.md) api=1 ;;
-    apps/web/* | packages/* | package.json | pnpm-lock.yaml | pnpm-workspace.yaml | turbo.json | tsconfig*) web=1 ;;
+    apps/web/* | packages/* | pnpm-lock.yaml | pnpm-workspace.yaml | turbo.json | tsconfig*) web=1 ;;
     docs/* | .claude/* | .agents/* | .github/* | *.md | LICENSE) ;;
     *) api=1 web=1 ;;
   esac
@@ -39,4 +41,9 @@ run pnpm lint-staged
 if [ "$code" = "1" ]; then
   [ "$api" = "1" ] || run pnpm --filter api run test:cross-app
   [ "$web" = "1" ] || run pnpm --filter web run test:cross-app
+fi
+
+if [ "${PRE_COMMIT_DRY_RUN:-}" = "1" ]; then
+  echo "pre-commit: dry run — nothing was checked, so the commit is refused"
+  exit 1
 fi

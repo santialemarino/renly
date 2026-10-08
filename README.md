@@ -97,9 +97,9 @@ On every `git commit`, Husky runs `scripts/pre-commit.sh`, which scopes the chec
 
 - **lint-staged** — always. Prettier on staged JS/TS/CSS/JSON/MD (with import sort via `@ianvs/prettier-plugin-sort-imports`); ruff on staged API Python; ESLint fix on staged TS/TSX in `apps/web` and `packages/ui`. Formatted files are re-staged.
 - **API** — `pnpm check:api` (the app loads) and `pnpm test:api` (pytest), when anything under `apps/api/` or `docs/public/api-reference.md` is staged.
-- **Web** — `pnpm check:web` (TypeScript compiles) and `pnpm test:web` (Vitest), when anything under `apps/web/` or `packages/`, or the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json` or `tsconfig*`, is staged.
+- **Web** — `pnpm check:web` (TypeScript compiles) and `pnpm test:web` (Vitest), when anything under `apps/web/` or `packages/`, or the root `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json` or `tsconfig*`, is staged.
 - **Cross-app tests** — whenever code is staged, the other app's parity tests (the ones that read the staged app's source) still run: `pnpm --filter api run test:cross-app` / `pnpm --filter web run test:cross-app`.
-- Docs, skills, `.github/` and Markdown alone run lint-staged only; any other path (root config, scripts, `.husky/`) runs everything. `PRE_COMMIT_DRY_RUN=1 bash scripts/pre-commit.sh` prints the plan.
+- Docs, skills, `.github/` and Markdown alone run lint-staged only; any other path (the root `package.json`, root config, scripts, `.husky/`) runs everything. `PRE_COMMIT_DRY_RUN=1 bash scripts/pre-commit.sh` prints the plan and then fails, so it never lets a commit through.
 
 To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:web`, `pnpm test:api`, `pnpm test:web`.
 
