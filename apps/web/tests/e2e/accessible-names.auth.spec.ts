@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { ROUTES } from '@/config/routes';
+import { waitForHydration } from './helpers/hydration';
 
 /*
  * The runtime half of the a11y sweep, and the half no static check can reach.
@@ -72,20 +73,17 @@ test.describe('accessible names (signed in)', () => {
       await expect(action).toBeVisible();
 
       /*
-       * Opening the tooltip is RETRIED as a whole — the interaction, not only the assertion.
-       *
-       * The button is server-rendered with its `aria-label` and `data-state="closed"` already in the
-       * HTML, so it is visible and actionable before React has hydrated and attached Radix's pointer
-       * handler. A hover sent in that window is simply dropped: the element never changes state, and
-       * waiting longer on the attribute cannot help because no timer was ever started. On a warm dev
-       * server the gap is invisible; on the first run after an idle one it failed both locales.
-       * Re-entering the pointer each attempt is what recovers, hence `toPass` around the pair.
+       * Hover only once the button is HYDRATED. It is server-rendered with its `aria-label` and
+       * `data-state="closed"` already in the HTML, so it is visible and actionable before React has
+       * attached Radix's pointer handler — and a hover sent in that window is dropped, not replayed: the
+       * element never changes state and no timer is ever started. On a warm dev server the gap is
+       * invisible; on the first run after an idle one it failed both locales. `waitForHydration` waits
+       * on the handler itself (see `helpers/hydration.ts`).
        */
-      await expect(async () => {
-        await page.mouse.move(0, 0);
-        await action.hover();
-        await expect(action).toHaveAttribute('aria-describedby', /./, { timeout: 1000 });
-      }).toPass({ timeout: 20000 });
+      await waitForHydration(action);
+      await page.mouse.move(0, 0);
+      await action.hover();
+      await expect(action).toHaveAttribute('aria-describedby', /./);
       // Radix puts the tooltip's text in a visually-hidden node, so this reads what a screen reader is
       // handed — which `getByRole('tooltip')` cannot see, the visible content being a separate node.
       const tooltipId = await action.getAttribute('aria-describedby');

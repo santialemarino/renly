@@ -147,6 +147,17 @@ Two things about where the attribute goes:
   of a testid per call site — the currency hint is `hint-currency-hint-dismissed`. Reach for this
   whenever a family of instances is already distinguished by a prop.
 
+### Hovering a server-rendered element
+
+A page loaded with `goto` is visible and actionable before React has hydrated it, and React does not
+replay a pointer MOVE aimed at content it has not hydrated yet. Radix opens a tooltip on `pointermove`,
+so a `hover()` sent in that window is lost for good — the trigger never changes state and no wait on
+the tooltip can recover it. Before hovering anything whose handler is React's (a tooltip trigger, a
+hover card), call `waitForHydration(locator)` from `tests/e2e/helpers/hydration.ts`: it waits until
+React has attached that element's props, which is the moment its handlers exist. Do not retry the
+hover in a `toPass` loop instead: that hides the race rather than waiting for the condition. A CSS
+`:hover` needs neither.
+
 ### Auth and storage state — how the harness actually works
 
 Two projects over one `testDir`, split by FILE NAME:
