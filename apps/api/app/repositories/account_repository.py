@@ -160,7 +160,8 @@ async def reassign_pots_to_user(session: AsyncSession, pot_ids: list[int], user_
 # account_reconciliations carry a copy of their parent's scope precisely so their policies do not
 # have to join back to it, so a parent whose children still name the old scope is a row its own
 # history has become invisible to. They are updated by PARENT id rather than by their own old scope,
-# so a child that had somehow drifted is corrected rather than left behind.
+# so a child that had somehow drifted is corrected rather than left behind. The account goes FIRST: a
+# trigger holds every reconciliation to its account's current scope, so the children can only follow it.
 async def move_to_scope(session: AsyncSession, ids: list[int], *, pot_id: int | None, user_id: int | None) -> int:
     if not ids:
         return 0

@@ -2004,10 +2004,11 @@ CREATE POLICY accounts_scope_write ON accounts FOR ALL
 -- else recorded, leaving the reconciliation claiming a difference its adjustment does not match — so
 -- the verbs are capped by a COLUMN grant below. RLS filters rows and never columns; only a REVOKE plus
 -- a per-column GRANT can say "these columns and no other". No WITH CHECK on the update: Postgres holds
--- the NEW row to the USING expression when one is absent, which is exactly the bound a re-point needs —
--- a reconciliation can leave only a scope its caller can see, and arrive only in one. (A statement that
--- reads a column is also held to the read policy on both rows; one that reads none, such as an UPDATE
--- with no WHERE, is bounded by this policy alone, which is why it carries the predicate itself.)
+-- the NEW row to the USING expression when one is absent, so a reconciliation can leave only a scope its
+-- caller can see, and arrive only in one. (A statement that reads a column is also held to the read
+-- policy on both rows; one that reads none, such as an UPDATE with no WHERE, is bounded by this policy
+-- alone, which is why it carries the predicate itself.) That bounds a re-point by WHO asks. WHERE it may
+-- land is narrower still — its account's scope and nowhere else — and the trigger below holds that.
 ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_reconciliations FORCE ROW LEVEL SECURITY;
 CREATE POLICY account_reconciliations_scope_read ON account_reconciliations FOR SELECT
@@ -2024,6 +2025,69 @@ CREATE POLICY account_reconciliations_scope_delete ON account_reconciliations FO
 REVOKE UPDATE ON account_reconciliations FROM renly_app;
 GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_expense_id, adjustment_shared_income_id, user_id, pot_id)
   ON account_reconciliations TO renly_app;
+
+-- A reconciliation always sits in its account's scope: its (user_id, pot_id) is its account's, on every
+-- insert and on every write to either column or to account_id, for every role. The policies above cannot
+-- say it — each checks the row against the CALLER, never against the account — so without this a
+-- view-only co-owner could file a pot's reconciliation under their own name (it would vanish from every
+-- other member's history, and the next same-date reconcile would hit the UNIQUE on a row nobody else can
+-- see), or record one naming another user's private account, or a private one on a pot's account.
+--
+-- A scope change therefore happens only by moving the ACCOUNT, which accounts_scope_write gates on pot
+-- write access, and the move re-points the children in a later statement of the same transaction —
+-- by which point this lookup already reads the account's new scope. One path does not use that move yet:
+-- account deletion absorbing an orphaned group's pots (reassign_pots_to_user) re-points the accounts but
+-- not their reconciliations, and this trigger, firing only on writes to account_reconciliations, cannot
+-- see it. The rows it leaves out of scope are deleted with the user right after, unless deletion fails
+-- in between.
+--
+-- What it checks is the row against the account AS COMMITTED when it runs: it reads the account without
+-- a lock, so on its own it does not hold across concurrent transactions. One that inserts a private
+-- reconciliation, uncommitted, while another moves the account into a pot and re-points its children
+-- (matching none, since the new row is invisible to it) would both commit and leave the reconciliation
+-- private on a pot's account. That "always" holds at the API level because the services serialise both
+-- sides on the same row first: a reconcile takes lock_private (the account, FOR UPDATE) or the pot's
+-- lock, and a move locks the pot and then updates the account, so one waits for the other and the
+-- second's write is judged against the first's committed scope.
+--
+-- SECURITY DEFINER, owned by renly_policy_definer (the handover block after app_is_group_member()),
+-- because the account a row names may be one its caller cannot see — that is the second case above —
+-- and a lookup filtered by the caller's policies would find nothing and wave it through. An account that
+-- does not exist at all is left to the foreign key, whose error names the real problem. The message
+-- names only what the caller wrote, never the account's actual scope.
+--
+-- AFTER the row, not BEFORE, and that is what keeps the definer's view from leaking. A BEFORE ROW trigger
+-- runs ahead of the policies' WITH CHECK, so on a row the policies would refuse anyway its answer would
+-- come first — and "refused by the policy" versus "refused by this trigger" would tell a caller whether
+-- their guess at the scope of an account they cannot see was right. Run after, it only ever judges rows
+-- the policies have already admitted, whose scope the caller can see, so it says nothing they don't know.
+CREATE OR REPLACE FUNCTION app_reconciliation_follows_account() RETURNS TRIGGER
+  LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public, pg_temp
+  AS $$
+    DECLARE
+      account_user_id BIGINT;
+      account_pot_id BIGINT;
+    BEGIN
+      SELECT a.user_id, a.pot_id INTO account_user_id, account_pot_id FROM accounts a WHERE a.id = NEW.account_id;
+      IF NOT FOUND THEN
+        RETURN NEW;
+      END IF;
+      IF NEW.user_id IS DISTINCT FROM account_user_id OR NEW.pot_id IS DISTINCT FROM account_pot_id THEN
+        RAISE EXCEPTION 'a reconciliation must sit in its account''s scope (account %)', NEW.account_id
+          USING ERRCODE = 'check_violation', CONSTRAINT = 'account_reconciliations_follow_account';
+      END IF;
+      RETURN NEW;
+    END
+  $$;
+
+-- A trigger function is never called by name, and EXECUTE is checked only when a trigger is created,
+-- so nobody is granted it.
+REVOKE ALL ON FUNCTION app_reconciliation_follows_account() FROM PUBLIC;
+
+CREATE TRIGGER trg_account_reconciliations_follow_account
+  AFTER INSERT OR UPDATE OF user_id, pot_id, account_id ON account_reconciliations
+  FOR EACH ROW EXECUTE FUNCTION app_reconciliation_follows_account();
 
 ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transfers FORCE ROW LEVEL SECURITY;
@@ -2196,7 +2260,8 @@ CREATE OR REPLACE FUNCTION app_is_group_member(p_group_id BIGINT) RETURNS BOOLEA
 REVOKE ALL ON FUNCTION app_is_group_member(BIGINT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
 
--- WHO the three SECURITY DEFINER helpers run as. Not the owner: every policied table is FORCEd, so
+-- WHO the SECURITY DEFINER functions run as — the three policy helpers and the reconciliation-scope
+-- trigger function. Not the owner: every policied table is FORCEd, so
 -- the owner is subject to the policies like anyone else, and a helper running as a NOSUPERUSER owner
 -- re-enters the policy that called it — group_members' policy calls app_is_group_member(), which
 -- reads group_members, whose policy calls app_is_group_member() … until "stack depth limit exceeded"
@@ -2204,8 +2269,9 @@ GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
 -- a local cluster never showed it.)
 --
 -- So they belong to renly_policy_definer: NOLOGIN, BYPASSRLS, not a superuser, and holding SELECT on
--- exactly the three tables these bodies read and nothing else — so the bypass reaches no further than
--- the questions the helpers answer, and every table stays FORCEd. The role is created by 00_roles.sql.
+-- exactly what these bodies read and nothing else — three tables for the helpers, and an account's id
+-- and scope pair for the trigger function — so the bypass reaches no further than the questions they
+-- answer, and every table stays FORCEd. The role is created by 00_roles.sql.
 --
 -- Handing a function to a role requires that role to hold CREATE on the function's schema, so it is
 -- granted for the handover and revoked straight after; the role keeps only what it reads. A later
@@ -2214,10 +2280,12 @@ GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
 -- and the catalogue guard in tests/integration/test_rls_force_role_model.py fails until you do.
 GRANT USAGE ON SCHEMA public TO renly_policy_definer;
 GRANT SELECT ON pots, group_members, pot_member_permissions TO renly_policy_definer;
+GRANT SELECT (id, user_id, pot_id) ON accounts TO renly_policy_definer;
 GRANT CREATE ON SCHEMA public TO renly_policy_definer;
 ALTER FUNCTION app_can_view_pot(BIGINT) OWNER TO renly_policy_definer;
 ALTER FUNCTION app_can_write_pot(BIGINT) OWNER TO renly_policy_definer;
 ALTER FUNCTION app_is_group_member(BIGINT) OWNER TO renly_policy_definer;
+ALTER FUNCTION app_reconciliation_follows_account() OWNER TO renly_policy_definer;
 REVOKE CREATE ON SCHEMA public FROM renly_policy_definer;
 
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;

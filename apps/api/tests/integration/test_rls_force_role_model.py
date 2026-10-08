@@ -222,14 +222,18 @@ class TestRowSecurityOffIsTheLoudGuard:
 
 
 _DEFINER = "renly_policy_definer"
-_HELPERS = {"app_can_view_pot", "app_can_write_pot", "app_is_group_member"}
+# The three policy helpers and the reconciliation-scope trigger function.
+_HELPERS = {"app_can_view_pot", "app_can_write_pot", "app_is_group_member", "app_reconciliation_follows_account"}
 _HELPER_READS = {"pots", "group_members", "pot_member_permissions"}
+# Read per column rather than per table: the trigger function needs an account's id and scope pair, and
+# a table grant would hand the bypass every figure on every account.
+_HELPER_COLUMN_READS = {("accounts", column) for column in ("id", "user_id", "pot_id")}
 
 
 class TestThePolicyHelpersRunAsTheDefinerRole:
     @pytest.mark.asyncio
     async def test_every_security_definer_function_is_owned_by_the_definer_role(self, admin):
-        # Derived from prosecdef rather than from the three names, so a NEW helper created by a later
+        # Derived from prosecdef rather than from the names above, so a NEW helper created by a later
         # migration — owned by renly_admin at creation and by the table owner after env.py's REASSIGN,
         # i.e. by exactly the role that recurses under FORCE — fails here until it is handed over.
         rows = (
@@ -241,8 +245,28 @@ class TestThePolicyHelpersRunAsTheDefinerRole:
             )
         ).all()
         owners = {name: owner for name, owner in rows}
-        assert _HELPERS <= set(owners), f"the policy helpers are missing or no longer SECURITY DEFINER: {owners}"
+        assert _HELPERS <= set(owners), f"a helper is missing or no longer SECURITY DEFINER: {owners}"
         assert {name: owner for name, owner in owners.items() if owner != _DEFINER} == {}
+
+    @pytest.mark.asyncio
+    async def test_every_security_definer_function_pins_its_search_path(self, admin):
+        # A SECURITY DEFINER body runs with its owner's bypass but, unless it pins its own search_path,
+        # resolves every unqualified name on the CALLER's — so a caller who put a schema of their own
+        # first could shadow `group_members` or `accounts` with a table they wrote. Derived from prosecdef
+        # like the owner check above, and held to the one value the schema uses: `public` first, and
+        # `pg_temp` named last so a temporary table cannot be searched ahead of it either.
+        rows = (
+            await admin.execute(
+                text(
+                    "SELECT p.proname, p.proconfig FROM pg_proc p"
+                    " JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.prosecdef"
+                )
+            )
+        ).all()
+        configs = {name: list(config or []) for name, config in rows}
+        assert _HELPERS <= set(configs), f"a helper is missing or no longer SECURITY DEFINER: {sorted(configs)}"
+        unpinned = {name: config for name, config in configs.items() if "search_path=public, pg_temp" not in config}
+        assert unpinned == {}
 
     @pytest.mark.asyncio
     async def test_the_definer_role_bypasses_rls_but_can_neither_log_in_nor_supersede(self, admin):
@@ -258,10 +282,12 @@ class TestThePolicyHelpersRunAsTheDefinerRole:
 
     @pytest.mark.asyncio
     async def test_the_definer_role_may_read_exactly_what_the_helpers_read_and_nothing_else(self, admin):
-        # The bypass reaches as far as the grants do. SELECT on these three is what the bodies need; any
-        # other table or verb would make the role a general reader with RLS switched off. It must own no
-        # relation (a table it owned would be exempt from FORCE) and keep no CREATE on the schema, which
-        # it holds only for the length of the ownership handover.
+        # The bypass reaches as far as the grants do. SELECT on these three tables and those three
+        # columns is what the bodies need; any other table, column or verb would make the role a general
+        # reader with RLS switched off. Column grants live in pg_attribute, not in the table's ACL, so
+        # they are read separately — the table query alone passes whatever columns are granted. It must
+        # own no relation (a table it owned would be exempt from FORCE) and keep no CREATE on the schema,
+        # which it holds only for the length of the ownership handover.
         grants = (
             await admin.execute(
                 text(
@@ -272,6 +298,19 @@ class TestThePolicyHelpersRunAsTheDefinerRole:
             )
         ).all()
         assert {(table, verb) for table, verb in grants} == {(table, "SELECT") for table in _HELPER_READS}
+        column_grants = (
+            await admin.execute(
+                text(
+                    "SELECT c.relname, att.attname, a.privilege_type FROM pg_attribute att"
+                    " JOIN pg_class c ON c.oid = att.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace,"
+                    " aclexplode(att.attacl) a WHERE n.nspname = 'public' AND a.grantee = CAST(:r AS regrole)"
+                ),
+                {"r": _DEFINER},
+            )
+        ).all()
+        assert {(table, column, verb) for table, column, verb in column_grants} == {
+            (table, column, "SELECT") for table, column in _HELPER_COLUMN_READS
+        }
         owned = (await admin.execute(text("SELECT count(*) FROM pg_class WHERE relowner = CAST(:r AS regrole)"), {"r": _DEFINER})).scalar_one()
         assert owned == 0
         may_create = (await admin.execute(text("SELECT has_schema_privilege(:r, 'public', 'CREATE')"), {"r": _DEFINER})).scalar_one()
