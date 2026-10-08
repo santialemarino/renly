@@ -193,6 +193,8 @@ test.describe('a tooltip cue has to be reachable from the keyboard too', () => {
     `<div class="truncate" data-slot="tooltip-trigger" data-tooltip-text="${LONG}" ${attributes}>${LONG}</div>`;
   const inButton = (inner: string) =>
     `<button style="display: block; width: 120px; padding: 0">${inner}</button>`;
+  const inRegion = (inner: string) =>
+    `<div tabindex="0" role="region" aria-label="Tabla" style="overflow-x: auto">${inner}</div>`;
 
   test('a focusable trigger that opens on focus and closes on Escape passes', async ({ page }) => {
     await render(page, trigger('tabindex="0" data-tooltip-on-focus'));
@@ -216,6 +218,12 @@ test.describe('a tooltip cue has to be reachable from the keyboard too', () => {
     );
   });
 
+  test('a focusable scroll region around a trigger is not a way to reach it', async ({ page }) => {
+    // The region is a stop the keyboard scrolls with (a wide table's container), not a control.
+    await render(page, inRegion(trigger('data-tooltip-on-focus')));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
+  });
+
   test('a tooltip Escape cannot dismiss fails', async ({ page }) => {
     await render(page, trigger('tabindex="0" data-tooltip-on-focus data-tooltip-keeps-on-escape'));
     expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(
@@ -229,6 +237,9 @@ test.describe('a truncating tooltip is a tab stop only while cut, and never a ne
     `<span class="truncate" style="display: block" data-truncating-tooltip ${attributes}>${text}</span>`;
   const inButton = (inner: string) =>
     `<button style="display: block; width: 120px">${inner}</button>`;
+  // A scroll region that takes focus while it overflows, as `Table`'s container does.
+  const inRegion = (inner: string) =>
+    `<div tabindex="0" role="region" aria-label="Tabla" style="overflow-x: auto">${inner}</div>`;
 
   test('the right stops pass, and each kind is counted', async ({ page }) => {
     await render(page, span('Visa') + span(LONG, 'tabindex="0"') + inButton(span(LONG)));
@@ -257,7 +268,39 @@ test.describe('a truncating tooltip is a tab stop only while cut, and never a ne
   test('cut text that is a stop inside a button is a finding', async ({ page }) => {
     await render(page, inButton(span(LONG, 'tabindex="0"')));
     expect((await checkTruncationTabStops(page)).findings).toEqual([
-      `"${LONG}" is a tab stop nested inside another tab stop`,
+      `"${LONG}" is a tab stop nested inside a control`,
+    ]);
+  });
+
+  test('a focusable scroll region is not a control: cut text inside it is its own stop', async ({
+    page,
+  }) => {
+    await render(page, inRegion(span(LONG, 'tabindex="0"')));
+    expect(await checkTruncationTabStops(page)).toEqual({
+      fits: 0,
+      standalone: 1,
+      nested: 0,
+      findings: [],
+    });
+  });
+
+  test('cut text a focusable scroll region took out of the tab order is a finding', async ({
+    page,
+  }) => {
+    await render(page, inRegion(span(LONG)));
+    expect((await checkTruncationTabStops(page)).findings).toEqual([
+      `"${LONG}" is truncated, and the keyboard cannot reach it`,
+    ]);
+  });
+
+  test('text that fits stays a stop while it holds focus, and only then', async ({ page }) => {
+    // Text that stopped being cut while focused keeps its stop until focus leaves.
+    await render(page, span('Visa', 'tabindex="0"'));
+    await page.locator('[data-truncating-tooltip]').focus();
+    expect((await checkTruncationTabStops(page)).findings).toEqual([]);
+    await page.locator('[data-truncating-tooltip]').blur();
+    expect((await checkTruncationTabStops(page)).findings).toEqual([
+      '"Visa" fits, and is still a tab stop',
     ]);
   });
 });

@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
+import { CONTROL_SELECTOR } from '@/lib/constants/controls';
 import { findSettledClipping, type Clipping, type ClippingReport } from './overflow';
 
 /*
@@ -171,8 +172,11 @@ const KEYBOARD_STOP_ATTRIBUTE = 'data-text-keyboard-stop';
 
 /*
  * The same tooltip, reached from the KEYBOARD (WCAG 2.1.1 and 1.4.13): the clipped element — or, when
- * it sits inside a link or a button, that element — is in the tab order, focusing it opens the tooltip
- * with the whole text, and Escape closes it. Returns why it failed, or null.
+ * it sits inside a control (`CONTROL_SELECTOR`: a link, a button, a field), that control — is in the
+ * tab order, focusing it opens the tooltip with the whole text, and Escape closes it. Returns why it
+ * failed, or null. Any other focusable ancestor — a scroll region that takes focus so the keyboard can
+ * scroll it — is not where the text is reached: focusing it opens nothing, and it is not a substitute
+ * for the text's own stop.
  *
  * Focus is moved by script right after a key press, which the browser treats as keyboard focus
  * (`:focus-visible`) — the focus a Tab gives, without walking the page's whole tab order. That the
@@ -185,16 +189,17 @@ export async function tooltipOpensFromKeyboard(
   const target = page.locator(`[${CLIPPED_MARK_ATTRIBUTE}="${clipping.index}"]`);
   const fullText = clipping.text.replace(/\s+/g, ' ').trim();
   const tooltip = page.getByRole('tooltip');
-  const reachable = await target.evaluate((element, attribute) => {
-    for (let node: HTMLElement | null = element as HTMLElement; node; node = node.parentElement) {
-      if (node.tabIndex >= 0) {
-        node.setAttribute(attribute, '');
-        return true;
-      }
-    }
-    return false;
-  }, KEYBOARD_STOP_ATTRIBUTE);
-  if (!reachable) return 'truncated, and neither it nor anything around it is in the tab order';
+  const reachable = await target.evaluate(
+    (element, { attribute, controlSelector }) => {
+      const control = element.parentElement?.closest<HTMLElement>(controlSelector);
+      const stop = (element as HTMLElement).tabIndex >= 0 ? element : control;
+      if (!stop || (stop as HTMLElement).tabIndex < 0) return false;
+      stop.setAttribute(attribute, '');
+      return true;
+    },
+    { attribute: KEYBOARD_STOP_ATTRIBUTE, controlSelector: CONTROL_SELECTOR },
+  );
+  if (!reachable) return 'truncated, and neither it nor a control around it is in the tab order';
 
   const stop = page.locator(`[${KEYBOARD_STOP_ATTRIBUTE}]`);
   try {
@@ -231,28 +236,28 @@ export interface TruncationTabStops {
 
 /*
  * Every `TruncatingTooltip` on screen (`data-truncating-tooltip`), held to its tab-stop contract: text
- * that fits is NOT a tab stop (it has nothing to reveal); cut text is one, unless something around it
- * already is — then it must not be, since a focusable inside a link or a button is a nested, empty
- * extra stop (axe's `nested-interactive`). "Something around it is a stop" is the browser's
- * `tabIndex >= 0`, not the component's own selector, so the check does not borrow the logic it checks.
+ * that fits is NOT a tab stop (it has nothing to reveal) — unless it holds focus, which it keeps until
+ * focus leaves; cut text is one, unless it sits inside a control (`CONTROL_SELECTOR`, the definition
+ * the component uses too) — then it must not be, since a focusable inside a link or a button is a
+ * nested, empty extra stop (axe's `nested-interactive`). A focusable that is not a control — a scroll
+ * region the keyboard scrolls — may hold stops, so cut text inside one must still be one. Whether the
+ * text IS a stop is the browser's `tabIndex`, not anything the component says.
  */
 export async function checkTruncationTabStops(page: Page): Promise<TruncationTabStops> {
-  return page.evaluate(() => {
+  return page.evaluate((controlSelector) => {
     const result = { fits: 0, standalone: 0, nested: 0, findings: [] as string[] };
     document.querySelectorAll<HTMLElement>('[data-truncating-tooltip]').forEach((el) => {
       if (el.getClientRects().length === 0) return;
       const text = (el.textContent ?? '').trim();
-      let insideStop = false;
-      for (let node = el.parentElement; node; node = node.parentElement) {
-        if (node.tabIndex >= 0) insideStop = true;
-      }
+      const inControl = el.parentElement?.closest(controlSelector) != null;
       if (el.scrollWidth <= el.clientWidth) {
         result.fits += 1;
-        if (el.tabIndex >= 0) result.findings.push(`"${text}" fits, and is still a tab stop`);
-      } else if (insideStop) {
+        if (el.tabIndex >= 0 && el !== document.activeElement)
+          result.findings.push(`"${text}" fits, and is still a tab stop`);
+      } else if (inControl) {
         result.nested += 1;
         if (el.tabIndex >= 0)
-          result.findings.push(`"${text}" is a tab stop nested inside another tab stop`);
+          result.findings.push(`"${text}" is a tab stop nested inside a control`);
       } else {
         result.standalone += 1;
         if (el.tabIndex < 0)
@@ -260,5 +265,5 @@ export async function checkTruncationTabStops(page: Page): Promise<TruncationTab
       }
     });
     return result;
-  });
+  }, CONTROL_SELECTOR);
 }

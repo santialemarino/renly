@@ -1,4 +1,10 @@
-import { expect, request as playwrightRequest, test, type Page } from '@playwright/test';
+import {
+  expect,
+  request as playwrightRequest,
+  test,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 
 import { API_BASE, apiToken } from './helpers/api';
 import { testMarker } from './helpers/factories';
@@ -8,7 +14,8 @@ import { expectRingContrast, measureRing, tabTo } from './helpers/focus';
  * A truncated text's tooltip is reachable from the keyboard, not only by hover (WCAG 2.1.1), and
  * behaves as content on focus must (1.4.13): `TruncatingTooltip` makes the text a tab stop only while
  * it is cut, Radix opens the tooltip on that focus, and Escape dismisses it. Text that fits is not a
- * stop, and a touch press still opens nothing.
+ * stop, the tooltip is never open over text that is not cut, and a touch press opens nothing — not
+ * even for a frame.
  *
  * The text sweep (`locale-text-clipping.auth.spec.ts`) holds every page to the same contract through
  * the DOM; this spec walks it with real Tab presses on one table, and paints the ring. The rows are two
@@ -63,11 +70,17 @@ function note(page: Page, text: string) {
   return page.locator('[data-truncating-tooltip]', { hasText: new RegExp(`^${text}$`) });
 }
 
+// Whether an element is the focused one.
+const isFocused = (locator: Locator) => locator.evaluate((el) => el === document.activeElement);
+const isCut = (locator: Locator) => locator.evaluate((el) => el.scrollWidth > el.clientWidth);
+
 async function openExpenses(page: Page) {
   await page.setViewportSize(DESKTOP);
   await page.goto(EXPENSES);
   await expect(note(page, longNote)).toBeVisible({ timeout: 20_000 });
   await expect(note(page, shortNote)).toBeVisible();
+  // Hydrated and measured: the cut note is a stop. A hover or a press before that reaches no handler.
+  await expect(note(page, longNote)).toHaveAttribute('tabindex', '0');
 }
 
 test.describe('a truncated text is reachable from the keyboard', () => {
@@ -85,11 +98,88 @@ test.describe('a truncated text is reachable from the keyboard', () => {
     await expect(tooltip).toHaveCount(1);
     await expect(tooltip).toHaveText(longNote);
     expectRingContrast(await measureRing(cut));
+    /*
+     * Radix points the trigger's `aria-describedby` at an open tooltip; the component strips it, since
+     * the whole text is already in the DOM and a description would have it read twice.
+     */
+    await expect(cut).not.toHaveAttribute('aria-describedby');
 
     await page.keyboard.press('Escape');
     await expect(tooltip).toHaveCount(0);
     // Dismissed, not moved away from: focus stays on the note (1.4.13 "dismissible").
-    expect(await cut.evaluate((el) => el === document.activeElement)).toBe(true);
+    expect(await isFocused(cut)).toBe(true);
+  });
+
+  test('a focused note that stops being cut keeps focus until it leaves, then drops its stop', async ({
+    page,
+  }) => {
+    await openExpenses(page);
+    const cut = note(page, longNote);
+    await tabTo(page, cut, MAX_TAB_STOPS);
+    const tooltip = page.getByRole('tooltip');
+    await expect(tooltip).toHaveCount(1);
+    await expect(tooltip).toHaveText(longNote);
+
+    // The same resize a wider window gives: the note's text now fits its box.
+    await cut.evaluate((el) => ((el as HTMLElement).style.fontSize = '1px'));
+    await expect.poll(() => isCut(cut)).toBe(false);
+    await expect(tooltip).toHaveCount(0);
+    expect(await isFocused(cut)).toBe(true);
+    expect(await cut.evaluate((el) => el.tabIndex)).toBe(0);
+
+    await page.keyboard.press('Tab');
+    expect(await isFocused(cut)).toBe(false);
+    await expect.poll(() => cut.evaluate((el) => el.tabIndex)).toBe(-1);
+  });
+
+  test('a hover over a note that fits leaves nothing to open once it is cut', async ({ page }) => {
+    await openExpenses(page);
+    const fits = note(page, shortNote);
+    const tooltip = page.getByRole('tooltip');
+    await fits.hover();
+    // Rested on, as a reader's pointer would: long enough for any open it asks for to be decided.
+    await page.waitForTimeout(300);
+    await expect(tooltip).toHaveCount(0);
+    await page.mouse.move(0, 0);
+    await page.mouse.move(1, 1);
+
+    // The same resize a narrower window gives: the note is cut now, with the pointer long gone.
+    await fits.evaluate((el) => ((el as HTMLElement).style.maxWidth = '1ch'));
+    await expect.poll(() => isCut(fits)).toBe(true);
+    await page.waitForTimeout(500);
+    await expect(tooltip).toHaveCount(0);
+    // The note does have a tooltip to give now: a fresh hover opens it.
+    await fits.hover();
+    await expect(tooltip).toHaveText(shortNote);
+  });
+
+  test('a focusable scroll region around the table does not take the note’s stop', async ({
+    page,
+  }) => {
+    await openExpenses(page);
+    const cut = note(page, longNote);
+    /*
+     * What `Table` does while it is wider than its column: its scroll container becomes a focusable,
+     * named region. It is not a control, so the cut note inside it stays a stop of its own, and the
+     * region's own focus opens no tooltip. The note is narrowed a little so it measures again.
+     */
+    const region = page.locator('[data-slot="table-container"]').filter({ has: cut });
+    await region.evaluate((el) => {
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('role', 'region');
+      el.setAttribute('aria-label', 'Gastos');
+    });
+    await cut.evaluate((el) => ((el as HTMLElement).style.maxWidth = '10rem'));
+    await expect
+      .poll(() => cut.evaluate((el) => el.getBoundingClientRect().width))
+      .toBeLessThanOrEqual(160);
+    await expect.poll(() => cut.evaluate((el) => el.tabIndex)).toBe(0);
+
+    await page.keyboard.press('Shift');
+    await region.focus();
+    expect(await isFocused(region)).toBe(true);
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
   });
 
   test('a note that fits is not a tab stop', async ({ page }) => {
@@ -169,10 +259,31 @@ test.describe('a truncated text inside a button', () => {
 test.describe('on a touch screen', () => {
   test.use({ hasTouch: true });
 
-  test('a press on a cut note opens no tooltip', async ({ page }) => {
+  test('a press on a cut note opens no tooltip, not even for a frame', async ({ page }) => {
     await openExpenses(page);
-    await note(page, longNote).tap();
+    const cut = note(page, longNote);
+    /*
+     * A tooltip that opens on the tap's focus and closes on its click lives ~140ms: gone again before
+     * a final count could see it. Every tooltip ever mounted is recorded instead.
+     */
+    await page.evaluate(() => {
+      const record = window as unknown as { tooltipsSeen: number };
+      record.tooltipsSeen = 0;
+      const content = '[data-slot="tooltip-content"]';
+      new MutationObserver((mutations) => {
+        for (const mutation of mutations)
+          for (const node of mutation.addedNodes)
+            if (node instanceof Element && (node.matches(content) || node.querySelector(content)))
+              record.tooltipsSeen += 1;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await cut.tap();
+    // The press did focus the note, so the focus path a flash would come from really ran.
+    expect(await isFocused(cut)).toBe(true);
     await page.waitForTimeout(500);
     await expect(page.getByRole('tooltip')).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as unknown as { tooltipsSeen: number }).tooltipsSeen),
+    ).toBe(0);
   });
 });
