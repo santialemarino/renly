@@ -27,6 +27,7 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
 import { TableSectionRow } from '@/components/table-section-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -374,8 +375,8 @@ function ExpenseRow({
       <TableCell>
         {expense.paymentMethod ? t(`paymentMethods.${expense.paymentMethod}`) : '—'}
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {expense.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={expense.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <RowActions

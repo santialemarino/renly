@@ -38,7 +38,12 @@ export const AXIS_TICK_MARGIN = 8;
 export const AXIS_FONT_SIZE = 12;
 export const AXIS_TICK_LINE = false;
 export const AXIS_LINE = false;
-export const Y_AXIS_WIDTH = 50;
+/*
+ * Sized by Recharts to the longest tick label, not fixed. A fixed 50px fit the English compact labels
+ * ("-45B") and cut the Spanish ones ("-45 mil M", 51px) off at the chart's left edge — the leading
+ * sign and digit of a negative figure gone, reading as a different value.
+ */
+export const Y_AXIS_WIDTH = 'auto';
 
 // --- Grid ---
 

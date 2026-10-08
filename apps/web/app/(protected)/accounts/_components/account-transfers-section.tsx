@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { Account } from '@/lib/api/accounts';
 import type { Transfer } from '@/lib/api/transfers';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
@@ -242,8 +243,11 @@ export function AccountTransfersSection({
                                     }
                                   />
                                 </TableCell>
-                                <TableCell className="max-w-48 truncate text-paragraph-sm text-muted-foreground">
-                                  {transfer.notes ?? '—'}
+                                <TableCell className="text-paragraph-sm text-muted-foreground">
+                                  <TruncatingTooltip
+                                    text={transfer.notes ?? '—'}
+                                    className="block max-w-48"
+                                  />
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <RowActionButton

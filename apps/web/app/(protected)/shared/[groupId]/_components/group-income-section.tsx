@@ -25,6 +25,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
@@ -258,8 +259,11 @@ function IncomeRow({
           </span>
         )}
       </TableCell>
-      <TableCell className="max-w-40 truncate text-paragraph-sm">
-        {income.sourceInvestmentName ?? t('income.table.noSource')}
+      <TableCell className="text-paragraph-sm">
+        <TruncatingTooltip
+          text={income.sourceInvestmentName ?? t('income.table.noSource')}
+          className="block max-w-40"
+        />
       </TableCell>
       <TableCell className="text-paragraph-sm">
         {holder.kind === 'member'
@@ -268,8 +272,8 @@ function IncomeRow({
             ? t('income.table.jointNamed', { account: holder.accountName })
             : t('income.table.joint')}
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {income.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={income.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">

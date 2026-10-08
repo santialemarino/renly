@@ -23,6 +23,7 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
 import { TableSectionRow } from '@/components/table-section-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';
@@ -292,8 +293,8 @@ function IncomeRow({
         )}
       </TableCell>
       <TableCell>{entry.category ? tCommon(`categories.${entry.category}`) : '—'}</TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {entry.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={entry.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <RowActions

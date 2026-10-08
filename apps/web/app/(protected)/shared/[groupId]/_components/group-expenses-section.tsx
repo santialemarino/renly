@@ -25,6 +25,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -267,8 +268,8 @@ function ExpenseRow({
             ? t('expenses.table.jointNamed', { account: payer.accountName })
             : t('expenses.table.joint')}
       </TableCell>
-      <TableCell className="max-w-48 truncate text-muted-foreground">
-        {expense.notes ?? '—'}
+      <TableCell className="text-muted-foreground">
+        <TruncatingTooltip text={expense.notes ?? '—'} className="block max-w-48" />
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">

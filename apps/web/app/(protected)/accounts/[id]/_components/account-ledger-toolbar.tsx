@@ -35,7 +35,7 @@ export function AccountLedgerToolbar({ accountId, kind }: AccountLedgerToolbarPr
         allLabel={t('filter.all')}
         icon={Filter}
         surface
-        className="w-full sm:w-56"
+        className="w-full sm:w-fit sm:min-w-56"
       />
     </div>
   );
