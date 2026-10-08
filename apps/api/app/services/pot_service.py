@@ -1411,13 +1411,20 @@ def _ensure_all_present(found: list, requested: list[int], pot: Pot, user: User,
 # have no way to ever see the money again, so the honest reading is that it was always this user's.
 # Runs BEFORE the account row goes, for the same ordering reason the orphan-group read does — and it
 # has to, because afterwards there is no user id left to assign.
+#
+# The move is the one move_to_scope performs for a move OUT of a pot, so the scope-denormalized
+# children travel with their parents in the same statement set, parent first: the investments' snapshots
+# and transactions, the accounts' reconciliations and transfers. Moving only the parents would leave
+# that history scoped to a pot its owner no longer holds anything in — readable by whoever can view the
+# pot — and the pot undeletable, since every pot_id foreign key is ON DELETE RESTRICT.
+#
+# A fixed number of queries however many groups, pots or holdings the leaver shared: one pots read, two
+# locked id reads, and at most six UPDATEs.
 async def absorb_group_pots(session: AsyncSession, group_ids: list[int], user_id: int) -> int:
-    if not group_ids:
-        return 0
-    pot_ids = [pot.id for group_id in group_ids for pot in await pot_repository.list_by_group(session, group_id)]
+    pot_ids = await pot_repository.list_ids_by_groups(session, group_ids)
     if not pot_ids:
         return 0
-    # Two statements for the whole set, not two per pot: account deletion is one use case and should
-    # cost a fixed number of queries rather than one that grows with how much the leaver shared.
-    moved = await investment_repository.reassign_pots_to_user(session, pot_ids, user_id)
-    return moved + await account_repository.reassign_pots_to_user(session, pot_ids, user_id)
+    investment_ids = await investment_repository.list_ids_by_pots_for_update(session, pot_ids)
+    account_ids = await account_repository.list_ids_by_pots_for_update(session, pot_ids)
+    moved = await investment_repository.move_to_scope(session, investment_ids, pot_id=None, user_id=user_id)
+    return moved + await account_repository.move_to_scope(session, account_ids, pot_id=None, user_id=user_id)

@@ -2035,11 +2035,7 @@ GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_exp
 --
 -- A scope change therefore happens only by moving the ACCOUNT, which accounts_scope_write gates on pot
 -- write access, and the move re-points the children in a later statement of the same transaction —
--- by which point this lookup already reads the account's new scope. One path does not use that move yet:
--- account deletion absorbing an orphaned group's pots (reassign_pots_to_user) re-points the accounts but
--- not their reconciliations, and this trigger, firing only on writes to account_reconciliations, cannot
--- see it. The rows it leaves out of scope are deleted with the user right after, unless deletion fails
--- in between.
+-- by which point this lookup already reads the account's new scope.
 --
 -- What it checks is the row against the account AS COMMITTED when it runs: it reads the account without
 -- a lock, so on its own it does not hold across concurrent transactions. One that inserts a private
