@@ -157,7 +157,7 @@ export function CreditCardReconciliationsSection({
                     exit={{ opacity: 0 }}
                     transition={{ duration: ANIMATION_FAST }}
                   >
-                    <Table>
+                    <Table label={t('title')}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t('table.period')}</TableHead>

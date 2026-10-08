@@ -189,7 +189,7 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   return (
     <>
       <div className="overflow-auto rounded-lg border border-border-3 shadow-xs">
-        <Table>
+        <Table label={t('title')}>
           <TableHeader>
             <TableRow className="group">
               <TableHead className="sticky left-0 z-10 min-w-[120px] bg-background">

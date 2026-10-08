@@ -73,7 +73,7 @@ export function PotPermissionsSection({ pot, group }: PotPermissionsSectionProps
         })}
       />
 
-      <Table>
+      <Table label={t('pots.permissions.title')}>
         <TableHeader>
           <TableRow>
             <TableHead>{t('pots.permissions.table.member')}</TableHead>

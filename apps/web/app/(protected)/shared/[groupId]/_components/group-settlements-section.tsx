@@ -128,7 +128,7 @@ export function GroupSettlementsSection({
         />
       ) : (
         <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-          <Table>
+          <Table label={t('settlements.title')}>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-32">{t('settlements.table.date')}</TableHead>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useId, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -91,6 +91,8 @@ export function ShareWizard({
 }: ShareWizardProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
+  // Ties each field's `Label` to its control, so the control is named by what the label says.
+  const fieldId = useId();
   const tCommon = useTranslations('common');
   const router = useRouter();
 
@@ -427,8 +429,9 @@ export function ShareWizard({
           {isNewPot ? (
             <div className="flex flex-col pt-2 gap-y-4 border-t border-border">
               <div className="flex flex-col gap-y-2">
-                <Label>{t('pots.form.name.label')}</Label>
+                <Label htmlFor={`${fieldId}-name`}>{t('pots.form.name.label')}</Label>
                 <Input
+                  id={`${fieldId}-name`}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder={t('pots.form.name.placeholder')}
@@ -439,8 +442,11 @@ export function ShareWizard({
               </div>
 
               <div className="flex flex-col gap-y-2">
-                <Label required>{t('pots.form.baseCurrency.label')}</Label>
+                <Label required htmlFor={`${fieldId}-currency`}>
+                  {t('pots.form.baseCurrency.label')}
+                </Label>
                 <CurrencyCombobox
+                  id={`${fieldId}-currency`}
                   value={chosenCurrency}
                   exclude={[]}
                   preferredCurrencies={preferredCurrencies}
@@ -459,8 +465,11 @@ export function ShareWizard({
               </div>
 
               <div className="flex flex-col gap-y-2">
-                <Label required>{t('pots.form.visibility.label')}</Label>
+                <Label required htmlFor={`${fieldId}-visibility`}>
+                  {t('pots.form.visibility.label')}
+                </Label>
                 <FormCombobox
+                  id={`${fieldId}-visibility`}
                   value={visibility}
                   onValueChange={(value) => setVisibility(value as PotVisibility)}
                   options={POT_VISIBILITIES.map((option) => ({

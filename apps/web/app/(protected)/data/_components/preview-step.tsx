@@ -79,7 +79,7 @@ export function PreviewStep({
       )}
 
       <div className="w-full overflow-x-auto">
-        <Table>
+        <Table label={t('import.preview.title')}>
           <TableHeader>
             <TableRow>
               <TableHead>{t('import.preview.row')}</TableHead>

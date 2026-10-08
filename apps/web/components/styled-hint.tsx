@@ -14,7 +14,10 @@ const VARIANT_CONFIG = {
   warning: {
     icon: AlertTriangle,
     iconColor: 'text-amber-500',
-    textColor: 'text-amber-600',
+    // Each variant's text clears the 4.5:1 its 12px size needs, on the page and on its own tint:
+    // amber-700 is 4.9:1 on amber-50 (the amber-600 it replaces was 3.1:1), blue-600 4.8:1 on
+    // blue-50, red-700 5.9:1 on red-50 (red-600 was 4.4:1).
+    textColor: 'text-amber-700',
     bg: 'bg-amber-50 border-amber-200',
   },
   info: {
@@ -26,7 +29,7 @@ const VARIANT_CONFIG = {
   error: {
     icon: XCircle,
     iconColor: 'text-red-500',
-    textColor: 'text-red-600',
+    textColor: 'text-red-700',
     bg: 'bg-red-50 border-red-200',
   },
 } as const;

@@ -27,7 +27,9 @@ export function LoginCard({ nextPath }: LoginCardProps) {
     <motion.div className="w-full max-w-auth-form" {...FADE_PROPS}>
       <Card>
         <CardHeader>
-          <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
+          <CardTitle as="h1" className="text-heading-4 text-center text-blue-800">
+            {t('title')}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <LoginForm nextPath={nextPath} />

@@ -146,7 +146,7 @@ export function PotOwnershipSection({
           }
         />
       ) : (
-        <Table>
+        <Table label={t('pots.ownership.title')}>
           <TableHeader>
             <TableRow>
               <TableHead>{t('pots.ownership.table.member')}</TableHead>

@@ -139,7 +139,7 @@ export function PotLedgerSection({ pot, events, total, page, pageSize }: PotLedg
         />
       ) : (
         <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-          <Table>
+          <Table label={t('pots.ledger.title')}>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-32">{t('pots.ledger.table.date')}</TableHead>

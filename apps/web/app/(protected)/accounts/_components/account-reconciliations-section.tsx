@@ -197,7 +197,7 @@ export function AccountReconciliationsSection({
                       transition={{ duration: ANIMATION_FAST }}
                       className="mt-3"
                     >
-                      <Table>
+                      <Table label={t('title')}>
                         <TableHeader>
                           <TableRow>
                             <TableHead>{t('table.date')}</TableHead>
