@@ -24,7 +24,7 @@ Tests live in `tests/unit/`, split into two Vitest projects by file extension (`
 - `pnpm test` — watch mode
 - `pnpm test:run` — single run (what root `pnpm test:web` calls)
 
-From repo root: `pnpm test:web`. Runs on every commit (pre-commit) and in CI Web. See the `testing` skill for what belongs here vs E2E.
+From repo root: `pnpm test:web`. Runs on every commit that stages web code (pre-commit) and in CI Web; files named `*.cross-app.test.ts` read the API's source and run on every code commit (`pnpm --filter web run test:cross-app`). See the `testing` skill for what belongs here vs E2E.
 
 ## E2E tests (Playwright)
 

@@ -14,7 +14,7 @@ import en from '../../translations/en.json';
 
 /*
  * A page whose totals left a currency out has to SAY so — and this is the half of that contract a
- * source scan cannot reach. `skipped-currencies-contract.test.ts` proves the web declares and maps the
+ * source scan cannot reach. `skipped-currencies-contract.cross-app.test.ts` proves the web declares and maps the
  * field; only rendering the page proves the hint appears. Setting `show={false}` on the finance
  * dashboard's and the calendar's hints left that scan, and every other test, green.
  *

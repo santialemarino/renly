@@ -14,6 +14,9 @@ import pytest
 from app.models.notification import NotificationEvent
 from app.services import notification_templates as templates
 
+# Reads the web app's source, so it runs on every commit whichever app is staged (see the testing skill).
+pytestmark = pytest.mark.cross_app
+
 _LOCALES = ("en", "es")
 # Every value any template interpolates, so one payload renders all of them. Deliberately a single
 # dict rather than one per event: a template that grew a placeholder nobody supplies is exactly what

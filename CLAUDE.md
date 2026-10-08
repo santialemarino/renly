@@ -33,7 +33,7 @@ pnpm lint:fix     # ESLint auto-fix
 - Never `git add .` or `git add -A` — stage files individually by name
 - Never stage `.claude/projects/` — gitignored for a reason
 - Never stage temporary `.md` files unless the user explicitly names them
-- Pre-commit runs lint-staged + `check:api` + `check:web` + `test:api` — don't commit code that would fail these
+- Pre-commit (`scripts/pre-commit.sh`) runs lint-staged, then `check:*` + `test:*` for each app that is staged plus both apps' cross-app tests — don't commit code that would fail any of these
 
 ## PR asset upload policy
 

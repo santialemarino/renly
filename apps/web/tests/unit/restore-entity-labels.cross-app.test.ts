@@ -20,7 +20,7 @@ import es from '../../translations/es.json';
  * labelled them, so every real export's preview rendered two key paths — for two PRs.
  *
  * The key list is read from the API's own `restore_specs.py` rather than restated here, for the same
- * reason `api-error-coverage.test.ts` reads `errors.py`: the failure being guarded IS the drift, and a
+ * reason `api-error-coverage.cross-app.test.ts` reads `errors.py`: the failure being guarded IS the drift, and a
  * restated list agrees with itself forever.
  */
 const RESTORE_SPECS_PY = join(import.meta.dirname, '../../../api/app/domain/restore_specs.py');

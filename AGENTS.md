@@ -33,7 +33,7 @@ pnpm lint:fix
 - Never stage `.claude/plans/`.
 - Never stage `docs/internal/`.
 - Never stage temporary markdown files unless the user explicitly names them.
-- Pre-commit runs lint-staged plus `check:api`, `check:web`, and `test:api`; do not commit code that would fail those checks.
+- Pre-commit (`scripts/pre-commit.sh`) runs lint-staged, then `check:*` + `test:*` for each app that is staged plus both apps' cross-app tests; do not commit code that would fail any of these.
 
 ## PR asset upload policy
 

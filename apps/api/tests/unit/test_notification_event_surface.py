@@ -28,8 +28,13 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from app.models.notification import NotificationEvent
 from app.services import notification_service
+
+# Reads the web app's source, so it runs on every commit whichever app is staged (see the testing skill).
+pytestmark = pytest.mark.cross_app
 
 _REPO = Path(__file__).resolve().parents[4]
 _WEB_CONSTANTS = _REPO / "apps" / "web" / "lib" / "constants" / "notifications.ts"

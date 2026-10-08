@@ -12,6 +12,7 @@
     "check-types": "echo 'No typecheck for Python'",
     "check": "uv run python -c \"from app.main import app\"",
     "test": "uv run pytest tests/ -v",
+    "test:cross-app": "uv run pytest tests/ -m cross_app -q",
     "migrate": "uv run alembic upgrade head",
     "migrate:make": "uv run alembic revision --autogenerate -m",
     "migrate:stamp": "uv run alembic stamp head"
