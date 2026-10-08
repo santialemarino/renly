@@ -724,26 +724,65 @@ class TestTheContributionPicker:
 
 
 class TestAbsorbingPotsOnAccountDeletion:
-    @pytest.mark.asyncio
-    async def test_every_holding_in_an_orphaned_groups_pots_is_reassigned(self, monkeypatch):
-        monkeypatch.setattr(pot_service.pot_repository, "list_by_group", AsyncMock(return_value=[_pot(id=5), _pot(id=6)]))
-        investments = AsyncMock(return_value=4)
-        accounts = AsyncMock(return_value=2)
-        monkeypatch.setattr(pot_service.investment_repository, "reassign_pots_to_user", investments)
-        monkeypatch.setattr(pot_service.account_repository, "reassign_pots_to_user", accounts)
-        moved = await pot_service.absorb_group_pots(AsyncMock(), [10], USER.id)
-        assert moved == 6
-        # Two statements for the whole set, not two per pot: the cost of deleting an account must not
-        # grow with how much the leaver happened to share.
-        assert (investments.await_count, accounts.await_count) == (1, 1)
-        assert investments.await_args.args[1:] == ([5, 6], USER.id)
+    # Wires the four repository calls absorption makes, returning their mocks.
+    def _wire(self, monkeypatch, *, pot_ids, investment_ids, account_ids):
+        calls = {
+            "pots": AsyncMock(return_value=pot_ids),
+            "investment_ids": AsyncMock(return_value=investment_ids),
+            "account_ids": AsyncMock(return_value=account_ids),
+            "investments": AsyncMock(return_value=len(investment_ids)),
+            "accounts": AsyncMock(return_value=len(account_ids)),
+        }
+        monkeypatch.setattr(pot_service.pot_repository, "list_ids_by_groups", calls["pots"])
+        monkeypatch.setattr(pot_service.investment_repository, "list_ids_by_pots_for_update", calls["investment_ids"])
+        monkeypatch.setattr(pot_service.account_repository, "list_ids_by_pots_for_update", calls["account_ids"])
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", calls["investments"])
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", calls["accounts"])
+        return calls
 
     @pytest.mark.asyncio
-    async def test_no_orphaned_groups_touches_nothing(self, monkeypatch):
-        list_by_group = AsyncMock(return_value=[])
-        monkeypatch.setattr(pot_service.pot_repository, "list_by_group", list_by_group)
-        assert await pot_service.absorb_group_pots(AsyncMock(), [], USER.id) == 0
-        list_by_group.assert_not_awaited()
+    async def test_every_holding_in_the_orphaned_groups_pots_moves_through_move_to_scope(self, monkeypatch):
+        # move_to_scope is what re-points the children with their parent, so the ids the locked reads
+        # returned must be exactly what reaches it, as private to the leaver.
+        calls = self._wire(monkeypatch, pot_ids=[5, 6, 7], investment_ids=[40, 41, 42, 43], account_ids=[80, 81])
+        moved = await pot_service.absorb_group_pots(AsyncMock(), [10, 11], USER.id)
+        assert moved == 6
+        assert calls["investment_ids"].await_args.args[1:] == ([5, 6, 7],)
+        assert calls["account_ids"].await_args.args[1:] == ([5, 6, 7],)
+        assert calls["investments"].await_args.args[1:] == ([40, 41, 42, 43],)
+        assert calls["investments"].await_args.kwargs == {"pot_id": None, "user_id": USER.id}
+        assert calls["accounts"].await_args.args[1:] == ([80, 81],)
+        assert calls["accounts"].await_args.kwargs == {"pot_id": None, "user_id": USER.id}
+
+    @pytest.mark.asyncio
+    async def test_the_cost_is_fixed_however_many_groups_and_pots_are_orphaned(self, monkeypatch):
+        # One call per repository function for the whole set, not one per group or pot: the cost of
+        # deleting an account must not grow with how much the leaver happened to share.
+        calls = self._wire(monkeypatch, pot_ids=[5, 6, 7], investment_ids=[40, 41], account_ids=[80])
+        await pot_service.absorb_group_pots(AsyncMock(), [10, 11], USER.id)
+        assert {name: mock.await_count for name, mock in calls.items()} == {
+            "pots": 1,
+            "investment_ids": 1,
+            "account_ids": 1,
+            "investments": 1,
+            "accounts": 1,
+        }
+        assert calls["pots"].await_args.args[1:] == ([10, 11],)
+
+    @pytest.mark.asyncio
+    async def test_groups_holding_no_pots_touch_no_holdings(self, monkeypatch):
+        calls = self._wire(monkeypatch, pot_ids=[], investment_ids=[], account_ids=[])
+        assert await pot_service.absorb_group_pots(AsyncMock(), [10], USER.id) == 0
+        for name in ("investment_ids", "account_ids", "investments", "accounts"):
+            calls[name].assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_orphaned_groups_issues_no_query_at_all(self):
+        # Through the real repositories: the usual case is that nothing was orphaned, and it must not
+        # cost a round trip.
+        session = AsyncMock()
+        assert await pot_service.absorb_group_pots(session, [], USER.id) == 0
+        session.execute.assert_not_awaited()
 
 
 class TestOneMembersShare:
