@@ -43,6 +43,15 @@ async def list_by_group(session: AsyncSession, group_id: int, *, limit: int | No
     return capped(list(result.scalars().all()), limit, "pots")
 
 
+# Lists the ids of every pot in the given groups, in one query: account deletion must cost a fixed
+# number of queries however many groups the leaver orphans.
+async def list_ids_by_groups(session: AsyncSession, group_ids: list[int]) -> list[int]:
+    if not group_ids:
+        return []
+    result = await session.execute(select(Pot.id).where(Pot.group_id.in_(group_ids)).order_by(Pot.id))
+    return list(result.scalars().all())
+
+
 # Fetches a pot by id. Returns None when it does not exist or is not visible to the session.
 async def get_by_id(session: AsyncSession, pot_id: int) -> Pot | None:
     return await session.get(Pot, pot_id)
@@ -177,6 +186,7 @@ class PotRepository:
     list_all = staticmethod(list_all)
     list_by_group = staticmethod(list_by_group)
     list_holdings = staticmethod(list_holdings)
+    list_ids_by_groups = staticmethod(list_ids_by_groups)
     list_permissions = staticmethod(list_permissions)
     list_permissions_by_pots = staticmethod(list_permissions_by_pots)
     list_visible = staticmethod(list_visible)

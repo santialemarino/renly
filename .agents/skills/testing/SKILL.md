@@ -51,6 +51,13 @@ pnpm test:e2e        # Playwright E2E
   - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
   - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
   - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`).
+    Also account deletion absorbing an orphaned group's pots: every scope-denormalized child
+    (reconciliations, both legs of a transfer, snapshots, transactions) ends in its parent's new scope,
+    the absorbed pot is then deletable (the RESTRICT foreign keys are the proof nothing still names it),
+    and a surviving group's pot is untouched — run with 0032's scope trigger live, which refuses a child
+    moved before its parent. Its structural half, `tests/unit/test_scope_children_follow.py`, DERIVES the
+    children from the models and fails when a `move_to_scope` misses one, moves one before its parent,
+    or a second function writes a parent's or child's `pot_id`.
   - `test_rls_pot_scope.py` — the same two `RLS_TEST_*` vars as `test_rls_isolation.py`, so the two
     run together. Covers the dual-scope policies, whose service layer holds a second copy of the
     same rules — the failure that matters is the two disagreeing, which only a real policy shows.
