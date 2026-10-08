@@ -147,6 +147,17 @@ Two things about where the attribute goes:
   of a testid per call site — the currency hint is `hint-currency-hint-dismissed`. Reach for this
   whenever a family of instances is already distinguished by a prop.
 
+### Hovering a server-rendered element
+
+A page loaded with `goto` is visible and actionable before React has hydrated it, and React does not
+replay a pointer MOVE aimed at content it has not hydrated yet. Radix opens a tooltip on `pointermove`,
+so a `hover()` sent in that window is lost for good — the trigger never changes state and no wait on
+the tooltip can recover it. Before hovering anything whose handler is React's (a tooltip trigger, a
+hover card), call `waitForHydration(locator)` from `tests/e2e/helpers/hydration.ts`: it waits until
+React has attached that element's props, which is the moment its handlers exist. Do not retry the
+hover in a `toPass` loop instead: that hides the race rather than waiting for the condition. A CSS
+`:hover` needs neither.
+
 ### Auth and storage state — how the harness actually works
 
 Two projects over one `testDir`, split by FILE NAME:
@@ -200,7 +211,10 @@ page as something a locator can find. The flow a spec is TESTING goes through th
 cleanup alike. Data it is NOT testing, such as the group and collection a layout sweep needs on screen,
 may be seeded and removed through the API (`helpers/api.ts`), which is faster and deterministic, and it
 is still marked. Either way, clean up in a `finally` or an `afterAll`, and make the cleanup a no-op when
-the row is already gone so it is safe to call unconditionally.
+the row is already gone so it is safe to call unconditionally. "Gone" is read off the LIST, never off the
+page at `load`: a protected page is still its `loading.tsx` skeleton then, so a row count there is 0 for a
+row that exists — the UI cleanups in `factories.ts` wait for the page's own toolbar first, and a cleanup
+that skipped that wait leaked its row on every run.
 A spec that temporarily changes ACCOUNT STATE rather than adding a row (a setting such as
 `onboarding_completed`) reads the value first and restores it in `afterAll` — and a run killed before
 `afterAll` can leave it changed, so check that setting on the account before trusting the next run.

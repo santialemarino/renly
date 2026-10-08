@@ -1,7 +1,6 @@
 import './globals.css';
 
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { Toaster } from 'sonner';
@@ -12,6 +11,7 @@ import { CookieConsent } from '@/components/cookie-consent';
 import { MotionProvider } from '@/components/motion-provider';
 import { OG_SITE_DEFAULTS, siteConfig, TWITTER_SITE_DEFAULTS } from '@/config/site';
 import { BRAND_SURFACE } from '@/lib/constants/brand';
+import { plusJakartaSans } from '@/lib/fonts/plus-jakarta-sans';
 
 // Absolute base for resolving the favicon / Open Graph image URLs. Reuses NEXTAUTH_URL, the app's
 // canonical web origin (see docs/technical/env-vars.md) — a runtime env, so it carries the real
@@ -44,11 +44,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: BRAND_SURFACE,
 };
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-});
 
 export default async function RootLayout({
   children,

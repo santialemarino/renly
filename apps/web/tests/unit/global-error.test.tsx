@@ -20,7 +20,7 @@ import { GlobalErrorContent } from '@/components/global-error-content';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 // The page's stylesheet and font are build-time concerns the unit environment cannot load.
 vi.mock('@/app/globals.css', () => ({}));
-vi.mock('next/font/google', () => ({ Plus_Jakarta_Sans: () => ({ className: 'font' }) }));
+vi.mock('next/font/local', () => ({ default: () => ({ className: 'font' }) }));
 
 const COPY = {
   en: { title: 'Something went wrong', retry: 'Try again' },

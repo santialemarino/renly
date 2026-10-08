@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type FocusEvent } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -44,15 +44,16 @@ interface TruncatingTooltipProps {
  * control. Which control, if any, is read when it matters — on each measure and each focus — not once.
  *
  * On a touch screen a tap opens nothing: Radix ignores touch hovers, and the focus a tap gives (which
- * arrives after Radix has forgotten the press) is kept from opening the tooltip.
+ * arrives after Radix has forgotten the press) is kept from opening the tooltip. That is decided by the
+ * focus itself — only a KEYBOARD focus (`:focus-visible`) may open it, the rule the nested path already
+ * follows — rather than by remembering the last press: a touch press that never focuses the text (a pan,
+ * a long press) would otherwise leave its type behind and block the next keyboard focus.
  *
  * The trigger carries no `aria-describedby`: CSS truncation leaves the whole text in the DOM, so
  * assistive tech already reads all of it, and a description repeating it would be announced twice.
  */
 export function TruncatingTooltip({ text, className, side = 'top' }: TruncatingTooltipProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  // The type of the last press on the text, until it loses focus.
-  const pressType = useRef<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [nested, setNested] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -99,29 +100,19 @@ export function TruncatingTooltip({ text, className, side = 'top' }: TruncatingT
     setOpen(next && ref.current !== null && isCut(ref.current));
   };
 
-  const handlePointerDown = (event: PointerEvent<HTMLSpanElement>) => {
-    pressType.current = event.pointerType;
-  };
-
-  // A default-prevented focus is one Radix does not open on.
+  // Only a keyboard focus opens the tooltip; a default-prevented focus is one Radix does not open on.
   const handleFocus = (event: FocusEvent<HTMLSpanElement>) => {
     setFocused(true);
-    if (pressType.current === 'touch') event.preventDefault();
+    if (!event.currentTarget.matches(':focus-visible')) event.preventDefault();
   };
 
   const handleBlur = () => {
     setFocused(false);
-    pressType.current = null;
   };
 
   return (
     <Tooltip open={open} onOpenChange={handleOpenChange}>
-      <TooltipTrigger
-        asChild
-        onPointerDown={handlePointerDown}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-      >
+      <TooltipTrigger asChild onFocus={handleFocus} onBlur={handleBlur}>
         <span
           ref={ref}
           tabIndex={focused || (truncated && !nested) ? 0 : undefined}

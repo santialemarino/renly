@@ -1,6 +1,7 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 
 import { createExpenseViaQuickAdd, deleteExpenseByMarker, testMarker } from './helpers/factories';
+import { waitForHydration } from './helpers/hydration';
 
 /*
  * `prefers-reduced-motion: reduce`, measured in the only place it exists: a real browser's computed
@@ -189,7 +190,14 @@ const SHEET: Surface = {
   close: pressEscape,
 };
 
-// A row action's tooltip; the row is one expense the test writes and removes itself.
+/*
+ * A row action's tooltip; the row is one expense the test writes and removes itself.
+ *
+ * The trigger is server-rendered, so it is visible before React hydrates it — and a hover in that
+ * window is dropped rather than replayed, which left the tooltip closed for the whole frame poll on
+ * some CI runs. `prepare` therefore waits for the trigger itself to be hydrated (see
+ * `helpers/hydration.ts`) before the one hover `open` sends.
+ */
 function tooltipSurface(): Surface {
   return {
     name: 'tooltip',
@@ -197,9 +205,16 @@ function tooltipSurface(): Surface {
     viewport: DESKTOP,
     prepare: async (page) => {
       await page.goto(EXPENSES);
-      await expect(page.getByTestId('expense-delete').first()).toBeVisible({ timeout: 20_000 });
+      const trigger = page.getByTestId('expense-delete').first();
+      await expect(trigger).toBeVisible({ timeout: 20_000 });
+      await waitForHydration(trigger);
     },
-    open: (page) => page.getByTestId('expense-delete').first().hover(),
+    // From the corner, so the pointer ARRIVES on the trigger: the second pass loads the page with the
+    // pointer still resting where the first pass left it, over this same button.
+    open: async (page) => {
+      await page.mouse.move(0, 0);
+      await page.getByTestId('expense-delete').first().hover();
+    },
     close: pressEscape,
   };
 }

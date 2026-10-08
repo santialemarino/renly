@@ -19,12 +19,15 @@ const PROTECTED = join(APP_ROOT, '(protected)');
 // Pages the sweep does not visit, each with the reason — never silently.
 export const TEXT_SWEEP_SKIPS: Record<string, string> = {
   '/admin':
-    'admin-only: the harness account is not an admin, so the page is a 404 (and in open signup mode it is a 404 for everyone)',
-  '/admin/feedback': 'admin-only, like /admin',
+    'admin-only: a 404 for the harness account. The admin session exists (ADMIN_AUTH_STATE_PATH in helpers/auth.ts, used by the axe sweep), but this sweep does not load it yet (U12b)',
+  '/admin/feedback':
+    'admin-only, like /admin: needs the admin session, which this sweep does not load yet (U12b)',
   '/shared/pots/[id]/buy-out':
-    'a 404 unless the pot is priced — holdings moved in and an opening ownership recorded, which is the money fixture (U12b), not a group seed',
-  '/shared/pots/[id]/contribute': 'a 404 unless the pot is priced, like /shared/pots/[id]/buy-out',
-  '/shared/pots/[id]/take-out': 'a 404 unless the pot is priced, like /shared/pots/[id]/buy-out',
+    'a 404 unless the pot is priced and divided (buy-out also needs a second active seat). a11y-routes.auth.spec.ts seeds such a pot, but this sweep does not use that seed yet (U12b)',
+  '/shared/pots/[id]/contribute':
+    'a 404 unless the pot is priced and divided, like /shared/pots/[id]/buy-out: not seeded for this sweep yet (U12b)',
+  '/shared/pots/[id]/take-out':
+    'a 404 unless the pot is priced and divided, like /shared/pots/[id]/buy-out: not seeded for this sweep yet (U12b)',
 };
 
 // Every page under (protected), as its route pattern: route groups dropped, dynamic segments kept.

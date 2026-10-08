@@ -69,6 +69,20 @@ export async function createExpenseViaQuickAdd(page: Page, marker: string, amoun
 }
 
 /*
+ * Loads a list page and waits for the LIST, not the page. A protected page streams behind its
+ * `loading.tsx` skeleton, and `goto` resolves on `load` while that skeleton is still what is on screen:
+ * a row count taken there is 0 for a row that exists. The cleanups below read that 0 as "already gone"
+ * and returned without deleting — every run leaked its row, passing ones included, until the leftovers
+ * pushed the next run's row under the cookie banner. The toolbar is rendered by the page itself, in the
+ * same commit as the table, and the skeleton only draws placeholders for it — so once it is on screen
+ * the rows are too.
+ */
+async function openListPage(page: Page, route: string) {
+  await page.goto(route);
+  await expect(page.getByTestId('entity-list-toolbar')).toBeVisible({ timeout: 20_000 });
+}
+
+/*
  * Deletes the expense carrying this marker, through the row's own delete action and its confirmation.
  * Safe to call when the row is already gone, so it can sit in a `finally` without knowing whether the
  * test that just ran got as far as creating anything.
@@ -80,7 +94,7 @@ export async function createExpenseViaQuickAdd(page: Page, marker: string, amoun
  */
 export async function deleteExpenseByMarker(page: Page, marker: string) {
   try {
-    await page.goto(EXPENSES);
+    await openListPage(page, EXPENSES);
     const row = expenseRow(page, marker);
     if ((await row.count()) === 0) return;
 
@@ -168,7 +182,7 @@ export async function createAccount(page: Page, marker: string, openingBalance: 
  */
 export async function deleteAccountByMarker(page: Page, marker: string) {
   try {
-    await page.goto(ACCOUNTS);
+    await openListPage(page, ACCOUNTS);
     const row = accountRow(page, marker);
     if ((await row.count()) === 0) return;
 
