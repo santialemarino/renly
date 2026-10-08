@@ -62,7 +62,10 @@ CREATE OR REPLACE FUNCTION app_reconciliation_follows_account() RETURNS TRIGGER
 # account, or a private one on a pot's account. An AFTER INSERT / UPDATE OF user_id, pot_id, account_id
 # trigger refuses any row whose scope is not its account's, so a scope change happens only by moving the
 # account — which needs pot write access — and the move re-points the children after the account, in the
-# same transaction, where the lookup already reads the new scope. The lookup takes no lock, so two
+# same transaction, where the lookup already reads the new scope. One path does not use that move yet:
+# account deletion absorbing an orphaned group's pots (reassign_pots_to_user) re-points the accounts but
+# not their reconciliations, which a trigger on account_reconciliations cannot see; the rows it leaves
+# out of scope are deleted with the user right after, unless deletion fails in between. The lookup takes no lock, so two
 # concurrent transactions could still break it — a private reconciliation inserted, uncommitted, while
 # the account moves into a pot and its re-point matches nothing — and it holds at the API level because
 # the services serialise both sides first: a reconcile takes lock_private (the account, FOR UPDATE) or
