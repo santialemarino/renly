@@ -368,16 +368,59 @@ jobs:
   # The one check to mark REQUIRED. It reports on every run and fails only when a job it needs failed
   # or was cancelled — so a PR whose gate skipped `e2e-web` passes, and one where it ran and broke
   # does not.
+  # A run cancelled because a NEWER run on the SAME commit superseded it (a label added at PR creation
+  # fires `opened` then `labeled`) must not post a red `e2e-required` next to the real one: it waits for
+  # the newest run on that commit and reports that run's `e2e-required` conclusion as its own, so the
+  # two agree and neither is ever green before the real result exists. Cancelled with no successor (a
+  # person, a timeout) it fails as before.
   e2e-required:
     needs: [changes, e2e-web]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      actions: read
     steps:
-      - name: Fail if a needed job failed or was cancelled
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+      - name: Fail if a needed job failed
+        if: contains(needs.*.result, 'failure')
         run: |
           echo "::error::changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}"
           exit 1
+      - name: When cancelled, report the newest run on this commit, or fail
+        if: ${{ !contains(needs.*.result, 'failure') && contains(needs.*.result, 'cancelled') }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.pull_request?.head.sha ?? context.sha;
+            const me = context.runId;
+            const deadline = Date.now() + 45 * 60 * 1000;
+            while (Date.now() < deadline) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo,
+                workflow_id: 'ci.web-e2e.yml',
+                head_sha: sha,
+                per_page: 50,
+              });
+              const newer = data.workflow_runs
+                .filter((run) => run.id > me)
+                .sort((a, b) => b.id - a.id)[0];
+              if (!newer) {
+                core.setFailed(`cancelled, and no newer run on ${sha} supersedes it`);
+                return;
+              }
+              if (newer.status === 'completed') {
+                const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+                  ...context.repo,
+                  run_id: newer.id,
+                });
+                const gate = jobs.jobs.find((job) => job.name === 'e2e-required');
+                core.info(`superseded by run ${newer.id}: e2e-required ${gate?.conclusion}`);
+                if (gate?.conclusion !== 'success') core.setFailed(`run ${newer.id} reported ${gate?.conclusion}`);
+                return;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 30_000));
+            }
+            core.setFailed('the superseding run did not finish within 45 minutes');
       - run: 'echo "changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}"'
 
   # The nightly net's memory: one open `e2e-red` issue while main's nightly run is red, updated on

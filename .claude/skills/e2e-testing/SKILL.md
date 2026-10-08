@@ -85,6 +85,15 @@ pnpm test:e2e --last-failed --reporter=line                      # re-run only w
 reporter's wall; `-x` (`--max-failures=1`) stops the run there. The full suite is not run locally —
 CI runs it (see "CI").
 
+**Which web server to run against.** For a run that edits nothing — verifying a change, reviewing a PR,
+proving a guard — use a production server: `pnpm build:ui`, `pnpm --filter web exec next build`, then
+`pnpm --filter web exec next start --port <port>` from the repo root (same env overrides as `next dev`).
+Measured 2026-10-08 on the same 86 tests (`a11y-routes.auth`, `locale-text-clipping.auth`,
+`money-overflow.auth`): `next dev` held a 6.4 GB footprint and took 670–690 s; the production server held
+0.5 GB and took 306 s after a 22 s build, with no cold-compile timeouts. Use `next dev` while implementing,
+where hot reload pays for itself; a fix found during a production run costs a ~25 s rebuild. Measure a
+dev server with macOS `footprint`, not RSS — RSS drops as it swaps.
+
 **To run the AUTHENTICATED specs, name an account:**
 
 ```bash
@@ -406,8 +415,11 @@ on every PR, every night on `main`, and on demand — and decides at JOB level w
 label.**
 
 `e2e-required` is the check to mark REQUIRED (a repository setting, not something the workflow
-decides). It reports on every run and fails only when a job it needs failed or was cancelled, so a PR
-whose gate skipped `e2e-web` passes. The gate lives in the job rather than in `on.paths` because a
+decides). It reports on every run and fails when a job it needs failed or was cancelled, so a PR
+whose gate skipped `e2e-web` passes. One exception keeps it honest: a run cancelled because a NEWER run on
+the same commit superseded it (a label added at PR creation fires `opened` then `labeled`) waits for the
+newest run and reports that run's `e2e-required` conclusion as its own, instead of a false red; cancelled
+with no successor, it fails. The gate lives in the job rather than in `on.paths` because a
 workflow skipped by a path filter leaves a required check pending forever.
 
 ### What the job does
