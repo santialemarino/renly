@@ -211,7 +211,10 @@ page as something a locator can find. The flow a spec is TESTING goes through th
 cleanup alike. Data it is NOT testing, such as the group and collection a layout sweep needs on screen,
 may be seeded and removed through the API (`helpers/api.ts`), which is faster and deterministic, and it
 is still marked. Either way, clean up in a `finally` or an `afterAll`, and make the cleanup a no-op when
-the row is already gone so it is safe to call unconditionally.
+the row is already gone so it is safe to call unconditionally. "Gone" is read off the LIST, never off the
+page at `load`: a protected page is still its `loading.tsx` skeleton then, so a row count there is 0 for a
+row that exists — the UI cleanups in `factories.ts` wait for the page's own toolbar first, and a cleanup
+that skipped that wait leaked its row on every run.
 A spec that temporarily changes ACCOUNT STATE rather than adding a row (a setting such as
 `onboarding_completed`) reads the value first and restores it in `afterAll` — and a run killed before
 `afterAll` can leave it changed, so check that setting on the account before trusting the next run.

@@ -81,8 +81,12 @@ incident:
   `apiToken()` in `tests/e2e/helpers/api.ts` (the saved session — never a per-worker `/auth/login`, which hits the
   login rate limit and turns real failures into 429s); a flow that 404s without data (pot buy-out/contribute/
   take-out need a priced, divided pot) needs that data seeded or the scan checks the 404.
-- **Shared e2e helpers:** `tests/e2e/helpers/overflow.ts` backs the money sweep — an edit to it (or to any helper
-  under `tests/e2e/helpers/`) re-runs every spec that imports it, and adds a case pinning the behaviour it changed.
+- **Shared e2e helpers:** `tests/e2e/helpers/overflow.ts` backs BOTH sweeps — the money sweep and the text sweep
+  (`locale-text-clipping.auth.spec.ts`, through `helpers/text-clipping.ts`) — and `overflow-harness.spec.ts` pins the
+  harness through both. Its `settle` also runs before every axe scan (`helpers/axe.ts`), so it reaches every `@a11y`
+  spec too (`a11y-routes.spec.ts`, `a11y-routes.auth.spec.ts`, `a11y-overlays.auth.spec.ts`). An edit to it re-runs
+  both sweeps and the `@a11y` specs and adds a harness case pinning the behaviour it changed; an edit to any other
+  helper under `tests/e2e/helpers/` re-runs every spec that imports it, and adds a case too.
 - **RLS and roles:** a new `SECURITY DEFINER` function is owned by `renly_policy_definer` with `SELECT` on exactly
   what it reads, pins `search_path`, and revokes `EXECUTE` from PUBLIC; an invariant trigger that refuses rows runs
   AFTER the row policies — a BEFORE trigger's error code can reveal rows the caller cannot see; a new UPDATE on a
