@@ -71,7 +71,7 @@ export function JoinCard({ token, preview, isLoggedIn, signupMode }: JoinCardPro
           <span className="grid size-12 shrink-0 place-items-center bg-muted rounded-full text-muted-foreground">
             <Users className="size-6" />
           </span>
-          <CardTitle className="text-heading-4 text-center text-blue-800">
+          <CardTitle as="h1" className="text-heading-4 text-center text-blue-800">
             {preview ? t('title', { group: preview.groupName }) : t('invalidTitle')}
           </CardTitle>
         </CardHeader>

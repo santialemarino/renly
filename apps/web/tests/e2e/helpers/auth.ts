@@ -29,3 +29,26 @@ export function e2eCredentials(): E2ECredentials | null {
   if (!email || !password) return null;
   return { email, password };
 }
+
+/*
+ * The ADMIN session, a second saved state beside the harness one. The admin pages (`/admin`,
+ * `/admin/feedback`) render only for a user with `users.is_admin` and show anyone else the not-found
+ * page, so the harness account cannot reach them — and making IT an admin would change what every
+ * other authenticated spec sees. A second account, flagged in SQL, signs in once in globalSetup like
+ * the first, and the specs that need it load this file with `test.use({ storageState: … })`.
+ */
+export const ADMIN_AUTH_STATE_PATH = join(import.meta.dirname, '../.auth/admin-storage-state.json');
+
+/*
+ * The admin account, from E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD, or null when either is unset — the
+ * same gating as `e2eCredentials`: unset, the admin scans skip (a local run) and globalSetup signs in
+ * only the harness account. CI sets both, and refuses a run in which anything skipped.
+ */
+export function e2eAdminCredentials(): E2ECredentials | null {
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  const email = process.env.E2E_ADMIN_EMAIL;
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  const password = process.env.E2E_ADMIN_PASSWORD;
+  if (!email || !password) return null;
+  return { email, password };
+}

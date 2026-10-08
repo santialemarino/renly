@@ -105,7 +105,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               // focus-bump on the icon instead (ux-motion's `group/<name>` idiom), so the two read
               // differently and the native outline is replaced. The blue eye darkens blue-800→blue-900
               // like the blue button.
-              'group/password-toggle absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all outline-none hover:scale-110',
+              // A 24px box around the 16px eye (WCAG 2.5.8's minimum target), placed so the eye sits
+              // exactly where it did when the box was the eye itself.
+              'group/password-toggle absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center cursor-pointer transition-all outline-none hover:scale-110',
               hasError
                 ? 'text-destructive'
                 : blue || blueEye

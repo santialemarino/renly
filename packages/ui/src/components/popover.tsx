@@ -5,11 +5,60 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 
 import { cn } from '@repo/ui/lib';
 
+/*
+ * A Radix popover's content is a `role="dialog"`, and a dialog needs a name (axe's `aria-dialog-name`).
+ * No call site should have to supply one, because every popover here already has it: the control that
+ * opened it. So the content takes its trigger's name unless the caller names it itself.
+ *
+ * The name is read off the rendered trigger, as a string, rather than wired with `aria-labelledby`:
+ * most triggers here are comboboxes, and a combobox referenced by `aria-labelledby` contributes its
+ * VALUE (none, for these) rather than its text, so the dialog came out unnamed. What a reader hears
+ * for the trigger is its `aria-label`, else its `<label>`s, else its text — so that is the order here.
+ */
+const PopoverTriggerNameContext = React.createContext<{
+  triggerName: string | undefined;
+  setTriggerName: (name: string | undefined) => void;
+} | null>(null);
+
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />;
+  const [triggerName, setTriggerName] = React.useState<string | undefined>(undefined);
+  const value = React.useMemo(() => ({ triggerName, setTriggerName }), [triggerName]);
+
+  return (
+    <PopoverTriggerNameContext.Provider value={value}>
+      <PopoverPrimitive.Root data-slot="popover" {...props} />
+    </PopoverTriggerNameContext.Provider>
+  );
 }
-function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
+
+// The trigger's name as a reader hears it: its aria-label, else its labels' text, else its own text.
+function nameOf(node: HTMLButtonElement): string | undefined {
+  const label = node.getAttribute('aria-label')?.trim();
+  if (label) return label;
+  const labels = [...(node.labels ?? [])].map((element) => element.textContent?.trim() ?? '');
+  const labelled = labels.filter(Boolean).join(' ');
+  if (labelled) return labelled;
+  return node.textContent?.trim() || undefined;
+}
+
+function PopoverTrigger({ ref, ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
+  const setTriggerName = React.useContext(PopoverTriggerNameContext)?.setTriggerName;
+  const nodeRef = React.useRef<HTMLButtonElement | null>(null);
+  const composedRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      nodeRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+  // Read after every render, not once: the trigger's text follows the selection and its label the
+  // locale. React skips the update when the name is unchanged, so this costs a comparison.
+  React.useLayoutEffect(() => {
+    setTriggerName?.(nodeRef.current ? nameOf(nodeRef.current) : undefined);
+  });
+
+  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} ref={composedRef} />;
 }
 function PopoverContent({
   className,
@@ -17,10 +66,14 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  const triggerName = React.useContext(PopoverTriggerNameContext)?.triggerName;
+  const named = props['aria-label'] !== undefined || props['aria-labelledby'] !== undefined;
+
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
         data-slot="popover-content"
+        aria-label={named ? undefined : triggerName}
         align={align}
         sideOffset={sideOffset}
         className={cn(

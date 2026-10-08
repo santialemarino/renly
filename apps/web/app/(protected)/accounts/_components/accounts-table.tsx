@@ -114,10 +114,12 @@ export function AccountsTable({
   return (
     <div className="flex flex-col gap-y-4">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-        <Table>
+        <Table label={t('title')}>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-8" />
+              <TableHead className="w-8">
+                <span className="sr-only">{tCommon('expandRow.details')}</span>
+              </TableHead>
               <SortableTableHead
                 label={t('table.name')}
                 column="name"
@@ -194,12 +196,27 @@ export function AccountsTable({
                       onClick={() => setExpandedId(isExpanded ? null : a.id)}
                     >
                       <TableCell>
-                        <ChevronRight
-                          className={cn(
-                            'size-4 transition-transform duration-200',
-                            isExpanded && 'rotate-90',
-                          )}
-                        />
+                        {/* The row still toggles on a click anywhere, but that is a mouse-only
+                            affordance; this is the control a keyboard and a screen reader reach. */}
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-label={tCommon('expandRow.toggle', { name: a.name })}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedId(isExpanded ? null : a.id);
+                          }}
+                          className="group/row-expand flex size-6 items-center justify-center cursor-pointer outline-none"
+                        >
+                          <span className="grid group-focus-visible/row-expand:animate-focus-bump">
+                            <ChevronRight
+                              className={cn(
+                                'size-4 transition-transform duration-200',
+                                isExpanded && 'rotate-90',
+                              )}
+                            />
+                          </span>
+                        </button>
                       </TableCell>
                       <TableCell className="text-paragraph-sm-medium">{a.name}</TableCell>
                       <TableCell className="text-muted-foreground">

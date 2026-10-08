@@ -78,7 +78,13 @@ export function GroupMembersSection({ group }: GroupMembersSectionProps) {
           description={t('members.emptyDescription')}
         />
       ) : (
-        <RosterTable group={group} members={active} isAdmin={isAdmin} onSuccess={refresh} />
+        <RosterTable
+          label={t('members.title')}
+          group={group}
+          members={active}
+          isAdmin={isAdmin}
+          onSuccess={refresh}
+        />
       )}
 
       {/* Former members are kept out of the main roster but never hidden: their seats still carry the
@@ -90,7 +96,13 @@ export function GroupMembersSection({ group }: GroupMembersSectionProps) {
             title={t('members.formerTitle')}
             description={t('members.formerDescription')}
           />
-          <RosterTable group={group} members={former} isAdmin={isAdmin} onSuccess={refresh} />
+          <RosterTable
+            label={t('members.formerTitle')}
+            group={group}
+            members={former}
+            isAdmin={isAdmin}
+            onSuccess={refresh}
+          />
         </div>
       )}
 
@@ -107,11 +119,13 @@ export function GroupMembersSection({ group }: GroupMembersSectionProps) {
 // One table for both rosters — active and former seats differ only in which rows they hold and which
 // actions those rows offer, so the columns are defined once.
 function RosterTable({
+  label,
   group,
   members,
   isAdmin,
   onSuccess,
 }: {
+  label: string;
   group: Group;
   members: GroupMember[];
   isAdmin: boolean;
@@ -120,7 +134,7 @@ function RosterTable({
   const t = useTranslations('shared');
 
   return (
-    <Table>
+    <Table label={label}>
       <TableHeader>
         <TableRow>
           <TableHead>{t('members.table.name')}</TableHead>

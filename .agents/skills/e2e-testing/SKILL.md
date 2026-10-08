@@ -72,6 +72,19 @@ pnpm dev
 
 If `pnpm dev` settles on a port other than 3000 (e.g. Next auto-bumps to 3001 when 3000 is busy), pass `PLAYWRIGHT_BASE_URL=http://localhost:<port>` when running tests. An empty `PLAYWRIGHT_BASE_URL=""` falls back to the default.
 
+**While iterating, run only what the change touches**, and read the failure as it happens:
+
+```bash
+pnpm test:e2e tests/e2e/a11y-routes.spec.ts --reporter=line -x   # one spec, stop at the first failure
+pnpm test:e2e --grep "@a11y" --reporter=line                     # every spec with a tag
+pnpm test:e2e --grep "/expenses" --reporter=line                 # tests whose title matches
+pnpm test:e2e --last-failed --reporter=line                      # re-run only what failed last time
+```
+
+`--reporter=line` prints one line per test and the full error at the failure, instead of the list
+reporter's wall; `-x` (`--max-failures=1`) stops the run there. The full suite is not run locally —
+CI runs it (see "CI").
+
 **To run the AUTHENTICATED specs, name an account:**
 
 ```bash
@@ -80,6 +93,11 @@ E2E_EMAIL=you@example.com E2E_PASSWORD=... pnpm test:e2e
 
 Without both, the `chromium-authenticated` project does not exist and only the signed-out specs run —
 the suite still exits 0. See "Auth and storage state" below.
+
+**To also scan the admin pages, name an admin account** with `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`
+(shell vars, like the two above). An account becomes an admin only in SQL, against the database the
+API under test uses (a throwaway clone, never a shared dev database):
+`update users set is_admin = true where email = '<admin email>';`. Without them the admin scans skip.
 
 **They are shell vars, and deliberately NOT in `.env`.** Playwright reads no dotenv file, so a value
 placed in `apps/web/.env` looks configured and reaches nothing. They also stay out of `.env.example`
@@ -161,6 +179,14 @@ an unauthenticated state instead makes every authenticated spec fail as a redire
 confusing failures away from the one real cause. Delete any stale state file before starting, so a
 failed setup cannot leave the previous run's session for the next one to load.
 
+**A second saved session, for the admin pages.** With `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` set,
+globalSetup signs that account in the same way and saves `tests/e2e/.auth/admin-storage-state.json`
+(`ADMIN_AUTH_STATE_PATH`), after checking it really is an admin (an admin page that renders the
+not-found page fails setup by name). A spec that needs it loads it with
+`test.use({ storageState: ADMIN_AUTH_STATE_PATH })` inside a `describe` that skips when
+`e2eAdminCredentials()` is null. It is a separate account rather than the harness one made admin, so
+every other spec keeps seeing a regular user.
+
 Login flow tests are the exception to reusing the state — they exercise the UI auth path.
 
 ### Seed data
@@ -187,6 +213,69 @@ on the first having run — which `workers: 1` happens to guarantee today and no
 `tests/e2e/helpers/overflow.ts` answers one question for any selector: is any matching element's text cut off? It checks the element's own box (`scrollWidth > clientWidth`, which is also what a `truncate` ellipsis looks like), the box an inline element's text sits in, and every `overflow: hidden` / `clip` ancestor — stopping at a scroll container, since content past a scroller's edge is one scroll away. It measures the laid-out TEXT through a Range, because a clipped element's own box is exactly as wide as the clip. Use `findSettledClipping(page, selector)` (it waits for fonts and animations, and re-measures briefly while a layout converges), and always check `matched` as well as `clipped`: an empty page has nothing clipped. The money sweep is the reference use — `[data-money]` on every money page, at eight widths, in both locales, with the page list derived by a unit test.
 
 The TEXT sweep (`locale-text-clipping.auth.spec.ts`) asks the same question of every text on every app page — derived from the `app/(protected)` route tree by `helpers/text-pages.ts`, with dynamic routes resolved from the seeds (`helpers/money-seed.ts`, and `helpers/group-seed.ts` for a group, a name-only seat, a shared expense and an empty pot) or skipped with a reason (`tests/unit/text-sweep-coverage.test.ts`) — at 360/390/768/1024/1280, in Spanish and in English, because Spanish copy runs 20-30% longer than the English it was sized for. `helpers/text-clipping.ts` tags every element holding its own visible text and defines the one exception, an **allowed truncation**: the element's own box is the only failure, it draws a real ellipsis (`truncate` on a block — on a flex container it draws none), it offers the whole text through a `title` or a tooltip the sweep opens and reads (by hover AND from the keyboard: the text, or the control around it, is in the tab order, focus opens the tooltip, Escape closes it), and it still shows at least 6em. Every `TruncatingTooltip` on a page is also held to its tab-stop contract (text that fits is not a stop unless it holds focus; cut text is one, unless it sits inside a control), counted per kind so the sweep fails when it met none of one. "Control" is `CONTROL_SELECTOR` (`lib/constants/controls.ts`), the one definition the component uses too — links, buttons, fields, widget roles, never a bare `[tabindex]`, because `Table`'s scroll container becomes a focusable region while it overflows and may hold stops. `truncating-tooltip.auth.spec.ts` walks the contract with real Tab presses, paints the ring, and pins the rest on `/expenses`: no `aria-describedby` on the open trigger, a focused note that stops being cut keeps focus, a hover over fitting text leaves no open behind once it is cut, a focusable region around the table does not take the note's stop, and a tap mounts no tooltip even for a frame (a MutationObserver records every mount — a flash closes before a final count could see it). Wait for the cut note to carry `tabindex=0` before any hover or tap: before hydration nothing handles them, and such a test passes on any code. `truncation-rule.spec.ts` pins each clause on a page built to break it, and `overflow-harness.spec.ts` pins the harness itself through BOTH sweeps (a flex item squeezed to no width, a zero-height wrapper, a figure clipping itself vertically — all reported; Recharts' 0×0 wrapper — not). A page proves it was checked by having text of its own inside `<main>` (the shell's text is on every page, so a whole-page count cannot fail) and by not rendering the not-found page or the error boundary — read off the settled screen, since behind a loading screen a failed page still answers 200. A finding is fixed in the layout (let a row wrap, stop a control shrinking), or, for text that may legitimately be long, with `TruncatingTooltip`; a finding that needs shorter Spanish copy is a product question, not a layout fix.
+
+### Accessibility (axe)
+
+Every page and every kind of overlay is scanned by axe (`@axe-core/playwright`), zero tolerance, in
+both locales. The pieces:
+
+- **The fixture — `tests/e2e/helpers/axe.ts`.** Import `test`/`expect` from it instead of
+  `@playwright/test` and the test gets `makeAxeBuilder()`: an `AxeBuilder` preset to the tags
+  `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa, best-practice`. `best-practice` is deliberate — it
+  holds `page-has-heading-one`, `region` and `landmark-unique`, the class the first audit found. Hand
+  the results to `expectNoA11yViolations(page, results, testInfo, name, { wholePage })`: it attaches
+  the full result as JSON to the report, then fails on any violation, printing one line per rule with
+  every element it fired on. A whole-page scan also checks that every tag the project decided on
+  reached axe: asked for in the run, and carried by at least one rule in the result — so a tag
+  dropped from the builder or renamed by an axe upgrade goes red by name. A decided tag that NO
+  runnable rule carries yet stays in the preset but sits in `NOT_YET_RUNNABLE` with its measured
+  reason, spared only the "carried" half: `wcag21a`, whose one rule in axe-core 4.13
+  (`label-content-name-mismatch`) is `experimental`, and a tag-selected run skips experimental rules.
+  The scan fails once an exempt tag DOES appear in a result, so the exemption is removed the day an
+  axe upgrade makes it runnable. Check a tag against the installed axe (`axe.getRules([tag])` and each
+  rule's `experimental` tag) before deciding it is unreachable.
+  `openForScan(page, path, locale)` loads a page in a locale, refuses a redirect (it would scan
+  another page under this name), waits for the cookie banner (every test context is a first visit,
+  so it is on every page), and then for the page to be still for a moment — no animation running and
+  no element mid-fade, including motion/react's own-loop fades that Web Animations cannot see. A
+  dialog or a banner mid-fade has half-contrast text, and a scan that catches it fails on some runs
+  only. It then fails if the not-found page or an error boundary rendered instead of the page; only
+  the two not-found targets pass `{ notFound: true }`, which REQUIRES the not-found page.
+- **The route sweep — `a11y-routes.spec.ts` (signed out) and `a11y-routes.auth.spec.ts` (signed
+  in).** The route list is DERIVED from `config/routes.ts` in `helpers/a11y-routes.ts`.
+  `tests/unit/a11y-sweep-coverage.test.ts` walks every `page.tsx` and fails unless its route is
+  swept or skipped there with a reason — so a new route in `ROUTES` is swept with no edit, and a new
+  dynamic page fails until it gets an entry. **A dynamic route must be seeded into a state in which
+  it renders**, not merely given an id: the pot flows `notFound()` unless the pot is priced and
+  divided (and buy-out needs a second active seat), so the signed-in spec seeds a pot holding an
+  account, an opening division between two seats, and a live group invite (the `/join` preview, also
+  scanned signed out). The token-gated auth forms are scanned too: `/reset-password?token=…` renders
+  its form for any token, and `/signup?invite=…` needs a live invite — CI seeds one in SQL and passes
+  it as `E2E_SIGNUP_INVITE_TOKEN` (a shell var like `E2E_EMAIL`, so it stays out of the env files);
+  without it that one case skips locally.
+- **The admin pages — scanned with an admin session.** `/admin` and `/admin/feedback` show anyone
+  without `users.is_admin` the not-found page, so the harness account cannot reach them.
+  `ADMIN_ROUTES` (every protected route under `/admin`, derived) is scanned in
+  `a11y-routes.auth.spec.ts` with a second saved session (see "Auth and storage state"), and each scan
+  checks a premise of the page's own content (the invite form, the feedback table) on top of
+  `openForScan` refusing the not-found page. The coverage test fails if an admin page is missing from
+  `ADMIN_ROUTES` or lands in the harness sweep.
+- **Open states — `a11y-overlays.auth.spec.ts`.** A page scan cannot see an overlay (unmounted until
+  opened, and once open Radix hides the rest of the page), so one of each KIND is opened and scanned
+  with `include()`: a dialog, a `FormCombobox` popover, a type-to-confirm delete, the nav sheet. The
+  phone width is scanned only where the layout differs (the top bar and its sheet). A new overlay kind
+  gets a case there; a new instance of an existing kind is covered by its base component.
+- **The allow-list — `tests/e2e/helpers/a11y-allowlist.ts`, kept as short as possible (one entry today).** The ONLY way a
+  finding is tolerated: one entry per `rule` + `selector`, with a `reason` and a `revisitBy` date.
+  It suppresses that rule on the elements that selector matches — never `disableRules` (a rule
+  everywhere) and never `exclude()` (every rule on an element). The selector must be built from
+  `[data-testid="…"]` / `[data-slot="…"]`, and `tests/unit/a11y-allowlist.test.ts` fails once the
+  date passes or once nothing in the source renders the attribute any more. Fix the defect first; an
+  entry is for a finding that genuinely cannot be fixed yet.
+
+All of them carry the `@a11y` tag (`--grep @a11y`), and they run in the normal suite, so
+`e2e-required` fails on them wherever the suite runs. **A defect axe reports on every page lives in
+a base component — fix it there** (`packages/ui` or `components/`), not at one call site.
 
 ### Headless vs headed
 
@@ -238,7 +327,7 @@ Defaults in `playwright.config.ts` are usually sufficient. If a specific test ne
 
 4. If the flow has issues, iterate on the code, refresh, re-verify.
 5. When satisfied, capture the final screenshots needed for the PR (see `pr-format` skill).
-6. Decide if a `.spec.ts` is warranted (see "When to write a Playwright test" above). If yes, write it now, then run `pnpm test:e2e` to confirm it passes.
+6. Decide if a `.spec.ts` is warranted (see "When to write a Playwright test" above). If yes, write it now, then run that spec (`pnpm test:e2e <file> --reporter=line`) to confirm it passes — three runs in a row before trusting it.
 
 ### Session management
 
@@ -330,7 +419,9 @@ One job, serial, Chromium only, built from the same pieces a developer uses:
    card holds BOTH currencies because the conversion-basis spec checks each display currency, and a
    bucket already in the display currency never converts — each pass needs one in the other
    currency, dated where the rate differs from today's. **A new spec that assumes account data adds
-   it to this step.**
+   it to this step.** The same step registers the ADMIN account (`E2E_ADMIN_EMAIL`, per-run
+   `E2E_ADMIN_PASSWORD`), verifies it and sets `is_admin` in SQL, and inserts one feedback row per
+   category so `/admin/feedback` renders its table; the signup invite it seeds is what `/admin` lists.
 5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200. Locally,
    `globalSetup` makes the same check first and fails at once with "start the web and API servers"
    when either is not running (a port that refuses the connection); a server that is up but slow — a

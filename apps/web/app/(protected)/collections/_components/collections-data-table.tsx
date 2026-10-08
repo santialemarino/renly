@@ -61,7 +61,7 @@ export function CollectionsDataTable({
   }
 
   return (
-    <Table>
+    <Table label={t('title')}>
       <TableHeader>
         <TableRow>
           <TableHead className="w-12">{t('table.id')}</TableHead>

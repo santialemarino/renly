@@ -39,7 +39,8 @@ export function AuthStatusScreen({
       </div>
 
       <div className="flex flex-col gap-y-2">
-        <p className="text-paragraph-semibold text-foreground">{title}</p>
+        {/* The page's heading: every status screen stands alone in the auth card, as its only title. */}
+        <h1 className="text-paragraph-semibold text-foreground">{title}</h1>
         <p className="text-paragraph-sm text-muted-foreground">{description}</p>
       </div>
 

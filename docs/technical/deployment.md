@@ -75,12 +75,12 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 Three login roles and one helper role, and which one a connection string names is the entire
 isolation boundary:
 
-| Role                   | Attributes                                                                                | Used by                                                            |
-| ---------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `renly`                | owner, **NOSUPERUSER**, **NOBYPASSRLS**                                                   | nothing at runtime — it exists to own the tables                   |
-| `renly_admin`          | **BYPASSRLS**, member of `renly`                                                          | `DATABASE_ADMIN_URL`, migrations, `pnpm db:backup`, `pnpm db:fork` |
-| `renly_app`            | DML grants only, **NOBYPASSRLS**                                                          | `DATABASE_URL` — every request connection                          |
-| `renly_policy_definer` | **NOLOGIN**, **BYPASSRLS**, `SELECT` on `pots`, `group_members`, `pot_member_permissions` | nothing connects — it owns the three `SECURITY DEFINER` helpers    |
+| Role                   | Attributes                                                                                                                              | Used by                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `renly`                | owner, **NOSUPERUSER**, **NOBYPASSRLS**                                                                                                 | nothing at runtime — it exists to own the tables                                                              |
+| `renly_admin`          | **BYPASSRLS**, member of `renly`                                                                                                        | `DATABASE_ADMIN_URL`, migrations, `pnpm db:backup`, `pnpm db:fork`                                            |
+| `renly_app`            | DML grants only, **NOBYPASSRLS**                                                                                                        | `DATABASE_URL` — every request connection                                                                     |
+| `renly_policy_definer` | **NOLOGIN**, **BYPASSRLS**, `SELECT` on `pots`, `group_members`, `pot_member_permissions` and on `accounts` (`id`, `user_id`, `pot_id`) | nothing connects — it owns the four `SECURITY DEFINER` functions (three policy helpers, one trigger function) |
 
 Every policied table carries `FORCE ROW LEVEL SECURITY`, so **owning a table is no longer an
 exemption from its policies**. A connection pointed at `renly` reads nothing rather than everything,
@@ -97,7 +97,8 @@ tables call `SECURITY DEFINER` helpers, which run as their owner. Were that the 
 be subject to the policy that called it — `group_members`' policy calls `app_is_group_member()`,
 which reads `group_members` — and every group and pot read would recurse until `stack depth limit
 exceeded`. `renly_policy_definer` bypasses RLS without owning any table, and can read only what the
-helpers read.
+helpers read. It also owns the trigger function that holds every account reconciliation to its
+account's scope, which reads three columns of `accounts` and is granted only those.
 
 ### Provisioning (superuser, once per database)
 

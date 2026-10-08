@@ -70,9 +70,10 @@ RESTORE_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' \
   `ALTER FUNCTION … OWNER TO` statement in the Row-Level Security section of
   [`apps/api/database/01_create_tables.sql`](../../apps/api/database/01_create_tables.sql) — all of
   them, in order: several tables are append-only through a `REVOKE`, the owner's default privileges are
-  what give `renly_app` its grants on tables created later, and the three `SECURITY DEFINER` policy
-  helpers must be handed back to `renly_policy_definer`, or on a NOSUPERUSER owner every group and pot
-  read fails with `stack depth limit exceeded`. This extracts exactly those statements (multi-line ones
+  what give `renly_app` its grants on tables created later, and the four `SECURITY DEFINER` functions
+  must be handed back to `renly_policy_definer`: without it, on a NOSUPERUSER owner every group and pot
+  read fails with `stack depth limit exceeded`, and the reconciliation-scope trigger can no longer see
+  the accounts it checks. This extracts exactly those statements (multi-line ones
   included):
 
   ```bash

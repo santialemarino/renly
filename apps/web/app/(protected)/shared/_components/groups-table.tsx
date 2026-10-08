@@ -32,7 +32,7 @@ export function GroupsTable({ groups, firstRun }: GroupsTableProps) {
   const router = useRouter();
 
   return (
-    <Table>
+    <Table label={t('title')}>
       <TableHeader>
         <TableRow>
           <TableHead>{t('table.name')}</TableHead>

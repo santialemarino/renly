@@ -50,8 +50,10 @@ env:
   NEXTAUTH_URL: http://localhost:3000
   PLAYWRIGHT_BASE_URL: http://localhost:3000
   E2E_API_URL: http://localhost:8000
-  # A throwaway account that exists only inside this job's database.
+  # Throwaway accounts that exist only inside this job's database: the harness account, and an admin
+  # one for the admin pages, which show anyone else the not-found page.
   E2E_EMAIL: e2e-ci@example.com
+  E2E_ADMIN_EMAIL: e2e-ci-admin@example.com
 
 jobs:
   changes:
@@ -134,7 +136,7 @@ jobs:
 
       - name: Generate this run's secrets
         # The JWT secret the API signs with and NextAuth verifies with must be equal and 32+ chars;
-        # the password is the throwaway account's. Both live only for this job. `add-mask` hides them
+        # the passwords are the throwaway accounts'. All live only for this job. `add-mask` hides them
         # in the job LOG only: a failed test's trace (uploaded below) records the requests it made,
         # so it can hold the harness session's bearer token (specs read it from the saved session, and
         # none sends the password) — which is harmless, because the account and the database it lives
@@ -142,12 +144,15 @@ jobs:
         run: |
           secret="$(openssl rand -hex 32)"
           password="$(openssl rand -hex 16)"
+          admin_password="$(openssl rand -hex 16)"
           echo "::add-mask::$secret"
           echo "::add-mask::$password"
+          echo "::add-mask::$admin_password"
           {
             echo "JWT_SECRET=$secret"
             echo "NEXTAUTH_SECRET=$secret"
             echo "E2E_PASSWORD=$password"
+            echo "E2E_ADMIN_PASSWORD=$admin_password"
           } >> "$GITHUB_ENV"
 
       - name: Install web dependencies
@@ -243,6 +248,34 @@ jobs:
             authed POST /expenses -d "$(jq -n --arg d "$filler_date" --arg a "$((1000 + i))" \
               '{date: $d, amount: $a, currency: "ARS", payment_method: "cash"}')" > /dev/null
           done
+
+          # A live signup invite, so the accessibility sweep scans the invited registration form and
+          # not only the invite-only notice. The API stores only an invite's SHA-256 and emails the raw
+          # token, so a run cannot ask for one: it is minted here, its hash inserted, and the raw value
+          # handed to the suite as E2E_SIGNUP_INVITE_TOKEN. The address is not the harness account's,
+          # so nothing a spec does ever consumes it.
+          invite_token="$(openssl rand -hex 24)"
+          echo "::add-mask::$invite_token"
+          invite_hash="$(printf '%s' "$invite_token" | sha256sum | cut -d' ' -f1)"
+          docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly -c "
+            insert into invites (email, token_hash, invited_by, expires_at)
+            select 'e2e-invited@example.com', '$invite_hash', id, (now() at time zone 'utc') + interval '30 days'
+            from users where email = '$E2E_EMAIL'"
+          echo "E2E_SIGNUP_INVITE_TOKEN=$invite_token" >> "$GITHUB_ENV"
+
+          # The admin account, for the accessibility scans of /admin and /admin/feedback. Registered
+          # like the harness one, then verified and flagged `is_admin` in SQL — the only way an account
+          # becomes an admin. Its pages need something to list: the invite above already shows on
+          # /admin, and one feedback row per category (from the harness account) puts the feedback
+          # table and every category badge in the scan instead of the empty state.
+          api POST /auth/register -d "$(jq -n --arg e "$E2E_ADMIN_EMAIL" --arg p "$E2E_ADMIN_PASSWORD" \
+            '{name: "E2E CI admin", email: $e, password: $p, language: "en"}')" > /dev/null
+          docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly -c "
+            update users set email_verified_at = now(), is_admin = true where email = '$E2E_ADMIN_EMAIL';
+            insert into feedback (user_id, category, message)
+            select id, category::feedback_category, 'E2E seeded ' || category || ' feedback'
+            from users, unnest(array['bug', 'idea', 'question', 'other']) as category
+            where email = '$E2E_EMAIL'"
 
           kill "$(cat /tmp/api-signup.pid)"
           timeout 30 bash -c 'while curl -s http://localhost:8000/health > /dev/null; do sleep 1; done'

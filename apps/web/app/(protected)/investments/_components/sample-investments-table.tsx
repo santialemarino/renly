@@ -31,6 +31,7 @@ export function SampleInvestmentsTable() {
 
   return (
     <SampleDataTable
+      label={t('title')}
       entity="investments"
       columns={columns}
       rows={sampleInvestments}

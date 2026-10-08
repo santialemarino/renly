@@ -165,7 +165,7 @@ export function IncomeDataTable({
   return (
     <div className="flex flex-col gap-y-4">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-        <Table>
+        <Table label={t('title')}>
           <TableHeader>
             <TableRow>
               <SortableTableHead

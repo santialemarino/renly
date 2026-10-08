@@ -217,7 +217,7 @@ function HoldingsTable({
   return (
     <div className="flex flex-col gap-y-2">
       <h3 className="text-paragraph-sm-semibold text-foreground">{caption}</h3>
-      <Table>
+      <Table label={caption}>
         <TableHeader>
           <TableRow>
             <TableHead>{t('pots.holdings.table.name')}</TableHead>

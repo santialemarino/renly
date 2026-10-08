@@ -95,7 +95,7 @@ export function RestoreSection() {
             </span>
 
             <div className="w-full overflow-x-auto">
-              <Table>
+              <Table label={t('restore.title')}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('restore.table.entity')}</TableHead>

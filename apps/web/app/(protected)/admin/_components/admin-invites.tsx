@@ -207,7 +207,7 @@ export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInv
        */}
       {total > 0 ? (
         <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-          <Table>
+          <Table label={t('title')}>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('table.email')}</TableHead>

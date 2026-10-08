@@ -109,7 +109,7 @@ export function AccountLedgerTable({
   return (
     <div className="flex flex-col gap-y-4">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
-        <Table>
+        <Table label={t('table.title')}>
           <TableHeader>
             <TableRow>
               <TableHead>{t('table.date')}</TableHead>
