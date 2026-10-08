@@ -56,7 +56,9 @@ export function AccountReconciliationsSection({
   const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
   const [latestDate, setLatestDate] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch lands, so the panel's first frame is the loading line rather than an
+  // empty state the account may not be in.
+  const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<AccountReconciliation | null>(null);
   // The reloadToken whose data is currently loaded; null until the first fetch.
   const loadedTokenRef = useRef<number | null>(null);
@@ -64,6 +66,9 @@ export function AccountReconciliationsSection({
   const loadedPageRef = useRef<number | null>(null);
   // Monotonic ticket per fetch; only the newest one may commit its result.
   const requestRef = useRef(0);
+  // Whether a load has landed yet. The display floor reads this, and only a load that commits sets
+  // it — `loadedPageRef` cannot answer, because the effect writes it BEFORE it calls `load()`.
+  const hasLoadedRef = useRef(false);
 
   /*
    * Only the account's most recent reconciliation can be deleted — an older one's adjustment is
@@ -90,7 +95,7 @@ export function AccountReconciliationsSection({
    */
   const load = useCallback(async () => {
     const ticket = ++requestRef.current;
-    const isFirstLoad = loadedPageRef.current === null;
+    const isFirstLoad = !hasLoadedRef.current;
     setLoading(true);
     const start = Date.now();
     try {
@@ -110,7 +115,10 @@ export function AccountReconciliationsSection({
       setTotal(0);
       setLatestDate(null);
     } finally {
-      if (ticket === requestRef.current) setLoading(false);
+      if (ticket === requestRef.current) {
+        hasLoadedRef.current = true;
+        setLoading(false);
+      }
     }
   }, [account.id, page]);
 

@@ -55,7 +55,9 @@ export function AccountTransfersSection({
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch lands, so the panel's first frame is the loading line rather than an
+  // empty state the account may not be in.
+  const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Transfer | null>(null);
   const [deleting, setDeleting] = useState(false);
   // The reloadToken whose data is currently loaded; null until the first fetch.
@@ -64,6 +66,9 @@ export function AccountTransfersSection({
   const loadedPageRef = useRef<number | null>(null);
   // Monotonic ticket per fetch; only the newest one may commit its result.
   const requestRef = useRef(0);
+  // Whether a load has landed yet. The display floor reads this, and only a load that commits sets
+  // it — `loadedPageRef` cannot answer, because the effect writes it BEFORE it calls `load()`.
+  const hasLoadedRef = useRef(false);
 
   /*
    * `requestRef` is what makes the LAST REQUESTED page win rather than the last response to arrive.
@@ -78,7 +83,7 @@ export function AccountTransfersSection({
    */
   const load = useCallback(async () => {
     const ticket = ++requestRef.current;
-    const isFirstLoad = loadedPageRef.current === null;
+    const isFirstLoad = !hasLoadedRef.current;
     setLoading(true);
     const start = Date.now();
     try {
@@ -96,7 +101,10 @@ export function AccountTransfersSection({
       setTransfers([]);
       setTotal(0);
     } finally {
-      if (ticket === requestRef.current) setLoading(false);
+      if (ticket === requestRef.current) {
+        hasLoadedRef.current = true;
+        setLoading(false);
+      }
     }
   }, [account.id, page]);
 
