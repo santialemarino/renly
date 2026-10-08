@@ -11,6 +11,7 @@ import { CollectionFormDialog } from '@/app/(protected)/collections/_components/
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SortOrder } from '@/lib/api/types';
@@ -134,8 +135,11 @@ function CollectionRow({
             ? `${collection.targetPercentage}%`
             : t('table.noTarget')}
         </TableCell>
-        <TableCell className="max-w-md text-paragraph-sm text-muted-foreground truncate">
-          {investmentNames || t('table.noInvestments')}
+        <TableCell className="text-paragraph-sm text-muted-foreground">
+          <TruncatingTooltip
+            text={investmentNames || t('table.noInvestments')}
+            className="block max-w-md"
+          />
         </TableCell>
         <TableCell className="text-center">
           <div className="flex items-center justify-center gap-x-1">

@@ -40,6 +40,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
@@ -223,11 +224,17 @@ function SettlementsSection({
                                   visible instead of write-only. An em dash means the settlement was
                                   recorded without one: the card debt dropped and no cash was
                                   recorded leaving. */}
-                              <TableCell className="max-w-40 truncate text-muted-foreground">
-                                {s.accountName ?? '—'}
+                              <TableCell className="text-muted-foreground">
+                                <TruncatingTooltip
+                                  text={s.accountName ?? '—'}
+                                  className="block max-w-40"
+                                />
                               </TableCell>
-                              <TableCell className="max-w-48 truncate text-muted-foreground">
-                                {s.notes ?? '—'}
+                              <TableCell className="text-muted-foreground">
+                                <TruncatingTooltip
+                                  text={s.notes ?? '—'}
+                                  className="block max-w-48"
+                                />
                               </TableCell>
                               <TableCell>
                                 <RowActionButton

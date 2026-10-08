@@ -83,7 +83,7 @@ export function FinanceDashboardDistribution({
 
   return (
     <Card className="flex-1">
-      <CardHeader className="flex flex-row items-center justify-between px-6">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-6">
         <CardTitle className="text-paragraph-sm text-muted-foreground">
           {t('distribution.title')}
         </CardTitle>

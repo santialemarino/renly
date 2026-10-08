@@ -61,7 +61,7 @@ function OnboardingStep({
 }: OnboardingStepProps) {
   const t = useTranslations('dashboard.onboarding');
   return (
-    <li className="flex items-center gap-x-3">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <span
         className={cn(
           'grid size-9 shrink-0 place-items-center rounded-full transition-colors duration-200',
@@ -71,10 +71,10 @@ function OnboardingStep({
         {done ? <Check className="size-5" /> : <Icon className="size-5" />}
       </span>
 
-      <div className="flex flex-col flex-1 min-w-0 gap-y-0.5">
+      <div className="flex flex-col flex-1 basis-40 min-w-0 gap-y-0.5">
         <span
           className={cn(
-            'flex items-center gap-x-2 text-paragraph-sm-medium',
+            'flex flex-wrap items-center gap-x-2 text-paragraph-sm-medium',
             done && 'text-muted-foreground',
           )}
         >
@@ -88,7 +88,7 @@ function OnboardingStep({
       </div>
 
       {!done && (
-        <div className="flex flex-col shrink-0 items-end gap-y-1">
+        <div className="flex flex-col shrink-0 ml-auto items-end gap-y-1">
           <Button asChild size="sm" variant="outline">
             <Link href={href}>{actionLabel}</Link>
           </Button>
