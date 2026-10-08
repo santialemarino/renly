@@ -29,10 +29,10 @@ on:
         default: false
 
 # A new push (or label) on a PR supersedes the run in flight; every run on the same commit reaches the
-# same gate decision, so the replacement stands in for it fully. Other events run to the end.
-concurrency:
-  group: ci-web-e2e-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+# same gate decision, so the replacement stands in for it fully. Other events run to the end. The groups
+# are on the two jobs that do the work, NOT on the workflow: a superseded run's `e2e-required` keeps
+# running to wait for its successor, and a workflow-level group would make that successor wait for it —
+# a deadlock (seen on #243).
 
 # Read-only by default. The two jobs that need more (`changes` reads the PR's file list, the nightly
 # report writes an issue) widen it for themselves only.
@@ -59,6 +59,9 @@ jobs:
   changes:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-web-e2e-changes-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       pull-requests: read
     outputs:
@@ -112,6 +115,9 @@ jobs:
           needs.changes.outputs.run_e2e == 'true'
         ))
       )
+    concurrency:
+      group: ci-web-e2e-suite-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
