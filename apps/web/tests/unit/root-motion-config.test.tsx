@@ -15,7 +15,7 @@ import RootLayout from '@/app/layout';
 
 // The layout's stylesheet and font are build-time concerns with nothing to say about the tree.
 vi.mock('@/app/globals.css', () => ({}));
-vi.mock('next/font/google', () => ({ Plus_Jakarta_Sans: () => ({ className: 'font' }) }));
+vi.mock('next/font/local', () => ({ default: () => ({ className: 'font' }) }));
 // The real provider infers its locale from the server request, which a test has none of. Passing the
 // children through keeps it on the path to the page without asserting anything about next-intl.
 vi.mock('next-intl', () => ({

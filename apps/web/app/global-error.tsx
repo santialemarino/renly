@@ -3,16 +3,11 @@
 import './globals.css';
 
 import { useSyncExternalStore } from 'react';
-import { Plus_Jakarta_Sans } from 'next/font/google';
 
 import { GlobalErrorContent } from '@/components/global-error-content';
+import { plusJakartaSans } from '@/lib/fonts/plus-jakarta-sans';
 import { useReportBoundaryError } from '@/lib/hooks/use-report-boundary-error';
 import { DEFAULT_LOCALE, LOCALE_COOKIE, resolveLocale, type Locale } from '@/lib/i18n/locales';
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-});
 
 // Reads the locale cookie from `document.cookie`.
 function readLocaleCookie(): string | undefined {
