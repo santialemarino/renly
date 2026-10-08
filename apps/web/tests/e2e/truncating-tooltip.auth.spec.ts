@@ -286,4 +286,33 @@ test.describe('on a touch screen', () => {
       await page.evaluate(() => (window as unknown as { tooltipsSeen: number }).tooltipsSeen),
     ).toBe(0);
   });
+
+  test('a touch press that never focuses the note leaves the next keyboard focus free to open it', async ({
+    page,
+  }) => {
+    await openExpenses(page);
+    const cut = note(page, longNote);
+    /*
+     * A long press: the finger goes down on the note and lifts again, and no click — so no focus —
+     * follows. Dispatched rather than tapped, because a tap always focuses — and the defect was a press
+     * with no focus after it, whose type was remembered until a blur that never came. (It ends in
+     * `pointerup`, not `pointercancel`: Radix itself ignores focus until it sees a pointer lift.)
+     */
+    await cut.dispatchEvent('pointerdown', {
+      pointerType: 'touch',
+      isPrimary: true,
+      bubbles: true,
+    });
+    await cut.dispatchEvent('pointerup', {
+      pointerType: 'touch',
+      isPrimary: true,
+      bubbles: true,
+    });
+    expect(await isFocused(cut)).toBe(false);
+
+    await tabTo(page, cut, MAX_TAB_STOPS);
+    const tooltip = page.getByRole('tooltip');
+    await expect(tooltip).toHaveCount(1);
+    await expect(tooltip).toHaveText(longNote);
+  });
 });
