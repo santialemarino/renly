@@ -14,7 +14,7 @@ from typing import NamedTuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.domain import PaymentMethod, claimed_installment_cuotas, claimed_subscription_cycles
+from app.domain import NotificationDispatch, PaymentMethod, claimed_installment_cuotas, claimed_subscription_cycles
 from app.models.account import Account
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
@@ -137,7 +137,7 @@ async def generate_auto_expenses(session: AsyncSession, *, now_utc: datetime | N
         await session.commit()
     # After the commit, never before it: a notification announces something that has ALREADY happened,
     # and a push service being down must not roll back the charges that produced it.
-    await _announce(announcements)
+    await _announce(session, announcements)
     return sub_created + inst_created
 
 
@@ -418,26 +418,35 @@ async def _generate_installment_expenses(
 # is in-app only out of the box (app/domain/notification.py), so the noise lands in a feed nobody is
 # interrupted by, and anybody who turns email on has the daily digest to batch it.
 #
-# Each dispatch is its own call because each charge carries its own payload — `dispatch` fans ONE
-# payload out to many people, which is the opposite shape. It never raises and it returns how many rows
-# it wrote, so a failure here costs the message and not the tick.
-async def _announce(announcements: list[ChargeAnnouncement]) -> None:
-    for charge in announcements:
-        await notification_service.dispatch(
-            NotificationEvent.plan_charged,
-            [charge.user_id],
-            {
-                "variant": charge.variant,
-                "plan_id": charge.plan_id,
-                "name": charge.name,
-                "amount": str(charge.amount),
-                "currency": charge.currency,
-                # The key the copy reads its date from is literally `date` on both sides — the API
-                # spells it out in the email and the web formats it for the feed.
-                "date": charge.charge_date.isoformat(),
-            },
-            dedupe_key=f"plan:{charge.variant}:{charge.plan_id}:{charge.charge_date.isoformat()}",
-        )
+# Each charge is its own fan-out because each carries its own payload, and all of them go in ONE batch
+# dispatch on the tick's own connection (U20): the same messages a dispatch per charge would send, for
+# a fixed number of queries instead of a fresh admin connection and four or more statements per charge.
+# It never raises and it returns how many rows it wrote, so a failure here costs the messages and not
+# the tick.
+async def _announce(session: AsyncSession, announcements: list[ChargeAnnouncement]) -> None:
+    if not announcements:
+        return
+    await notification_service.dispatch_many(
+        NotificationEvent.plan_charged,
+        [
+            NotificationDispatch(
+                [charge.user_id],
+                {
+                    "variant": charge.variant,
+                    "plan_id": charge.plan_id,
+                    "name": charge.name,
+                    "amount": str(charge.amount),
+                    "currency": charge.currency,
+                    # The key the copy reads its date from is literally `date` on both sides — the API
+                    # spells it out in the email and the web formats it for the feed.
+                    "date": charge.charge_date.isoformat(),
+                },
+                dedupe_key=f"plan:{charge.variant}:{charge.plan_id}:{charge.charge_date.isoformat()}",
+            )
+            for charge in announcements
+        ],
+        session=session,
+    )
 
 
 # Returns {subscription_id: set of linked expense dates} for every expense row linked to

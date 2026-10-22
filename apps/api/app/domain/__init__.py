@@ -125,7 +125,7 @@ from app.domain.list_scope import (
     build_sections,
 )
 from app.domain.money import assign_remainder, quantize, spread_remainder
-from app.domain.notification import DEFAULT_EMAIL_CADENCE, EmailCadence, is_enabled_by_default
+from app.domain.notification import DEFAULT_EMAIL_CADENCE, EmailCadence, NotificationDispatch, is_enabled_by_default
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
 from app.domain.pot import (
@@ -222,6 +222,7 @@ __all__ = [
     "MovementKind",
     "MovementSource",
     "NotFoundError",
+    "NotificationDispatch",
     "OwnershipEntry",
     "PasswordBreachedError",
     "PaymentMethod",

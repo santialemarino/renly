@@ -153,16 +153,28 @@ class TestTheBatchWriterResolution:
         assert pot_service.writer_user_ids(_pot(), self._ROSTER, permissions) == one_at_a_time
 
 
+# Wires pot 5 as holding `investments` and no account, for the single read and the batch read alike.
+def _holds(monkeypatch, investments) -> None:
+    monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=investments))
+    monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+    monkeypatch.setattr(pot_service.pot_repository, "list_active_investments_by_pots", AsyncMock(return_value={5: investments}))
+    monkeypatch.setattr(pot_service.pot_repository, "list_accounts_by_pots", AsyncMock(return_value={}))
+
+
+# The reminder's freshness read for pot 5, through the batch it actually calls.
+async def _freshness(today: date) -> tuple[date | None, bool]:
+    return (await pot_service.get_freshnesses(AsyncMock(), [_pot()], as_of_date=today))[5]
+
+
 class TestFreshnessSharesOneRule:
-    # `get_freshness` exists so the hourly reminder never pays for a NAV, and the risk it introduces is
+    # `get_freshnesses` exists so the hourly reminder never pays for a NAV, and the risk it introduces is
     # the one §20 named: two ways to compute one figure. These pin the cheap answer to the expensive
     # one over the same fixture, so a change to either shows up as a disagreement rather than as a
     # reminder that quietly stops firing.
     def _wire(self, monkeypatch, *, snapshot_date):
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=snapshot_date, value=Decimal("100"), currency="USD")
-        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
+        _holds(monkeypatch, [_pot_investment(1)])
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
-        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         return lookup
@@ -173,19 +185,18 @@ class TestFreshnessSharesOneRule:
         lookup = self._wire(monkeypatch, snapshot_date=date(2026, 6, snapshot_day))
         today = date(2026, 7, 15)
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=today, lookup=lookup)
-        valued_as_of, is_stale = await pot_service.get_freshness(AsyncMock(), _pot(), as_of_date=today)
+        valued_as_of, is_stale = await _freshness(today)
         assert (valued_as_of, is_stale) == (valuation.valued_as_of, valuation.is_stale)
         assert is_stale is expected_stale
 
     @pytest.mark.asyncio
     async def test_they_agree_about_a_pot_holding_nothing(self, monkeypatch):
-        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
-        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        _holds(monkeypatch, [])
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         today = date(2026, 7, 15)
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=today, lookup=lookup)
-        assert await pot_service.get_freshness(AsyncMock(), _pot(), as_of_date=today) == (valuation.valued_as_of, valuation.is_stale)
+        assert await _freshness(today) == (valuation.valued_as_of, valuation.is_stale)
         # And "holding nothing" is not overdue: nobody can satisfy a demand to value an empty pot.
         assert valuation.is_stale is False
 
@@ -194,13 +205,12 @@ class TestFreshnessSharesOneRule:
         # What makes it usable from a background job: freshness is a question about DATES, so the answer
         # cannot depend on whose currency preference the job happened to run under.
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 6, 1), value=Decimal("100"), currency="BRL")
-        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
+        _holds(monkeypatch, [_pot_investment(1)])
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
-        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         # An unconvertible holding: the NAV is unknown, and the freshness is still a real date.
         unconvertible = AsyncMock()
         unconvertible.get_rate_map_at = lambda _d: {}
         today = date(2026, 7, 15)
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=today, lookup=unconvertible)
         assert valuation.nav is None
-        assert await pot_service.get_freshness(AsyncMock(), _pot(), as_of_date=today) == (date(2026, 6, 1), True)
+        assert await _freshness(today) == (date(2026, 6, 1), True)

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.domain import EmailCadence, NotFoundError, PushNotConfiguredError
+from app.domain import EmailCadence, NotFoundError, NotificationDispatch, PushNotConfiguredError
 from app.domain.notification import is_enabled_by_default
 from app.models.notification import Notification, NotificationChannel, NotificationEvent, NotificationPreference
 from app.models.push_subscription import PushSubscription
@@ -71,7 +71,8 @@ def _arrange_dispatch(monkeypatch, *, overrides=None, written=None, subscription
 
     monkeypatch.setattr(svc, "AdminSessionLocal", lambda: _admin_session())
     monkeypatch.setattr(svc.notification_repository, "preferences_by_user_ids", AsyncMock(return_value=overrides or {}))
-    created = AsyncMock(side_effect=lambda _s, rows: [row.user_id for row in rows] if written is None else written)
+    # `written` names the user ids that gained a row; the repository answers (user_id, dedupe_key) pairs.
+    created = AsyncMock(side_effect=lambda _s, rows: [(row.user_id, row.dedupe_key) for row in rows if written is None or row.user_id in written])
     monkeypatch.setattr(svc.notification_repository, "create_many", created)
     monkeypatch.setattr(svc.user_repository, "get_by_ids", AsyncMock(return_value={USER.id: USER, OTHER.id: OTHER}))
     monkeypatch.setattr(svc.settings_service, "get_languages_by_user_ids", AsyncMock(side_effect=lambda _s, ids: dict.fromkeys(ids, "en")))
@@ -282,6 +283,89 @@ class TestDispatch:
         moment = datetime(2026, 9, 2, 12, 0, 0)
         await svc.dispatch(NotificationEvent.member_joined, [OTHER.id], {"group_id": 1, "group": "Casa", "member": "Ana"}, now=moment)
         assert mocks["created"].await_args.args[1][0].created_at == moment
+
+
+# U20: a job hands every fan-out of a tick to ONE dispatch. Each test here is a way the batch could tell
+# somebody something different from what one dispatch per item would have; the DB-backed comparison of
+# the two lives in tests/integration/test_reminder_dispatch_batching.py.
+class TestBatchDispatch:
+    def _items(self) -> list[NotificationDispatch]:
+        return [
+            NotificationDispatch([USER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "A"}, "pot:5:2026-09"),
+            NotificationDispatch([USER.id, OTHER.id], {"group_id": 1, "group": "Casa", "pot_id": 6, "pot": "B"}, "pot:6:2026-09"),
+            NotificationDispatch([OTHER.id], {"group_id": 1, "group": "Casa", "pot_id": 7, "pot": "C"}, "pot:7:2026-09"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_callers_session_is_used_and_no_connection_is_opened(self, monkeypatch):
+        mocks = _arrange_dispatch(monkeypatch)
+        monkeypatch.setattr(svc, "AdminSessionLocal", lambda: pytest.fail("dispatch opened its own connection"))
+        session = AsyncMock()
+        assert await svc.dispatch_many(NotificationEvent.snapshot_due, self._items(), session=session) == 4
+        assert mocks["created"].await_args.args[0] is session
+        session.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_failure_on_the_callers_session_rolls_it_back_and_reports_nobody(self, monkeypatch):
+        # Swallowed as always, and the caller's session is left usable rather than in a failed transaction.
+        _arrange_dispatch(monkeypatch)
+        monkeypatch.setattr(svc.notification_repository, "create_many", AsyncMock(side_effect=RuntimeError("the database is gone")))
+        session = AsyncMock()
+        assert await svc.dispatch_many(NotificationEvent.snapshot_due, self._items(), session=session) == 0
+        session.rollback.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_every_source_is_read_once_for_the_whole_batch(self, monkeypatch):
+        mocks = _arrange_dispatch(monkeypatch, subscriptions={USER.id: [_subscription(1, USER.id, "https://p/1")]}, push_configured=True)
+        reads = [
+            svc.notification_repository.preferences_by_user_ids,
+            svc.settings_service.get_email_cadences_by_user_ids,
+            svc.user_repository.get_by_ids,
+            svc.settings_service.get_languages_by_user_ids,
+            svc.push_subscription_repository.list_by_user_ids,
+        ]
+        await svc.dispatch_many(NotificationEvent.snapshot_due, self._items())
+        assert [read.await_count for read in reads] == [1] * len(reads)
+        assert mocks["created"].await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_each_person_is_emailed_each_items_own_payload_and_only_where_a_row_was_written(self, monkeypatch):
+        # The key decides which fan-out a written row belongs to: OTHER already holds pot 6's reminder
+        # (a deduped repeat), so they are emailed about pot 7 alone, while USER hears about 5 and 6.
+        mocks = _arrange_dispatch(monkeypatch)
+        mocks["created"].side_effect = lambda _s, rows: [
+            (r.user_id, r.dedupe_key) for r in rows if (r.user_id, r.dedupe_key) != (OTHER.id, "pot:6:2026-09")
+        ]
+        assert await svc.dispatch_many(NotificationEvent.snapshot_due, self._items()) == 3
+        sent = sorted((call.args[0].id, call.args[2]["pot"]) for call in mocks["emails"].await_args_list)
+        assert sent == [(USER.id, "A"), (USER.id, "B"), (OTHER.id, "C")]
+
+    @pytest.mark.asyncio
+    async def test_the_same_key_twice_in_one_batch_belongs_to_the_first_item(self, monkeypatch):
+        # As across two calls: the first is written, the second refused, and only the first's payload
+        # is ever sent.
+        mocks = _arrange_dispatch(monkeypatch)
+        mocks["created"].side_effect = lambda _s, rows: [(rows[0].user_id, rows[0].dedupe_key)]
+        items = [
+            NotificationDispatch([USER.id], {"group_id": 1, "group": "Casa", "pot": "first"}, "k"),
+            NotificationDispatch([USER.id], {"group_id": 1, "group": "Casa", "pot": "second"}, "k"),
+        ]
+        assert await svc.dispatch_many(NotificationEvent.snapshot_due, items) == 1
+        assert [call.args[2]["pot"] for call in mocks["emails"].await_args_list] == ["first"]
+
+    @pytest.mark.asyncio
+    async def test_a_browser_pushed_twice_is_settled_once_and_gone_wins(self, monkeypatch):
+        # Across separate calls the first "gone" deletes the browser and no later call reaches it; in
+        # one batch both pushes go out, so the bookkeeping must still end in one delete and no touch.
+        deleted, touched = AsyncMock(), AsyncMock()
+        _arrange_dispatch(monkeypatch, subscriptions={USER.id: [_subscription(1, USER.id, "https://p/1")]}, push_configured=True)
+        monkeypatch.setattr(svc.push_subscription_repository, "delete_by_endpoint", deleted)
+        monkeypatch.setattr(svc.push_subscription_repository, "touch", touched)
+        outcomes = iter([(False, True), (True, False)])
+        monkeypatch.setattr(svc, "_send_push", AsyncMock(side_effect=lambda _c, sub, *_a: (sub, *next(outcomes))))
+        await svc.dispatch_many(NotificationEvent.snapshot_due, self._items()[:2])
+        assert [call.args[1] for call in deleted.await_args_list] == ["https://p/1"]
+        touched.assert_not_awaited()
 
 
 class TestTheDigestQueue:

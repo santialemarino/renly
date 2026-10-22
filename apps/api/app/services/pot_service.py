@@ -476,20 +476,21 @@ async def get_valuations(
     return valuations
 
 
-# How current a pot's value is, WITHOUT computing what it is.
+# How current each of several pots' value is at one date, keyed by pot id, WITHOUT computing what it is.
 #
 # It exists for the overdue reminder, which runs hourly over every pot in the database and needs no
 # figure at all — and a NAV is the expensive half (seven sums per account, times every account). This
-# is not a second freshness rule: it shares `_holdings_at` and `_is_overdue` with get_valuation, so the
-# reminder and the badge on the pot page are the same answer by construction rather than by agreement.
-# That is §20's own lesson about the value series applied a second time.
+# is not a second freshness rule: it shares `_holdings_at_many` and `_is_overdue` with the valuations,
+# so the reminder and the badge on the pot page are the same answer by construction rather than by
+# agreement. That is §20's own lesson about the value series applied a second time.
 #
-# It also needs no RateLookup, which is what makes it usable from a background job: freshness is a
-# question about DATES, and only the NAV depends on a rate — so the reminder cannot be made wrong by
-# whose currency preference it happened to run under.
-async def get_freshness(session: AsyncSession, pot: Pot, *, as_of_date: date_type) -> tuple[date_type | None, bool]:
-    held = await _holdings_at(session, pot, as_of_date=as_of_date)
-    return (held.valued_as_of, _is_overdue(pot, held, as_of_date))
+# Batched because an Argentina-facing app puts nearly every pot due on the SAME tick (U20): a fixed
+# number of queries however many there are. It also needs no RateLookup, which is what makes it usable
+# from a background job: freshness is a question about DATES, and only the NAV depends on a rate — so
+# the reminder cannot be made wrong by whose currency preference it happened to run under.
+async def get_freshnesses(session: AsyncSession, pots: list[Pot], *, as_of_date: date_type) -> dict[int, tuple[date_type | None, bool]]:
+    held_by_pot = await _holdings_at_many(session, pots, as_of_date=as_of_date)
+    return {pot.id: (held_by_pot[pot.id].valued_as_of, _is_overdue(pot, held_by_pot[pot.id], as_of_date)) for pot in pots}
 
 
 # The pot's value on a date, for a caller that needs only the figure — the ownership ledger prices

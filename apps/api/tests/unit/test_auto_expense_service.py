@@ -399,6 +399,11 @@ class TestScheduledChargesFlagReconciledStatements:
 # because a notification announces something that has already happened and a push service being down
 # must never roll back a money write; and the event carries the plan's own words, because the copy
 # interpolates them and a missing field is a literal `{name}` on a lock screen.
+# Every fan-out the tick handed to dispatch_many, across all its calls, in order.
+def _announced(dispatched: AsyncMock) -> list:
+    return [item for call in dispatched.await_args_list for item in call.args[1]]
+
+
 class TestChargesAreAnnounced:
     # A whole tick's queries in order: the subscription scan, its linked-date load, then the same pair
     # for installments. The linked-date load only happens when the scan found something, so the queue is
@@ -464,7 +469,7 @@ class TestChargesAreAnnounced:
             AsyncMock(return_value={7: "America/Argentina/Buenos_Aires"}),
         )
         dispatched = AsyncMock(return_value=1)
-        monkeypatch.setattr(auto_expense_service.notification_service, "dispatch", dispatched)
+        monkeypatch.setattr(auto_expense_service.notification_service, "dispatch_many", dispatched)
         return dispatched
 
     @pytest.mark.asyncio
@@ -474,14 +479,16 @@ class TestChargesAreAnnounced:
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
         dispatched.assert_awaited_once()
         assert dispatched.await_args.args[0] == NotificationEvent.plan_charged
-        assert dispatched.await_args.args[1] == [7]
+        assert [item.user_ids for item in _announced(dispatched)] == [[7]]
+        # On the tick's own connection rather than a second one from the small admin pool (U20).
+        assert dispatched.await_args.kwargs["session"] is session
 
     @pytest.mark.asyncio
     async def test_the_payload_carries_everything_the_copy_interpolates(self, monkeypatch):
         dispatched = self._arrange(monkeypatch)
         session = self._session([self._sub()], [])
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
-        assert dispatched.await_args.args[2] == {
+        assert _announced(dispatched)[0].payload == {
             "variant": "subscription",
             "plan_id": 1,
             "name": "Netflix",
@@ -497,7 +504,7 @@ class TestChargesAreAnnounced:
         dispatched = self._arrange(monkeypatch)
         session = self._session([], [self._installment()])
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
-        payload = dispatched.await_args.args[2]
+        payload = _announced(dispatched)[0].payload
         assert (payload["variant"], payload["name"], payload["amount"]) == ("installment", "TV Samsung", "10000.00")
 
     @pytest.mark.asyncio
@@ -509,7 +516,7 @@ class TestChargesAreAnnounced:
         plan = self._installment()
         session = self._session([], [plan])
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
-        assert dispatched.await_args.args[2]["amount"] == str(plan.installment_amount)
+        assert _announced(dispatched)[0].payload["amount"] == str(plan.installment_amount)
 
     @pytest.mark.asyncio
     async def test_the_dedupe_key_names_the_cycle(self, monkeypatch):
@@ -519,7 +526,7 @@ class TestChargesAreAnnounced:
         dispatched = self._arrange(monkeypatch)
         session = self._session([self._sub()], [])
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
-        assert dispatched.await_args.kwargs["dedupe_key"] == "plan:subscription:1:2026-06-30"
+        assert _announced(dispatched)[0].dedupe_key == "plan:subscription:1:2026-06-30"
 
     @pytest.mark.asyncio
     async def test_a_back_fill_announces_every_cycle_it_recorded(self, monkeypatch):
@@ -530,7 +537,9 @@ class TestChargesAreAnnounced:
         sub.next_billing_date = date(2026, 4, 30)
         session = self._session([sub], [])
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
-        assert [call.kwargs["dedupe_key"] for call in dispatched.await_args_list] == [
+        # Three messages, still ONE dispatch: the batch is a cost decision, not a granularity one.
+        dispatched.assert_awaited_once()
+        assert [item.dedupe_key for item in _announced(dispatched)] == [
             "plan:subscription:1:2026-04-30",
             "plan:subscription:1:2026-05-30",
             "plan:subscription:1:2026-06-30",
@@ -568,10 +577,10 @@ class TestChargesAreAnnounced:
             AsyncMock(return_value={7: "America/Argentina/Buenos_Aires", 8: "America/Argentina/Buenos_Aires"}),
         )
         dispatched = AsyncMock(return_value=1)
-        monkeypatch.setattr(auto_expense_service.notification_service, "dispatch", dispatched)
+        monkeypatch.setattr(auto_expense_service.notification_service, "dispatch_many", dispatched)
         mine, theirs = self._sub(), self._sub()
         theirs.id, theirs.user_id, theirs.name = 2, 8, "Spotify"
         session = self._session([mine, theirs], [])
         await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
-        told = {call.args[2]["name"]: call.args[1] for call in dispatched.await_args_list}
+        told = {item.payload["name"]: item.user_ids for item in _announced(dispatched)}
         assert told == {"Netflix": [7], "Spotify": [8]}
