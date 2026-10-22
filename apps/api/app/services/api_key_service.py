@@ -64,8 +64,8 @@ async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
         return None
     prefix = raw_key[:KEY_PREFIX_LENGTH]
     candidates = await api_key_repository.list_active_by_prefix(session, prefix)
-    # Release the admin-pool connection before the ~250ms threaded bcrypt per candidate: this runs
-    # on the shared admin pool (pre-auth, no user context), so holding a connection across the hash
+    # Release the auth-pool connection before the ~250ms threaded bcrypt per candidate: this runs
+    # on the small auth pool (pre-auth, no user context), so holding a connection across the hash
     # would let an API-key burst exhaust it and queue on pool_timeout. The last-used update below
     # re-acquires; expire_on_commit=False keeps the candidate rows usable without a reload.
     await session.commit()
@@ -75,5 +75,8 @@ async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
             await api_key_repository.save(session, key)
             await session.commit()
             user = await user_repository.get_by_id(session, key.user_id)
+            # Hand the auth-pool connection back now rather than at the end of the request, so slow
+            # API-key requests cannot hold the pool logins and refreshes draw from.
+            await session.commit()
             return user
     return None

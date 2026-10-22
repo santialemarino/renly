@@ -1,5 +1,6 @@
 import ast
 import inspect
+import typing
 from pathlib import Path
 
 from fastapi.dependencies.models import Dependant
@@ -40,7 +41,15 @@ def _nodes(dependant: Dependant) -> list[Dependant]:
     return out
 
 
-# A dependency that resolves the caller: annotated to return User and reading a session itself.
+# Whether an annotation names User, through Optional/Union and Annotated wrappers.
+def _names_user(annotation: object) -> bool:
+    if annotation is User:
+        return True
+    return any(_names_user(arg) for arg in typing.get_args(annotation))
+
+
+# A dependency that resolves the caller: annotated to return User (bare, Optional or Annotated) and
+# reading a session itself.
 def _is_user_resolver(node: Dependant) -> bool:
     if node.call is None or not callable(node.call):
         return False
@@ -48,7 +57,7 @@ def _is_user_resolver(node: Dependant) -> bool:
         returns = inspect.signature(node.call).return_annotation
     except (TypeError, ValueError):
         return False
-    if returns is not User:
+    if not _names_user(returns):
         return False
     return any(sub.call in {db.get_session, *_PRIVILEGED_SESSIONS} for sub in node.dependencies)
 
