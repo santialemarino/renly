@@ -14,6 +14,7 @@
 # unit test can assert the service passes the same exclusion to all three and still not notice that the
 # repository ignores it, which is exactly what a mutation sweep found.
 
+import importlib
 import os
 from datetime import datetime
 
@@ -74,9 +75,31 @@ async def test_the_same_key_is_written_once_and_the_repeat_reaches_nobody(seeded
         await s.commit()
         second = await notification_repository.create_many(s, _rows([user_id], key="pot:1:2026-09"))
         await s.commit()
-        assert first == [user_id]
+        assert first == [(user_id, "pot:1:2026-09")]
         assert second == []
         assert (await s.execute(text("SELECT count(*) FROM notifications WHERE user_id = :u"), {"u": user_id})).scalar_one() == 1
+
+
+# U20: a batch dispatch hands several fan-outs to one call, so one call can carry the same (user, key)
+# twice — and it must collide with itself exactly as two calls would: the first row written, the
+# second skipped, nothing raised. Driven with one-row chunks too, so the collision across two INSERTs of
+# one call is pinned as well as the one inside a single VALUES list.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chunk", [1000, 1])
+async def test_the_same_key_twice_in_one_call_keeps_the_first_row(seeded, monkeypatch, chunk):
+    monkeypatch.setattr(importlib.import_module("app.repositories.notification_repository"), "_INSERT_CHUNK_ROWS", chunk)
+    user_id = seeded["user_id"]
+    rows = [
+        Notification(user_id=user_id, event=NotificationEvent.snapshot_due, payload={"n": 1}, dedupe_key="pot:1:2026-09"),
+        Notification(user_id=user_id, event=NotificationEvent.snapshot_due, payload={"n": 2}, dedupe_key="pot:1:2026-09"),
+        Notification(user_id=user_id, event=NotificationEvent.snapshot_due, payload={"n": 3}, dedupe_key=None),
+    ]
+    async with seeded["factory"]() as s:
+        written = await notification_repository.create_many(s, rows)
+        await s.commit()
+        payloads = (await s.execute(text("SELECT payload->>'n' FROM notifications WHERE user_id = :u ORDER BY id"), {"u": user_id})).scalars().all()
+    assert written == [(user_id, "pot:1:2026-09"), (user_id, None)]
+    assert payloads == ["1", "3"]
 
 
 # The next period is a different key, so a pot still overdue next month is raised again. Once per
@@ -88,7 +111,7 @@ async def test_a_new_period_is_written(seeded):
         await notification_repository.create_many(s, _rows([user_id], key="pot:1:2026-09"))
         again = await notification_repository.create_many(s, _rows([user_id], key="pot:1:2026-10"))
         await s.commit()
-        assert again == [user_id]
+        assert again == [(user_id, "pot:1:2026-10")]
 
 
 # A one-off notification carries no key and is never deduplicated: two identical shared-expense
@@ -100,7 +123,7 @@ async def test_keyless_rows_are_never_deduplicated(seeded):
         first = await notification_repository.create_many(s, _rows([user_id], event=NotificationEvent.shared_expense_added))
         second = await notification_repository.create_many(s, _rows([user_id], event=NotificationEvent.shared_expense_added))
         await s.commit()
-        assert first == [user_id] and second == [user_id]
+        assert first == [(user_id, None)] and second == [(user_id, None)]
         count = (await s.execute(text("SELECT count(*) FROM notifications WHERE user_id = :u"), {"u": user_id})).scalar_one()
         assert count == 2
 
@@ -125,7 +148,7 @@ async def test_the_same_key_for_two_people_is_two_rows(seeded):
         async with factory() as s:
             written = await notification_repository.create_many(s, _rows([seeded["user_id"], other], key="pot:1:2026-09"))
             await s.commit()
-            assert sorted(written) == sorted([seeded["user_id"], other])
+            assert sorted(written) == sorted([(seeded["user_id"], "pot:1:2026-09"), (other, "pot:1:2026-09")])
     finally:
         async with factory() as s:
             await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": second_email})
@@ -156,7 +179,7 @@ async def test_one_repeat_in_a_batch_does_not_lose_the_rest(seeded):
             await s.commit()
             written = await notification_repository.create_many(s, _rows([seeded["user_id"], other], key="pot:1:2026-09"))
             await s.commit()
-            assert written == [other]
+            assert written == [(other, "pot:1:2026-09")]
     finally:
         async with factory() as s:
             await s.execute(text("DELETE FROM users WHERE email = :e"), {"e": second_email})
