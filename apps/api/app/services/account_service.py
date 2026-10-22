@@ -342,8 +342,10 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
     if not account_ids:
         return {}
     owners = {a.user_id for a in accounts}
-    # A pot's accounts share one scope, so one owner value covers the batch; a mixed batch would need
-    # a sum per owner, which no caller produces (holdings are listed per pot, or per user).
+    # Pot accounts all carry a NULL owner (`accounts_single_owner`), so one owner value covers a batch
+    # spanning any number of pots; a batch mixing pot and private accounts, or two users' accounts,
+    # would need a sum per owner, which no caller produces (the pot batch reads pots only, the private
+    # reads one user's accounts).
     owner_id = next(iter(owners)) if len(owners) == 1 else None
     income = await income_repository.sum_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
     expenses = await expense_repository.sum_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)

@@ -375,6 +375,9 @@ async def _value_holdings(
     as_of_date: date_type,
     lookup: RateLookup,
 ) -> dict[int, tuple[Decimal | None, dict[str, Decimal], _Holdings]]:
+    # One entry per pot: a pot listed twice would reuse its started total and have its accounts summed
+    # into it twice. No caller passes one (a caller holds one seat per pot), so this only keeps it so.
+    held_by_pot = list({pot.id: (pot, held) for pot, held in held_by_pot}.values())
     rate_map = lookup.get_rate_map_at(as_of_date)
     started: dict[int, tuple[Decimal, dict[str, Decimal]]] = {}
     for pot, held in held_by_pot:

@@ -103,6 +103,21 @@ class TestTheHeadlineReadsEveryPotOnce:
         assert mocks["compute_account_balances_at"].await_count == 1
 
 
+class TestThePotsListReadsEveryPotOnce:
+    @pytest.mark.asyncio
+    async def test_each_source_is_read_once_for_twenty_pots(self, monkeypatch):
+        mocks = _wire(monkeypatch)
+        single = AsyncMock()
+        monkeypatch.setattr(pot_service, "get_valuation", single)
+        valuations = await pot_service.get_valuations(AsyncMock(), [seat.pot for seat in _seats()], as_of_date=AS_OF, lookup=_LOOKUP)
+        assert [valuation.nav for valuation in valuations.values()] == [Decimal("110")] * POTS
+        for name in ("list_active_investments_by_pots", "list_accounts_by_pots", "get_latest_by_investments", "compute_account_balances_at"):
+            assert mocks[name].await_count == 1, name
+        single.assert_not_awaited()
+        mocks["list_active_investments"].assert_not_awaited()
+        mocks["list_accounts"].assert_not_awaited()
+
+
 class TestTheEvolutionReadsEveryPotOnce:
     @pytest.mark.asyncio
     async def test_each_source_is_read_once_for_twenty_pots(self, monkeypatch):

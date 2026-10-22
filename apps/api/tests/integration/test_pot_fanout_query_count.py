@@ -152,12 +152,12 @@ async def _user(s: AsyncSession, tag: str) -> int:
     ).scalar_one()
 
 
+# Seeds a rate only where none exists: a row already there is somebody else's and is neither changed
+# nor re-tagged, so the source-tagged cleanup can only ever delete what this file inserted. Nothing
+# here asserts on the rate's value — the comparison holds whichever rate the lookup ends up with.
 async def _rates(s: AsyncSession, *, since: date) -> None:
     await s.execute(
-        text(
-            "INSERT INTO exchange_rates (date, pair, rate, source) VALUES (:d, 'USD_ARS_MEP', 1000, :s) "
-            "ON CONFLICT (date, pair) DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source"
-        ),
+        text("INSERT INTO exchange_rates (date, pair, rate, source) VALUES (:d, 'USD_ARS_MEP', 1000, :s) ON CONFLICT (date, pair) DO NOTHING"),
         {"d": since, "s": _RATE_SOURCE},
     )
 
@@ -181,24 +181,24 @@ async def _count(engine, read) -> tuple[int, object]:
 
 class TestTheDashboardCostsAFixedNumberOfStatements:
     @staticmethod
-    async def _seed(factory) -> dict[int, int]:
-        users: dict[int, int] = {}
+    async def _seed(factory) -> dict[int, tuple[int, int]]:
+        users: dict[int, tuple[int, int]] = {}
         async with factory() as s:
-            await _rates(s, since=date(2026, 1, 1))
             for count in _POT_COUNTS:
                 user = await _user(s, f"p{count}")
                 seed = _Seeder(s, user)
                 group, mine, theirs = await seed.group(f"{_PREFIX}g{count}")
                 # Every pot holds both kinds of holding, so every conditional read (snapshots, the
-                # balance union) runs at every P and the comparison is like for like. Worth 110 USD:
-                # 100 in stock plus 10,000 ARS at 1,000. Divided 60/40, so the caller's share is 66.
+                # balance union) runs at every P and the comparison is like for like. Worth 110 USD,
+                # 100 in stock plus 10 in cash, all in dollars so no stored rate can move the figure.
+                # Divided 60/40, so the caller's share is 66.
                 for index in range(count):
                     pot = await seed.pot(group, "USD", f"pot {index}")
                     await seed.investment(pot, "USD", snapshots=[(_JAN, "100.00")])
-                    await seed.account(pot, "ARS", "10000.00", _JAN)
+                    await seed.account(pot, "USD", "10.00", _JAN)
                     await seed.opening(pot, mine, "60", _JAN)
                     await seed.opening(pot, theirs, "40", _JAN)
-                users[count] = user
+                users[count] = (user, group)
             await s.commit()
         return users
 
@@ -208,19 +208,28 @@ class TestTheDashboardCostsAFixedNumberOfStatements:
         users = await self._seed(factory)
 
         reads = {
-            "overview": lambda s, user: dashboard_service.get_overview(s, user, currency="USD"),
-            "evolution": lambda s, user: dashboard_service.get_evolution(s, user, currency="USD"),
-            "composition": lambda s, user: dashboard_service.get_composition(s, user, currency="USD"),
-            # The pots list values every pot it shows through the same batch.
-            "pots": lambda s, user: pot_service.list_pots(s, User(id=user, name="u", email="u", password_hash="h", session_epoch=0)),
+            "overview": lambda s, user, _group: dashboard_service.get_overview(s, user, currency="USD"),
+            "evolution": lambda s, user, _group: dashboard_service.get_evolution(s, user, currency="USD"),
+            "composition": lambda s, user, _group: dashboard_service.get_composition(s, user, currency="USD"),
+            # The pots list values every pot it shows through the same batch. Scoped to the user's own
+            # group: this session bypasses RLS, so the unscoped list returns EVERY pot in the database
+            # for every user, and its count could not move with P whatever the code did.
+            "pots": lambda s, user, group: pot_service.list_pots(
+                s, User(id=user, name="u", email="u", password_hash="h", session_epoch=0), group_id=group
+            ),
         }
         counts: dict[str, dict[int, int]] = {name: {} for name in reads}
+        listed: dict[int, int] = {}
         for name, read in reads.items():
-            for pots, user in users.items():
+            for pots, (user, group) in users.items():
                 async with factory() as s:
-                    counts[name][pots], _ = await _count(engine, lambda s=s, user=user, read=read: read(s, user))
+                    counts[name][pots], result = await _count(engine, lambda s=s, user=user, group=group, read=read: read(s, user, group))
+                if name == "pots":
+                    listed[pots] = len(result)
         print(f"\nstatements per request by pot count: {counts}")
 
+        # The list really did value P pots — the population behind its count.
+        assert listed == {pots: pots for pots in _POT_COUNTS}
         for name, by_pots in counts.items():
             assert len(set(by_pots.values())) == 1, f"{name} grows with the pot count: {by_pots}"
 
@@ -231,7 +240,7 @@ class TestTheDashboardCostsAFixedNumberOfStatements:
         # has to be exactly P times it.
         _, factory = maker
         users = await self._seed(factory)
-        for pots, user in users.items():
+        for pots, (user, _) in users.items():
             exchange_rate_service.invalidate_rates_cache()
             async with factory() as s:
                 context = await shared_worth_service.load_context(s, user)
@@ -242,14 +251,15 @@ class TestTheDashboardCostsAFixedNumberOfStatements:
 
 
 class TestTheBatchAnswersWhatThePerPotReadAnswers:
-    # Month ends from before the first rate (January's ARS figures cannot convert) to well after the
-    # last movement, so the series crosses every state a pot passes through.
+    # Month ends from before the seeded rate (on an empty rates table January's ARS figures cannot
+    # convert) to well after the last movement, so the series crosses every state a pot passes through.
     _DATES = [date(2025, 12, 31), date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 31), date(2026, 4, 30), date(2026, 6, 30)]
 
     @staticmethod
     async def _seed(factory) -> int:
         async with factory() as s:
-            # Rates only from February: every ARS figure in January is unconvertible.
+            # Rates only from February: on an empty rates table every ARS figure in January is
+            # unconvertible. With real rates present it converts, and the comparison still holds.
             await _rates(s, since=date(2026, 2, 1))
             user = await _user(s, "rich")
             seed = _Seeder(s, user)
