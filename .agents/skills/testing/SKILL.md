@@ -125,6 +125,13 @@ pnpm test:e2e        # Playwright E2E
     cursor listener for users holding 1, 5 and 20 pots — and every batch-over-pots read answers exactly
     what the per-pot read it replaced answers, over a fixture reaching every valuation branch. Its
     DB-free half, `tests/unit/test_pot_fanout_batching.py`, pins one read per source at twenty pots.
+  - `test_bind_parameter_cliff.py` — `LEDGER_TEST_DATABASE_URL`. asyncpg refuses a statement carrying more
+    than 32,767 bind parameters and `in_(ids)` binds one per id, so every repository read chunked through
+    `repositories/utils.chunked` is driven PAST the cap and must answer what it answers under it — ids
+    repeated and shuffled, and again one id per chunk (rows and order unchanged) — plus the auto-snapshot
+    job over more holdings than the cap. Its DB-free half, `tests/unit/test_in_chunking.py`, DERIVES every
+    repository `IN` over a caller list and fails on one that is neither chunked nor named bounded with a
+    reason, and on any unchunked one the scheduler can reach.
   - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue), the roles carry the attributes the model depends on, the
