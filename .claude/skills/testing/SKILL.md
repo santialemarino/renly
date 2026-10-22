@@ -125,6 +125,11 @@ pnpm test:e2e        # Playwright E2E
     cursor listener for users holding 1, 5 and 20 pots — and every batch-over-pots read answers exactly
     what the per-pot read it replaced answers, over a fixture reaching every valuation branch. Its
     DB-free half, `tests/unit/test_pot_fanout_batching.py`, pins one read per source at twenty pots.
+  - `test_reminder_dispatch_batching.py` — `LEDGER_TEST_DATABASE_URL`. The overdue-pot reminder costs a
+    FIXED number of statements and holds ONE connection however many pots are due — counted on the wire
+    and at the pool for 1, 10 and 100 due pots — and the batched dispatch tells everybody exactly what one
+    dispatch per pot did (rows, emails, pushes, stamped browsers), over a fixture reaching every
+    recipient branch: channels off, feed off, email off, the daily digest, a deduped repeat.
   - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue), the roles carry the attributes the model depends on, the
