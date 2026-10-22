@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Path
 
 from app.deps.auth import CurrentUser
-from app.deps.db import AdminSessionDep
+from app.deps.db import AdminSessionDep, AuthSessionDep
 from app.schemas.auth import TOKEN_MAX_LENGTH
 from app.schemas.group_invite import GroupInviteAcceptedResponse, GroupInvitePreviewResponse
 from app.services import group_invite_service
@@ -20,13 +20,13 @@ router = APIRouter(prefix="/group-invites", tags=["groups"])
 # Deliberately unauthenticated — most recipients open the link logged out, and requiring a session to
 # read it would strand them. Carries no financial data and no other member's identity. Returns 400 for
 # a token that is unknown, already claimed, or expired (one answer for all three, so it cannot be
-# probed).
+# probed). Pre-auth, so it borrows from the auth pool rather than the scheduler's admin pool.
 @router.get("/{token}", response_model=GroupInvitePreviewResponse)
 async def preview_group_invite(
     token: Annotated[str, Path(max_length=TOKEN_MAX_LENGTH, description="Raw invite token from the join link.")],
-    admin_session: AdminSessionDep,
+    auth_session: AuthSessionDep,
 ) -> GroupInvitePreviewResponse:
-    return await group_invite_service.preview_invite(admin_session, token)
+    return await group_invite_service.preview_invite(auth_session, token)
 
 
 # Claims the seat for the authenticated account: links it, stamps joined_at, consumes the invite.

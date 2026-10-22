@@ -31,6 +31,13 @@ ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
+# Minute past the hour each hourly job fires at. The daily and monthly crons fire at minute 0, so the
+# hourly ones take distinct later minutes: no two jobs start together and contend for the small
+# admin pool at once. Ten minutes apart leaves each run room to finish before the next one starts.
+AUTO_EXPENSES_MINUTE = 10
+POT_REMINDERS_MINUTE = 20
+OBLIGATION_REMINDERS_MINUTE = 30
+NOTIFICATION_DIGESTS_MINUTE = 40
 
 # Misfire policy: with the in-memory job store, APScheduler's default 1s grace silently skips any
 # tick the loop couldn't serve on time. Six hours of grace + coalesce=True means a late tick fires
@@ -189,7 +196,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         _generate_auto_expenses,
         "cron",
-        minute=0,
+        minute=AUTO_EXPENSES_MINUTE,
         id="generate_auto_expenses",
         replace_existing=True,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -202,7 +209,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         _send_pot_reminders,
         "cron",
-        minute=0,
+        minute=POT_REMINDERS_MINUTE,
         id="send_pot_reminders",
         replace_existing=True,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -215,7 +222,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         _send_obligation_reminders,
         "cron",
-        minute=0,
+        minute=OBLIGATION_REMINDERS_MINUTE,
         id="send_obligation_reminders",
         replace_existing=True,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,
@@ -229,7 +236,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         _send_notification_digests,
         "cron",
-        minute=0,
+        minute=NOTIFICATION_DIGESTS_MINUTE,
         id="send_notification_digests",
         replace_existing=True,
         misfire_grace_time=MISFIRE_GRACE_SECONDS,

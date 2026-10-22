@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from app.config import Environment, Settings, SignupMode
-from app.db import get_admin_session, get_session
+from app.db import get_admin_session, get_auth_session, get_session
 from app.main import create_app
 from app.middleware import MAX_REQUEST_BODY_BYTES
 from app.models.user import User
@@ -67,6 +67,7 @@ def _client(*, settings: Settings | None = None, existing_user: User | None = No
     # login/register read users on the privileged session (pre-auth, RLS-bypassing); override both.
     app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_admin_session] = _fake_session
+    app.dependency_overrides[get_auth_session] = _fake_session
     return TestClient(app, raise_server_exceptions=False)
 
 

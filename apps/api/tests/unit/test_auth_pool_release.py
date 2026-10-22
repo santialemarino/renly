@@ -4,16 +4,16 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings, SignupMode
 from app.config import settings as app_settings
-from app.db import get_admin_session, get_session
+from app.db import get_admin_session, get_auth_session, get_session
 from app.main import create_app
 from app.rate_limit import limiter
 from app.services import api_key_service, auth_service
 
-# Coverage for the admin-pool connection-lifetime hardening (audit follow-up item 7): login,
-# register, and API-key verification each run the ~250ms threaded bcrypt on the small shared admin
-# pool. Each must RELEASE its connection (session.commit) BEFORE the hash so an auth burst can't pin
-# the pool across the CPU-bound work and queue on pool_timeout. These tests pin the ordering:
-# commit precedes the bcrypt call on every path. The bcrypt itself is stubbed to keep them fast.
+# Coverage for the auth-pool connection-lifetime hardening (audit follow-up item 7): login,
+# register, and API-key verification each run the ~250ms threaded bcrypt on the small auth pool.
+# Each must RELEASE its connection (session.commit) BEFORE the hash so an auth burst can't pin the
+# pool across the CPU-bound work and queue on pool_timeout. These tests pin the ordering: commit
+# precedes the bcrypt call on every path. The bcrypt itself is stubbed to keep them fast.
 
 _DB_URL = "postgresql+asyncpg://user:pass@localhost:5432/renly"
 _SECRET = "x" * 32
@@ -66,6 +66,7 @@ class TestLoginReleasesConnectionBeforeBcrypt:
 
         app.dependency_overrides[get_session] = _fake_session
         app.dependency_overrides[get_admin_session] = _fake_session
+        app.dependency_overrides[get_auth_session] = _fake_session
 
         orig_verify = auth_service.verify_password
 

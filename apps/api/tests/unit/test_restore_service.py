@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import DBAPIError
 
 from app.config import Settings
-from app.db import get_admin_session, get_session
+from app.db import get_admin_session, get_auth_session, get_session
 from app.deps.auth import get_current_user
 from app.domain import InvalidImportFileError
 from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES
@@ -598,6 +598,7 @@ def _restore_client() -> TestClient:
 
     app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_admin_session] = _fake_session
+    app.dependency_overrides[get_auth_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
 

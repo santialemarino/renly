@@ -7,7 +7,7 @@ from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.db import set_session_user
-from app.deps.db import AdminSessionDep, SessionDep
+from app.deps.db import AuthSessionDep, SessionDep
 from app.http_errors import CodedHTTPException
 from app.models.user import User
 from app.services import api_key_service
@@ -18,7 +18,7 @@ bearer_optional = HTTPBearer(auto_error=False)
 # Try JWT first, fall back to API key verification.
 async def get_jwt_or_api_key_user(
     session: SessionDep,
-    admin_session: AdminSessionDep,
+    admin_session: AuthSessionDep,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_optional)],
 ) -> User:
     # Carry the same `invalid_auth_token` code as the JWT-only dependency (deps/auth.py) so a
@@ -56,7 +56,7 @@ async def get_jwt_or_api_key_user(
         pass
 
     # Fall back to API key. The prefix lookup has no user context yet, so it runs on the
-    # privileged session (bypasses RLS); once resolved, scope the request session to the user.
+    # privileged auth-pool session (bypasses RLS); once resolved, scope the request session to the user.
     user = await api_key_service.verify_api_key(admin_session, token)
     if user is not None:
         set_session_user(session, user.id)

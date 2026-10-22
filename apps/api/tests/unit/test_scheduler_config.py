@@ -1,8 +1,15 @@
+from datetime import UTC, datetime, timedelta
+
+from apscheduler.triggers.cron import CronTrigger
+
 from app import scheduler as scheduler_module
 
-# Unit coverage for the scheduler misfire/coalesce policy + the month-end startup catch-up job
-# (P08 perf). add_job is recorded so the config is asserted without starting a real event-loop
+# Unit coverage for the scheduler misfire/coalesce policy, the month-end startup catch-up job (P08
+# perf) and the staggered start times (U18). add_job is recorded so the config is asserted without starting a real event-loop
 # scheduler.
+
+# The add_job keyword arguments that are CronTrigger fields (the rest are job options).
+_CRON_FIELDS = {"year", "month", "day", "week", "day_of_week", "hour", "minute", "second"}
 
 
 # Records add_job calls so tests assert scheduling config without starting a real event-loop scheduler.
@@ -48,7 +55,7 @@ class TestSchedulerConfig:
         recorder = self._record(monkeypatch)
         job = next(call for call in recorder.calls if call[2]["id"] == "send_pot_reminders")
         assert job[1] == "cron"
-        assert job[2]["minute"] == 0 and "hour" not in job[2]
+        assert job[2]["minute"] == scheduler_module.POT_REMINDERS_MINUTE and "hour" not in job[2]
 
     # The same rule, asserted over EVERY per-user-local-hour job rather than once per job. Each of these
     # picks its recipients by comparing the tick to a person's own clock, which only works if the tick
@@ -63,7 +70,7 @@ class TestSchedulerConfig:
         for job_id in local_hour_jobs:
             trigger, kwargs = by_id[job_id]
             assert trigger == "cron", job_id
-            assert kwargs["minute"] == 0 and "hour" not in kwargs, job_id
+            assert isinstance(kwargs["minute"], int) and "hour" not in kwargs, job_id
 
     # The digest runs LATER in the day than the two reminder jobs, and that ordering is the whole reason
     # a reminder raised this morning lands in tonight's summary rather than tomorrow's. All three filter
@@ -74,3 +81,29 @@ class TestSchedulerConfig:
 
         assert notification_digest_service.DIGEST_HOUR_LOCAL > obligation_reminder_service.OBLIGATION_REMINDER_HOUR_LOCAL
         assert notification_digest_service.DIGEST_HOUR_LOCAL > pot_reminder_service.SNAPSHOT_REMINDER_HOUR_LOCAL
+
+    # No two cron jobs ever start in the same minute (U18): every job opens a session on the small admin
+    # pool, and four hourly jobs firing together at minute 0 measured a peak of 4 checkouts out of 5.
+    # Derived from what start_scheduler registers, not from a list: each cron job's real CronTrigger is
+    # walked across 40 days starting on a month's last day (so the month-end and the 1st-of-month jobs
+    # fire inside the window) and every fire time must belong to exactly one job.
+    def test_no_two_cron_jobs_start_in_the_same_minute(self, monkeypatch):
+        recorder = self._record(monkeypatch)
+        cron_jobs = {kwargs["id"]: kwargs for _f, trigger, kwargs in recorder.calls if trigger == "cron"}
+        print(f"cron jobs checked: {sorted(cron_jobs)}")
+        assert len(cron_jobs) >= 7
+
+        start = datetime(2026, 1, 31, tzinfo=UTC)
+        end = start + timedelta(days=40)
+        fired_by: dict[datetime, str] = {}
+        for job_id, kwargs in cron_jobs.items():
+            fields = {k: v for k, v in kwargs.items() if k in _CRON_FIELDS}
+            trigger = CronTrigger(timezone=UTC, **fields)
+            fire = trigger.get_next_fire_time(None, start)
+            fires = 0
+            while fire is not None and fire < end:
+                assert fire not in fired_by, f"{job_id} and {fired_by.get(fire)} both start at {fire.isoformat()}"
+                fired_by[fire] = job_id
+                fires += 1
+                fire = trigger.get_next_fire_time(fire, fire + timedelta(seconds=1))
+            assert fires > 0, f"{job_id} never fired inside the window, so the check proved nothing for it"
