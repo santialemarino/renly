@@ -181,6 +181,21 @@ owner — and give each connection string the role from the table above. For bac
 [`backups.md`](./backups.md). If the chosen host offers its own automated backups, enable them at
 go-live as an additional layer.
 
+### Connection budget
+
+Each API process opens at most **30 connections**: three pools, each `pool_size` + `max_overflow`
+(deliberate constants in `apps/api/app/db.py`, not env):
+
+| Pool    | Role          | Max | Serves                                                                             |
+| ------- | ------------- | --- | ---------------------------------------------------------------------------------- |
+| request | `renly_app`   | 20  | every authenticated request                                                        |
+| admin   | `renly_admin` | 5   | the scheduler, notification dispatch, the admin surface, cross-user bootstrap work |
+| auth    | `renly_admin` | 5   | login, register, refresh, verification, password reset, API-key verification       |
+
+Size the database for `30 × API processes` plus migrations, backups and a superuser session. A
+small managed Postgres (often ~22–25 usable connections) does not fit even one process at peak —
+pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front.
+
 ---
 
 ## CI
