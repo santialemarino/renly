@@ -9,6 +9,7 @@ from sqlmodel import select
 
 from app.models.asset_price import AssetPrice
 from app.models.utils import utcnow
+from app.repositories.utils import chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -22,19 +23,22 @@ async def get_latest(session: AsyncSession, ticker: str) -> AssetPrice | None:
 async def get_latest_by_tickers(session: AsyncSession, tickers: list[str]) -> dict[str, AssetPrice]:
     if not tickers:
         return {}
-    subq = (
-        select(AssetPrice.ticker, func.max(AssetPrice.date).label("max_date"))
-        .where(AssetPrice.ticker.in_(tickers))
-        .group_by(AssetPrice.ticker)
-        .subquery()
-    )
-    result = await session.execute(
-        select(AssetPrice).join(
-            subq,
-            (AssetPrice.ticker == subq.c.ticker) & (AssetPrice.date == subq.c.max_date),
+    prices: dict[str, AssetPrice] = {}
+    for chunk in chunked(tickers):
+        subq = (
+            select(AssetPrice.ticker, func.max(AssetPrice.date).label("max_date"))
+            .where(AssetPrice.ticker.in_(chunk))
+            .group_by(AssetPrice.ticker)
+            .subquery()
         )
-    )
-    return {p.ticker: p for p in result.scalars().all()}
+        result = await session.execute(
+            select(AssetPrice).join(
+                subq,
+                (AssetPrice.ticker == subq.c.ticker) & (AssetPrice.date == subq.c.max_date),
+            )
+        )
+        prices.update({p.ticker: p for p in result.scalars().all()})
+    return prices
 
 
 # Returns a price by ticker and date. Returns None if not found.

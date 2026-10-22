@@ -16,6 +16,7 @@ from sqlmodel import select
 
 from app.models.notification import Notification, NotificationChannel, NotificationEvent, NotificationPreference
 from app.models.utils import utcnow
+from app.repositories.utils import chunked
 
 
 # The three feed reads share one WHERE, which is the point: the list, the total and the unread badge
@@ -80,14 +81,15 @@ async def list_digest_pending_user_ids(admin_session: AsyncSession) -> list[int]
 async def list_digest_pending(admin_session: AsyncSession, user_ids: list[int]) -> dict[int, list[Notification]]:
     if not user_ids:
         return {}
-    result = await admin_session.execute(
-        select(Notification)
-        .where(Notification.digest_pending, Notification.user_id.in_(user_ids))
-        .order_by(Notification.created_at.asc(), Notification.id.asc())
-    )
     by_user: dict[int, list[Notification]] = defaultdict(list)
-    for row in result.scalars().all():
-        by_user[row.user_id].append(row)
+    for chunk in chunked(user_ids):
+        result = await admin_session.execute(
+            select(Notification)
+            .where(Notification.digest_pending, Notification.user_id.in_(chunk))
+            .order_by(Notification.created_at.asc(), Notification.id.asc())
+        )
+        for row in result.scalars().all():
+            by_user[row.user_id].append(row)
     return dict(by_user)
 
 
@@ -174,7 +176,8 @@ async def mark_all_read(
     return int(result.rowcount or 0)
 
 
-# Takes the given rows out of the digest queue, in one statement.
+# Takes the given rows out of the digest queue, one statement per chunk of ids — every pending row the
+# tick read, across every user due this hour, so the list is not bounded by any one person.
 #
 # Called whether or not the email actually went out, which is the same posture every other send in this
 # layer takes: the notification is already in the recipient's feed, so an email outage must not leave a
@@ -183,13 +186,16 @@ async def mark_all_read(
 async def clear_digest_pending(admin_session: AsyncSession, notification_ids: list[int]) -> int:
     if not notification_ids:
         return 0
-    result = await admin_session.execute(
-        update(Notification)
-        .where(Notification.id.in_(notification_ids), Notification.digest_pending)
-        .values(digest_pending=False)
-        .execution_options(synchronize_session=False)
-    )
-    return int(result.rowcount or 0)
+    cleared = 0
+    for chunk in chunked(notification_ids):
+        result = await admin_session.execute(
+            update(Notification)
+            .where(Notification.id.in_(chunk), Notification.digest_pending)
+            .values(digest_pending=False)
+            .execution_options(synchronize_session=False)
+        )
+        cleared += int(result.rowcount or 0)
+    return cleared
 
 
 # Lists every preference OVERRIDE the user holds. Absence of a row means the shipped default, so the

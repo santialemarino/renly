@@ -20,6 +20,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.pot import OwnershipEventType, PotOwnershipEvent
+from app.repositories.utils import chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -161,15 +162,18 @@ async def _sum_leg(
 ) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = (
-        select(leg, func.coalesce(func.sum(amount), 0))
-        .join(Account, Account.id == leg)
-        .where(leg.in_(account_ids), PotOwnershipEvent.date >= Account.opening_date)
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(PotOwnershipEvent.date <= as_of_date)
-    result = await session.execute(stmt.group_by(leg))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(leg, func.coalesce(func.sum(amount), 0))
+            .join(Account, Account.id == leg)
+            .where(leg.in_(chunk), PotOwnershipEvent.date >= Account.opening_date)
+        )
+        if as_of_date is not None:
+            stmt = stmt.where(PotOwnershipEvent.date <= as_of_date)
+        result = await session.execute(stmt.group_by(leg))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # Total moved OUT of each account by an ownership event (debits the balance): the private side of a
@@ -200,17 +204,20 @@ async def _sum_leg_dated(
 ) -> list[tuple[int, date_type, Decimal]]:
     if not account_ids:
         return []
-    result = await session.execute(
-        select(leg, PotOwnershipEvent.date, func.coalesce(func.sum(amount), 0))
-        .join(Account, Account.id == leg)
-        .where(
-            leg.in_(account_ids),
-            PotOwnershipEvent.date >= Account.opening_date,
-            PotOwnershipEvent.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(leg, PotOwnershipEvent.date, func.coalesce(func.sum(amount), 0))
+            .join(Account, Account.id == leg)
+            .where(
+                leg.in_(chunk),
+                PotOwnershipEvent.date >= Account.opening_date,
+                PotOwnershipEvent.date <= until,
+            )
+            .group_by(leg, PotOwnershipEvent.date)
         )
-        .group_by(leg, PotOwnershipEvent.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Dated totals moved OUT of each account by an ownership event.
