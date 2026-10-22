@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
+from apscheduler.events import EVENT_JOB_ERROR, JobExecutionEvent
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Background jobs run with no user context, so they use the privileged (RLS-bypassing) session.
@@ -47,110 +48,100 @@ MISFIRE_GRACE_SECONDS = 6 * 3600
 AUTO_SNAPSHOTS_CATCHUP_DAYS = 3
 
 
+# Reports a job that raised. The job wrappers below do NOT catch: APScheduler already isolates a raising
+# job (the scheduler and every other job keep running) and emits EVENT_JOB_ERROR for it, so a failure
+# reaches this one place instead of being swallowed into a routine log line inside each wrapper — which
+# is how a job that fails the same way every run (a statement past the bind-parameter cap) went unseen.
+# CRITICAL with a fixed prefix, so a log alert can key on it without matching anything a job logs itself;
+# with a Sentry DSN configured it is also an error event carrying the exception (the logging integration
+# captures ERROR and above), the channel request errors already report through.
+def _report_job_failure(event: JobExecutionEvent) -> None:
+    logger.critical(
+        "SCHEDULED JOB FAILED: %s (run due %s): %s",
+        event.job_id,
+        event.scheduled_run_time,
+        type(event.exception).__name__,
+        exc_info=event.exception,
+    )
+
+
 # Fetches latest exchange rates from all sources (DolarApi + Frankfurter) and stores them.
 async def _update_exchange_rates() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            await exchange_rate_service.fetch_and_store_latest(session)
-    except Exception:
-        logger.exception("Scheduled exchange rate update failed.")
+    async with AdminSessionLocal() as session:
+        await exchange_rate_service.fetch_and_store_latest(session)
 
 
 # Fetches latest asset prices for all ticker-linked investments.
 async def _update_asset_prices() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await asset_price_service.refresh_all_prices(session)
-            logger.info("Scheduled asset price update: %d prices stored.", count)
-    except Exception:
-        logger.exception("Scheduled asset price update failed.")
+    async with AdminSessionLocal() as session:
+        count = await asset_price_service.refresh_all_prices(session)
+        logger.info("Scheduled asset price update: %d prices stored.", count)
 
 
 # Generates auto-snapshots for ticker-linked investments using latest prices.
 async def _generate_auto_snapshots() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await auto_snapshot_service.generate_auto_snapshots(session)
-            logger.info("Scheduled auto-snapshots: %d snapshots created.", count)
-    except Exception:
-        logger.exception("Scheduled auto-snapshot generation failed.")
+    async with AdminSessionLocal() as session:
+        count = await auto_snapshot_service.generate_auto_snapshots(session)
+        logger.info("Scheduled auto-snapshots: %d snapshots created.", count)
 
 
 # Generates expense_entries from active subscriptions and installment plans.
 # Loops retroactively per record so missed cycles back-fill on the next tick.
 async def _generate_auto_expenses() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await auto_expense_service.generate_auto_expenses(session)
-            logger.info("Scheduled auto-expenses: %d entries created.", count)
-    except Exception:
-        logger.exception("Scheduled auto-expense generation failed.")
+    async with AdminSessionLocal() as session:
+        count = await auto_expense_service.generate_auto_expenses(session)
+        logger.info("Scheduled auto-expenses: %d entries created.", count)
 
 
 # Notifies each pot's writers when its valuation has fallen behind the cadence they agreed on.
 # Loops over every pot but values only the ones with somebody due, and the notification's dedupe key
 # makes the whole job idempotent — so it can run hourly and still tell each person once per period.
 async def _send_pot_reminders() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await pot_reminder_service.send_due_reminders(session)
-            if count:
-                logger.info("Scheduled pot reminders: %d notifications dispatched.", count)
-    except Exception:
-        logger.exception("Scheduled pot reminder run failed.")
+    async with AdminSessionLocal() as session:
+        count = await pot_reminder_service.send_due_reminders(session)
+        if count:
+            logger.info("Scheduled pot reminders: %d notifications dispatched.", count)
 
 
 # Tells each person about the bills coming due in the next few days. Prunes in SQL to obligations
 # plausibly due, then filters to owners at their own local reminder hour; the notification's dedupe key
 # names the cycle, so a bill inside the window all week is still announced exactly once.
 async def _send_obligation_reminders() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await obligation_reminder_service.send_due_reminders(session)
-            if count:
-                logger.info("Scheduled obligation reminders: %d notifications dispatched.", count)
-    except Exception:
-        logger.exception("Scheduled obligation reminder run failed.")
+    async with AdminSessionLocal() as session:
+        count = await obligation_reminder_service.send_due_reminders(session)
+        if count:
+            logger.info("Scheduled obligation reminders: %d notifications dispatched.", count)
 
 
 # Sends the daily email summary to everyone who asked for one instead of individual emails. Its first
 # read is the pending queue itself, so an hour with nothing owed costs one partial-index probe.
 async def _send_notification_digests() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await notification_digest_service.send_due_digests(session)
-            if count:
-                logger.info("Scheduled notification digests: %d summaries sent.", count)
-    except Exception:
-        logger.exception("Scheduled notification digest run failed.")
+    async with AdminSessionLocal() as session:
+        count = await notification_digest_service.send_due_digests(session)
+        if count:
+            logger.info("Scheduled notification digests: %d summaries sent.", count)
 
 
 # Fetches CEDEAR ratios from Banco Comafi.
 async def _update_cedear_ratios() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            count = await cedear_ratio_service.fetch_and_store_ratios(session)
-            logger.info("Scheduled CEDEAR ratio update: %d ratios stored.", count)
-    except Exception:
-        logger.exception("Scheduled CEDEAR ratio update failed.")
+    async with AdminSessionLocal() as session:
+        count = await cedear_ratio_service.fetch_and_store_ratios(session)
+        logger.info("Scheduled CEDEAR ratio update: %d ratios stored.", count)
 
 
 # Startup catch-up for the month-end auto-snapshot job. The in-memory job store loses all schedule
 # state on restart, so a restart spanning the month-end tick would silently skip a whole month of
 # auto-snapshots — misfire_grace_time cannot help across restarts. The window/dedup logic lives in
-# the service; this wrapper only owns the session + error isolation.
+# the service; this wrapper only owns the session.
 async def _auto_snapshots_startup_catchup() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            ran = await auto_snapshot_service.run_startup_catchup(
-                session,
-                catchup_days=AUTO_SNAPSHOTS_CATCHUP_DAYS,
-                snapshots_hour_utc=AUTO_SNAPSHOTS_HOUR_UTC,
-            )
-            if ran:
-                logger.info("Auto-snapshot startup catch-up ran (missed month-end tick detected).")
-    except Exception:
-        logger.exception("Auto-snapshot startup catch-up failed.")
+    async with AdminSessionLocal() as session:
+        ran = await auto_snapshot_service.run_startup_catchup(
+            session,
+            catchup_days=AUTO_SNAPSHOTS_CATCHUP_DAYS,
+            snapshots_hour_utc=AUTO_SNAPSHOTS_HOUR_UTC,
+        )
+        if ran:
+            logger.info("Auto-snapshot startup catch-up ran (missed month-end tick detected).")
 
 
 # Registers all background jobs and starts the scheduler. Called from the app lifespan on startup.
@@ -267,6 +258,7 @@ def start_scheduler() -> None:
         coalesce=True,
     )
 
+    scheduler.add_listener(_report_job_failure, EVENT_JOB_ERROR)
     scheduler.start()
     logger.info(
         "Scheduler started (exchange rates: now + every %dh, "
