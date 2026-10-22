@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 
 from app.config import SignupMode, settings
 from app.deps.auth import CurrentUser
-from app.deps.db import AdminSessionDep, SessionDep
+from app.deps.db import AuthSessionDep, SessionDep
 from app.domain import EmailNotVerifiedError
 from app.http_errors import CodedHTTPException
 from app.models.auth_token import AuthTokenType
@@ -58,7 +58,7 @@ def _token_response(user: User, issued: refresh_token_service.IssuedRefreshToken
 # user context yet; the insert + email lookup must bypass the users RLS policy — SEC-15).
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(REGISTER_LIMIT)
-async def register(request: Request, response: Response, body: RegisterRequest, session: AdminSessionDep) -> MessageResponse:
+async def register(request: Request, response: Response, body: RegisterRequest, session: AuthSessionDep) -> MessageResponse:
     await auth_service.register_account(session, body.name, body.email, body.password, body.invite_token, body.language)
     return MessageResponse(detail=_UNIFORM_ACK)
 
@@ -68,7 +68,7 @@ async def register(request: Request, response: Response, body: RegisterRequest, 
 # invite lookup is pre-auth (no user context), so it bypasses RLS (SEC-15).
 @router.get("/signup-context", response_model=SignupContextResponse)
 async def signup_context(
-    session: AdminSessionDep,
+    session: AuthSessionDep,
     invite: str | None = Query(default=None, max_length=TOKEN_MAX_LENGTH, description="Raw invite token from the emailed link."),
 ) -> SignupContextResponse:
     invited_email = None
@@ -83,7 +83,7 @@ async def signup_context(
 # context), so it bypasses the users RLS policy (SEC-15).
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(LOGIN_LIMIT)
-async def login(request: Request, response: Response, body: LoginRequest, session: AdminSessionDep) -> TokenResponse:
+async def login(request: Request, response: Response, body: LoginRequest, session: AuthSessionDep) -> TokenResponse:
     invalid_credentials = CodedHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid credentials",
@@ -91,8 +91,8 @@ async def login(request: Request, response: Response, body: LoginRequest, sessio
         headers={"WWW-Authenticate": "Bearer"},
     )
     user = await auth_service.get_user_by_email(session, body.email)
-    # Release the admin-pool connection before the ~250ms threaded bcrypt: login/register/API-key
-    # verification share the small admin pool, and holding a connection across the hash would let an
+    # Release the auth-pool connection before the ~250ms threaded bcrypt: login/register/API-key
+    # verification share the small auth pool, and holding a connection across the hash would let an
     # auth burst exhaust it and queue on pool_timeout. The by-email read is done; commit() returns
     # the connection now and issue_refresh_token below re-acquires one for the write.
     # expire_on_commit=False keeps `user` usable without a reload.
@@ -116,7 +116,7 @@ async def login(request: Request, response: Response, body: LoginRequest, sessio
 # bump (logout / password change). Privileged session: the call is pre-auth (it carries a refresh
 # token, not an access token), so the lookup bypasses RLS (SEC-15).
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest, session: AdminSessionDep) -> TokenResponse:
+async def refresh(body: RefreshRequest, session: AuthSessionDep) -> TokenResponse:
     user, issued = await refresh_token_service.rotate_refresh_token(session, body.refresh_token)
     return _token_response(user, issued)
 
@@ -125,7 +125,7 @@ async def refresh(body: RefreshRequest, session: AdminSessionDep) -> TokenRespon
 # an unverified account. Privileged session (pre-auth lookup bypasses RLS — SEC-15).
 @router.post("/verify-email/request", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(VERIFY_EMAIL_LIMIT)
-async def request_verification(request: Request, response: Response, body: EmailActionRequest, session: AdminSessionDep) -> MessageResponse:
+async def request_verification(request: Request, response: Response, body: EmailActionRequest, session: AuthSessionDep) -> MessageResponse:
     await auth_service.request_verification_email(session, body.email)
     return MessageResponse(detail=_UNIFORM_ACK)
 
@@ -134,7 +134,7 @@ async def request_verification(request: Request, response: Response, body: Email
 # dispatching on the token type. Returns which flow completed. Privileged session (pre-auth — the
 # user may not be logged in when clicking the link; bypasses RLS — SEC-15).
 @router.post("/verify-email/confirm", response_model=ConfirmEmailResponse)
-async def confirm_verification(body: ConfirmEmailRequest, session: AdminSessionDep) -> ConfirmEmailResponse:
+async def confirm_verification(body: ConfirmEmailRequest, session: AuthSessionDep) -> ConfirmEmailResponse:
     token_type = await auth_service.confirm_email_token(session, body.token)
     detail = (
         "Your new email address is confirmed." if token_type == AuthTokenType.email_change else "Your email address is verified. You can now log in."
@@ -146,7 +146,7 @@ async def confirm_verification(body: ConfirmEmailRequest, session: AdminSessionD
 # account. Privileged session (pre-auth lookup bypasses RLS — SEC-15).
 @router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(FORGOT_PASSWORD_LIMIT)
-async def forgot_password(request: Request, response: Response, body: EmailActionRequest, session: AdminSessionDep) -> MessageResponse:
+async def forgot_password(request: Request, response: Response, body: EmailActionRequest, session: AuthSessionDep) -> MessageResponse:
     await auth_service.request_password_reset(session, body.email)
     return MessageResponse(detail=_UNIFORM_ACK)
 
@@ -155,7 +155,7 @@ async def forgot_password(request: Request, response: Response, body: EmailActio
 # the token is invalid/expired/used or the new password is breached. Privileged session (pre-auth).
 @router.post("/reset-password", response_model=MessageResponse)
 @limiter.limit(RESET_PASSWORD_LIMIT)
-async def reset_password(request: Request, response: Response, body: ResetPasswordRequest, session: AdminSessionDep) -> MessageResponse:
+async def reset_password(request: Request, response: Response, body: ResetPasswordRequest, session: AuthSessionDep) -> MessageResponse:
     await auth_service.reset_password(session, body.token, body.password)
     return MessageResponse(detail="Your password has been reset. You can now log in.")
 

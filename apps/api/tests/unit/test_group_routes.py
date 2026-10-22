@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.db import get_admin_session, get_session
+from app.db import get_admin_session, get_auth_session, get_session
 from app.deps.auth import get_current_user
 from app.main import create_app
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
@@ -42,6 +42,7 @@ def _client(sessions: dict, *, authenticated: bool = True) -> TestClient:
 
     app.dependency_overrides[get_session] = _request_session
     app.dependency_overrides[get_admin_session] = _admin_session
+    app.dependency_overrides[get_auth_session] = _admin_session
     if authenticated:
         app.dependency_overrides[get_current_user] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
