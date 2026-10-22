@@ -121,8 +121,9 @@ def earliest_month(context: SharedContext) -> tuple[int, int] | None:
 
 # The shared half of the caller's net worth at a date, converted to the display currency.
 #
-# One valuation per visible pot, which is the expensive part and is the same read the pot pages already
-# pay for. §12's O3 is the standing note to re-measure it against real fan-out rather than assume it.
+# Every visible pot is valued in ONE batch (pot_service.get_member_shares), so the request costs a fixed
+# number of queries however many pots the caller can see — pinned by
+# tests/integration/test_pot_fanout_query_count.py (U17).
 async def get_shared_worth(
     session: AsyncSession,
     user_id: int,
@@ -147,8 +148,8 @@ async def get_shared_worth(
     # balances and no pots needs none, and is a common shape.
     if context.pots:
         pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
-        for seat in context.pots:
-            share = await pot_service.get_member_share(session, seat, as_of_date=as_of_date, lookup=pot_lookup)
+        shares = await pot_service.get_member_shares(session, context.pots, as_of_date=as_of_date, lookup=pot_lookup)
+        for seat, share in zip(context.pots, shares, strict=True):
             if share.value is None:
                 # A pot holding nothing is an empty container, not a half-finished setup: there is no
                 # missing value to explain, so it stays silent instead of being listed.
@@ -181,6 +182,9 @@ async def get_shared_worth(
 # last point — so both fold the SAME two sources through the same rules: pot_service's share series
 # (which is also the pot page's) and group_settlement_service's position algebra.
 #
+# Every pot's series comes from one batch read, so the chart costs a fixed number of queries however
+# many pots there are (U17).
+#
 # Each month converts at its own month-end rate, which is what the private side does term by term, so
 # every part of a month's net worth is priced in one frame.
 #
@@ -207,15 +211,8 @@ async def get_shared_series(
 
     if context.pots:
         pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
-        for seat in context.pots:
-            points = await pot_service.compute_share_series(
-                session,
-                seat.pot,
-                seat.member_id,
-                dates=month_ends,
-                events=seat.events,
-                lookup=pot_lookup,
-            )
+        series = await pot_service.compute_share_series_many(session, context.pots, dates=month_ends, lookup=pot_lookup)
+        for seat, points in zip(context.pots, series, strict=True):
             for index, point in enumerate(points):
                 if point.my_value is None:
                     continue

@@ -122,15 +122,42 @@ async def list_holdings(session: AsyncSession, pot_id: int) -> tuple[list[Invest
 # comes free in the same query — a second read to fetch it would be a second answer to "what does this
 # pot hold".
 async def list_active_investments(session: AsyncSession, pot_id: int) -> list[Investment]:
-    result = await session.execute(select(Investment).where(Investment.pot_id == pot_id, Investment.is_active.is_(True)).order_by(Investment.id))
-    return list(result.scalars().all())
+    return (await list_active_investments_by_pots(session, [pot_id])).get(pot_id, [])
+
+
+# The ACTIVE investments of several pots in one query, keyed by pot id and ordered by id within each,
+# so valuing every pot a dashboard shows costs one read rather than one per pot. The single-pot read
+# above goes through this one, so "what does a pot hold" has exactly one predicate.
+async def list_active_investments_by_pots(session: AsyncSession, pot_ids: list[int]) -> dict[int, list[Investment]]:
+    if not pot_ids:
+        return {}
+    result = await session.execute(
+        select(Investment).where(Investment.pot_id.in_(pot_ids), Investment.is_active.is_(True)).order_by(Investment.pot_id, Investment.id)
+    )
+    grouped: dict[int, list[Investment]] = defaultdict(list)
+    for investment in result.scalars().all():
+        grouped[investment.pot_id].append(investment)
+    return dict(grouped)
 
 
 # The accounts a pot holds, for the NAV query. Returns whole rows because a balance needs each
 # account's currency and opening date, not just its id.
 async def list_accounts(session: AsyncSession, pot_id: int) -> list[Account]:
-    result = await session.execute(select(Account).where(Account.pot_id == pot_id, Account.is_active.is_(True)))
-    return list(result.scalars().all())
+    return (await list_accounts_by_pots(session, [pot_id])).get(pot_id, [])
+
+
+# The ACTIVE accounts of several pots in one query, keyed by pot id and ordered by id within each — the
+# batch sibling of list_accounts, which goes through it for the same one-predicate reason.
+async def list_accounts_by_pots(session: AsyncSession, pot_ids: list[int]) -> dict[int, list[Account]]:
+    if not pot_ids:
+        return {}
+    result = await session.execute(
+        select(Account).where(Account.pot_id.in_(pot_ids), Account.is_active.is_(True)).order_by(Account.pot_id, Account.id)
+    )
+    grouped: dict[int, list[Account]] = defaultdict(list)
+    for account in result.scalars().all():
+        grouped[account.pot_id].append(account)
+    return dict(grouped)
 
 
 # Every permission row for one pot.
@@ -182,7 +209,9 @@ class PotRepository:
     get_by_id = staticmethod(get_by_id)
     get_permission = staticmethod(get_permission)
     list_accounts = staticmethod(list_accounts)
+    list_accounts_by_pots = staticmethod(list_accounts_by_pots)
     list_active_investments = staticmethod(list_active_investments)
+    list_active_investments_by_pots = staticmethod(list_active_investments_by_pots)
     list_all = staticmethod(list_all)
     list_by_group = staticmethod(list_by_group)
     list_holdings = staticmethod(list_holdings)

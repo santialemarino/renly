@@ -120,6 +120,11 @@ pnpm test:e2e        # Playwright E2E
   - `test_pot_contribution_value.py` — `LEDGER_TEST_DATABASE_URL`. Contributing a holding moves
     NOBODY's value — a claim spanning the ledger replay, the NAV sum, the balance union and the share
     split, four of which read SQL.
+  - `test_pot_fanout_query_count.py` — `LEDGER_TEST_DATABASE_URL`. The dashboard and the pots list
+    cost a FIXED number of statements however many pots the caller sees — counted on the wire by a
+    cursor listener for users holding 1, 5 and 20 pots — and every batch-over-pots read answers exactly
+    what the per-pot read it replaced answers, over a fixture reaching every valuation branch. Its
+    DB-free half, `tests/unit/test_pot_fanout_batching.py`, pins one read per source at twenty pots.
   - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue), the roles carry the attributes the model depends on, the
