@@ -71,13 +71,10 @@ def _standing(by_group, month=(2026, 7)):
     return [((month[0], month[1] - 1), earlier), (month, by_group)]
 
 
-# Stubs the one pot read get_shared_worth makes, with the same answer for every pot it is asked about.
+# Stubs the one batch pot read get_shared_worth makes, with the same answer for every pot it is asked about.
 def _share(monkeypatch, *, nav, value, weights=None, holds_anything=True) -> None:
-    monkeypatch.setattr(
-        pot_service,
-        "get_member_share",
-        AsyncMock(return_value=pot_service.PotShare(nav=nav, value=value, weights=weights or {}, holds_anything=holds_anything)),
-    )
+    share = pot_service.PotShare(nav=nav, value=value, weights=weights or {}, holds_anything=holds_anything)
+    monkeypatch.setattr(pot_service, "get_member_shares", AsyncMock(side_effect=lambda _s, seats, **_k: [share for _ in seats]))
 
 
 async def _worth(monkeypatch, context, *, currency: str | None = "USD", lookup=_MISSING) -> shared_worth_service.SharedWorth:
@@ -226,7 +223,7 @@ class TestHasShared:
         worth = await _worth(monkeypatch, _context(), lookup=None)
         assert worth.has_shared is False
         assert worth.total == Decimal("0")
-        pot_service.get_member_share.assert_not_awaited()
+        pot_service.get_member_shares.assert_not_awaited()
         rates.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -275,7 +272,7 @@ class TestTheSeries:
             PotValueSeriesPoint(date=date(2026, 6, 30), nav=Decimal("200"), my_value=Decimal("100")),
             PotValueSeriesPoint(date=date(2026, 7, 31), nav=Decimal("400"), my_value=Decimal("200")),
         ]
-        monkeypatch.setattr(pot_service, "compute_share_series", AsyncMock(return_value=points))
+        monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [points for _ in seats]))
         values, skipped = await shared_worth_service.get_shared_series(
             AsyncMock(),
             1,
@@ -298,8 +295,8 @@ class TestTheSeries:
         }
         monkeypatch.setattr(
             pot_service,
-            "compute_share_series",
-            AsyncMock(side_effect=lambda _s, pot, *_a, **_k: series[pot.id]),
+            "compute_share_series_many",
+            AsyncMock(side_effect=lambda _s, seats, **_k: [series[seat.pot.id] for seat in seats]),
         )
         context = _context(pots=[_pot_seat(_pot(5)), _pot_seat(_pot(6))], seats=[_seat(100)])
         values, _ = await shared_worth_service.get_shared_series(
@@ -322,7 +319,7 @@ class TestTheSeries:
             PotValueSeriesPoint(date=date(2026, 6, 30), nav=None, my_value=None),
             PotValueSeriesPoint(date=date(2026, 7, 31), nav=Decimal("400"), my_value=Decimal("200")),
         ]
-        monkeypatch.setattr(pot_service, "compute_share_series", AsyncMock(return_value=points))
+        monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [points for _ in seats]))
         values, _ = await shared_worth_service.get_shared_series(
             AsyncMock(),
             1,
@@ -338,7 +335,7 @@ class TestTheSeries:
     async def test_positions_forward_fill_over_months_that_did_not_move(self, monkeypatch):
         # The positions series carries only the months that moved, so a quiet month has to stand where
         # the previous one left it — a balance does not disappear because nobody recorded anything.
-        monkeypatch.setattr(pot_service, "compute_share_series", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [[] for _ in seats]))
         context = _context(
             seats=[_seat(100)],
             positions=[((2026, 5), {10: {"USD": {100: Decimal("40")}}}), ((2026, 7), {10: {"USD": {100: Decimal("90")}}})],
@@ -365,7 +362,7 @@ class TestTheSeries:
         context = _context(seats=[_seat(100)], positions=_standing(by_group))
         worth = await _worth(monkeypatch, context)
 
-        monkeypatch.setattr(pot_service, "compute_share_series", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [[] for _ in seats]))
         values, _ = await shared_worth_service.get_shared_series(
             AsyncMock(),
             1,

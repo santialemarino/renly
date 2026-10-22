@@ -264,17 +264,45 @@ class _Holdings:
 async def _holdings_at(session: AsyncSession, pot: Pot, *, as_of_date: date_type) -> _Holdings:
     investments = await pot_repository.list_active_investments(session, pot.id)
     investment_ids = [investment.id for investment in investments]
-    snapshots: dict[int, InvestmentSnapshot] = {}
+    # Bounded by the date, not filtered after the fact — see the repository comment. Without the
+    # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
+    # a back-dated ownership event would be priced against that understated NAV.
+    snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date) if investment_ids else {}
+    accounts = await pot_repository.list_accounts(session, pot.id)
+    return _assemble_holdings(investments, snapshots, accounts, as_of_date=as_of_date)
+
+
+# What each of several pots holds at one date, keyed by pot id, for a FIXED number of queries however
+# many pots there are — the dashboard values every pot the caller can see, and the per-pot read costs
+# three queries a pot before a single balance is summed (U17). Same three reads, each over every pot
+# at once, assembled by the same function, so the batch and the single read cannot disagree.
+async def _holdings_at_many(session: AsyncSession, pots: list[Pot], *, as_of_date: date_type) -> dict[int, _Holdings]:
+    pot_ids = [pot.id for pot in pots]
+    investments_by_pot = await pot_repository.list_active_investments_by_pots(session, pot_ids)
+    investment_ids = [investment.id for investments in investments_by_pot.values() for investment in investments]
+    snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date) if investment_ids else {}
+    accounts_by_pot = await pot_repository.list_accounts_by_pots(session, pot_ids)
+    return {
+        pot.id: _assemble_holdings(investments_by_pot.get(pot.id, []), snapshots, accounts_by_pot.get(pot.id, []), as_of_date=as_of_date)
+        for pot in pots
+    }
+
+
+# One pot's holdings from rows already loaded. `snapshots` may carry other pots' investments too (the
+# batch read loads them all at once); only this pot's own are kept, so a pot's _Holdings is the same
+# value whichever read produced it.
+def _assemble_holdings(
+    investments: list[Investment],
+    snapshots: dict[int, InvestmentSnapshot],
+    accounts: list[Account],
+    *,
+    as_of_date: date_type,
+) -> _Holdings:
+    investment_ids = [investment.id for investment in investments]
+    own = {investment_id: snapshots[investment_id] for investment_id in investment_ids if investment_id in snapshots}
     valued_as_of: date_type | None = None
     if investment_ids:
-        # Bounded by the date, not filtered after the fact — see the repository comment. Without the
-        # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
-        # a back-dated ownership event would be priced against that understated NAV.
-        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
-        found = [snapshots[investment_id].date for investment_id in investment_ids if investment_id in snapshots]
-        valued_as_of = min(found) if len(found) == len(investment_ids) else None
-
-    accounts = await pot_repository.list_accounts(session, pot.id)
+        valued_as_of = min(snapshot.date for snapshot in own.values()) if len(own) == len(investment_ids) else None
     # An account's balance is DERIVED at the date asked about, so it is current by construction and
     # never pulls valued_as_of backwards; only a snapshot can. A pot holding accounts alone is
     # therefore known as of the date itself.
@@ -282,7 +310,7 @@ async def _holdings_at(session: AsyncSession, pot: Pot, *, as_of_date: date_type
         valued_as_of = as_of_date
     return _Holdings(
         investments=investments,
-        snapshots=snapshots,
+        snapshots=own,
         accounts=accounts,
         valued_as_of=valued_as_of,
         holds_anything=bool(investments or accounts),
@@ -319,40 +347,73 @@ async def _value_pot(
     as_of_date: date_type,
     lookup: RateLookup,
 ) -> tuple[Decimal | None, dict[str, Decimal], _Holdings]:
-    rate_map = lookup.get_rate_map_at(as_of_date)
     held = await _holdings_at(session, pot, as_of_date=as_of_date)
-    if not held.holds_anything:
-        return (None, {}, held)
+    return (await _value_holdings(session, [(pot, held)], as_of_date=as_of_date, lookup=lookup))[pot.id]
 
-    total = ZERO
-    buckets: dict[str, Decimal] = {}
-    if held.investments:
-        added = _add_holdings(total, _investment_figures(held), pot.base_currency, rate_map)
-        # Returned here so an unconvertible investment never costs a BALANCE query — the expensive
-        # read, seven sums per account. (The two cheap holdings lookups now both happen up front, in
-        # _holdings_at, because knowing what the pot holds is what decides holds_anything at all.)
-        if added is None:
-            return (None, {}, held)
-        total, buckets = added
 
-    if held.accounts:
-        # No missing case here either: an account always has a balance — its opening figure at worst.
-        balances = await account_service.compute_account_balances_at(session, held.accounts, as_of_date=as_of_date)
-        figures = [(CASH_BUCKET, (balances.get(a.id, ZERO), a.currency)) for a in held.accounts]
-        added = _add_holdings(total, figures, pot.base_currency, rate_map)
-        if added is None:
-            return (None, {}, held)
-        total, cash_buckets = added
-        # Added rather than merged. No investment category is called `cash` today, so the two maps are
-        # disjoint and a mutation sweep confirms this is UNREACHABLE — reverting it to `{**a, **b}`
-        # leaves the whole suite green, and no fixture can distinguish the two without inventing an
-        # enum member that does not exist. It stays for the reason `_CASH_STATUSES` stays in
-        # group_settlement_repository: it is correct about MEANING rather than about today's enum, and
-        # a merge would silently DROP one side's money on a collision instead of summing it.
-        for bucket, value in cash_buckets.items():
-            buckets[bucket] = buckets.get(bucket, ZERO) + value
+# _value_pot for several pots at once, keyed by pot id: a fixed number of queries whatever the pot
+# count, which is what keeps a dashboard load from growing by fourteen statements per pot (U17).
+async def _value_pots(
+    session: AsyncSession,
+    pots: list[Pot],
+    *,
+    as_of_date: date_type,
+    lookup: RateLookup,
+) -> dict[int, tuple[Decimal | None, dict[str, Decimal], _Holdings]]:
+    held_by_pot = await _holdings_at_many(session, pots, as_of_date=as_of_date)
+    return await _value_holdings(session, [(pot, held_by_pot[pot.id]) for pot in pots], as_of_date=as_of_date, lookup=lookup)
 
-    return (total, buckets, held)
+
+# THE valuation engine behind both reads above, over pots whose holdings are already loaded: the
+# investment half per pot, then ONE balance union over every account of every pot still standing,
+# then the account half per pot. Pot accounts carry no owner (`accounts_single_owner`), so one union
+# over all of them resolves the same NULL owner each per-pot union would.
+async def _value_holdings(
+    session: AsyncSession,
+    held_by_pot: list[tuple[Pot, _Holdings]],
+    *,
+    as_of_date: date_type,
+    lookup: RateLookup,
+) -> dict[int, tuple[Decimal | None, dict[str, Decimal], _Holdings]]:
+    rate_map = lookup.get_rate_map_at(as_of_date)
+    started: dict[int, tuple[Decimal, dict[str, Decimal]]] = {}
+    for pot, held in held_by_pot:
+        if not held.holds_anything:
+            continue
+        added = _add_holdings(ZERO, _investment_figures(held), pot.base_currency, rate_map)
+        # Dropped here so an unconvertible investment never costs a BALANCE query — the expensive
+        # read, eleven sums over every account it is handed.
+        if added is not None:
+            started[pot.id] = added
+
+    # No missing case here: an account always has a balance — its opening figure at worst.
+    accounts = [account for pot, held in held_by_pot if pot.id in started for account in held.accounts]
+    balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=as_of_date) if accounts else {}
+
+    valued: dict[int, tuple[Decimal | None, dict[str, Decimal], _Holdings]] = {}
+    for pot, held in held_by_pot:
+        if pot.id not in started:
+            valued[pot.id] = (None, {}, held)
+            continue
+        total, buckets = started[pot.id]
+        if held.accounts:
+            figures = [(CASH_BUCKET, (balances.get(a.id, ZERO), a.currency)) for a in held.accounts]
+            added = _add_holdings(total, figures, pot.base_currency, rate_map)
+            if added is None:
+                valued[pot.id] = (None, {}, held)
+                continue
+            total, cash_buckets = added
+            # Added rather than merged. No investment category is called `cash` today, so the two maps
+            # are disjoint and a mutation sweep confirms this is UNREACHABLE — reverting it to
+            # `{**a, **b}` leaves the whole suite green, and no fixture can distinguish the two without
+            # inventing an enum member that does not exist. It stays for the reason `_CASH_STATUSES`
+            # stays in group_settlement_repository: it is correct about MEANING rather than about
+            # today's enum, and a merge would silently DROP one side's money on a collision instead of
+            # summing it.
+            for bucket, value in cash_buckets.items():
+                buckets[bucket] = buckets.get(bucket, ZERO) + value
+        valued[pot.id] = (total, buckets, held)
+    return valued
 
 
 # Each held investment's figure, labelled with the composition bucket it contributes to. A `None`
@@ -393,6 +454,23 @@ async def get_valuation(
 ) -> PotValuation:
     nav, _, held = await _value_pot(session, pot, as_of_date=as_of_date, lookup=lookup)
     return PotValuation(nav=nav, valued_as_of=held.valued_as_of, is_stale=_is_overdue(pot, held, as_of_date))
+
+
+# get_valuation for several pots at one date, keyed by pot id, for a fixed number of queries — the list
+# page values every pot it shows.
+async def get_valuations(
+    session: AsyncSession,
+    pots: list[Pot],
+    *,
+    as_of_date: date_type,
+    lookup: RateLookup,
+) -> dict[int, PotValuation]:
+    valued = await _value_pots(session, pots, as_of_date=as_of_date, lookup=lookup)
+    valuations: dict[int, PotValuation] = {}
+    for pot in pots:
+        nav, _, held = valued[pot.id]
+        valuations[pot.id] = PotValuation(nav=nav, valued_as_of=held.valued_as_of, is_stale=_is_overdue(pot, held, as_of_date))
+    return valuations
 
 
 # How current a pot's value is, WITHOUT computing what it is.
@@ -495,8 +573,8 @@ def _as_entries(events):
 
 
 # Lists every pot the caller may see, each with its ownership breakdown. Permissions, ledgers and
-# rosters are batch-loaded for all pots at once, so the response cost does not grow with pot count.
-# NAV is per pot because each fans out over its own holdings — see the note in get_nav.
+# rosters and valuations are batch-loaded for all pots at once, so the response cost does not grow
+# with pot count.
 async def list_pots(session: AsyncSession, user: User, *, group_id: int | None = None) -> list[PotResponse]:
     # Capped on BOTH branches: the ceiling belongs to this endpoint's read, and the two other callers
     # of list_by_group resolve a group's pots for a computation and must keep reading every row.
@@ -512,7 +590,7 @@ async def list_pots(session: AsyncSession, user: User, *, group_id: int | None =
     events_by_pot = await pot_ownership_repository.list_by_pots(session, pot_ids)
     members_by_group = await group_repository.list_members_by_groups(session, sorted({p.group_id for p in pots}))
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
-    today = date_type.today()
+    valuations = await get_valuations(session, pots, as_of_date=date_type.today(), lookup=lookup)
 
     responses = []
     for pot in pots:
@@ -525,11 +603,10 @@ async def list_pots(session: AsyncSession, user: User, *, group_id: int | None =
             continue
         permissions = permissions_by_pot.get(pot.id, [])
         mine = next((p for p in permissions if p.member_id == viewer.id), None)
-        valuation = await get_valuation(session, pot, as_of_date=today, lookup=lookup)
         responses.append(
             _build_response(
                 pot,
-                valuation=valuation,
+                valuation=valuations[pot.id],
                 events=events_by_pot.get(pot.id, []),
                 members_by_id={m.id: m for m in members},
                 viewer_member_id=viewer.id,
@@ -663,6 +740,18 @@ async def list_visible_scopes(session: AsyncSession, user_id: int) -> list[PotSc
 # query, and re-reading per pot to apply a bound would cost a query per pot to answer the same question.
 async def get_member_share(session: AsyncSession, seat: PotSeat, *, as_of_date: date_type, lookup: RateLookup) -> PotShare:
     nav, weights, held = await _value_pot(session, seat.pot, as_of_date=as_of_date, lookup=lookup)
+    return _member_share(seat, nav, weights, held, as_of_date=as_of_date)
+
+
+# get_member_share for every seat at once, in the seats' order — the dashboard headline's read, for a
+# fixed number of queries however many pots the caller can see (U17).
+async def get_member_shares(session: AsyncSession, seats: list[PotSeat], *, as_of_date: date_type, lookup: RateLookup) -> list[PotShare]:
+    valued = await _value_pots(session, [seat.pot for seat in seats], as_of_date=as_of_date, lookup=lookup)
+    return [_member_share(seat, *valued[seat.pot.id], as_of_date=as_of_date) for seat in seats]
+
+
+# One seat's share from a valuation already made, so the single and the batch read split it one way.
+def _member_share(seat: PotSeat, nav: Decimal | None, weights: dict[str, Decimal], held: _Holdings, *, as_of_date: date_type) -> PotShare:
     balances = replay_units(_as_entries([e for e in seat.events if e.date <= as_of_date]))
     value = None if nav is None or total_units(balances) <= 0 else share_values(balances, nav).get(seat.member_id, ZERO)
     return PotShare(nav=nav, value=value, weights=weights, holds_anything=held.holds_anything)
@@ -926,12 +1015,82 @@ async def compute_share_series(
     if not dates:
         return []
     investments = await pot_repository.list_active_investments(session, pot.id)
+    accounts = [a for a in await pot_repository.list_accounts(session, pot.id) if a.id is not None]
+    snapshots = await snapshot_repository.list_by_investments(session, [investment.id for investment in investments], until=dates[-1])
+    balances = await account_service.compute_account_balance_series(session, accounts, dates=dates)
+    return _share_points(
+        pot,
+        viewer_member_id,
+        dates=dates,
+        events=events,
+        investments=investments,
+        snapshots=snapshots,
+        accounts=accounts,
+        balances=balances,
+        lookup=lookup,
+    )
+
+
+# compute_share_series for every seat at once, in the seats' order, each over its own ledger — the
+# dashboard evolution chart's read. The same four reads as the single series, each over every pot at
+# once, so a request costs a fixed number of queries however many pots there are (U17).
+async def compute_share_series_many(
+    session: AsyncSession,
+    seats: list[PotSeat],
+    *,
+    dates: list[date_type],
+    lookup: RateLookup,
+) -> list[list[PotValueSeriesPoint]]:
+    if not dates or not seats:
+        return [[] for _ in seats]
+    pot_ids = [seat.pot.id for seat in seats]
+    investments_by_pot = await pot_repository.list_active_investments_by_pots(session, pot_ids)
+    accounts_by_pot = await pot_repository.list_accounts_by_pots(session, pot_ids)
+    investment_ids = [investment.id for investments in investments_by_pot.values() for investment in investments]
+    snapshots = await snapshot_repository.list_by_investments(session, investment_ids, until=dates[-1])
+    accounts = [a for pot_accounts in accounts_by_pot.values() for a in pot_accounts if a.id is not None]
+    balances = await account_service.compute_account_balance_series(session, accounts, dates=dates)
+
+    snapshots_by_investment: dict[int, list[InvestmentSnapshot]] = {}
+    for snapshot in snapshots:
+        snapshots_by_investment.setdefault(snapshot.investment_id, []).append(snapshot)
+    series = []
+    for seat in seats:
+        investments = investments_by_pot.get(seat.pot.id, [])
+        series.append(
+            _share_points(
+                seat.pot,
+                seat.member_id,
+                dates=dates,
+                events=seat.events,
+                investments=investments,
+                snapshots=[row for investment in investments for row in snapshots_by_investment.get(investment.id, [])],
+                accounts=[a for a in accounts_by_pot.get(seat.pot.id, []) if a.id is not None],
+                balances=balances,
+                lookup=lookup,
+            )
+        )
+    return series
+
+
+# The series walk itself over rows already loaded, shared by the single and the batch read so the two
+# cannot compute a point differently. `snapshots` are this pot's own, ordered by (investment_id, date);
+# `balances` may carry other pots' accounts too and is read by id.
+def _share_points(
+    pot: Pot,
+    viewer_member_id: int,
+    *,
+    dates: list[date_type],
+    events: list,
+    investments: list[Investment],
+    snapshots: list[InvestmentSnapshot],
+    accounts: list[Account],
+    balances: dict[int, list[Decimal]],
+    lookup: RateLookup,
+) -> list[PotValueSeriesPoint]:
     investment_ids = [investment.id for investment in investments]
     bucket_by_investment = {investment.id: investment.category.value for investment in investments}
-    accounts = [a for a in await pot_repository.list_accounts(session, pot.id) if a.id is not None]
     holds_anything = bool(investment_ids or accounts)
-    snapshots = await snapshot_repository.list_by_investments(session, investment_ids, until=dates[-1])
-    balances = await account_service.compute_account_balance_series(session, accounts, dates=dates)
 
     # Both walks are merges over already-sorted inputs — snapshots by (investment_id, date), events by
     # (date, id) — so each row is visited once across the whole series rather than once per point.
