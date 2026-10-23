@@ -2,8 +2,8 @@
 # who a dispatch actually reaches, and what the feed shows.
 #
 # The fan-out is the part worth testing hardest, because every one of its failure modes is silent by
-# design — it swallows exceptions so a push outage cannot roll back a money write, which means a
-# dispatch that reaches nobody looks exactly like one that reaches everybody.
+# design — on the request path it swallows exceptions so a push outage cannot roll back a money write,
+# which means a dispatch that reaches nobody looks exactly like one that reaches everybody.
 
 import re
 from contextlib import asynccontextmanager
@@ -305,14 +305,36 @@ class TestBatchDispatch:
         assert mocks["created"].await_args.args[0] is session
         session.commit.assert_awaited()
 
+    # A caller passing its own session is a scheduled job, and a job's failure must reach the scheduler's
+    # error listener (CRITICAL `SCHEDULED JOB FAILED`) rather than be logged and swallowed here every
+    # tick. Both entry points, and a failure in the delivery half as well as in the write.
     @pytest.mark.asyncio
-    async def test_a_failure_on_the_callers_session_rolls_it_back_and_reports_nobody(self, monkeypatch):
-        # Swallowed as always, and the caller's session is left usable rather than in a failed transaction.
+    @pytest.mark.parametrize("failing", ["create_many", "get_by_ids"])
+    async def test_a_failure_on_the_callers_session_raises_to_the_job(self, monkeypatch, failing):
+        _arrange_dispatch(monkeypatch)
+        repository = svc.notification_repository if failing == "create_many" else svc.user_repository
+        monkeypatch.setattr(repository, failing, AsyncMock(side_effect=RuntimeError("the database is gone")))
+        with pytest.raises(RuntimeError, match="the database is gone"):
+            await svc.dispatch_many(NotificationEvent.snapshot_due, self._items(), session=AsyncMock())
+        with pytest.raises(RuntimeError, match="the database is gone"):
+            await svc.dispatch(NotificationEvent.snapshot_due, [USER.id], {"group_id": 1, "group": "Casa"}, session=AsyncMock())
+
+    # The same failure on the request path (no session passed) is still swallowed and reports nobody.
+    @pytest.mark.asyncio
+    async def test_the_same_failure_without_a_session_is_swallowed(self, monkeypatch):
         _arrange_dispatch(monkeypatch)
         monkeypatch.setattr(svc.notification_repository, "create_many", AsyncMock(side_effect=RuntimeError("the database is gone")))
-        session = AsyncMock()
-        assert await svc.dispatch_many(NotificationEvent.snapshot_due, self._items(), session=session) == 0
-        session.rollback.assert_awaited_once()
+        assert await svc.dispatch_many(NotificationEvent.snapshot_due, self._items()) == 0
+
+    # What a job is still spared: one email that cannot be sent costs that email, not the job.
+    @pytest.mark.asyncio
+    async def test_a_failed_email_on_the_callers_session_is_still_swallowed(self, monkeypatch):
+        mocks = _arrange_dispatch(monkeypatch)
+        monkeypatch.setattr(svc, "_send_email", _REAL_SEND_EMAIL)
+        send = AsyncMock(side_effect=RuntimeError("provider down"))
+        monkeypatch.setattr(svc, "get_email_service", lambda: AsyncMock(send=send))
+        assert await svc.dispatch_many(NotificationEvent.snapshot_due, self._items(), session=AsyncMock()) == 4
+        assert send.await_count == 4 and mocks["created"].await_count == 1
 
     @pytest.mark.asyncio
     async def test_every_source_is_read_once_for_the_whole_batch(self, monkeypatch):

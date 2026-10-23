@@ -13,10 +13,14 @@
 #     RECIPIENT, and `notifications` deliberately has no INSERT policy — so no request path can write
 #     into anybody's feed, including its own. Same posture as group creation and invite acceptance.
 #
-#   * IT NEVER RAISES, and it is always called AFTER the producer's commit. A notification is a
-#     side-effect of something that already happened: a push service being down, or a stale email
-#     credential, must not fail — or worse, roll back — the money write that produced it. Every failure
-#     is logged and swallowed, exactly as the transactional email sends already are.
+#   * IT NEVER RAISES INTO A REQUEST, and it is always called AFTER the producer's commit. A notification
+#     is a side-effect of something that already happened: a push service being down, or a stale email
+#     credential, must not fail — or worse, roll back — the money write that produced it. On the request
+#     path every failure is logged and swallowed, exactly as the transactional email sends already are.
+#     A SCHEDULED JOB is the one caller it raises into (it passes its own session): there is no user
+#     request to protect, and a job's failure has to reach the scheduler's error listener rather than
+#     read as one routine log line every tick. A single email or push failing is still swallowed on
+#     both paths — it costs that message, never the rest of the fan-out.
 #
 #   * A PREFERENCE IS AN OVERRIDE. Absence means the shipped default (app/domain/notification.py), so
 #     nothing is ever seeded and a new event has an answer for every existing account the day it is
@@ -180,8 +184,9 @@ async def _send_push(
 #
 # `session` is for a caller that already holds a PRIVILEGED session of its own (a scheduler job): the
 # fan-out then runs on that connection instead of checking a second one out of the small admin pool.
-# It is committed, like the one dispatch would have opened. A request session must never be passed —
-# `notifications` has no INSERT policy, so the write would be refused (and swallowed).
+# It is committed, like the one dispatch would have opened, and a failure RAISES to that caller instead
+# of being swallowed, so the job fails visibly (see the module header). A request session must never be
+# passed — `notifications` has no INSERT policy, so the write would be refused.
 async def dispatch(
     event: NotificationEvent,
     user_ids: list[int],
@@ -214,20 +219,14 @@ async def dispatch_many(
     recipients = sorted({user_id for user_ids, _ in fan_outs for user_id in user_ids})
     if not recipients:
         return 0
+    # A scheduled job's own session: a failure propagates, and the job's session teardown rolls back.
+    if session is not None:
+        return await _dispatch_on(session, event, fan_outs, recipients, now)
     try:
-        if session is not None:
-            return await _dispatch_on(session, event, fan_outs, recipients, now)
         async with AdminSessionLocal() as admin_session:
             return await _dispatch_on(admin_session, event, fan_outs, recipients, now)
     except Exception:
         logger.exception("Notification dispatch failed for event '%s'.", event.value)
-        # The caller's own session is left usable rather than stuck in a failed transaction; a session
-        # dispatch opened itself is rolled back by its own teardown.
-        if session is not None:
-            try:
-                await session.rollback()
-            except Exception:
-                logger.warning("Rolling back after a failed dispatch failed too.", exc_info=True)
         return 0
 
 

@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
@@ -8,6 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app import scheduler as scheduler_module
+from tests.unit.test_in_chunking import scheduler_walk
 
 # Unit coverage for the scheduler misfire/coalesce policy, the month-end startup catch-up job (P08
 # perf) and the staggered start times (U18). add_job is recorded so the config is asserted without starting a real event-loop
@@ -171,3 +173,22 @@ class TestJobFailuresAreReported:
         assert len(critical) == 1
         assert critical[0].getMessage().startswith("SCHEDULED JOB FAILED: u19_failing_job")
         assert isinstance(critical[0].exc_info[1], _Boom)
+
+    # U20: a job's notification dispatch raises into the job only when the job passes its own session —
+    # without one, dispatch opens its own and swallows, and the failure never reaches the listener above.
+    # Derived from the scheduler's call graph (tests/unit/test_in_chunking.py's walk): every dispatch a
+    # job can reach, outside the notification layer itself, passes `session=`.
+    def test_every_dispatch_a_job_reaches_passes_the_jobs_session(self):
+        calls = [
+            (name, node)
+            for name, fn in scheduler_walk().items()
+            if not name.startswith("notification_service.")
+            for node in ast.walk(fn)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and getattr(node.func.value, "id", None) == "notification_service"
+            and node.func.attr in {"dispatch", "dispatch_many"}
+        ]
+        print(f"\nscheduled dispatch call sites: {sorted(name for name, _ in calls)}")
+        assert len(calls) >= 3
+        assert [name for name, node in calls if not any(kw.arg == "session" for kw in node.keywords)] == []
