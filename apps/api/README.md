@@ -45,8 +45,9 @@ From repo root: `pnpm test:api`
 From here: `uv run pytest tests/ -v`
 
 `tests/integration/` needs a real Postgres and is **skipped by default** — each file gates on its own
-env var, so a green `pnpm test:api` says nothing about it. Point them at a throwaway DB with the schema
-applied:
+env var, so a green `pnpm test:api` says nothing about it. CI runs all of them on every API PR (`ci-api` builds a
+Postgres from `00_roles.sql` + `01_create_tables.sql`, sets the four variables, and fails if any test was skipped).
+Locally, point them at a throwaway DB with the schema applied:
 
 ```bash
 # RLS isolation — needs BOTH the restricted request role and the BYPASSRLS admin role

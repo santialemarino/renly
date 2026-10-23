@@ -24,6 +24,34 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    # A real Postgres, built exactly as `pnpm db:init` builds the local one (00_roles.sql, then
+    # 01_create_tables.sql, then an Alembic stamp), so the integration suites — RLS, money equality,
+    # query counts, the bind-parameter cliff — run on every PR instead of being skipped.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: renly
+          POSTGRES_PASSWORD: renly
+          POSTGRES_DB: renly
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U renly -d renly"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Request role and BYPASSRLS admin role on the CI database; every integration suite reads its own
+      # var and is skipped when it is unset, so all four are set (see the testing skill).
+      DATABASE_URL: postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly
+      DATABASE_ADMIN_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+      RLS_TEST_DATABASE_URL: postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly
+      RLS_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+      LEDGER_TEST_DATABASE_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+      GROUPS_TEST_DATABASE_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+      JWT_SECRET: ci-dummy-jwt-secret-min-32-chars-padding
+      EMAIL_PROVIDER: console
 
     steps:
       - uses: actions/checkout@v4
@@ -45,15 +73,31 @@ jobs:
         run: uv run ruff check .
 
       - name: Verify app imports
-        env:
-          # Dummy values — pydantic-settings requires these fields to be present at import time.
-          # No DB connection or JWT signing happens during this step.
-          DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/renly
-          JWT_SECRET: ci-dummy-jwt-secret-min-32-chars-padding
         run: uv run python -c "from app.main import app"
 
-      - name: Run tests
+      - name: Initialize the database
         env:
-          DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/renly
-          JWT_SECRET: ci-dummy-jwt-secret-min-32-chars-padding
-        run: uv run pytest tests/ -v
+          PGPASSWORD: renly
+        run: |
+          psql -v ON_ERROR_STOP=1 -h localhost -U renly -d renly -f database/00_roles.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U renly -d renly -f database/01_create_tables.sql
+          uv run alembic stamp head
+
+      - name: Run tests
+        run: uv run pytest tests/ -v --junitxml=pytest-results.xml
+
+      # Every integration suite skips itself when its database variable is missing or unusable, and a
+      # skipped suite still reports green. With all four set, nothing may skip: a skip here means a suite
+      # silently stopped running.
+      - name: Require that no test was skipped
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("pytest-results.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
+          skipped = sum(int(s.get("skipped", 0)) for s in suites)
+          total = sum(int(s.get("tests", 0)) for s in suites)
+          print(f"{total} tests, {skipped} skipped")
+          raise SystemExit(1 if skipped or total == 0 else 0)
+          PY
