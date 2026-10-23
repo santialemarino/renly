@@ -267,17 +267,17 @@ class _Capture:
         self.pushes.clear()
 
 
-# Puts the database back to the state before a run: no rows but the one already sent this period, and no
+# Puts the database back to the state before a run: no rows but the ones already sent this period, and no
 # browser stamped.
-async def _rewind(make, already_sent: tuple[int, str, dict]) -> None:
+async def _rewind(make, already_sent: list[tuple[int, str, dict]]) -> None:
     async with make() as s:
         await s.execute(text("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE email LIKE :p)"), {"p": f"{_PREFIX}%"})
         await s.execute(text("UPDATE push_subscriptions SET last_used_at = NULL WHERE endpoint LIKE :p"), {"p": f"https://push.test/{_PREFIX}%"})
-        user, key, payload = already_sent
-        await s.execute(
-            text("INSERT INTO notifications (user_id, event, payload, dedupe_key) VALUES (:u, 'snapshot_due', CAST(:pl AS jsonb), :k)"),
-            {"u": user, "pl": json.dumps(payload), "k": key},
-        )
+        for user, key, payload in already_sent:
+            await s.execute(
+                text("INSERT INTO notifications (user_id, event, payload, dedupe_key) VALUES (:u, 'snapshot_due', CAST(:pl AS jsonb), :k)"),
+                {"u": user, "pl": json.dumps(payload), "k": key},
+            )
         await s.commit()
 
 
@@ -319,8 +319,14 @@ async def test_the_batched_tick_tells_everyone_exactly_what_one_dispatch_per_pot
     def payload(group_id, group, pot_id, pot) -> dict:
         return {"group_id": group_id, "group": group, "pot_id": pot_id, "pot": pot, "valued_as_of": None}
 
-    # Ana was already told about the nameless pot this month: the index refuses the repeat.
-    already_sent = (ana, f"pot:{auto}:2026-09", payload(home, f"{_PREFIX}Casa", auto, None))
+    # Ana and Cai were already told about the nameless pot this month: the index refuses both repeats.
+    # For Ana it is her LATER item (Depto comes first and is written); for Cai it is the EARLIER one, and
+    # his later item (Semanal) must still be written and delivered — one recipient, a refused item before
+    # a written one, in one batch.
+    already_sent = [
+        (ana, f"pot:{auto}:2026-09", payload(home, f"{_PREFIX}Casa", auto, None)),
+        (cai, f"pot:{auto}:2026-09", payload(home, f"{_PREFIX}Casa", auto, None)),
+    ]
     capture = _Capture(monkeypatch)
 
     await _rewind(factory, already_sent)
@@ -353,8 +359,19 @@ async def test_the_batched_tick_tells_everyone_exactly_what_one_dispatch_per_pot
     assert f"{_PREFIX}eli@test.local" in emails
     assert not {f"{_PREFIX}dov@test.local", f"{_PREFIX}fay@test.local"} & emails
     assert len(batched["stamped"]) == 3
-    assert told_batched == 5
+    assert told_batched == 4
     # Held absolutely too, not only against the sequential half (which runs the same delivery code): the
     # repeat Ana was refused reaches none of her channels.
     about_auto = f'"pot_id": {auto}'
-    assert not [sent for sent in batched["emails"] + batched["pushes"] if "ana" in sent[0] and about_auto in sent[2]]
+    assert not [sent for sent in batched["emails"] + batched["pushes"] if ("ana" in sent[0] or "cai" in sent[0]) and about_auto in sent[2]]
+    # And Cai's later item, after his refused one, still reached him: its row (queued for his digest) and
+    # its push, and nothing else new.
+    semanal_key = f"pot:{semanal}:2026-W36"
+    cai_rows = [row for row in batched["rows"] if row[0] == f"{_PREFIX}cai@test.local"]
+    assert sorted(row[3] for row in cai_rows) == sorted([f"pot:{auto}:2026-09", semanal_key])
+    assert [(row[2], row[4]) for row in cai_rows if row[3] == semanal_key] == [
+        (json.dumps(payload(trip, f"{_PREFIX}Viaje", semanal, "Semanal"), sort_keys=True), True)
+    ]
+    assert [sent[2] for sent in batched["pushes"] if "cai" in sent[0]] == [
+        json.dumps(payload(trip, f"{_PREFIX}Viaje", semanal, "Semanal"), sort_keys=True)
+    ]
