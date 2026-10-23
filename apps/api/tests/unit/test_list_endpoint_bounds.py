@@ -304,7 +304,11 @@ class TestTheCappedOnesActuallyCap:
         status = TestClient(test_app, raise_server_exceptions=False).get(path).status_code
         return status, seen
 
-    @pytest.mark.parametrize(("method", "path"), sorted(CAPPED))
+    # A capped endpoint with more than one capped branch is probed once per branch: `/pots` lists every
+    # visible pot, and `/pots?group_id=` lists one group's — both bounded (`pot_service.list_pots`).
+    BRANCH_PROBES = (("GET", "/pots?group_id=1"),)
+
+    @pytest.mark.parametrize(("method", "path"), sorted(CAPPED) + list(BRANCH_PROBES))
     def test_the_list_query_carries_the_ceiling(self, method, path):
         status, statements = self._statements_for(path)
         assert status == 200, f"{path} answered {status} — the probe never reached its query"
