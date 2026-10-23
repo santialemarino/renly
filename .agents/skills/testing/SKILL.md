@@ -125,6 +125,13 @@ pnpm test:e2e        # Playwright E2E
     cursor listener for users holding 1, 5 and 20 pots — and every batch-over-pots read answers exactly
     what the per-pot read it replaced answers, over a fixture reaching every valuation branch. Its
     DB-free half, `tests/unit/test_pot_fanout_batching.py`, pins one read per source at twenty pots.
+  - `test_dashboard_query_shape.py` — `LEDGER_TEST_DATABASE_URL`. Three reads held to the answer they gave
+    before being made cheaper: the overview's month-over-month delta derives only the two months it compares,
+    and they must equal the full net-worth series' last two in every display mode (each term reaching them by
+    a different route — a forward-filled investment, cash, a card balance, a pot share); one `RateLookup` per
+    dashboard request in every mode; and the payments calendar's paid badges, read in a batch per distinct
+    date, cost the same statements for 5 cards as for 10 and match a literal for each way a settlement can
+    fall relative to the statement it pays.
   - `test_bind_parameter_cliff.py` — `LEDGER_TEST_DATABASE_URL`. asyncpg refuses a statement carrying more
     than 32,767 bind parameters and `in_(ids)` binds one per id, so every repository read chunked through
     `repositories/utils.chunked` is driven PAST the cap and must answer what it answers under it — ids
