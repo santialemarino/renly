@@ -9,9 +9,9 @@
 #   * the email provider is forced to the console adapter for every test, and the cached adapter is
 #     rebuilt around it, so a dispatch that gets as far as sending only logs;
 #   * underneath that, httpx's REAL network transports are replaced with a recorder that refuses every
-#     request. Every outbound call the app makes (Resend, web push, the price and rate providers) goes
-#     through one of them; a fake client, `MockTransport` or the ASGI test transport does not, so tests
-#     that stub their HTTP keep working.
+#     request. Resend and web push go through one of them; a fake client, `MockTransport` or the ASGI
+#     test transport does not, so tests that stub their HTTP keep working. Not every provider is
+#     covered: yfinance fetches through its own client (curl_cffi), outside httpx.
 #
 # The assertion is made at TEARDOWN, like the unit suite's session guard (tests/unit/conftest.py), and
 # for the same reason: the refusal raises inside code built to swallow it, so a raise alone would pass
