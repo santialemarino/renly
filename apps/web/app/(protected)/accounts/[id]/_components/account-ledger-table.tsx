@@ -93,6 +93,9 @@ export function AccountLedgerTable({
     if (movement.source === 'shared_expense') {
       return t('rows.sharedExpense', { group: other });
     }
+    if (movement.source === 'shared_income') {
+      return t('rows.sharedIncome', { group: other });
+    }
     if (movement.kind === 'group_settlement') {
       return t(outgoing ? 'rows.settleUpPaid' : 'rows.settleUpReceived', { person: other });
     }

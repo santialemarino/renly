@@ -187,6 +187,9 @@ export interface InvestmentMetrics {
   currentValue: number | null;
   investedCapital: number;
   absoluteGain: number | null;
+  // `simpleReturn`, `twr` and each `periodReturns[].returnPct` are measured in `baseCurrency`, not in
+  // `currency`: a peso holding can return +25% while its converted value is flat. Wherever one is
+  // rendered beside converted figures, it must name `baseCurrency`. `irr` is in `currency`.
   simpleReturn: number | null;
   twr: number | null;
   irr: number | null;

@@ -1235,7 +1235,8 @@
         "settleUpPaid": "Paid {person}",
         "settleUpReceived": "{person} paid you",
         "settlement": "Payment to {card}",
-        "sharedExpense": "Shared with {group}"
+        "sharedExpense": "Shared with {group}",
+        "sharedIncome": "Shared income from {group}"
       },
       "table": {
         "title": "Movements",
@@ -1886,7 +1887,8 @@
       "neverValued": "Never valued, and the pot expects a figure {cadence}.",
       "lockedAdd": "Only a member with write access can value this pot. Ask a group admin for it.",
       "skippedInvestments": "Left out because their currency can't be converted: {names}.",
-      "lockedAddLabel": "Managed by the pot"
+      "lockedAddLabel": "Managed by the pot",
+      "returnIn": "Change since the previous snapshot, measured in {currency}, the investment's own currency."
     },
     "form": {
       "titleCreate": "Add snapshot",

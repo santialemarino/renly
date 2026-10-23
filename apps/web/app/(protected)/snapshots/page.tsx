@@ -117,7 +117,7 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
       >
         {t('intro')}
       </ConceptHint>
-      <SnapshotsGrid grid={grid} firstRun={firstRun} />
+      <SnapshotsGrid grid={grid} currency={currency ?? null} firstRun={firstRun} />
     </div>
   );
 }
