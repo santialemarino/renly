@@ -58,6 +58,8 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 | `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                            |
 | `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                              |
 
+With `SENTRY_DSN` set, add a Sentry alert rule at deploy on events whose message starts with `SCHEDULED JOB FAILED` (the recommended default): a failed background job is reported there and in the logs, nowhere else ([scheduler](scheduler.md#error-handling)).
+
 **Web:**
 
 | Variable                                              | Notes                                                                                                                            |

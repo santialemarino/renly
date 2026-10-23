@@ -18,6 +18,10 @@ from app.models.notification import Notification, NotificationChannel, Notificat
 from app.models.utils import utcnow
 from app.repositories.utils import chunked
 
+# Rows per INSERT in create_many: at six bound parameters a row, one statement stays far below
+# asyncpg's 32767-parameter cap.
+_INSERT_CHUNK_ROWS = 1000
+
 
 # The three feed reads share one WHERE, which is the point: the list, the total and the unread badge
 # have to describe the same set of rows, and three separately-written predicates are three things that
@@ -113,8 +117,11 @@ async def get_by_id(session: AsyncSession, user_id: int, notification_id: int) -
 # other index would become a row that silently failed to insert. Naming the arbiter means only the
 # dedupe collision is tolerated and anything else still raises.
 #
-# Returns the user ids that actually GAINED a row, which is what the caller needs and all of it: email
-# and push must go to exactly those recipients, never to the ones a previous tick already told. Columns
+# Returns (user_id, dedupe_key) for every row actually WRITTEN, which is what the caller needs and all
+# of it: email and push must go to exactly those recipients, never to the ones a previous tick already
+# told — and the key is what tells a batch of several fan-outs which of them each row belongs to. Two
+# rows of one batch with the same user and key collide with each other exactly as two calls would: the
+# first is written and the second skipped. Columns
 # are listed explicitly rather than dumped from the models so every row of the batch carries the same
 # keys — a multi-row VALUES with differing keys is not the same statement.
 #
@@ -123,32 +130,37 @@ async def get_by_id(session: AsyncSession, user_id: int, notification_id: int) -
 # the live case — omitted, it would be false for every row, the digest queue would never fill, and the
 # job would run hourly forever finding nothing. `tests/unit/test_notification_service.py` asserts this
 # list against the model's own columns.
-async def create_many(admin_session: AsyncSession, notifications: list[Notification]) -> list[int]:
-    if not notifications:
-        return []
-    stmt = (
-        insert(Notification)
-        .values(
-            [
-                {
-                    "user_id": n.user_id,
-                    "event": n.event,
-                    "payload": n.payload,
-                    "dedupe_key": n.dedupe_key,
-                    "digest_pending": n.digest_pending,
-                    "created_at": n.created_at,
-                }
-                for n in notifications
-            ]
+#
+# Written in chunks of _INSERT_CHUNK_ROWS: a job batching every due item of a tick into one call can
+# hand over thousands of rows, and one VALUES list past the driver's 32767-parameter cap would fail the
+# whole tick. A later chunk still collides with an earlier one, which the same transaction can see.
+async def create_many(admin_session: AsyncSession, notifications: list[Notification]) -> list[tuple[int, str | None]]:
+    written: list[tuple[int, str | None]] = []
+    for start in range(0, len(notifications), _INSERT_CHUNK_ROWS):
+        stmt = (
+            insert(Notification)
+            .values(
+                [
+                    {
+                        "user_id": n.user_id,
+                        "event": n.event,
+                        "payload": n.payload,
+                        "dedupe_key": n.dedupe_key,
+                        "digest_pending": n.digest_pending,
+                        "created_at": n.created_at,
+                    }
+                    for n in notifications[start : start + _INSERT_CHUNK_ROWS]
+                ]
+            )
+            .on_conflict_do_nothing(
+                index_elements=["user_id", "event", "dedupe_key"],
+                index_where=Notification.dedupe_key.is_not(None),
+            )
+            .returning(Notification.user_id, Notification.dedupe_key)
         )
-        .on_conflict_do_nothing(
-            index_elements=["user_id", "event", "dedupe_key"],
-            index_where=Notification.dedupe_key.is_not(None),
-        )
-        .returning(Notification.user_id)
-    )
-    result = await admin_session.execute(stmt)
-    return list(result.scalars().all())
+        result = await admin_session.execute(stmt)
+        written.extend((user_id, dedupe_key) for user_id, dedupe_key in result.all())
+    return written
 
 
 # Marks one notification read, if it is not already. Returns the row so the caller can respond with it.
@@ -205,16 +217,16 @@ async def list_preferences(session: AsyncSession, user_id: int) -> list[Notifica
     return list(result.scalars().all())
 
 
-# Batch variant of list_preferences: {user_id: {(event, channel): enabled}} for every requested id, in
-# one query. The fan-out asks about every recipient of an event at once, so the single-user version
-# inside that loop would be an N+1 that grows with the group.
+# Batch variant of list_preferences: {user_id: {(event, channel): enabled}} for every requested id, one
+# query per chunk. The fan-out asks about every recipient of an event at once, so the single-user
+# version inside that loop would be an N+1 that grows with the group — and a scheduled job's batched
+# dispatch asks about every recipient of a whole tick, which grows with the user base (hence chunked).
 async def preferences_by_user_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, dict[tuple[NotificationEvent, NotificationChannel], bool]]:
-    if not user_ids:
-        return {}
-    result = await session.execute(select(NotificationPreference).where(NotificationPreference.user_id.in_(user_ids)))
     by_user: dict[int, dict[tuple[NotificationEvent, NotificationChannel], bool]] = defaultdict(dict)
-    for row in result.scalars().all():
-        by_user[row.user_id][(row.event, row.channel)] = row.enabled
+    for chunk in chunked(user_ids):
+        result = await session.execute(select(NotificationPreference).where(NotificationPreference.user_id.in_(chunk)))
+        for row in result.scalars().all():
+            by_user[row.user_id][(row.event, row.channel)] = row.enabled
     return dict(by_user)
 
 

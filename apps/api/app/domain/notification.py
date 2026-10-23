@@ -14,6 +14,7 @@
 # never expressed an opinion receives. That is deliberate: the alternative is seeding rows per user per
 # event, which turns every new event into a backfill and freezes yesterday's answer forever.
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 from app.models.notification import NotificationChannel, NotificationEvent
@@ -78,3 +79,14 @@ def is_enabled_by_default(event: NotificationEvent, channel: NotificationChannel
     if channel == NotificationChannel.in_app:
         return True
     return event in _OUTSIDE_APP_BY_DEFAULT
+
+
+# One fan-out inside a batch dispatch: who is told, what they are told, and the key that makes it
+# once-only. A job that raises many notifications of one event on one tick (one per overdue pot, one per
+# recorded charge) hands them over together, so they share one connection and one read per source
+# instead of paying the whole fan-out per item.
+@dataclass(frozen=True)
+class NotificationDispatch:
+    user_ids: list[int]
+    payload: dict
+    dedupe_key: str | None = None

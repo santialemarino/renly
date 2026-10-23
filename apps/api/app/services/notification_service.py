@@ -13,10 +13,14 @@
 #     RECIPIENT, and `notifications` deliberately has no INSERT policy — so no request path can write
 #     into anybody's feed, including its own. Same posture as group creation and invite acceptance.
 #
-#   * IT NEVER RAISES, and it is always called AFTER the producer's commit. A notification is a
-#     side-effect of something that already happened: a push service being down, or a stale email
-#     credential, must not fail — or worse, roll back — the money write that produced it. Every failure
-#     is logged and swallowed, exactly as the transactional email sends already are.
+#   * IT NEVER RAISES INTO A REQUEST, and it is always called AFTER the producer's commit. A notification
+#     is a side-effect of something that already happened: a push service being down, or a stale email
+#     credential, must not fail — or worse, roll back — the money write that produced it. On the request
+#     path every failure is logged and swallowed, exactly as the transactional email sends already are.
+#     A SCHEDULED JOB is the one caller it raises into (it passes its own session): there is no user
+#     request to protect, and a job's failure has to reach the scheduler's error listener rather than
+#     read as one routine log line every tick. A single email or push failing is still swallowed on
+#     both paths — it costs that message, never the rest of the fan-out.
 #
 #   * A PREFERENCE IS AN OVERRIDE. Absence means the shipped default (app/domain/notification.py), so
 #     nothing is ever seeded and a new event has an answer for every existing account the day it is
@@ -30,6 +34,7 @@
 
 import asyncio
 import logging
+from collections import Counter
 from datetime import datetime
 
 import httpx
@@ -37,7 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import AdminSessionLocal
-from app.domain import EmailCadence, NotFoundError, PushNotConfiguredError
+from app.domain import EmailCadence, NotFoundError, NotificationDispatch, PushNotConfiguredError
 from app.domain.notification import is_enabled_by_default
 from app.models.notification import Notification, NotificationChannel, NotificationEvent
 from app.models.push_subscription import PushSubscription
@@ -172,55 +177,116 @@ async def _send_push(
 # idempotent for a repeating notification: the same (user, event, key) is accepted once, so a job may
 # attempt it on every tick and only the first attempt reaches anybody.
 #
-# The order is not arbitrary. Preferences are read first, so a recipient with every channel off costs
-# nothing further; the rows go in next, and only the recipients who actually GAINED one are sent to —
-# which is what stops a re-attempted reminder emailing somebody a second time.
-#
 # Returns how many people were actually TOLD, which is not how many were asked: a deduped repeat and a
 # recipient with every channel off both return 0, and so does a failure. Every producer ignores it; the
 # hourly reminder is what needs it, because a job that logs its recipient count would report the same
 # figure every day of a period while the dedupe index quietly wrote nothing.
+#
+# `session` is for a caller that already holds a PRIVILEGED session of its own (a scheduler job): the
+# fan-out then runs on that connection instead of checking a second one out of the small admin pool.
+# It is committed, like the one dispatch would have opened, and a failure RAISES to that caller instead
+# of being swallowed, so the job fails visibly (see the module header). A request session must never be
+# passed — `notifications` has no INSERT policy, so the write would be refused.
 async def dispatch(
-    event: NotificationEvent, user_ids: list[int], payload: dict, *, dedupe_key: str | None = None, now: datetime | None = None
+    event: NotificationEvent,
+    user_ids: list[int],
+    payload: dict,
+    *,
+    dedupe_key: str | None = None,
+    now: datetime | None = None,
+    session: AsyncSession | None = None,
 ) -> int:
-    recipients = sorted(set(user_ids))
+    return await dispatch_many(event, [NotificationDispatch(user_ids, payload, dedupe_key)], now=now, session=session)
+
+
+# dispatch for several fan-outs of one event at once — each its own recipients, payload and key — for a
+# FIXED number of queries however many there are. A job that raises one notification per item (an
+# overdue pot, a recorded charge) would otherwise pay the preference read, the cadence read, the insert
+# and the delivery reads once per item, on a fresh connection each time (U20).
+#
+# What each person receives is exactly what one dispatch per item, in order, would have sent: the same
+# rows, the same emails and pushes, the same digest flags. Every per-recipient answer depends only on
+# the recipient and the event, never on which item named them, and the dedupe collision resolves inside
+# one INSERT as it does across two (the first item wins). Returns the total number of rows written.
+async def dispatch_many(
+    event: NotificationEvent,
+    items: list[NotificationDispatch],
+    *,
+    now: datetime | None = None,
+    session: AsyncSession | None = None,
+) -> int:
+    fan_outs = [(sorted(set(item.user_ids)), item) for item in items]
+    recipients = sorted({user_id for user_ids, _ in fan_outs for user_id in user_ids})
     if not recipients:
         return 0
+    # A scheduled job's own session: a failure propagates, and the job's session teardown rolls back.
+    if session is not None:
+        return await _dispatch_on(session, event, fan_outs, recipients, now)
     try:
         async with AdminSessionLocal() as admin_session:
-            overrides = await notification_repository.preferences_by_user_ids(admin_session, recipients)
-            wanted = [
-                user_id for user_id in recipients if any(_is_enabled(event, channel, overrides.get(user_id, {})) for channel in NotificationChannel)
-            ]
-            if not wanted:
-                return 0
-            cadences = await settings_service.get_email_cadences_by_user_ids(admin_session, wanted)
-            rows = [
-                Notification(
-                    user_id=user_id,
-                    event=event,
-                    payload=payload,
-                    dedupe_key=dedupe_key,
-                    digest_pending=_defers_email(event, overrides.get(user_id, {}), cadences[user_id]),
-                )
-                for user_id in wanted
-            ]
-            if now is not None:
-                for row in rows:
-                    row.created_at = now
-            written = await notification_repository.create_many(admin_session, rows)
-            await admin_session.commit()
-            if written:
-                await _deliver(admin_session, event, payload, written, overrides, cadences)
-            return len(written)
+            return await _dispatch_on(admin_session, event, fan_outs, recipients, now)
     except Exception:
         logger.exception("Notification dispatch failed for event '%s'.", event.value)
         return 0
 
 
-# Sends the out-of-app channels to the recipients who gained a row. Split from dispatch because the
-# in-app half is a transaction and this half is a fan of network calls, and only the first must be
-# atomic.
+# The body of dispatch_many on whichever privileged session it was given. The order is not arbitrary.
+# Preferences are read first, so a recipient with every channel off costs nothing further; the rows go
+# in next, and only the recipients who actually GAINED one are sent to — which is what stops a
+# re-attempted reminder emailing somebody a second time.
+async def _dispatch_on(
+    admin_session: AsyncSession,
+    event: NotificationEvent,
+    fan_outs: list[tuple[list[int], NotificationDispatch]],
+    recipients: list[int],
+    now: datetime | None,
+) -> int:
+    overrides = await notification_repository.preferences_by_user_ids(admin_session, recipients)
+    wanted = [user_id for user_id in recipients if any(_is_enabled(event, channel, overrides.get(user_id, {})) for channel in NotificationChannel)]
+    if not wanted:
+        return 0
+    cadences = await settings_service.get_email_cadences_by_user_ids(admin_session, wanted)
+    wanted_ids = set(wanted)
+    rows = [
+        Notification(
+            user_id=user_id,
+            event=event,
+            payload=item.payload,
+            dedupe_key=item.dedupe_key,
+            digest_pending=_defers_email(event, overrides.get(user_id, {}), cadences[user_id]),
+        )
+        for user_ids, item in fan_outs
+        for user_id in user_ids
+        if user_id in wanted_ids
+    ]
+    if now is not None:
+        for row in rows:
+            row.created_at = now
+    written = await notification_repository.create_many(admin_session, rows)
+    await admin_session.commit()
+    if not written:
+        return 0
+
+    # Which fan-out each written row belongs to, claimed in item order: a (user, key) pair is written at
+    # most once when it carries a key — so the first item naming it owns it, as the first of two calls
+    # would — and every pair without one is always written, once per item that named it.
+    unclaimed = Counter(written)
+    deliveries: list[tuple[dict, list[int]]] = []
+    for user_ids, item in fan_outs:
+        told = []
+        for user_id in user_ids:
+            if unclaimed[(user_id, item.dedupe_key)] > 0:
+                unclaimed[(user_id, item.dedupe_key)] -= 1
+                told.append(user_id)
+        if told:
+            deliveries.append((item.payload, told))
+    await _deliver(admin_session, event, deliveries, overrides, cadences)
+    return len(written)
+
+
+# Sends the out-of-app channels to the recipients who gained a row, for every fan-out of the batch at
+# once. Split from dispatch because the in-app half is a transaction and this half is a fan of network
+# calls, and only the first must be atomic.
 #
 # Email and push go out in PARALLEL (independent external calls, per the performance rules) — a group
 # of six with email on would otherwise be six sequential provider round trips inside the request that
@@ -228,8 +294,7 @@ async def dispatch(
 async def _deliver(
     admin_session: AsyncSession,
     event: NotificationEvent,
-    payload: dict,
-    written: list[int],
+    deliveries: list[tuple[dict, list[int]]],
     overrides: dict[int, dict[tuple, bool]],
     cadences: dict[int, EmailCadence],
 ) -> None:
@@ -242,39 +307,62 @@ async def _deliver(
     # `written` is a subset of it, so a missing key is impossible — and a default there would be a
     # fallback no test can reach, which is dead code rather than an untested rule. A KeyError is the
     # honest failure if that invariant ever breaks.
-    email_ids = [
-        user_id
-        for user_id in written
-        if _is_enabled(event, NotificationChannel.email, overrides.get(user_id, {}))
-        and not _defers_email(event, overrides.get(user_id, {}), cadences[user_id])
-    ]
-    push_ids = (
-        [user_id for user_id in written if _is_enabled(event, NotificationChannel.push, overrides.get(user_id, {}))]
-        if web_push.is_configured()
-        else []
-    )
-    if not email_ids and not push_ids:
+    sends: list[tuple[dict, list[int], list[int]]] = []
+    for payload, written in deliveries:
+        email_ids = [
+            user_id
+            for user_id in written
+            if _is_enabled(event, NotificationChannel.email, overrides.get(user_id, {}))
+            and not _defers_email(event, overrides.get(user_id, {}), cadences[user_id])
+        ]
+        push_ids = (
+            [user_id for user_id in written if _is_enabled(event, NotificationChannel.push, overrides.get(user_id, {}))]
+            if web_push.is_configured()
+            else []
+        )
+        if email_ids or push_ids:
+            sends.append((payload, email_ids, push_ids))
+    if not sends:
         return
 
     # Every read the sends need, batch-loaded before any of them: the addresses, the languages, and the
-    # subscribed browsers. One query each, whatever the size of the group.
-    link = _link(event, payload)
-    needed = sorted(set(email_ids) | set(push_ids))
+    # subscribed browsers. One query each, whatever the size of the group or the batch.
+    needed = sorted({user_id for _, email_ids, push_ids in sends for user_id in (*email_ids, *push_ids)})
+    push_needed = sorted({user_id for _, _, push_ids in sends for user_id in push_ids})
     users = await user_repository.get_by_ids(admin_session, needed)
     languages = await settings_service.get_languages_by_user_ids(admin_session, needed)
-    subscriptions = await push_subscription_repository.list_by_user_ids(admin_session, push_ids) if push_ids else {}
-    push_targets = [(user_id, sub) for user_id in push_ids if user_id in users for sub in subscriptions.get(user_id, [])]
+    subscriptions = await push_subscription_repository.list_by_user_ids(admin_session, push_needed) if push_needed else {}
+
+    emails = [
+        (users[user_id], payload, languages[user_id], _link(event, payload))
+        for payload, email_ids, _ in sends
+        for user_id in email_ids
+        if user_id in users
+    ]
+    pushes = [
+        (sub, payload, languages[user_id], _link(event, payload))
+        for payload, _, push_ids in sends
+        for user_id in push_ids
+        if user_id in users
+        for sub in subscriptions.get(user_id, [])
+    ]
 
     async with httpx.AsyncClient() as client:
         _, push_results = await asyncio.gather(
-            asyncio.gather(*(_send_email(users[user_id], event, payload, languages[user_id], link) for user_id in email_ids if user_id in users)),
-            asyncio.gather(*(_send_push(client, sub, event, payload, languages[user_id], link) for user_id, sub in push_targets)),
+            asyncio.gather(*(_send_email(user, event, payload, language, link) for user, payload, language, link in emails)),
+            asyncio.gather(*(_send_push(client, sub, event, payload, language, link) for sub, payload, language, link in pushes)),
         )
 
     # A subscription the push service reported gone is dead: the browser revoked it or was reinstalled.
     # Deleted here rather than left to fail forever, and touched on success so a person can tell which
-    # of their devices is still live.
+    # of their devices is still live. Settled once per BROWSER, because a batch can push one browser
+    # several times: gone on any send wins, as it would have across separate calls (the first call
+    # deletes it and no later one reaches it).
+    outcome: dict[int, tuple[PushSubscription, bool, bool]] = {}
     for subscription, sent, gone in push_results:
+        _, was_sent, was_gone = outcome.get(subscription.id, (subscription, False, False))
+        outcome[subscription.id] = (subscription, was_sent or sent, was_gone or gone)
+    for subscription, sent, gone in outcome.values():
         if gone:
             await push_subscription_repository.delete_by_endpoint(admin_session, subscription.endpoint)
         elif sent:

@@ -15,6 +15,7 @@ from sqlmodel import select
 
 from app.models.push_subscription import PushSubscription
 from app.models.utils import utcnow
+from app.repositories.utils import chunked
 
 
 # Lists the browsers one account has subscribed, oldest first.
@@ -23,16 +24,17 @@ async def list_by_user(session: AsyncSession, user_id: int) -> list[PushSubscrip
     return list(result.scalars().all())
 
 
-# Batch variant of list_by_user: {user_id: [subscription, ...]} for every requested id, in one query.
-# The fan-out sends to every recipient of an event at once, so the single-user version inside that loop
-# would be a query per recipient.
+# Batch variant of list_by_user: {user_id: [subscription, ...]} for every requested id, one query per
+# chunk. The fan-out sends to every recipient of an event at once, so the single-user version inside
+# that loop would be a query per recipient — and a scheduled job's batched dispatch sends to every
+# recipient of a whole tick, which grows with the user base (hence chunked). Each user's browsers come
+# back oldest first.
 async def list_by_user_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, list[PushSubscription]]:
-    if not user_ids:
-        return {}
-    result = await session.execute(select(PushSubscription).where(PushSubscription.user_id.in_(user_ids)))
     by_user: dict[int, list[PushSubscription]] = defaultdict(list)
-    for row in result.scalars().all():
-        by_user[row.user_id].append(row)
+    for chunk in chunked(user_ids):
+        result = await session.execute(select(PushSubscription).where(PushSubscription.user_id.in_(chunk)).order_by(PushSubscription.id))
+        for row in result.scalars().all():
+            by_user[row.user_id].append(row)
     return dict(by_user)
 
 

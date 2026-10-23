@@ -51,12 +51,24 @@ def _arrange(monkeypatch, *, pots=None, timezones=None, permissions=None, freshn
         "get_all_timezones",
         AsyncMock(return_value=timezones if timezones is not None else {1: BUENOS_AIRES, 2: BUENOS_AIRES}),
     )
-    monkeypatch.setattr(svc.pot_service, "get_freshness", AsyncMock(return_value=freshness))
+    monkeypatch.setattr(svc.pot_service, "get_freshnesses", _freshnesses(freshness))
     # dispatch answers with how many people it actually WROTE a row for, which is what the job counts.
     # Defaults to "everybody it was asked about", so a test that does not care reads naturally.
-    dispatched = AsyncMock(side_effect=(lambda _e, ids, _p, **_kw: len(ids)) if told is None else (lambda *_a, **_kw: told))
-    monkeypatch.setattr(svc.notification_service, "dispatch", dispatched)
+    dispatched = AsyncMock(
+        side_effect=(lambda _e, items, **_kw: sum(len(item.user_ids) for item in items)) if told is None else (lambda *_a, **_kw: told)
+    )
+    monkeypatch.setattr(svc.notification_service, "dispatch_many", dispatched)
     return dispatched
+
+
+# The batch freshness read, answering `freshness` for every pot it is asked about.
+def _freshnesses(freshness) -> AsyncMock:
+    return AsyncMock(side_effect=lambda _s, pots, *, as_of_date: {pot.id: freshness for pot in pots})
+
+
+# The fan-outs the job handed to its (last) dispatch, in order.
+def _items(dispatched: AsyncMock) -> list:
+    return dispatched.await_args.args[1]
 
 
 class TestWhoIsReminded:
@@ -66,7 +78,7 @@ class TestWhoIsReminded:
         # nudge to somebody who cannot act is a nudge they learn to ignore.
         dispatched = _arrange(monkeypatch)
         assert await svc.send_due_reminders(AsyncMock(), NOON_UTC) == 1
-        assert dispatched.await_args.args[1] == [WRITER.user_id]
+        assert _items(dispatched)[0].user_ids == [WRITER.user_id]
 
     @pytest.mark.asyncio
     async def test_a_pot_with_no_write_permissions_at_all_reminds_nobody(self, monkeypatch):
@@ -109,7 +121,7 @@ class TestWhen:
         # The same fallback every other per-user-hour job uses. At 09:00 UTC they are due.
         dispatched = _arrange(monkeypatch, timezones={})
         assert await svc.send_due_reminders(AsyncMock(), datetime(2026, 9, 2, 9, 0, tzinfo=UTC)) == 1
-        assert dispatched.await_args.args[1] == [WRITER.user_id]
+        assert _items(dispatched)[0].user_ids == [WRITER.user_id]
 
     @pytest.mark.asyncio
     async def test_two_writers_in_different_zones_are_reached_on_their_own_ticks(self, monkeypatch):
@@ -121,11 +133,11 @@ class TestWhen:
             timezones={1: BUENOS_AIRES, 2: "Europe/Madrid"},
         )
         assert await svc.send_due_reminders(AsyncMock(), NOON_UTC) == 1
-        assert dispatched.await_args.args[1] == [WRITER.user_id]
+        assert _items(dispatched)[0].user_ids == [WRITER.user_id]
         dispatched.reset_mock()
         # 07:00 UTC is 09:00 in Madrid.
         assert await svc.send_due_reminders(AsyncMock(), datetime(2026, 9, 2, 7, 0, tzinfo=UTC)) == 1
-        assert dispatched.await_args.args[1] == [VIEWER.user_id]
+        assert _items(dispatched)[0].user_ids == [VIEWER.user_id]
 
 
 class TestWhatIsSaid:
@@ -142,8 +154,8 @@ class TestWhatIsSaid:
         # pot one day past its period reads as up to date for a whole day — and a Buenos Aires fixture
         # cannot show that, because there both dates are the same.
         _arrange(monkeypatch, timezones={1: "Pacific/Kiritimati"})
-        freshness = AsyncMock(return_value=(date(2026, 7, 12), True))
-        monkeypatch.setattr(svc.pot_service, "get_freshness", freshness)
+        freshness = _freshnesses((date(2026, 7, 12), True))
+        monkeypatch.setattr(svc.pot_service, "get_freshnesses", freshness)
         now = datetime(2026, 9, 1, 19, 0, tzinfo=UTC)
         assert await svc.send_due_reminders(AsyncMock(), now) == 1
         assert now.date() == date(2026, 9, 1)
@@ -153,7 +165,7 @@ class TestWhatIsSaid:
     async def test_the_payload_names_the_pot_the_group_and_when_it_was_last_valued(self, monkeypatch):
         dispatched = _arrange(monkeypatch)
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
-        payload = dispatched.await_args.args[2]
+        payload = _items(dispatched)[0].payload
         assert payload == {"group_id": 10, "group": "Casa", "pot_id": 5, "pot": "Depto", "valued_as_of": "2026-07-12"}
 
     @pytest.mark.asyncio
@@ -162,7 +174,7 @@ class TestWhatIsSaid:
         # "It has never been valued".
         dispatched = _arrange(monkeypatch, freshness=(None, True))
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
-        assert dispatched.await_args.args[2]["valued_as_of"] is None
+        assert _items(dispatched)[0].payload["valued_as_of"] is None
 
     @pytest.mark.asyncio
     async def test_a_nameless_default_pot_carries_a_null_name_for_the_renderer_to_label(self, monkeypatch):
@@ -170,7 +182,7 @@ class TestWhatIsSaid:
         # recipient whatever language each of them uses — so the fallback belongs to each renderer.
         dispatched = _arrange(monkeypatch, pots=[_pot(name=None)])
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
-        assert dispatched.await_args.args[2]["pot"] is None
+        assert _items(dispatched)[0].payload["pot"] is None
 
 
 class TestDeduplication:
@@ -178,7 +190,7 @@ class TestDeduplication:
     async def test_the_key_names_the_pot_and_the_calendar_month(self, monkeypatch):
         dispatched = _arrange(monkeypatch)
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
-        assert dispatched.await_args.kwargs["dedupe_key"] == "pot:5:2026-09"
+        assert _items(dispatched)[0].dedupe_key == "pot:5:2026-09"
 
     @pytest.mark.asyncio
     async def test_a_weekly_pot_keys_on_the_iso_week_instead(self, monkeypatch):
@@ -186,7 +198,7 @@ class TestDeduplication:
         # freshness rule and not the nudge, which is the two halves disagreeing.
         dispatched = _arrange(monkeypatch, pots=[_pot(cadence=PotCadence.weekly)])
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
-        assert dispatched.await_args.kwargs["dedupe_key"] == "pot:5:2026-W36"
+        assert _items(dispatched)[0].dedupe_key == "pot:5:2026-W36"
 
     @pytest.mark.asyncio
     async def test_the_key_changes_when_the_period_rolls_over_so_it_nudges_again(self, monkeypatch):
@@ -194,9 +206,9 @@ class TestDeduplication:
         # again, and the key is the only thing that decides that.
         dispatched = _arrange(monkeypatch)
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
-        first = dispatched.await_args.kwargs["dedupe_key"]
+        first = _items(dispatched)[0].dedupe_key
         await svc.send_due_reminders(AsyncMock(), datetime(2026, 10, 2, 12, 0, tzinfo=UTC))
-        assert dispatched.await_args.kwargs["dedupe_key"] != first
+        assert _items(dispatched)[0].dedupe_key != first
 
 
 class TestCost:
@@ -205,8 +217,8 @@ class TestCost:
         # The job runs 24 times a day over every pot in the database. Valuing them all on every tick
         # would be the expensive read multiplied by the pot count, 23 times out of 24 for nothing.
         _arrange(monkeypatch, timezones={1: "Europe/Madrid"})
-        freshness = AsyncMock(return_value=(date(2026, 7, 12), True))
-        monkeypatch.setattr(svc.pot_service, "get_freshness", freshness)
+        freshness = _freshnesses((date(2026, 7, 12), True))
+        monkeypatch.setattr(svc.pot_service, "get_freshnesses", freshness)
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
         freshness.assert_not_awaited()
 
@@ -223,6 +235,42 @@ class TestCost:
         monkeypatch.setattr(svc.pot_repository, "list_permissions_by_pots", permissions)
         await svc.send_due_reminders(AsyncMock(), NOON_UTC)
         assert (members.await_count, permissions.await_count) == (1, 1)
+
+    @pytest.mark.asyncio
+    async def test_every_due_pot_of_a_tick_shares_one_freshness_read_and_one_dispatch(self, monkeypatch):
+        # U20: an Argentina-facing app puts nearly every pot on ONE tick, so a read or a dispatch per pot
+        # is a cost that grows with the whole database at 09:00 local. The batch is the fix; the job's
+        # own session is passed down so the fan-out does not check out a second connection.
+        second = Pot(id=6, group_id=10, name="Otro", base_currency="USD", snapshot_cadence=PotCadence.monthly, is_default=False)
+        dispatched = _arrange(monkeypatch, pots=[_pot(), second])
+        monkeypatch.setattr(
+            svc.pot_repository,
+            "list_permissions_by_pots",
+            AsyncMock(return_value={5: [_permission(100, can_write=True)], 6: [_permission(100, can_write=True)]}),
+        )
+        freshness = _freshnesses((date(2026, 7, 12), True))
+        monkeypatch.setattr(svc.pot_service, "get_freshnesses", freshness)
+        session = AsyncMock()
+        assert await svc.send_due_reminders(session, NOON_UTC) == 2
+        assert (freshness.await_count, dispatched.await_count) == (1, 1)
+        assert [item.dedupe_key for item in _items(dispatched)] == ["pot:5:2026-09", "pot:6:2026-09"]
+        assert dispatched.await_args.kwargs["session"] is session
+
+    @pytest.mark.asyncio
+    async def test_writers_on_two_local_dates_are_valued_once_per_date(self, monkeypatch):
+        # 19:00 UTC on the 1st is 09:00 on the 2nd in Kiritimati (UTC+14) and 09:00 on the 1st in
+        # Honolulu (UTC-10): one tick, two calendar days. One read per DATE, each about its own date,
+        # and each writer reminded under their own.
+        dispatched = _arrange(
+            monkeypatch,
+            permissions=[_permission(100, can_write=True), _permission(101, can_write=True)],
+            timezones={1: "Pacific/Kiritimati", 2: "Pacific/Honolulu"},
+        )
+        freshness = _freshnesses((date(2026, 7, 12), True))
+        monkeypatch.setattr(svc.pot_service, "get_freshnesses", freshness)
+        assert await svc.send_due_reminders(AsyncMock(), datetime(2026, 9, 1, 19, 0, tzinfo=UTC)) == 2
+        assert sorted(call.kwargs["as_of_date"] for call in freshness.await_args_list) == [date(2026, 9, 1), date(2026, 9, 2)]
+        assert sorted((item.user_ids, item.dedupe_key) for item in _items(dispatched)) == [([1], "pot:5:2026-09"), ([2], "pot:5:2026-09")]
 
     @pytest.mark.asyncio
     async def test_an_empty_database_costs_one_query(self, monkeypatch):

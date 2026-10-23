@@ -84,8 +84,8 @@ pnpm test:e2e        # Playwright E2E
   - `test_notification_queries.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). The two
     notification statements whose whole correctness lives in the SQL: the fan-out's
     `ON CONFLICT DO NOTHING` against a PARTIAL unique index (Postgres matches a partial index only
-    when the statement repeats its predicate, and getting it wrong raises on every send — invisibly,
-    because the dispatcher swallows its own exceptions), and the three feed reads that share one
+    when the statement repeats its predicate, and getting it wrong raises on every send — invisibly
+    on the request path, where the dispatcher swallows its own exceptions), and the three feed reads that share one
     WHERE, whose failure is the badge and the list describing different row sets.
   - `test_shared_flow_queries.py` — `LEDGER_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`). The three queries
     whose whole correctness lives in the SQL: the `/expenses` UNION (does it return the caller's
@@ -132,6 +132,11 @@ pnpm test:e2e        # Playwright E2E
     job over more holdings than the cap. Its DB-free half, `tests/unit/test_in_chunking.py`, DERIVES every
     repository `IN` over a caller list and fails on one that is neither chunked nor named bounded with a
     reason, and on any unchunked one the scheduler can reach.
+  - `test_reminder_dispatch_batching.py` — `LEDGER_TEST_DATABASE_URL`. The overdue-pot reminder costs a
+    FIXED number of statements and holds ONE connection however many pots are due — counted on the wire
+    and at the pool for 1, 10 and 100 due pots — and the batched dispatch tells everybody exactly what one
+    dispatch per pot did (rows, emails, pushes, stamped browsers), over a fixture reaching every
+    recipient branch: channels off, feed off, email off, the daily digest, a deduped repeat.
   - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue), the roles carry the attributes the model depends on, the
@@ -258,12 +263,22 @@ its functions open their own, because both do something no request connection ma
 rows for OTHER users into a table with no INSERT policy, and `subscribe_push` detaches a browser from
 whichever account held it before. A unit test reaching either would connect to whatever
 `DATABASE_ADMIN_URL` names, which on a developer's machine is their real data, and `dispatch` would do
-so silently (it swallows every exception). The guard therefore records rather than raises, and asserts
-at TEARDOWN, because a raise inside dispatch is exactly what dispatch ignores. Reaching it usually
-means a producer was driven without stubbing `notification_service.dispatch` — which is also what lets
-a test assert WHAT was announced.
+so silently (on the request path it swallows every exception). The guard therefore records rather
+than raises, and asserts at TEARDOWN, because a raise inside dispatch is exactly what dispatch ignores.
+Reaching it usually means a producer was driven without stubbing `notification_service.dispatch` —
+which is also what lets a test assert WHAT was announced.
 
-Apart from that guard, API tests build their own fixtures/mocks per file.
+`apps/api/tests/conftest.py` holds ONE autouse guard for the whole suite, unit AND integration: no test
+can reach a real email or push provider. A developer's `.env` (and a worktree's copy of it) sets
+`EMAIL_PROVIDER=resend` with a live key, and a test once sent real email through it. The guard forces the
+console email adapter for every test and replaces httpx's REAL network transports with a recorder that
+refuses every request and fails the test at teardown (again because the refusal lands inside code that
+swallows it). Fake clients, `MockTransport` and the ASGI test transport are untouched, so a test that
+stubs its HTTP keeps working; a test that means to show a refusal takes the `no_real_provider` fixture
+and empties its record (`tests/unit/test_no_real_providers.py`). Still set `EMAIL_PROVIDER=console` in
+the shell for any script or server run outside the suite.
+
+Apart from those guards, API tests build their own fixtures/mocks per file.
 
 ## Fixtures
 

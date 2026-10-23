@@ -70,6 +70,8 @@ def _scan_cutoff(now_utc: datetime) -> date_type:
 # actually TOLD rather than how many were offered a reminder — a bill stays inside the window for the
 # whole lead period, so the offer is made every day and the dedupe index refuses all but the first.
 # Counting the offer would make the scheduler's log claim a daily reminder nobody received.
+# Each dispatch runs on this job's own session, so a dispatch failure raises to the job and reaches the
+# scheduler's error listener instead of being swallowed.
 # `now_utc` is injectable for tests, mirroring auto_expense_service and pot_reminder_service.
 async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = None) -> int:
     now_utc = now_utc or datetime.now(UTC)
@@ -109,6 +111,7 @@ async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = N
                     "date": obligation.next_due_date.isoformat(),
                 },
                 dedupe_key=f"obligation:{obligation.id}:{obligation.next_due_date.isoformat()}",
+                session=session,
             )
     if dispatched:
         logger.info("Obligation reminders: told %d people about upcoming bills at %s UTC.", dispatched, now_utc.isoformat())

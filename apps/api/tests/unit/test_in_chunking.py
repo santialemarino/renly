@@ -35,6 +35,8 @@ CHUNKED = {
     "asset_price_repository.get_latest_by_tickers",
     "card_settlement_repository.sum_by_account_ids",
     "card_settlement_repository.sum_by_account_ids_dated",
+    "expense_repository.linked_installment_dates_across_users",
+    "expense_repository.linked_subscription_dates_across_users",
     "expense_repository.sum_by_account_ids",
     "expense_repository.sum_by_account_ids_dated",
     "group_repository.get_by_ids",
@@ -45,11 +47,13 @@ CHUNKED = {
     "income_repository.sum_by_account_ids_dated",
     "notification_repository.clear_digest_pending",
     "notification_repository.list_digest_pending",
+    "notification_repository.preferences_by_user_ids",
     "pot_ownership_repository._sum_leg",
     "pot_ownership_repository._sum_leg_dated",
     "pot_repository.list_accounts_by_pots",
     "pot_repository.list_active_investments_by_pots",
     "pot_repository.list_permissions_by_pots",
+    "push_subscription_repository.list_by_user_ids",
     "shared_expense_repository.sum_by_account_ids",
     "shared_expense_repository.sum_by_account_ids_dated",
     "shared_income_repository.sum_by_account_ids",
@@ -64,14 +68,14 @@ CHUNKED = {
 }
 
 # Why each unchunked `IN` over a caller list is bounded. Every caller reaches these from ONE request (or
-# one event), with ids drawn from rows that request's user owns or can see — so the list grows with one
-# person's data, never with the user base. None is reachable from the scheduler (asserted below).
+# one entity being changed), with ids drawn from rows that request's user owns or can see — so the list
+# grows with one person's data, never with the user base. Only SCHEDULER_BOUNDED's are reachable from
+# the scheduler (asserted below).
 _OWN_ROWS = "ids of the caller's own rows (accounts, cards, investments, plans), from one request"
 _OWN_GROUPS = "the groups or pots the caller holds a seat in, from one request"
 _OWN_SEATS = "the caller's own seats across their groups"
 _ONE_REQUEST = "the ids one request's rows reference, from one request"
 _ONE_ENTITY = "the children of one card, group or account being changed"
-_ONE_EVENT = "the recipients of one notification event: one group's members at most"
 BOUNDED = {
     "account_reconciliation_repository.get_latest_dates_by_account_ids": _OWN_ROWS,
     "account_repository.get_by_ids": _OWN_ROWS,
@@ -118,12 +122,10 @@ BOUNDED = {
     "metrics_repository.get_latest_snapshots": _OWN_ROWS,
     "metrics_repository.list_snapshots_by_investments": _OWN_ROWS,
     "metrics_repository.list_transactions_by_investments": _OWN_ROWS,
-    "notification_repository.preferences_by_user_ids": _ONE_EVENT,
     "pot_ownership_repository.divided_pot_ids": _OWN_GROUPS,
     "pot_ownership_repository.linked_account_ids": _OWN_ROWS,
     "pot_ownership_repository.list_by_pots": _OWN_GROUPS,
     "pot_repository.list_ids_by_groups": _OWN_GROUPS,
-    "push_subscription_repository.list_by_user_ids": _ONE_EVENT,
     "shared_expense_repository.linked_account_ids": _OWN_ROWS,
     "shared_expense_repository.list_positions_by_groups": _OWN_GROUPS,
     "shared_expense_repository.list_positions_by_groups_monthly": _OWN_GROUPS,
@@ -146,8 +148,6 @@ BOUNDED = {
 # even though a job reaches it. A job spans the user base, so the reason has to be narrower than a user.
 SCHEDULER_BOUNDED = {
     "card_reconciliation_repository.mark_stale": "one card's statements, after one charge",
-    "notification_repository.preferences_by_user_ids": _ONE_EVENT,
-    "push_subscription_repository.list_by_user_ids": _ONE_EVENT,
 }
 
 
@@ -208,8 +208,8 @@ def _callees(module: str, fn: ast.AST, known: dict[str, ast.AST]) -> set[str]:
     return out
 
 
-# Every repository function reachable from the scheduler's job wrappers.
-def _scheduler_reach() -> set[str]:
+# Every service and repository function reachable from the scheduler's job wrappers, with its tree.
+def scheduler_walk() -> dict[str, ast.AST]:
     known = {**_functions("services"), **_REPOSITORIES}
     scheduler = ast.parse((_APP / "scheduler.py").read_text())
     wrappers = [n for n in scheduler.body if isinstance(n, ast.AsyncFunctionDef)]
@@ -221,7 +221,12 @@ def _scheduler_reach() -> set[str]:
             continue
         seen.add(name)
         frontier |= _callees(name.split(".")[0], known[name], known) - seen
-    return {name for name in seen if name in _REPOSITORIES}
+    return {name: known[name] for name in seen}
+
+
+# Every repository function reachable from the scheduler's job wrappers.
+def _scheduler_reach() -> set[str]:
+    return {name for name in scheduler_walk() if name in _REPOSITORIES}
 
 
 class TestChunked:
@@ -279,6 +284,10 @@ class TestEveryUnboundedInIsChunked:
             "pot_repository.list_permissions_by_pots",
             "account_repository.get_by_ids_across_users",
             "user_settings_repository.get_string_by_user_ids",
+            "notification_repository.preferences_by_user_ids",
+            "push_subscription_repository.list_by_user_ids",
+            "expense_repository.linked_subscription_dates_across_users",
+            "expense_repository.linked_installment_dates_across_users",
         ],
     )
     def test_the_walk_reaches_the_scheduler_reads(self, name):
