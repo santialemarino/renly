@@ -177,27 +177,6 @@ async def sum_settlements_at(
     return Decimal(str(result.scalar_one()))
 
 
-# Sum of settlements for a card+currency bucket dated inside (after_date, to_date].
-# Used by the Payments Calendar card_due event to decide whether the statement due on
-# to_date has been settled (paid-marking; the frozen statement amount is unchanged).
-async def sum_settlements_between(
-    session: AsyncSession,
-    card_id: int,
-    currency: str,
-    after_date: date_type,
-    to_date: date_type,
-) -> Decimal:
-    result = await session.execute(
-        select(func.coalesce(func.sum(CardSettlement.amount), 0)).where(
-            CardSettlement.credit_card_id == card_id,
-            CardSettlement.currency == currency,
-            CardSettlement.date > after_date,
-            CardSettlement.date <= to_date,
-        )
-    )
-    return Decimal(str(result.scalar_one()))
-
-
 # Per-day expense sums for a card+currency bucket up to a date, ascending. One grouped query
 # replaces the per-closing SUM round-trips in list_recent_statements; the service cumulative-sums
 # the daily rows to get the running balance at each statement closing.
@@ -350,7 +329,6 @@ class CardReconciliationRepository:
     sum_expenses_at = staticmethod(sum_expenses_at)
     sum_expenses_by_bucket_at = staticmethod(sum_expenses_by_bucket_at)
     sum_settlements_at = staticmethod(sum_settlements_at)
-    sum_settlements_between = staticmethod(sum_settlements_between)
     sum_settlements_by_bucket_at = staticmethod(sum_settlements_by_bucket_at)
 
 

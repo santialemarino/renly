@@ -10,8 +10,10 @@
 # Three properties make this catch the CLASS rather than one instance of it:
 #
 # * The population comes from `app.routes` — the real FastAPI app with the real routers — and a route
-#   counts as a list read if its response model IS a list or CARRIES an `items` field. Neither test
-#   reads a name, so a new endpoint cannot avoid the check by being called something else.
+#   counts as a list read if its response model IS a list or CARRIES an `items` field, or if its body is
+#   OPAQUE (a bare dict, `Any`, or no model at all), because then nothing here can tell whether it holds
+#   a list, and an endpoint must not escape the check by being annotated loosely. Neither test reads a
+#   name, so a new endpoint cannot avoid the check by being called something else.
 # * Every endpoint must land in exactly one of three buckets, and the buckets are compared against the
 #   router both ways. An unclassified endpoint fails; a classified endpoint that no longer exists fails
 #   too, so the lists cannot rot into a description of a router that has moved on.
@@ -19,6 +21,8 @@
 #   adding one costs writing down why. That is the bucket a defect would hide in, and the cost of
 #   entering it is the only thing standing between it and a dumping ground.
 
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 from unittest.mock import AsyncMock
 
 import pytest
@@ -84,6 +88,12 @@ BOUNDED = {
         "dates from today, so the row count is a constant and no query returns a row per statement."
     ),
     ("GET", "/exchange-rates"): "A required `date` query parameter bounds it to one day's rate per supported pair.",
+    ("GET", "/health"): "Opaque only because it is unannotated: a constant one-key liveness body that reads nothing.",
+    ("GET", "/me/export"): (
+        "Unbounded BY CONTRACT: the export is the user's whole data set (AUTH-6), so a page or a cap would make it "
+        "an incomplete backup. Its row count is one user's own rows, and its cost is bounded by EXPORT_LIMIT "
+        "per user instead (app/rate_limit.py), pinned by tests/unit/test_perimeter_hardening.py."
+    ),
     ("GET", "/groups/{group_id}/activity"): "Already takes a bounded `limit` query parameter of its own (the group hub's activity feed).",
     ("GET", "/payments-calendar"): "Required `year` and `month` parameters bound it to one month.",
     ("GET", "/dashboard/composition"): "Fixed buckets — one row per net-worth component, an enumerated constant.",
@@ -99,22 +109,34 @@ BOUNDED = {
 }
 
 
-# Every mounted GET route that serves a collection: its response model IS a list, or carries `items`.
-# Read off the app rather than restated, so an endpoint cannot dodge the check by being named something
-# else — and `items` rather than a name suffix, because the envelope is what makes it a collection.
+# Every mounted GET route that serves a collection — its response model IS a list, or carries `items` —
+# or whose body is opaque, so it cannot be shown not to. Read off the app rather than restated, so an
+# endpoint cannot dodge the check by being named something else — and `items` rather than a name suffix,
+# because the envelope is what makes it a collection. The value is the envelope model, when there is one.
 def _list_routes() -> dict[tuple[str, str], type | None]:
     found: dict[tuple[str, str], type | None] = {}
     for route in app.routes:
         if not isinstance(route, APIRoute) or "GET" not in route.methods:
             continue
-        model = route.response_model
-        if model is None:
-            continue
-        if getattr(model, "__origin__", None) is list:
-            found[("GET", route.path)] = None
-        elif isinstance(model, type) and issubclass(model, BaseModel) and "items" in model.model_fields:
-            found[("GET", route.path)] = model
+        shape = _shape(route.response_model)
+        if shape is not False:
+            found[("GET", route.path)] = shape
     return found
+
+
+# What a response model says about the body: False for a single object (not a list read), None for a bare
+# list or an opaque body, or the BaseModel envelope carrying `items`. An `X | None` reads as its X.
+def _shape(model) -> type | bool | None:
+    if model is None or model is Any:
+        return None
+    if isinstance(model, UnionType) or get_origin(model) is Union:
+        shapes = [_shape(arg) for arg in get_args(model) if arg is not type(None)]
+        return next((shape for shape in shapes if shape is not False), False)
+    if get_origin(model) is list:
+        return None
+    if isinstance(model, type) and issubclass(model, BaseModel):
+        return model if "items" in model.model_fields else False
+    return None
 
 
 # Every query parameter a route accepts, INCLUDING those a sub-dependency contributes. `page` and

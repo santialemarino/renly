@@ -346,7 +346,7 @@ async def _obligation_items(
 # Archived cards are included (an archived card with outstanding balance still has real due
 # dates — archive is a UI filter, P04). Balances are batched: one grouped expenses + one grouped
 # settlements query per DISTINCT closing date (typically 1-2 for 1-3 cards) instead of two
-# queries per card×bucket.
+# queries per card×bucket. The paid-marking reads batch the same way — see _settled_by_bucket.
 async def _card_due_items(
     session: AsyncSession,
     user: User,
@@ -386,23 +386,26 @@ async def _card_due_items(
     for closing_date, ids in cards_by_closing.items():
         snapshots.update(await card_reconciliation_service.compute_bucket_balances_at(session, ids, closing_date))
 
+    # Paid-marking (P04): the frozen statement amount stays, but settlements dated inside
+    # (closing_date, due_date] covering it flip the badge to Paid. Negative snapshots (credit balance)
+    # are not a bill — never marked paid, so only cards holding a positive one are read.
+    owing = [
+        card.id
+        for card in cards
+        if card.id in due_by_card and any(snapshots.get((card.id, b.currency), Decimal(0)) > 0 for b in buckets_by_card.get(card.id, []))
+    ]
+    settled = await _settled_by_bucket(session, owing, closing_by_card, due_by_card)
+
     items: list[CalendarItem] = []
     for card in cards:
         due_date = due_by_card.get(card.id)
         if due_date is None:
             continue
-        closing_date = closing_by_card[card.id]
         for bucket in buckets_by_card.get(card.id, []):
             snapshot = snapshots.get((card.id, bucket.currency), Decimal(0))
             if snapshot == Decimal(0):
                 continue
-            # Paid-marking (P04): the frozen statement amount stays, but settlements dated inside
-            # (closing_date, due_date] covering it flip the badge to Paid. Negative snapshots
-            # (credit balance) are not a bill — never marked paid.
-            is_paid = False
-            if snapshot > Decimal(0):
-                settled = await card_reconciliation_repository.sum_settlements_between(session, card.id, bucket.currency, closing_date, due_date)
-                is_paid = settled >= snapshot
+            is_paid = snapshot > Decimal(0) and settled.get((card.id, bucket.currency), Decimal(0)) >= snapshot
             items.append(
                 CalendarItem(
                     type="card_due",
@@ -415,6 +418,36 @@ async def _card_due_items(
                 )
             )
     return items
+
+
+# What each card's buckets settled inside (closing_date, due_date], for the given cards. A settlement
+# sum over that window is the sum up to the due date less the sum up to the closing date, so it reads the
+# batched at-a-date sum once per DISTINCT closing date and once per distinct due date — a fixed number
+# of statements however many cards there are, where reading the window per (card, bucket) cost one each.
+async def _settled_by_bucket(
+    session: AsyncSession,
+    card_ids: list[int],
+    closing_by_card: dict[int, date_type],
+    due_by_card: dict[int, date_type],
+) -> dict[tuple[int, str], Decimal]:
+    to_due = await _settlements_at_dates(session, card_ids, due_by_card)
+    to_closing = await _settlements_at_dates(session, card_ids, closing_by_card)
+    return {key: total - to_closing.get(key, Decimal(0)) for key, total in to_due.items()}
+
+
+# Each card's settlements per bucket up to that card's own date, one batched read per distinct date.
+async def _settlements_at_dates(
+    session: AsyncSession,
+    card_ids: list[int],
+    date_by_card: dict[int, date_type],
+) -> dict[tuple[int, str], Decimal]:
+    cards_by_date: dict[date_type, list[int]] = {}
+    for card_id in card_ids:
+        cards_by_date.setdefault(date_by_card[card_id], []).append(card_id)
+    sums: dict[tuple[int, str], Decimal] = {}
+    for as_of, ids in cards_by_date.items():
+        sums.update(await card_reconciliation_repository.sum_settlements_by_bucket_at(session, ids, as_of))
+    return sums
 
 
 # Resolves the statement closing date that a given due_date is paying for.
