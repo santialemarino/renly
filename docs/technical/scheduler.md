@@ -170,6 +170,8 @@ async def _job_name() -> None:
 
 A raising job is isolated by APScheduler itself: the run is abandoned, the scheduler and the other jobs keep running, and the next tick runs normally. APScheduler emits `EVENT_JOB_ERROR` for it, and the one listener `_report_job_failure` logs it at **CRITICAL** with the fixed prefix `SCHEDULED JOB FAILED:`, the job id, the due time and the traceback — a level and a prefix nothing a job logs on its own path uses, so a log alert can key on them; with `SENTRY_DSN` set it is also a Sentry error event carrying the exception. Swallowing the exception inside the wrapper is what let a job that failed identically every run read as one routine log line among many.
 
+The same holds one layer down for notifications. `notification_service.dispatch` / `dispatch_many` swallow a failure on the request path (a notification must never fail the money write that produced it), but a job passes its OWN session to them, and on that path a failure raises into the job and reaches the listener; only a single email or push that cannot be sent is still swallowed, costing that one message. `tests/unit/test_scheduler_config.py` walks the scheduler's call graph and fails on a dispatch a job reaches without `session=`.
+
 ## Adding a new job
 
 1. Create an async wrapper function that opens a session and calls the service method.
