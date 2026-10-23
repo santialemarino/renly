@@ -500,7 +500,7 @@ class TestStatementClosingForDue:
         dues = [date(2026, 1, 28), date(2026, 2, 28), date(2026, 3, 28), date(2026, 4, 28)]
         assert [_statement_closing_for_due(closing_day, 28, due) for due in dues] == expected
 
-    # A KNOWN, ACCEPTED edge (Santi, 2026-10-23): closing 30 / due 31 clamps BOTH to February 28, so that
+    # A KNOWN edge, left as is (Phase 4 close review, 2026-10-23): closing 30 / due 31 clamps BOTH to February 28, so that
     # month's statement closes on its own due date and its paid window is empty — no "Paid" badge in February.
     # Only a 1-3 day closing-to-due gap reaches it, which Ley 25.065 rules out for real cards. Deciding by the
     # clamped DATES instead would bill January 30's statement twice and February 28's never, so the rule
