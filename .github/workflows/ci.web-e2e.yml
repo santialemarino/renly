@@ -406,6 +406,10 @@ jobs:
             const me = context.runId;
             const deadline = Date.now() + 45 * 60 * 1000;
             const job = (jobs, name) => jobs.find((j) => j.name === name);
+            // A run's verdict never changes once reached, so each run's jobs are fetched only until then:
+            // re-listing every run every poll grows with the square of the runs and can exhaust the
+            // workflow token's hourly API quota on a PR opened with many labels.
+            const settled = new Map(); // run id -> gate conclusion, or null when the run did not run the gate
             while (Date.now() < deadline) {
               const { data } = await github.rest.actions.listWorkflowRuns({
                 ...context.repo,
@@ -414,8 +418,7 @@ jobs:
                 per_page: 50,
               });
               let pending = false;
-              const decided = [];
-              for (const run of data.workflow_runs.filter((r) => r.id !== me)) {
+              for (const run of data.workflow_runs.filter((r) => r.id !== me && !settled.has(r.id))) {
                 const { data: listed } = await github.rest.actions.listJobsForWorkflowRun({
                   ...context.repo,
                   run_id: run.id,
@@ -423,23 +426,31 @@ jobs:
                 const changes = job(listed.jobs, 'changes');
                 const suite = job(listed.jobs, 'e2e-web');
                 const gate = job(listed.jobs, 'e2e-required');
-                if (!changes || changes.status !== 'completed') { pending = true; continue; }
-                if (changes.conclusion !== 'success') continue;
-                if (suite?.status === 'completed' && suite.conclusion === 'cancelled') continue;
-                if (gate?.status === 'completed') decided.push({ id: run.id, conclusion: gate.conclusion });
+                if (!changes || changes.status !== 'completed') {
+                  // A completed run with no `changes` job (a startup failure) will never get one.
+                  if (run.status === 'completed') settled.set(run.id, null);
+                  else pending = true;
+                  continue;
+                }
+                if (changes.conclusion !== 'success') { settled.set(run.id, null); continue; }
+                if (suite?.status === 'completed' && suite.conclusion === 'cancelled') { settled.set(run.id, null); continue; }
+                if (gate?.status === 'completed') settled.set(run.id, gate.conclusion);
                 else pending = true;
               }
-              if (decided.length > 0) {
-                const real = decided.sort((a, b) => b.id - a.id)[0];
-                core.info(`superseded by run ${real.id}: e2e-required ${real.conclusion}`);
-                if (real.conclusion !== 'success') core.setFailed(`run ${real.id} reported ${real.conclusion}`);
-                return;
-              }
+              // Decide only when no run can still change the answer: an earlier run that skipped the suite
+              // (no label yet) must not stand in for a later one whose suite is still running.
               if (!pending) {
-                core.setFailed(`cancelled, and no other run on ${sha} ran the gate`);
+                const ran = [...settled].filter(([, conclusion]) => conclusion !== null).sort((a, b) => b[0] - a[0]);
+                if (ran.length === 0) {
+                  core.setFailed(`cancelled, and no other run on ${sha} ran the gate`);
+                  return;
+                }
+                const [id, conclusion] = ran[0];
+                core.info(`superseded by run ${id}: e2e-required ${conclusion}`);
+                if (conclusion !== 'success') core.setFailed(`run ${id} reported ${conclusion}`);
                 return;
               }
-              await new Promise((resolve) => setTimeout(resolve, 30_000));
+              await new Promise((resolve) => setTimeout(resolve, 60_000));
             }
             core.setFailed('the run that superseded this one did not finish within 45 minutes');
       - run: 'echo "changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}"'
