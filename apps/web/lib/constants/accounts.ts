@@ -33,14 +33,15 @@ export type MovementKind = (typeof MOVEMENT_KINDS)[number];
  * `adjustment` spans income and expense, whose id sequences are independent, so two adjustments can
  * share (kind, sourceId). A type rather than an array because nothing enumerates it at runtime.
  *
- * `shared_expense` is the one source with no kind of its own: from the ACCOUNT's point of view a
- * group's dinner is an expense like any other, so it reads as that kind and only the source says the
- * money was a group's.
+ * `shared_expense` and `shared_income` are the sources with no kind of their own: from the ACCOUNT's
+ * point of view a group's dinner is an expense like any other (and a group's income an income), so it
+ * reads as that kind and only the source says the money was a group's.
  */
 export type MovementSource =
   | 'income'
   | 'expense'
   | 'shared_expense'
+  | 'shared_income'
   | 'settlement'
   | 'group_settlement'
   | 'ownership'

@@ -19,7 +19,7 @@ import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 // The set must stay in sync with the backend ImportEntity enum (order is independent).
 const DATA_TYPES = ['expenses', 'income', 'investments', 'snapshots', 'transactions'] as const;
 
-type DataTypeKey = (typeof DATA_TYPES)[number];
+export type DataTypeKey = (typeof DATA_TYPES)[number];
 
 const DEFAULT_ENTITY: DataTypeKey = 'investments';
 

@@ -5,14 +5,15 @@ import { FileUp, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
+import type { DataTypeKey } from '@/app/(protected)/data/_components/import-section';
 import { InlineLink } from '@/components/inline-link';
 
 const ACCEPT = '.csv,.tsv,.xlsx';
 
-// Downloadable starter template per importable entity.
-const DEFAULT_TEMPLATE_HREF = '/templates/investments-import-template.csv';
-const TEMPLATE_HREFS: Record<string, string> = {
-  investments: DEFAULT_TEMPLATE_HREF,
+// Downloadable starter template per importable entity — keyed by the entity type, so an entity added to
+// DATA_TYPES without a template fails the type check instead of silently offering the investments one.
+const TEMPLATE_HREFS: Record<DataTypeKey, string> = {
+  investments: '/templates/investments-import-template.csv',
   expenses: '/templates/expenses-import-template.csv',
   income: '/templates/income-import-template.csv',
   snapshots: '/templates/snapshots-import-template.csv',
@@ -20,7 +21,7 @@ const TEMPLATE_HREFS: Record<string, string> = {
 };
 
 interface FileStepProps {
-  entity: string;
+  entity: DataTypeKey;
   onSelect: (file: File) => void;
   loading: boolean;
 }
@@ -82,7 +83,7 @@ export function FileStep({ entity, onSelect, loading }: FileStepProps) {
       </button>
 
       <InlineLink
-        href={TEMPLATE_HREFS[entity] ?? DEFAULT_TEMPLATE_HREF}
+        href={TEMPLATE_HREFS[entity]}
         color="blue"
         download
         className="text-paragraph-xs-medium"
