@@ -4,6 +4,10 @@ run-name: 'CI API by @${{ github.actor }}'
 
 on:
   workflow_call:
+  # Every merge to main runs the whole suite, integration suites included, whatever it touched.
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main

@@ -30,6 +30,7 @@ from typing import NamedTuple
 
 import pytest
 
+from app.domain.reconciliation import SYSTEM_EXPENSE_CATEGORIES, SYSTEM_INCOME_CATEGORIES
 from app.models.investment import InvestmentCategory
 from app.services import asset_price_service
 
@@ -63,20 +64,15 @@ _TWINS: tuple[Twin, ...] = (
     # The confirm endpoint answers only the two email flows; a password reset has its own route.
     Twin("AuthTokenType", "lib/auth-api.ts", "ConfirmEmailKind", web_omits=frozenset({"password_reset"})),
     Twin("EmailCadence", "lib/constants/notifications.ts", "NOTIFICATION_EMAIL_CADENCES"),
-    # The picker's set: the other three are written by a reconciliation, never chosen by a person.
-    Twin(
-        "ExpenseCategory",
-        _CATEGORIES,
-        "EXPENSE_CATEGORIES",
-        web_omits=frozenset({"account_adjustment", "card_credits_and_refunds", "card_fees_and_taxes"}),
-    ),
+    # The picker's set: the system categories are written by a reconciliation, never chosen by a person.
+    Twin("ExpenseCategory", _CATEGORIES, "EXPENSE_CATEGORIES", web_omits=frozenset(c.value for c in SYSTEM_EXPENSE_CATEGORIES)),
     Twin("FeedbackCategory", "lib/constants/feedback.ts", "FEEDBACK_CATEGORIES"),
     Twin("GroupKind", "lib/constants/groups.ts", "GROUP_KINDS"),
     Twin("GroupMemberRole", "lib/constants/groups.ts", "GROUP_ROLES"),
     Twin("GroupSettlementStatus", "lib/constants/group-settlements.ts", "SETTLEMENT_STATUSES"),
     Twin("ImportEntity", "app/(protected)/data/_components/import-section.tsx", "DATA_TYPES"),
     # As for expenses: system-written categories are not offered by the picker.
-    Twin("IncomeCategory", _CATEGORIES, "INCOME_CATEGORIES", web_omits=frozenset({"account_adjustment", "card_credits_and_refunds"})),
+    Twin("IncomeCategory", _CATEGORIES, "INCOME_CATEGORIES", web_omits=frozenset(c.value for c in SYSTEM_INCOME_CATEGORIES)),
     Twin("IncomeDestination", "lib/constants/shared-income.ts", "INCOME_DESTINATIONS"),
     Twin("InvestmentCategory", _CATEGORIES, "INVESTMENT_CATEGORIES"),
     # `expired` is derived on read (invite_service.effective_status), never stored.
@@ -85,6 +81,7 @@ _TWINS: tuple[Twin, ...] = (
     Twin("MovementKind", "lib/constants/accounts.ts", "MOVEMENT_KINDS"),
     Twin("MovementSource", "lib/constants/accounts.ts", "MovementSource"),
     Twin("NotificationChannel", "lib/constants/notifications.ts", "NOTIFICATION_CHANNELS"),
+    # The fuller check of this pair, across every list an event touches, is test_notification_event_surface.py.
     Twin("NotificationEvent", "lib/constants/notifications.ts", "NOTIFICATION_EVENTS"),
     Twin("OwnershipEventType", _POTS, "OWNERSHIP_EVENT_TYPES"),
     # The movements endpoint takes these two; an opening and a re-agreement have endpoints of their own.

@@ -4,6 +4,10 @@ run-name: 'CI Web by @${{ github.actor }}'
 
 on:
   workflow_call:
+  # Every merge to main runs the whole suite, whatever it touched.
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
