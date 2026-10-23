@@ -27,6 +27,9 @@ INVITE_LIMIT = "30/hour"
 IMPORT_LIMIT = "20/hour"
 # Restore endpoints (re-import a full export; heavier than a single-entity import); tighter per user.
 RESTORE_LIMIT = "10/hour"
+# Data export (reads every row the user owns, one full-table read per exported table); the read-side
+# twin of restore, bounded per user at the same rate.
+EXPORT_LIMIT = "10/hour"
 # Feedback submissions (each can email the admins); bounded per user to cap outbound volume.
 FEEDBACK_LIMIT = "10/hour"
 

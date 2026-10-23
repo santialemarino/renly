@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import bcrypt
 import pytest
 from fastapi.testclient import TestClient
@@ -5,11 +7,12 @@ from starlette.requests import Request
 
 from app.config import Environment, Settings, SignupMode
 from app.db import get_admin_session, get_auth_session, get_session
+from app.deps.auth import get_current_user
 from app.main import create_app
 from app.middleware import MAX_REQUEST_BODY_BYTES
 from app.models.user import User
 from app.models.utils import utcnow
-from app.rate_limit import client_ip, limiter
+from app.rate_limit import EXPORT_LIMIT, client_ip, limiter
 
 # Perimeter-hardening coverage for the M1 bundle: rate limiting + 429 (SEC-1), docs lockdown
 # (SEC-7), catch-all 500 handler (SEC-8), env-driven CORS (SEC-9), request body-size limit
@@ -121,6 +124,22 @@ class TestRateLimiting:
         assert response.status_code == 200
         assert response.json()["access_token"]
         assert response.headers.get("x-ratelimit-limit") is not None
+
+    def test_the_data_export_is_limited_per_user(self, monkeypatch):
+        # /me/export reads every row the user owns and cannot be paged (it is the whole backup), so its
+        # cost is bounded by EXPORT_LIMIT instead — the read-side twin of RESTORE_LIMIT. A successful
+        # export must still carry its download header next to the limiter's (the limiter injects into the
+        # route's Response, which a route returning a plain dict has to declare).
+        user = User(id=7, name="Santi", email="me@example.com", session_epoch=0, password_hash=_PASSWORD_HASH)
+        client = _client()
+        client.app.dependency_overrides[get_current_user] = lambda: user
+        monkeypatch.setattr("app.routers.me.user_account_service.export_user_data", AsyncMock(return_value={"user": {"id": 7}}))
+        assert EXPORT_LIMIT == "10/hour"
+        responses = [client.get("/me/export") for _ in range(11)]
+        assert [r.status_code for r in responses] == [200] * 10 + [429]
+        assert responses[0].json() == {"user": {"id": 7}}
+        assert responses[0].headers["content-disposition"] == 'attachment; filename="renly-export.json"'
+        assert responses[0].headers.get("x-ratelimit-limit") == "10"
 
 
 # --- SEC-7: docs lockdown in production ---

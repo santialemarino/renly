@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request, Response, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
-from app.rate_limit import CHANGE_EMAIL_LIMIT, limiter
+from app.rate_limit import CHANGE_EMAIL_LIMIT, EXPORT_LIMIT, limiter
 from app.schemas.auth import MessageResponse
 from app.schemas.user_account import ChangeEmailRequest, ChangePasswordRequest, DeleteAccountRequest
 from app.services import user_account_service
@@ -37,9 +37,11 @@ async def change_email(
 
 
 # Exports the current user's full data set as a downloadable JSON document (AUTH-6). Excludes the
-# password hash and api-key secrets.
+# password hash and api-key secrets. Unpaged by contract (it is the whole data set), so its cost grows with
+# the account and it is rate-limited per user instead.
 @router.get("/export")
-async def export_data(current_user: CurrentUser, session: SessionDep, response: Response) -> dict[str, Any]:
+@limiter.limit(EXPORT_LIMIT)
+async def export_data(request: Request, response: Response, current_user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     data = await user_account_service.export_user_data(session, current_user)
     response.headers["Content-Disposition"] = 'attachment; filename="renly-export.json"'
     return data
