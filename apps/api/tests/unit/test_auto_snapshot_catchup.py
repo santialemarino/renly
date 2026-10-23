@@ -60,6 +60,39 @@ class TestRunStartupCatchup:
         )
         assert result is False and ran["generated"] is False
 
+    # The window's two edges, each with the instant on either side of it (U25): the tests above sit hours
+    # inside it, where `<` and `<=` (or `>` and `>=`) answer alike. A restart AT the tick's own instant is
+    # past it, and one exactly catchup_days later is still inside.
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("now_utc", "runs"),
+        [
+            (datetime(2026, 6, 30, 22, 59, 59, tzinfo=UTC), False),
+            (datetime(2026, 6, 30, 23, 0, tzinfo=UTC), True),
+            (datetime(2026, 7, 3, 23, 0, tzinfo=UTC), True),
+            (datetime(2026, 7, 3, 23, 0, 1, tzinfo=UTC), False),
+            # A short month: February's tick is caught up in the first days of March.
+            (datetime(2026, 3, 2, 10, 0, tzinfo=UTC), True),
+        ],
+    )
+    async def test_the_window_edges(self, monkeypatch, now_utc, runs):
+        ran = self._wire(monkeypatch, has_autos=False)
+        result = await auto_snapshot_service.run_startup_catchup(None, catchup_days=3, snapshots_hour_utc=23, now_utc=now_utc)
+        assert result is runs and ran["generated"] is runs
+
+    # The probe is asked about the month-end being caught up, not about today.
+    @pytest.mark.asyncio
+    async def test_the_probe_is_asked_from_the_month_end(self, monkeypatch):
+        asked = []
+
+        async def fake_has(session, since):
+            asked.append(since)
+            return True
+
+        monkeypatch.setattr(auto_snapshot_service, "_has_auto_snapshots_since", fake_has)
+        await auto_snapshot_service.run_startup_catchup(None, catchup_days=3, snapshots_hour_utc=23, now_utc=datetime(2026, 3, 2, 10, 0, tzinfo=UTC))
+        assert asked == [date(2026, 2, 28)]
+
 
 class TestMostRecentMonthEnd:
     @pytest.mark.parametrize(
