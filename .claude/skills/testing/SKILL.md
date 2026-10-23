@@ -50,7 +50,7 @@ pnpm test:e2e        # Playwright E2E
 - Tests that need a real Postgres (schema, roles, RLS), each gated on its own env var and skipped
   when unset, so the default `pnpm test:api` run stays green without a DB. CI (`ci-api`) sets all four
   on a Postgres built like `pnpm db:init` and FAILS if any test is skipped, so a new integration suite
-  must read one of the four variables. Today:
+  must read one of the four variables (an `xfail` counts as a skip there too — fix the test instead). Today:
   - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
   - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
   - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`).
