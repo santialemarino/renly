@@ -150,7 +150,7 @@ pnpm test:e2e        # Playwright E2E
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue) and the tables WITHOUT RLS are exactly the pinned global reference
     tables (`GLOBAL_REFERENCE_TABLES` in `tests/unit/test_schema_parity.py`, whose static twin reads
-    `01_create_tables.sql` so CI sees it too), the roles carry the attributes the model depends on, the
+    `01_create_tables.sql` on every commit, without a database), the roles carry the attributes the model depends on, the
     `SECURITY DEFINER` functions are owned by `renly_policy_definer` and it reads only what they read
     (table and column grants alike) and each pins its `search_path`, tables a migration creates reach `renly_app` with their grants, and `row_security = off` is the loud
     guard. It also reads a group and a pot as `renly_app` under a NOSUPERUSER owner — directly when the

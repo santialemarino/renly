@@ -192,9 +192,8 @@ GLOBAL_REFERENCE_TABLES = {
 
 class TestRowLevelSecurityCoversEveryTenantTable:
     # The static twin of the catalogue checks in `tests/integration/test_rls_force_role_model.py`, read off
-    # the canonical schema so CI — which runs no integration suite — still sees a table created without
-    # its ENABLE / FORCE. The live check stays the authority (a migration can diverge from this file); this
-    # one is cheap and runs on every commit.
+    # the canonical schema so a table created without its ENABLE / FORCE fails on every commit, without a
+    # database. The live check stays the authority (a migration can diverge from this file).
 
     @staticmethod
     def _rls() -> tuple[set[str], set[str], set[str]]:
