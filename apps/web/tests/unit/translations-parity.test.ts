@@ -151,6 +151,122 @@ describe('interpolated messages render', () => {
   });
 });
 
+/*
+ * The placeholders an ICU message expects from its caller: every argument name (`{name}`, `{count,
+ * plural, …}`, and any argument nested inside a plural or select branch) and every rich-text tag
+ * (`<bold>`, reported as `<bold>`). Parsed rather than matched: a regex over braces reads a branch's own
+ * prose — `one {item}` — as an argument named `item`, so EN's `{item}` and ES's `{elemento}` would
+ * differ while both are correct. Throws on a message it cannot read, so a shape it does not know fails
+ * loudly instead of contributing an empty set.
+ */
+function icuPlaceholders(message: string): string[] {
+  const found = new Set<string>();
+  let at = 0;
+
+  // Message text up to the `}` that closes the enclosing branch (or the end).
+  const readText = (): void => {
+    while (at < message.length && message[at] !== '}') {
+      if (message[at] === '{') {
+        at += 1;
+        readArgument();
+        continue;
+      }
+      const tag = /^<\/?(\w+)>/.exec(message.slice(at));
+      if (tag) {
+        found.add(`<${tag[1]}>`);
+        at += tag[0].length;
+        continue;
+      }
+      at += 1;
+    }
+  };
+
+  // One `{…}` argument, its opening brace already consumed; leaves `at` past its closing brace.
+  const readArgument = (): void => {
+    const head = /^\s*(\w+)\s*(?:,\s*(\w+)\s*)?/.exec(message.slice(at));
+    if (!head) throw new Error(`unreadable argument at ${at}: ${message}`);
+    found.add(head[1] as string);
+    at += head[0].length;
+    const type = head[2];
+    if (type === 'plural' || type === 'select' || type === 'selectordinal') {
+      if (message[at] !== ',') throw new Error(`${type} with no branches: ${message}`);
+      at += 1;
+      for (;;) {
+        const selector = /^\s*(?:offset:\s*\d+\s+)?(=?[\w-]+)\s*/.exec(message.slice(at));
+        if (selector) at += selector[0].length;
+        if (message[at] === '}') break;
+        if (!selector || message[at] !== '{')
+          throw new Error(`unreadable ${type} branch at ${at}: ${message}`);
+        at += 1;
+        readText();
+        if (message[at] !== '}') throw new Error(`unclosed ${type} branch: ${message}`);
+        at += 1;
+      }
+    } else {
+      // A simple argument, or a formatted one (`{amount, number, ::currency/USD}`): no nested message.
+      const close = message.indexOf('}', at);
+      if (close === -1) throw new Error(`unclosed argument: ${message}`);
+      at = close;
+    }
+    at += 1;
+  };
+
+  readText();
+  if (at < message.length) throw new Error(`unbalanced '}' at ${at}: ${message}`);
+  return [...found].sort();
+}
+
+/*
+ * The render check above feeds each locale the arguments ITS OWN message names, so an EN message reading
+ * `{count}` beside an ES one reading `{total}` renders cleanly in both — and in production the caller
+ * passes `count`, and Spanish users see a raw placeholder or a missing value. The keyset checks cannot see
+ * it either: both locales have the key. So the placeholder SET of every message is compared across the
+ * locales, key by key.
+ */
+describe('ICU placeholder parity', () => {
+  const pairs = [
+    { name: 'main', en: flattenLeaves(en), es: flattenLeaves(es) },
+    { name: 'error-boundary', en: flattenLeaves(ebEn), es: flattenLeaves(ebEs) },
+  ];
+
+  it('reads placeholders the way the messages are written', () => {
+    expect(icuPlaceholders('Hello {name}')).toEqual(['name']);
+    expect(icuPlaceholders('{count, plural, one {# item} other {# items}}')).toEqual(['count']);
+    // Branch prose in braces is text, not an argument; an argument inside a branch is one.
+    expect(icuPlaceholders('{n, plural, =0 {none} one {{who} paid} other {# by {who}}}')).toEqual([
+      'n',
+      'who',
+    ]);
+    expect(
+      icuPlaceholders('{kind, select, buy {Bought} other {Sold}} <bold>{amount}</bold>'),
+    ).toEqual(['<bold>', 'amount', 'kind']);
+    expect(icuPlaceholders('{amount, number, ::currency/USD}')).toEqual(['amount']);
+    expect(() => icuPlaceholders('{count, plural, one {x}')).toThrow();
+  });
+
+  it('finds messages with placeholders to compare', () => {
+    const withPlaceholders = Object.values(flattenLeaves(en)).filter(
+      (message) => icuPlaceholders(message).length > 0,
+    );
+    expect(withPlaceholders.length).toBeGreaterThan(100);
+  });
+
+  it('gives every message the same placeholders in both locales', () => {
+    const mismatched = pairs.flatMap(({ name, en: enLeaves, es: esLeaves }) =>
+      Object.entries(enLeaves).flatMap(([key, enMessage]) => {
+        const esMessage = esLeaves[key];
+        if (esMessage === undefined) return [];
+        const enSet = icuPlaceholders(enMessage);
+        const esSet = icuPlaceholders(esMessage);
+        return enSet.join() === esSet.join()
+          ? []
+          : [`${name}:${key} en=[${enSet.join()}] es=[${esSet.join()}]`];
+      }),
+    );
+    expect(mismatched).toEqual([]);
+  });
+});
+
 describe('help page anchors', () => {
   const enSections = en.help.sections as ProseSectionData[];
   const esSections = es.help.sections as ProseSectionData[];

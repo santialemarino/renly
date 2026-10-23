@@ -38,6 +38,31 @@ def _migration_text() -> str:
     return "\n".join(path.read_text() for path in sorted(MIGRATIONS.glob("*.py")))
 
 
+# `CREATE TABLE <name> (` … the `);` that closes it at the start of a line.
+_TABLE = re.compile(r"^CREATE TABLE (\w+) \((.*?)^\);", re.M | re.S)
+
+
+# {table: its column names} for every table the canonical schema creates, columns read from the CREATE
+# body (a line starting with an identifier; CONSTRAINT / UNIQUE / PRIMARY KEY lines are not columns) plus
+# any `ALTER TABLE … ADD COLUMN` later in the file.
+def _schema_tables() -> dict[str, set[str]]:
+    text = SCHEMA.read_text()
+    keywords = {"CONSTRAINT", "UNIQUE", "PRIMARY", "FOREIGN", "CHECK", "EXCLUDE"}
+    tables = {
+        name: {column for column in re.findall(r"^\s+(\w+)\s", body, re.M) if column.upper() not in keywords} for name, body in _TABLE.findall(text)
+    }
+    for table, column in re.findall(r"ALTER TABLE (\w+)\s+ADD COLUMN (?:IF NOT EXISTS )?(\w+)", text):
+        tables[table].add(column)
+    return tables
+
+
+# The dual-scope tables: those a row of which belongs EITHER to a user or to a pot. Derived from the
+# columns, so a seventh such table is held to the guards below by existing, instead of passing because
+# nobody added it to a list.
+def _dual_scope_tables() -> tuple[str, ...]:
+    return tuple(sorted(name for name, columns in _schema_tables().items() if {"user_id", "pot_id"} <= columns))
+
+
 class TestFunctionBodiesMatchTheirMigration:
     def test_every_function_a_migration_defines_matches_the_schema_file_verbatim(self):
         # Scoped to functions some migration actually DEFINES. set_updated_at() is deliberately not
@@ -64,15 +89,25 @@ class TestFunctionBodiesMatchTheirMigration:
 
 class TestScopedTablesCarryTheirGuards:
     # The dual-scope tables all need the same three objects, and a table that gained a pot_id without
-    # one of them would fail open (no CHECK) or fail closed in the wrong place (no policy).
-    SCOPED = (
-        "investments",
-        "investment_snapshots",
-        "transactions",
-        "accounts",
-        "account_reconciliations",
-        "transfers",
-    )
+    # one of them would fail open (no CHECK) or fail closed in the wrong place (no policy). DERIVED from
+    # the schema: this was a hand-written 6-tuple, so a seventh dual-scope table with no single-owner
+    # CHECK and no RLS at all passed every assertion in this class.
+    SCOPED = _dual_scope_tables()
+
+    def test_the_derived_population_is_the_one_the_schema_holds(self):
+        # Anti-vacuity: a column regex that stopped matching would derive an empty tuple, and every
+        # assertion in this class would pass over it. The six named here are the tables that existed when
+        # the derivation replaced the list; more may join, none may vanish without this failing.
+        assert {"investments", "investment_snapshots", "transactions", "accounts", "account_reconciliations", "transfers"} <= set(self.SCOPED)
+
+    def test_every_scoped_table_is_policied_and_forced(self):
+        text = SCHEMA.read_text()
+        missing = [
+            t
+            for t in self.SCOPED
+            if f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY;" not in text or f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY;" not in text
+        ]
+        assert missing == [], f"dual-scope tables without RLS enabled and forced: {missing}"
 
     def test_every_scoped_table_has_a_single_owner_check(self):
         text = SCHEMA.read_text()
@@ -142,3 +177,59 @@ class TestScopedTablesCarryTheirGuards:
         for name in ("app_can_view_pot", "app_can_write_pot"):
             body = _schema_functions()[name]
             assert "role" not in body, f"{name} consults a role"
+
+
+# The tables that hold NO tenant's rows and so carry no RLS: global reference data every user reads alike,
+# written only by the scheduler. Pinned by name AND reason, and compared both ways below — a table may
+# join this list only by writing down why it is nobody's. `tests/integration/test_rls_force_role_model.py`
+# holds the live catalogue to the same list.
+GLOBAL_REFERENCE_TABLES = {
+    "asset_prices": "Daily market prices per ticker, fetched by the scheduler; identical for every user.",
+    "cedear_ratios": "CEDEAR-to-underlying conversion ratios, fetched by the scheduler; identical for every user.",
+    "exchange_rates": "Daily currency-pair rates, fetched by the scheduler; identical for every user.",
+}
+
+
+class TestRowLevelSecurityCoversEveryTenantTable:
+    # The static twin of the catalogue checks in `tests/integration/test_rls_force_role_model.py`, read off
+    # the canonical schema so CI — which runs no integration suite — still sees a table created without
+    # its ENABLE / FORCE. The live check stays the authority (a migration can diverge from this file); this
+    # one is cheap and runs on every commit.
+
+    @staticmethod
+    def _rls() -> tuple[set[str], set[str], set[str]]:
+        text = SCHEMA.read_text()
+        enabled = set(re.findall(r"ALTER TABLE (\w+) ENABLE ROW LEVEL SECURITY", text))
+        forced = set(re.findall(r"ALTER TABLE (\w+) FORCE ROW LEVEL SECURITY", text))
+        policied = set(re.findall(r"CREATE POLICY \w+\s+ON (\w+)", text))
+        return enabled, forced, policied
+
+    def test_every_policied_table_is_enabled_and_forced(self):
+        # A policy on a table with RLS off is decoration: every role reads every row.
+        enabled, forced, policied = self._rls()
+        assert sorted(policied - (enabled & forced)) == []
+
+    def test_every_rls_table_has_a_policy(self):
+        # The other direction: RLS on with no policy denies every row to the request role, silently.
+        enabled, forced, policied = self._rls()
+        assert sorted((enabled | forced) - policied) == []
+
+    def test_the_only_tables_without_rls_are_the_global_reference_tables(self):
+        enabled, forced, _ = self._rls()
+        without = set(_schema_tables()) - (enabled & forced)
+        assert without == set(GLOBAL_REFERENCE_TABLES), f"tables without RLS enabled and forced, against the named exceptions: {sorted(without)}"
+
+    def test_the_exception_list_is_pinned(self):
+        # Pinned to a number on purpose: growing it is a decision about who may read a table, and a test
+        # that moves with the list cannot notice the list moving.
+        assert len(GLOBAL_REFERENCE_TABLES) == 3
+        assert all(reason.strip() for reason in GLOBAL_REFERENCE_TABLES.values())
+        tables = _schema_tables()
+        scoped = [t for t in GLOBAL_REFERENCE_TABLES if tables[t] & {"user_id", "group_id", "pot_id"}]
+        assert scoped == [], f"a 'global' table carries a tenant column: {scoped}"
+
+    def test_the_parse_finds_the_schema(self):
+        # Anti-vacuity: every assertion above is satisfied by a regex that matched nothing.
+        enabled, forced, policied = self._rls()
+        assert len(_schema_tables()) >= 42
+        assert len(enabled & forced) >= 39 and len(policied) >= 39
