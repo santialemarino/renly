@@ -327,7 +327,7 @@ class TestTheCashAndCardLegsNeverSwap:
 
         assert "coalesce(card_settlements.account_amount, card_settlements.amount)" in sql
 
-    # All SIX card-side queries, parametrized so adding a seventh has an obvious home. The four in
+    # All FIVE card-side queries, parametrized so adding a sixth has an obvious home. The three in
     # card_reconciliation_repository are covered nowhere else: their own tests mock them, and switching any
     # one to the cash leg would clear a USD bucket with a peso figure while the whole suite stayed green.
     @pytest.mark.parametrize(
@@ -336,10 +336,6 @@ class TestTheCashAndCardLegsNeverSwap:
             ("sum_by_card_ids_grouped", lambda s: card_settlement_repository.sum_by_card_ids_grouped(s, [5])),
             ("sum_by_card_ids_monthly", lambda s: card_settlement_repository.sum_by_card_ids_monthly(s, [5])),
             ("sum_settlements_at", lambda s: card_reconciliation_repository.sum_settlements_at(s, 5, "USD", date(2026, 8, 17))),
-            (
-                "sum_settlements_between",
-                lambda s: card_reconciliation_repository.sum_settlements_between(s, 5, "USD", date(2026, 7, 20), date(2026, 8, 17)),
-            ),
             ("list_settlement_daily_sums", lambda s: card_reconciliation_repository.list_settlement_daily_sums(s, 5, "USD", date(2026, 8, 17))),
             ("sum_settlements_by_bucket_at", lambda s: card_reconciliation_repository.sum_settlements_by_bucket_at(s, [5], date(2026, 8, 17))),
         ],

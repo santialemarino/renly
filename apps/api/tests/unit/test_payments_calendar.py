@@ -484,8 +484,13 @@ class TestCardDuePaidMarking:
             "compute_bucket_balances_at",
             AsyncMock(return_value={(1, "ARS"): snapshot}),
         )
-        self.settled_mock = AsyncMock(return_value=settled)
-        monkeypatch.setattr(payments_calendar_service.card_reconciliation_repository, "sum_settlements_between", self.settled_mock)
+        # Settled inside the window = settled up to the due date less settled up to the closing date. An
+        # earlier 7,000 sits before the closing on purpose, so a window read that forgot to subtract it
+        # would mark a short payment Paid.
+        earlier = Decimal("7000")
+        by_date = {date(2026, 5, 20): earlier, date(2026, 6, 5): earlier + settled}
+        self.settled_mock = AsyncMock(side_effect=lambda _s, ids, as_of: {(card_id, "ARS"): by_date[as_of] for card_id in ids})
+        monkeypatch.setattr(payments_calendar_service.card_reconciliation_repository, "sum_settlements_by_bucket_at", self.settled_mock)
 
     @pytest.mark.asyncio
     async def test_fully_settled_statement_is_paid(self, monkeypatch):
@@ -498,8 +503,8 @@ class TestCardDuePaidMarking:
         assert items[0].date == date(2026, 6, 5)
         assert items[0].amount == Decimal("100000")  # Frozen statement amount, not reduced.
         assert items[0].is_paid is True
-        # Settlement window is exactly (closing, due].
-        assert self.settled_mock.call_args.args[2:] == ("ARS", date(2026, 5, 20), date(2026, 6, 5))
+        # Settlement window is exactly (closing, due]: one batched read at each end.
+        assert sorted(call.args[1:] for call in self.settled_mock.call_args_list) == [([1], date(2026, 5, 20)), ([1], date(2026, 6, 5))]
 
     @pytest.mark.asyncio
     async def test_partial_settlement_stays_unpaid(self, monkeypatch):
