@@ -17,6 +17,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.shared_income import SharedIncome, SharedIncomeSplit
+from app.repositories.utils import chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -157,15 +158,18 @@ async def delete_splits(session: AsyncSession, income_id: int) -> None:
 async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], *, as_of_date: date_type | None = None) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = (
-        select(SharedIncome.paid_to_account_id, func.coalesce(func.sum(SharedIncome.amount), 0))
-        .join(Account, Account.id == SharedIncome.paid_to_account_id)
-        .where(SharedIncome.paid_to_account_id.in_(account_ids), SharedIncome.date >= Account.opening_date)
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(SharedIncome.date <= as_of_date)
-    result = await session.execute(stmt.group_by(SharedIncome.paid_to_account_id))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(SharedIncome.paid_to_account_id, func.coalesce(func.sum(SharedIncome.amount), 0))
+            .join(Account, Account.id == SharedIncome.paid_to_account_id)
+            .where(SharedIncome.paid_to_account_id.in_(chunk), SharedIncome.date >= Account.opening_date)
+        )
+        if as_of_date is not None:
+            stmt = stmt.where(SharedIncome.date <= as_of_date)
+        result = await session.execute(stmt.group_by(SharedIncome.paid_to_account_id))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # The same totals grouped by (account_id, date), for a caller deriving balances at many dates in one
@@ -173,17 +177,20 @@ async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], *, a
 async def sum_by_account_ids_dated(session: AsyncSession, account_ids: list[int], *, until: date_type) -> list[tuple[int, date_type, Decimal]]:
     if not account_ids:
         return []
-    result = await session.execute(
-        select(SharedIncome.paid_to_account_id, SharedIncome.date, func.coalesce(func.sum(SharedIncome.amount), 0))
-        .join(Account, Account.id == SharedIncome.paid_to_account_id)
-        .where(
-            SharedIncome.paid_to_account_id.in_(account_ids),
-            SharedIncome.date >= Account.opening_date,
-            SharedIncome.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(SharedIncome.paid_to_account_id, SharedIncome.date, func.coalesce(func.sum(SharedIncome.amount), 0))
+            .join(Account, Account.id == SharedIncome.paid_to_account_id)
+            .where(
+                SharedIncome.paid_to_account_id.in_(chunk),
+                SharedIncome.date >= Account.opening_date,
+                SharedIncome.date <= until,
+            )
+            .group_by(SharedIncome.paid_to_account_id, SharedIncome.date)
         )
-        .group_by(SharedIncome.paid_to_account_id, SharedIncome.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Which of the given accounts any shared income has arrived in. Feeds the currency lock, exactly as the

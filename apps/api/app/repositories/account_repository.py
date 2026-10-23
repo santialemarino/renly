@@ -7,7 +7,7 @@ from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
 from app.models.transfer import Transfer
-from app.repositories.utils import apply_sort, scope_filter
+from app.repositories.utils import apply_sort, chunked, scope_filter
 from app.utils.pagination import apply_limit, capped
 
 _SORT_COLUMNS = {
@@ -102,8 +102,11 @@ async def get_by_ids(session: AsyncSession, account_ids: list[int], user_id: int
 async def get_by_ids_across_users(session: AsyncSession, account_ids: list[int]) -> list[Account]:
     if not account_ids:
         return []
-    result = await session.execute(select(Account).where(Account.id.in_(account_ids)))
-    return list(result.scalars().all())
+    accounts: list[Account] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(select(Account).where(Account.id.in_(chunk)))
+        accounts.extend(result.scalars().all())
+    return accounts
 
 
 # Returns whether the user has any account (cheap existence check for the onboarding checklist;

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.user_settings import UserSettings
+from app.repositories.utils import chunked
 
 
 # Returns {user_id: timezone_name} for every user that has a non-empty 'timezone' key in their settings.
@@ -35,14 +36,15 @@ async def get_languages_by_user_ids(session: AsyncSession, user_ids: list[int]) 
 async def get_string_by_user_ids(session: AsyncSession, user_ids: list[int], key: str) -> dict[int, str]:
     if not user_ids:
         return {}
-    result = await session.execute(
-        select(UserSettings.user_id, UserSettings.settings).where(UserSettings.user_id.in_(user_ids)),
-    )
     out: dict[int, str] = {}
-    for user_id, settings in result.all():
-        value = settings.get(key) if isinstance(settings, dict) else None
-        if isinstance(value, str) and value:
-            out[user_id] = value
+    for chunk in chunked(user_ids):
+        result = await session.execute(
+            select(UserSettings.user_id, UserSettings.settings).where(UserSettings.user_id.in_(chunk)),
+        )
+        for user_id, settings in result.all():
+            value = settings.get(key) if isinstance(settings, dict) else None
+            if isinstance(value, str) and value:
+                out[user_id] = value
     return out
 
 

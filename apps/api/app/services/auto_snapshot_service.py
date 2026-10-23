@@ -36,7 +36,9 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
     # the existing-snapshot dedup key. User-facing "today" semantics live in request paths.
     today = date_type.today()
     inv_ids = [inv.id for inv in investments]
-    tickers = [inv.ticker for inv in investments if inv.ticker]
+    # Distinct: many holders share a ticker (measured 50,005 holdings over 403 tickers), and the price
+    # read wants each one once — repeating it only grows the statement towards the bind-parameter cap.
+    tickers = sorted({inv.ticker for inv in investments if inv.ticker})
 
     # Batch-load: existing snapshots for today, latest prices, latest snapshots.
     existing_today = await snapshot_repository.get_ids_with_snapshot_on_date(session, inv_ids, today)

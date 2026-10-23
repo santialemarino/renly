@@ -9,6 +9,7 @@ from sqlmodel import select
 
 from app.models.snapshot import InvestmentSnapshot
 from app.models.utils import utcnow
+from app.repositories.utils import chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -32,13 +33,16 @@ async def get_ids_with_snapshots(session: AsyncSession, investment_ids: list[int
 async def get_ids_with_snapshot_on_date(session: AsyncSession, investment_ids: list[int], snapshot_date: date) -> set[int]:
     if not investment_ids:
         return set()
-    result = await session.execute(
-        select(InvestmentSnapshot.investment_id).where(
-            InvestmentSnapshot.investment_id.in_(investment_ids),
-            InvestmentSnapshot.date == snapshot_date,
+    found: set[int] = set()
+    for chunk in chunked(investment_ids):
+        result = await session.execute(
+            select(InvestmentSnapshot.investment_id).where(
+                InvestmentSnapshot.investment_id.in_(chunk),
+                InvestmentSnapshot.date == snapshot_date,
+            )
         )
-    )
-    return {row[0] for row in result.all()}
+        found.update({row[0] for row in result.all()})
+    return found
 
 
 # Returns {investment_id: latest InvestmentSnapshot} for each investment (max-date row per id).
@@ -47,23 +51,26 @@ async def get_latest_by_investments(
 ) -> dict[int, InvestmentSnapshot]:
     if not investment_ids:
         return {}
-    # as_of_date bounds the MAX, which is not the same as filtering the result afterwards: taking the
-    # latest snapshot and then discarding it for being too new drops the investment entirely, when
-    # what the caller asked for was its value on that date. A pot valued at a past date, or an
-    # ownership event back-dated into one, needs the latest snapshot ON OR BEFORE it.
-    latest = select(InvestmentSnapshot.investment_id, func.max(InvestmentSnapshot.date).label("max_date")).where(
-        InvestmentSnapshot.investment_id.in_(investment_ids)
-    )
-    if as_of_date is not None:
-        latest = latest.where(InvestmentSnapshot.date <= as_of_date)
-    subq = latest.group_by(InvestmentSnapshot.investment_id).subquery()
-    result = await session.execute(
-        select(InvestmentSnapshot).join(
-            subq,
-            (InvestmentSnapshot.investment_id == subq.c.investment_id) & (InvestmentSnapshot.date == subq.c.max_date),
+    snapshots: dict[int, InvestmentSnapshot] = {}
+    for chunk in chunked(investment_ids):
+        # as_of_date bounds the MAX, which is not the same as filtering the result afterwards: taking the
+        # latest snapshot and then discarding it for being too new drops the investment entirely, when
+        # what the caller asked for was its value on that date. A pot valued at a past date, or an
+        # ownership event back-dated into one, needs the latest snapshot ON OR BEFORE it.
+        latest = select(InvestmentSnapshot.investment_id, func.max(InvestmentSnapshot.date).label("max_date")).where(
+            InvestmentSnapshot.investment_id.in_(chunk)
         )
-    )
-    return {s.investment_id: s for s in result.scalars().all()}
+        if as_of_date is not None:
+            latest = latest.where(InvestmentSnapshot.date <= as_of_date)
+        subq = latest.group_by(InvestmentSnapshot.investment_id).subquery()
+        result = await session.execute(
+            select(InvestmentSnapshot).join(
+                subq,
+                (InvestmentSnapshot.investment_id == subq.c.investment_id) & (InvestmentSnapshot.date == subq.c.max_date),
+            )
+        )
+        snapshots.update({s.investment_id: s for s in result.scalars().all()})
+    return snapshots
 
 
 # Every snapshot for these investments dated on or before `until`, oldest first, so a caller valuing
@@ -76,12 +83,15 @@ async def get_latest_by_investments(
 async def list_by_investments(session: AsyncSession, investment_ids: list[int], *, until: date) -> list[InvestmentSnapshot]:
     if not investment_ids:
         return []
-    result = await session.execute(
-        select(InvestmentSnapshot)
-        .where(InvestmentSnapshot.investment_id.in_(investment_ids), InvestmentSnapshot.date <= until)
-        .order_by(InvestmentSnapshot.investment_id, InvestmentSnapshot.date)
-    )
-    return list(result.scalars().all())
+    snapshots: list[InvestmentSnapshot] = []
+    for chunk in chunked(investment_ids):
+        result = await session.execute(
+            select(InvestmentSnapshot)
+            .where(InvestmentSnapshot.investment_id.in_(chunk), InvestmentSnapshot.date <= until)
+            .order_by(InvestmentSnapshot.investment_id, InvestmentSnapshot.date)
+        )
+        snapshots.extend(result.scalars().all())
+    return snapshots
 
 
 # Lists one page of an investment's snapshots, most recent first, with the total across every page.

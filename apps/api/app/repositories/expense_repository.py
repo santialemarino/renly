@@ -11,7 +11,7 @@ from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
-from app.repositories.utils import apply_entry_sort
+from app.repositories.utils import apply_entry_sort, chunked
 
 # The two things a row in the unioned expenses list can be. A private expense_entries row of the
 # caller's own, or the caller's SHARE of a shared expense their group recorded.
@@ -406,15 +406,18 @@ async def sum_by_account_ids(
 ) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = (
-        select(ExpenseEntry.account_id, func.coalesce(func.sum(ExpenseEntry.amount), 0))
-        .join(Account, Account.id == ExpenseEntry.account_id)
-        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id, ExpenseEntry.date >= Account.opening_date)
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(ExpenseEntry.date <= as_of_date)
-    result = await session.execute(stmt.group_by(ExpenseEntry.account_id))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(ExpenseEntry.account_id, func.coalesce(func.sum(ExpenseEntry.amount), 0))
+            .join(Account, Account.id == ExpenseEntry.account_id)
+            .where(ExpenseEntry.account_id.in_(chunk), ExpenseEntry.user_id == user_id, ExpenseEntry.date >= Account.opening_date)
+        )
+        if as_of_date is not None:
+            stmt = stmt.where(ExpenseEntry.date <= as_of_date)
+        result = await session.execute(stmt.group_by(ExpenseEntry.account_id))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # Expense totals linked to each account, grouped by (account_id, date), for a caller deriving those
@@ -425,18 +428,21 @@ async def sum_by_account_ids_dated(
 ) -> list[tuple[int, date_type, Decimal]]:
     if not account_ids:
         return []
-    result = await session.execute(
-        select(ExpenseEntry.account_id, ExpenseEntry.date, func.coalesce(func.sum(ExpenseEntry.amount), 0))
-        .join(Account, Account.id == ExpenseEntry.account_id)
-        .where(
-            ExpenseEntry.account_id.in_(account_ids),
-            ExpenseEntry.user_id == user_id,
-            ExpenseEntry.date >= Account.opening_date,
-            ExpenseEntry.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(ExpenseEntry.account_id, ExpenseEntry.date, func.coalesce(func.sum(ExpenseEntry.amount), 0))
+            .join(Account, Account.id == ExpenseEntry.account_id)
+            .where(
+                ExpenseEntry.account_id.in_(chunk),
+                ExpenseEntry.user_id == user_id,
+                ExpenseEntry.date >= Account.opening_date,
+                ExpenseEntry.date <= until,
+            )
+            .group_by(ExpenseEntry.account_id, ExpenseEntry.date)
         )
-        .group_by(ExpenseEntry.account_id, ExpenseEntry.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Monthly expense totals linked to each account, grouped by account_id, year, month (the account's
