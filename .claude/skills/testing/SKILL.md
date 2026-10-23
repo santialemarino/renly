@@ -173,6 +173,17 @@ pnpm test:e2e        # Playwright E2E
     held to what `renly_app` may update in the catalogue — a table granted per column refuses a statement
     naming any other column, as the request role only. The derivation itself is pinned without a
     database by `tests/unit/test_update_write_derivation.py`; its header says what it cannot see.
+  - `test_card_liability_queries.py` — `LEDGER_TEST_DATABASE_URL`. Two figures a card debt reaches the
+    user through, each one operator from a wrong answer: the net-worth evolution SUBTRACTS a real card's
+    balance (every earlier assertion ran with a zero card, where `- card` and `+ card` agree), and the
+    payments calendar bills the statement a due date pays when the closing and due days coincide.
+  - `test_auth_lifecycle.py` — the two `RLS_TEST_*` vars. The real app with only its sessions swapped and
+    `get_current_user` NOT overridden (every unit endpoint test overrides it): logout ends every session
+    through the session-epoch check, the RLS user is set before the user row is read, an unverified address
+    cannot log in, and an account's opening date locks once money links to it.
+  - `test_auto_snapshot_catchup_probe.py` — `LEDGER_TEST_DATABASE_URL`. The startup catch-up's one SQL
+    probe ("an AUTO snapshot dated on or after the month-end"), whose two predicates the unit tests fake.
+    Seeded in 2091, because the probe is global by design.
 - **Which role each URL names.** `RLS_TEST_DATABASE_URL` is `renly_app`; every other var, including
   `RLS_TEST_ADMIN_DATABASE_URL`, is `renly_admin` — never the owner, which under FORCE reads nothing when
   it is a NOSUPERUSER and everything when it is a superuser, so neither exercises what the suites assert.
