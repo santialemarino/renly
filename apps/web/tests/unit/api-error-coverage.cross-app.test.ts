@@ -94,8 +94,12 @@ function scanApiErrorCodes(): ScannedCodes {
     // that is not a lowercase literal is UNRESOLVED (or a PASSTHROUGH), never skipped, so a code written in
     // a shape this pattern does not parse fails here instead of reaching a client untranslated.
     for (const block of source.split(/^class /m).slice(1)) {
-      // The class body: from after its `class` line up to the next line that starts in column 0.
-      const body = block.slice(block.indexOf('\n') + 1).split(/^\S/m)[0] ?? '';
+      // The class body: from after its `class` line up to the next top-level `def`, decorator or
+      // assignment — not any column-0 line, since a docstring or a closing bracket can sit there too.
+      const body =
+        block
+          .slice(block.indexOf('\n') + 1)
+          .split(/^(?:def |async def |@|[A-Za-z_]\w*\s*(?::[^=\n]*)?=)/m)[0] ?? '';
       const assignments = [
         ...body.matchAll(/^(?: {4}code\b|\s+self\.code\b)[^=\n]*=(?!=)\s*(.+?)\s*$/gm),
       ];
