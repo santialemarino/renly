@@ -745,6 +745,29 @@ async def list_linked_installment_expenses(
     return grouped
 
 
+# {subscription_id: every linked expense date} for the given subscriptions, ACROSS users: the
+# auto-expense job's dedup read, run on the privileged session over every plan due on one tick.
+# Unwindowed — cycle-proximity dedup binds each date to its closest cycle, so the plans' full linked
+# history loads before the job's loop. The plan list grows with the user base, hence chunked.
+async def linked_subscription_dates_across_users(session: AsyncSession, subscription_ids: list[int]) -> dict[int, set[date_type]]:
+    grouped: dict[int, set[date_type]] = {}
+    for chunk in chunked(subscription_ids):
+        result = await session.execute(select(ExpenseEntry.subscription_id, ExpenseEntry.date).where(ExpenseEntry.subscription_id.in_(chunk)))
+        for subscription_id, entry_date in result.all():
+            grouped.setdefault(subscription_id, set()).add(entry_date)
+    return grouped
+
+
+# Same read for installment plans: {installment_id: every linked expense date}, across users, chunked.
+async def linked_installment_dates_across_users(session: AsyncSession, installment_ids: list[int]) -> dict[int, set[date_type]]:
+    grouped: dict[int, set[date_type]] = {}
+    for chunk in chunked(installment_ids):
+        result = await session.execute(select(ExpenseEntry.installment_id, ExpenseEntry.date).where(ExpenseEntry.installment_id.in_(chunk)))
+        for installment_id, entry_date in result.all():
+            grouped.setdefault(installment_id, set()).add(entry_date)
+    return grouped
+
+
 # Returns True when `expense_id` is the most-recent linked expense (by date DESC, id DESC)
 # for the given obligation. Used by the reverse-on-unlink hook (Phase 3, follow-up Item 10):
 # the obligation's cursor walks back only when the row being deleted / unlinked was the
@@ -830,6 +853,8 @@ class ExpenseRepository:
     delete = staticmethod(delete)
     exists_by_account_id = staticmethod(exists_by_account_id)
     linked_account_ids = staticmethod(linked_account_ids)
+    linked_installment_dates_across_users = staticmethod(linked_installment_dates_across_users)
+    linked_subscription_dates_across_users = staticmethod(linked_subscription_dates_across_users)
     exists_by_user = staticmethod(exists_by_user)
     find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)

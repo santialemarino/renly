@@ -72,6 +72,8 @@ class _Seed:
     investments: list[int]
     tickers: list[str]
     notifications: list[int]
+    subscriptions: list[int]
+    installments: list[int]
 
 
 async def _scalar(s: AsyncSession, sql: str, **params):
@@ -84,7 +86,9 @@ async def _run(s: AsyncSession, sql: str, **params) -> None:
 
 # Two of everything a chunked read is keyed by, so a chunk of one id holds one key and the merge has
 # something to get wrong; rows on two dates where a read is ordered or bounded by date; and a row in
-# every one of the eleven sources of an account's balance.
+# every one of the eleven sources of an account's balance. Each user also holds preference overrides and
+# push browsers (the dispatch's recipient reads), and two plans of each kind carry linked expenses on
+# different dates (the auto-expense job's dedup reads).
 async def _seed(s: AsyncSession) -> _Seed:
     new_user = "INSERT INTO users (name, email, password_hash) VALUES ('cliff', :e, 'h') RETURNING id"
     users = [await _scalar(s, new_user, e=_EMAIL.format(n)) for n in (1, 2)]
@@ -240,7 +244,43 @@ async def _seed(s: AsyncSession) -> _Seed:
         await _scalar(s, "INSERT INTO notifications (user_id, event, digest_pending) VALUES (:u, 'pot_movement', TRUE) RETURNING id", u=user)
         for user in (users[0], users[0], users[1])
     ]
-    return _Seed(users, groups, pots, accounts, investments, tickers, notifications)
+    for user, browsers in ((users[0], 2), (users[1], 1)):
+        for channel in ("email", "push"):
+            await _run(
+                s,
+                "INSERT INTO notification_preferences (user_id, event, channel, enabled) VALUES (:u, 'snapshot_due', :c, FALSE)",
+                u=user,
+                c=channel,
+            )
+        for n in range(browsers):
+            await _run(
+                s,
+                "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (:u, :e, 'k', 'a')",
+                u=user,
+                e=f"https://push.test/cliff-u20/{user}/{n}",
+            )
+    new_subscription = (
+        "INSERT INTO subscriptions (user_id, name, amount, currency, billing_cycle, next_billing_date, anchor_day) "
+        "VALUES (:u, 'cliff', 5, 'USD', 'monthly', :d, 10) RETURNING id"
+    )
+    new_installment = (
+        "INSERT INTO installments (user_id, name, total_amount, installment_amount, currency, installments_count, start_date) "
+        "VALUES (:u, 'cliff', 30, 10, 'USD', 3, :d) RETURNING id"
+    )
+    subscriptions = [await _scalar(s, new_subscription, u=me, d=_JAN) for _ in (1, 2)]
+    installments = [await _scalar(s, new_installment, u=me, d=_JAN) for _ in (1, 2)]
+    for column, plans in (("subscription_id", subscriptions), ("installment_id", installments)):
+        for plan, on in ((plans[0], _JAN), (plans[0], _FEB), (plans[1], _FEB)):
+            await _run(
+                s,
+                f"INSERT INTO expense_entries (user_id, account_id, date, amount, currency, category, {column}) "
+                "VALUES (:u, :a, :d, 5, 'USD', 'food', :p)",
+                u=me,
+                a=mine,
+                d=on,
+                p=plan,
+            )
+    return _Seed(users, groups, pots, accounts, investments, tickers, notifications, subscriptions, installments)
 
 
 def _repo(name: str):
@@ -294,6 +334,30 @@ _CASES = [
     ("group_repository.list_members_by_groups", "groups", lambda s, ids, _: _repo("group_repository").list_members_by_groups(s, ids), True),
     ("notification_repository.list_digest_pending", "users", lambda s, ids, _: _repo("notification_repository").list_digest_pending(s, ids), True),
     ("user_repository.get_by_ids", "users", lambda s, ids, _: _repo("user_repository").get_by_ids(s, ids), True),
+    (
+        "notification_repository.preferences_by_user_ids",
+        "users",
+        lambda s, ids, _: _repo("notification_repository").preferences_by_user_ids(s, ids),
+        True,
+    ),
+    (
+        "push_subscription_repository.list_by_user_ids",
+        "users",
+        lambda s, ids, _: _repo("push_subscription_repository").list_by_user_ids(s, ids),
+        True,
+    ),
+    (
+        "expense_repository.linked_subscription_dates_across_users",
+        "subscriptions",
+        lambda s, ids, _: _repo("expense_repository").linked_subscription_dates_across_users(s, ids),
+        True,
+    ),
+    (
+        "expense_repository.linked_installment_dates_across_users",
+        "installments",
+        lambda s, ids, _: _repo("expense_repository").linked_installment_dates_across_users(s, ids),
+        True,
+    ),
     (
         "user_settings_repository.get_string_by_user_ids",
         "users",

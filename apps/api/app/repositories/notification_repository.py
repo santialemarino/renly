@@ -217,16 +217,16 @@ async def list_preferences(session: AsyncSession, user_id: int) -> list[Notifica
     return list(result.scalars().all())
 
 
-# Batch variant of list_preferences: {user_id: {(event, channel): enabled}} for every requested id, in
-# one query. The fan-out asks about every recipient of an event at once, so the single-user version
-# inside that loop would be an N+1 that grows with the group.
+# Batch variant of list_preferences: {user_id: {(event, channel): enabled}} for every requested id, one
+# query per chunk. The fan-out asks about every recipient of an event at once, so the single-user
+# version inside that loop would be an N+1 that grows with the group — and a scheduled job's batched
+# dispatch asks about every recipient of a whole tick, which grows with the user base (hence chunked).
 async def preferences_by_user_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, dict[tuple[NotificationEvent, NotificationChannel], bool]]:
-    if not user_ids:
-        return {}
-    result = await session.execute(select(NotificationPreference).where(NotificationPreference.user_id.in_(user_ids)))
     by_user: dict[int, dict[tuple[NotificationEvent, NotificationChannel], bool]] = defaultdict(dict)
-    for row in result.scalars().all():
-        by_user[row.user_id][(row.event, row.channel)] = row.enabled
+    for chunk in chunked(user_ids):
+        result = await session.execute(select(NotificationPreference).where(NotificationPreference.user_id.in_(chunk)))
+        for row in result.scalars().all():
+            by_user[row.user_id][(row.event, row.channel)] = row.enabled
     return dict(by_user)
 
 
