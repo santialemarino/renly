@@ -10,7 +10,7 @@
 #
 # * The Python side is DERIVED: every `StrEnum` under `app/` must be either paired below or declared
 #   server-only with a reason, so a new enum fails here until somebody decides which it is.
-# * The web side is SCANNED: any TypeScript literal list or union whose values EQUAL an enum's must be a
+# * The web side is SCANNED: any `as const` literal array or literal union whose values EQUAL an enum's must be a
 #   registered twin, so a new transcription on the web fails here too.
 # * A picker offering FEWER values than its enum is not tolerated silently — the values it omits (or, for
 #   a derived status, adds) are DECLARED, and the declaration is asserted exactly: a subset that heals or
