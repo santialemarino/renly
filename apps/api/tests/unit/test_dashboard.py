@@ -530,6 +530,28 @@ class TestNetWorthEvolutionCurrentMonth:
 
         assert [p.date for p in points] == [date_type(2026, 7, 1)]
 
+    @pytest.mark.asyncio
+    async def test_a_card_balance_is_SUBTRACTED_from_both_net_worth_figures(self, monkeypatch):
+        # Every other evolution test here runs with no card, where `- card` and `+ card` agree. 5,000
+        # invested and a 1,200 card debt from July is 3,800 — never 6,200. The SQL-backed half of this,
+        # a real card's balance flowing through the same series, is in
+        # tests/integration/test_card_liability_queries.py.
+        evo = PortfolioEvolutionResponse(points=[EvolutionPoint(date=date_type(2026, 6, 1), total_value=Decimal("5000"))])
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_portfolio_evolution", AsyncMock(return_value=evo))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(
+            dashboard_service.credit_card_service, "get_card_bucket_series", AsyncMock(return_value={(2026, 7): {(9, "USD"): Decimal("1200")}})
+        )
+        monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=[]))
+        _no_shared(monkeypatch)
+
+        points, _ = await dashboard_service.compute_net_worth_evolution(AsyncMock(), 1, currency=None, lookup=None, today=date_type(2026, 7, 15))
+
+        assert [(p.date, p.card_balance, p.private_net_worth, p.net_worth) for p in points] == [
+            (date_type(2026, 6, 1), Decimal("0"), Decimal("5000"), Decimal("5000")),
+            (date_type(2026, 7, 1), Decimal("1200"), Decimal("3800"), Decimal("3800")),
+        ]
+
 
 def _zero_finance_overview() -> FinanceOverviewResponse:
     return FinanceOverviewResponse(

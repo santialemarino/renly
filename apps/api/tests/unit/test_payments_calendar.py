@@ -13,6 +13,7 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.services import payments_calendar_service
 from app.services.payments_calendar_service import (
+    _statement_closing_for_due,
     _to_response,
     installment_past_paid_cuotas_in_window,
     obligation_dates_in_window,
@@ -462,6 +463,28 @@ class TestInstallmentPastPaidCuotas:
         e_jan = _expense(date_val=date(2026, 1, 31))
         result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 3, 31), [e_mar, e_feb, e_jan])
         assert result == [(1, date(2026, 1, 31), e_jan), (2, date(2026, 2, 28), e_feb), (3, date(2026, 3, 31), e_mar)]
+
+
+# --- which statement a due date pays ---
+
+
+class TestStatementClosingForDue:
+    # The bill due in a month pays the statement that closed on or before that due date in the same month,
+    # else the previous month's. The boundary is the case a card whose closing and due days coincide lands
+    # on: the statement closes the day it is due, so the bill is THAT day's statement — a strict comparison
+    # would bill the previous month's balance instead. Driven end to end against a real database in
+    # tests/integration/test_card_liability_queries.py.
+    @pytest.mark.parametrize(
+        ("closing_day", "due", "expected"),
+        [
+            (15, date(2026, 3, 15), date(2026, 3, 15)),  # closes the day it is due → that day's statement
+            (5, date(2026, 3, 15), date(2026, 3, 5)),  # closes before the due day → this month's statement
+            (20, date(2026, 3, 5), date(2026, 2, 20)),  # closes after the due day → last month's statement
+            (20, date(2026, 1, 5), date(2025, 12, 20)),  # ...across a year boundary
+        ],
+    )
+    def test_the_statement_a_due_date_pays(self, closing_day, due, expected):
+        assert _statement_closing_for_due(closing_day, due) == expected
 
 
 # --- card_due paid-marking ---
