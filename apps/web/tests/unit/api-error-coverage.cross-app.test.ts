@@ -39,6 +39,8 @@ const API_APP = join(import.meta.dirname, '../../../api/app');
 const PASSTHROUGH: Record<string, string> = {
   'main.py: exc.code': 'the DomainError handler forwards the class-level code — source 1.',
   'main.py: code': 'the HTTPException handler forwards CodedHTTPException.code — source 2.',
+  'http_errors.py: self.code = code':
+    'CodedHTTPException stores the keyword-only `code=` its callers pass — source 2.',
 };
 
 // Codes the scan finds that no response can carry.
@@ -88,8 +90,24 @@ function scanApiErrorCodes(): ScannedCodes {
     const source = readFileSync(path, 'utf8').replace(/^\s*#.*$/gm, '');
 
     // Source 1: a class-level code, paired with an `extra` only within the same class.
+    // EVERY class-attribute `code` line (any annotation, either quote) and every `self.code =` is read: one
+    // that is not a lowercase literal is UNRESOLVED (or a PASSTHROUGH), never skipped, so a code written in
+    // a shape this pattern does not parse fails here instead of reaching a client untranslated.
     for (const block of source.split(/^class /m).slice(1)) {
-      const code = /^\s+code(?:\s*:\s*str)?\s*=\s*"([a-z_0-9]+)"/m.exec(block)?.[1];
+      // The class body: from after its `class` line up to the next line that starts in column 0.
+      const body = block.slice(block.indexOf('\n') + 1).split(/^\S/m)[0] ?? '';
+      const assignments = [
+        ...body.matchAll(/^(?: {4}code\b|\s+self\.code\b)[^=\n]*=(?!=)\s*(.+?)\s*$/gm),
+      ];
+      if (assignments.length === 0) continue;
+      let code: string | undefined;
+      for (const [line, value] of assignments) {
+        const literal = /^["']([a-z_0-9]+)["']$/.exec(value as string)?.[1];
+        const key = `${file}: ${(line as string).trim()}`;
+        if (literal) code = literal;
+        else if (key in PASSTHROUGH) scanned.passthroughsSeen.add(key);
+        else scanned.unresolved.push(key);
+      }
       if (!code) continue;
       // `[\s\S]*?` rather than `\s*` before the return: one of these properties has a comment line in
       // between, and requiring only whitespace silently yielded an EMPTY payload for it — which read as
