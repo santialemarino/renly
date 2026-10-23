@@ -80,6 +80,13 @@ class SharedWorth:
 # each month — and the reads behind both are the same three: which seats the caller holds, which pots
 # they can see (with each pot's ledger), and how the groups' positions moved. Loading them once and
 # passing the context down is what keeps a dashboard load from reading the same rows twice.
+#
+# `lookup` is the RateLookup the pot valuations convert with, resolved ONCE here for the same reason. A
+# pot's holdings convert into its own base currency before anything else, so valuing pots needs a lookup
+# even in Original mode, where the caller asked for no display currency and built none; both questions
+# above value the same pots, and each resolving its own would cost the request a second lookup and a
+# second settings read. It is the caller's own lookup whenever the caller built one, and None only when
+# there are no pots to value.
 @dataclass(frozen=True)
 class SharedContext:
     seats: list[GroupMember]
@@ -87,6 +94,7 @@ class SharedContext:
     # Cumulative positions at the end of every month that moved, ascending — see
     # group_settlement_service.get_positions_by_month.
     positions: list[tuple[tuple[int, int], dict[int, dict[str, dict[int, Decimal]]]]]
+    lookup: RateLookup | None = None
 
     @property
     def seat_ids(self) -> set[int]:
@@ -99,11 +107,15 @@ class SharedContext:
         return bool(self.pots or self.seats)
 
 
-async def load_context(session: AsyncSession, user_id: int) -> SharedContext:
+# Loads the context, reusing the caller's per-request RateLookup when it built one (any display
+# currency) and resolving one only when there are pots to value and the caller built none.
+async def load_context(session: AsyncSession, user_id: int, *, lookup: RateLookup | None = None) -> SharedContext:
     seats = await group_repository.list_active_members(session, user_id)
     pots = await pot_service.list_visible_seats(session, user_id)
     positions = await group_settlement_service.get_positions_by_month(session, sorted({seat.group_id for seat in seats}))
-    return SharedContext(seats=seats, pots=pots, positions=positions)
+    if pots and lookup is None:
+        lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+    return SharedContext(seats=seats, pots=pots, positions=positions, lookup=lookup if pots else None)
 
 
 # The first month the caller's shared side could be worth anything, or None when it never was.
@@ -126,7 +138,6 @@ def earliest_month(context: SharedContext) -> tuple[int, int] | None:
 # tests/integration/test_pot_fanout_query_count.py (U17).
 async def get_shared_worth(
     session: AsyncSession,
-    user_id: int,
     context: SharedContext,
     *,
     currency: str | None,
@@ -141,14 +152,10 @@ async def get_shared_worth(
     buckets: dict[str, Decimal] = {}
     undivided: list[UndividedPot] = []
 
-    # The whole pot section sits behind the guard rather than the lookup alone, so the RateLookup a
-    # valuation requires is only resolved where one is actually needed — and is never a nullable
-    # standing in for one. A pot's holdings convert into ITS OWN base currency before anything else, so
-    # a valuation needs a lookup even when the caller asked for no display currency at all; a group with
-    # balances and no pots needs none, and is a common shape.
+    # The valuations convert with the context's lookup, which load_context resolved once for the whole
+    # request — see SharedContext. `lookup` below is the DISPLAY conversion alone, None in Original mode.
     if context.pots:
-        pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
-        shares = await pot_service.get_member_shares(session, context.pots, as_of_date=as_of_date, lookup=pot_lookup)
+        shares = await pot_service.get_member_shares(session, context.pots, as_of_date=as_of_date, lookup=context.lookup)
         for seat, share in zip(context.pots, shares, strict=True):
             if share.value is None:
                 # A pot holding nothing is an empty container, not a half-finished setup: there is no
@@ -195,7 +202,6 @@ async def get_shared_worth(
 # co-owner forgot a snapshot. A currency that could not be converted is reported either way.
 async def get_shared_series(
     session: AsyncSession,
-    user_id: int,
     context: SharedContext,
     *,
     months: list[tuple[int, int]],
@@ -210,8 +216,7 @@ async def get_shared_series(
     skipped: set[str] = set()
 
     if context.pots:
-        pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
-        series = await pot_service.compute_share_series_many(session, context.pots, dates=month_ends, lookup=pot_lookup)
+        series = await pot_service.compute_share_series_many(session, context.pots, dates=month_ends, lookup=context.lookup)
         for seat, points in zip(context.pots, series, strict=True):
             for index, point in enumerate(points):
                 if point.my_value is None:

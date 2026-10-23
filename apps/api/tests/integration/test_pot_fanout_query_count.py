@@ -245,7 +245,7 @@ class TestTheDashboardCostsAFixedNumberOfStatements:
             async with factory() as s:
                 context = await shared_worth_service.load_context(s, user)
                 lookup = await exchange_rate_service.get_user_rate_lookup(s, user)
-                worth = await shared_worth_service.get_shared_worth(s, user, context, currency="USD", lookup=lookup, as_of_date=date(2026, 6, 30))
+                worth = await shared_worth_service.get_shared_worth(s, context, currency="USD", lookup=lookup, as_of_date=date(2026, 6, 30))
             assert len(context.pots) == pots
             assert worth.pot_value == Decimal("66.00") * pots
 

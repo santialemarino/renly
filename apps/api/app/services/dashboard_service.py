@@ -263,7 +263,7 @@ async def get_overview(
     # own share into their spending and earnings, and the shared half of net worth needs the same
     # seats plus the pots — one read set for the whole request rather than two that could disagree
     # about which seats are active.
-    context = await shared_worth_service.load_context(session, user_id)
+    context = await shared_worth_service.load_context(session, user_id, lookup=lookup)
     # Sequential calls — AsyncSession is not safe for concurrent use.
     portfolio = await metrics_service.get_portfolio_metrics(
         session,
@@ -291,7 +291,6 @@ async def get_overview(
     # settings at all (no display currency requested), which is the same fallback the pot pages use.
     shared = await shared_worth_service.get_shared_worth(
         session,
-        user_id,
         context,
         currency=currency,
         lookup=lookup,
@@ -320,10 +319,12 @@ async def get_overview(
 
     # Net worth month-over-month: the latest vs prior month of the SAME monthly net-worth series the
     # evolution chart uses (investment + cash − card per month), so the delta reflects cash and card
-    # movements, not investments alone — e.g. funding a new account this month now shows up. Full
-    # history (unwindowed): net worth is a point-in-time snapshot, unlike the period-scoped income
-    # /expense totals. (investment_month_change below stays investment-only for the Investment card.)
-    nw_points, _ = await compute_net_worth_evolution(session, user_id, currency=currency, lookup=lookup, today=today, context=context)
+    # movements, not investments alone — e.g. funding a new account this month now shows up. Unwindowed:
+    # net worth is a point-in-time snapshot, unlike the period-scoped income/expense totals. Only the two
+    # months the delta compares are derived (`last_months`), not the whole history the chart draws — see
+    # compute_net_worth_evolution for why they are the same two figures. (investment_month_change below
+    # stays investment-only for the Investment card.)
+    nw_points, _ = await compute_net_worth_evolution(session, user_id, currency=currency, lookup=lookup, today=today, context=context, last_months=2)
     net_worth_change: Decimal | None = None
     net_worth_change_pct: Decimal | None = None
     nw_mom = month_over_month([(p.date, p.net_worth) for p in nw_points])
@@ -393,6 +394,13 @@ async def get_overview(
 # one. It now runs from the earliest month ANY term begins to the current month, clipped to the
 # requested window at both ends. Clipping the end is also what stops a window that closed in June from
 # gaining a September point, which appending "today" unconditionally used to do.
+#
+# `last_months` keeps only the newest N months of that grid, for a caller that needs the tail rather
+# than the chart (the overview's month-over-month delta). Those N points are the full series' last N
+# by construction: the grid is computed in full before it is cut, the investment and card sides
+# forward-fill from their WHOLE history rather than from the kept months, and cash and the shared side
+# are derived AT each month end rather than accumulated across the grid. Pinned against the full
+# series in tests/integration/test_dashboard_query_shape.py.
 async def compute_net_worth_evolution(
     session: AsyncSession,
     user_id: int,
@@ -403,8 +411,9 @@ async def compute_net_worth_evolution(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
     context: shared_worth_service.SharedContext | None = None,
+    last_months: int | None = None,
 ) -> tuple[list[NetWorthEvolutionPoint], list[str]]:
-    context = context if context is not None else await shared_worth_service.load_context(session, user_id)
+    context = context if context is not None else await shared_worth_service.load_context(session, user_id, lookup=lookup)
     portfolio_evo = await metrics_service.get_portfolio_evolution(
         session,
         user_id,
@@ -434,6 +443,8 @@ async def compute_net_worth_evolution(
         date_from=date_from,
         date_to=date_to,
     )
+    if last_months is not None:
+        months = months[-last_months:]
     if not months:
         return [], []
     month_ends = [_month_end(year, month) for year, month in months]
@@ -448,7 +459,6 @@ async def compute_net_worth_evolution(
 
     shared_values, shared_skipped = await shared_worth_service.get_shared_series(
         session,
-        user_id,
         context,
         months=months,
         month_ends=month_ends,
@@ -588,10 +598,9 @@ async def get_composition(
     # adds to `cedears`, your share of a jointly-held bank account to `cash`. The donut answers "what is
     # my money in", and scope is not an asset class — the Yours/Shared split is the headline's job. It
     # is also what keeps these slices agreeing with the cards above them, which count the same universe.
-    context = await shared_worth_service.load_context(session, user_id)
+    context = await shared_worth_service.load_context(session, user_id, lookup=lookup)
     shared = await shared_worth_service.get_shared_worth(
         session,
-        user_id,
         context,
         currency=currency,
         lookup=lookup,

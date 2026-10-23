@@ -54,8 +54,9 @@ def _event(on: date, member_id: int = 100) -> PotOwnershipEvent:
     )
 
 
+# A context as load_context returns it: carrying the valuation lookup exactly when it holds pots.
 def _context(*, seats=(), pots=(), positions=()) -> shared_worth_service.SharedContext:
-    return shared_worth_service.SharedContext(seats=list(seats), pots=list(pots), positions=list(positions))
+    return shared_worth_service.SharedContext(seats=list(seats), pots=list(pots), positions=list(positions), lookup=_FixedLookup() if pots else None)
 
 
 # The context's positions as the dashboard reads them: the cumulative position at the end of every
@@ -80,7 +81,6 @@ def _share(monkeypatch, *, nav, value, weights=None, holds_anything=True) -> Non
 async def _worth(monkeypatch, context, *, currency: str | None = "USD", lookup=_MISSING) -> shared_worth_service.SharedWorth:
     return await shared_worth_service.get_shared_worth(
         AsyncMock(),
-        1,
         context,
         currency=currency,
         lookup=_FixedLookup() if lookup is _MISSING else lookup,
@@ -214,31 +214,14 @@ class TestTheBalanceSplit:
 class TestHasShared:
     @pytest.mark.asyncio
     async def test_a_solo_user_has_no_shared_side_and_pays_for_no_reads(self, monkeypatch):
-        # Both reads this function can make are asserted absent, not just the pot one: the valuation,
-        # and the rate lookup a valuation needs. A dashboard load is the app's most-used request and
-        # every user is solo at launch.
+        # A dashboard load is the app's most-used request and every user is solo at launch, so the
+        # valuation is asserted absent. (The rate lookup a valuation needs is resolved by load_context,
+        # and pinned there — see TestTheValuationLookup.)
         _share(monkeypatch, nav=Decimal("1"), value=Decimal("1"))
-        rates = AsyncMock()
-        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "get_user_rate_lookup", rates)
         worth = await _worth(monkeypatch, _context(), lookup=None)
         assert worth.has_shared is False
         assert worth.total == Decimal("0")
         pot_service.get_member_shares.assert_not_awaited()
-        rates.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_a_group_with_balances_and_no_pots_needs_no_rate_lookup_either(self, monkeypatch):
-        # The guard is around the whole pot section rather than the lookup alone: a household that
-        # splits bills and shares no assets is a common shape, and it should not pay for a valuation
-        # engine it has nothing to value.
-        rates = AsyncMock()
-        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "get_user_rate_lookup", rates)
-        context = _context(seats=[_seat(100)], positions=_standing({10: {"USD": {100: Decimal("40")}}}))
-        # lookup=None on purpose: with one supplied, `lookup or await …` short-circuits and the guard
-        # under test is never reached — which is exactly how this test first passed while proving nothing.
-        worth = await _worth(monkeypatch, context, currency=None, lookup=None)
-        assert worth.receivable == Decimal("40")
-        rates.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_seat_with_no_money_at_all_still_has_a_shared_side(self, monkeypatch):
@@ -247,6 +230,45 @@ class TestHasShared:
         worth = await _worth(monkeypatch, _context(seats=[_seat(100)]))
         assert worth.has_shared is True
         assert worth.total == Decimal("0")
+
+
+# The RateLookup the pot valuations need is resolved ONCE per request, in load_context, and only when
+# there are pots to value: Original mode (no display currency) used to resolve one in each of the
+# overview's two shared reads, with a settings read apiece.
+class TestTheValuationLookup:
+    @staticmethod
+    def _wire(monkeypatch, *, seats=(), pots=()) -> AsyncMock:
+        monkeypatch.setattr(shared_worth_service.group_repository, "list_active_members", AsyncMock(return_value=list(seats)))
+        monkeypatch.setattr(pot_service, "list_visible_seats", AsyncMock(return_value=list(pots)))
+        monkeypatch.setattr(shared_worth_service.group_settlement_service, "get_positions_by_month", AsyncMock(return_value=[]))
+        rates = AsyncMock(return_value=_FixedLookup())
+        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "get_user_rate_lookup", rates)
+        return rates
+
+    @pytest.mark.asyncio
+    async def test_a_group_with_balances_and_no_pots_resolves_none(self, monkeypatch):
+        # A household that splits bills and shares no assets is a common shape, and it should not pay
+        # for a valuation engine it has nothing to value. No caller lookup on purpose: with one supplied
+        # the resolution is skipped anyway and the guard under test would never be reached.
+        rates = self._wire(monkeypatch, seats=[_seat(100)])
+        context = await shared_worth_service.load_context(AsyncMock(), 1)
+        assert context.lookup is None
+        rates.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_callers_lookup_is_reused_rather_than_rebuilt(self, monkeypatch):
+        rates = self._wire(monkeypatch, pots=[_pot_seat()])
+        mine = _FixedLookup()
+        context = await shared_worth_service.load_context(AsyncMock(), 1, lookup=mine)
+        assert context.lookup is mine
+        rates.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_original_mode_resolves_exactly_one(self, monkeypatch):
+        rates = self._wire(monkeypatch, pots=[_pot_seat()])
+        context = await shared_worth_service.load_context(AsyncMock(), 1)
+        assert context.lookup is rates.return_value
+        rates.assert_awaited_once()
 
 
 class TestTheEarliestMonth:
@@ -275,7 +297,6 @@ class TestTheSeries:
         monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [points for _ in seats]))
         values, skipped = await shared_worth_service.get_shared_series(
             AsyncMock(),
-            1,
             _context(pots=[_pot_seat()], seats=[_seat(100)]),
             months=[(2026, 6), (2026, 7)],
             month_ends=[date(2026, 6, 30), date(2026, 7, 31)],
@@ -301,7 +322,6 @@ class TestTheSeries:
         context = _context(pots=[_pot_seat(_pot(5)), _pot_seat(_pot(6))], seats=[_seat(100)])
         values, _ = await shared_worth_service.get_shared_series(
             AsyncMock(),
-            1,
             context,
             months=[(2026, 7)],
             month_ends=[date(2026, 7, 31)],
@@ -322,7 +342,6 @@ class TestTheSeries:
         monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [points for _ in seats]))
         values, _ = await shared_worth_service.get_shared_series(
             AsyncMock(),
-            1,
             _context(pots=[_pot_seat()], seats=[_seat(100)]),
             months=[(2026, 6), (2026, 7)],
             month_ends=[date(2026, 6, 30), date(2026, 7, 31)],
@@ -342,7 +361,6 @@ class TestTheSeries:
         )
         values, _ = await shared_worth_service.get_shared_series(
             AsyncMock(),
-            1,
             context,
             months=[(2026, 4), (2026, 5), (2026, 6), (2026, 7)],
             month_ends=[date(2026, 4, 30), date(2026, 5, 31), date(2026, 6, 30), date(2026, 7, 31)],
@@ -365,7 +383,6 @@ class TestTheSeries:
         monkeypatch.setattr(pot_service, "compute_share_series_many", AsyncMock(side_effect=lambda _s, seats, **_k: [[] for _ in seats]))
         values, _ = await shared_worth_service.get_shared_series(
             AsyncMock(),
-            1,
             context,
             months=[(2026, 7)],
             month_ends=[date(2026, 7, 31)],

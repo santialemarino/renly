@@ -96,9 +96,12 @@ class TestTheHeadlineReadsEveryPotOnce:
         single = AsyncMock()
         monkeypatch.setattr(pot_service, "get_member_share", single)
         context = shared_worth_service.SharedContext(
-            seats=[GroupMember(id=100, group_id=10, user_id=1, display_name="Santi", role=GroupMemberRole.member)], pots=_seats(), positions=[]
+            seats=[GroupMember(id=100, group_id=10, user_id=1, display_name="Santi", role=GroupMemberRole.member)],
+            pots=_seats(),
+            positions=[],
+            lookup=_LOOKUP,
         )
-        await shared_worth_service.get_shared_worth(AsyncMock(), 1, context, currency="USD", lookup=_LOOKUP, as_of_date=AS_OF)
+        await shared_worth_service.get_shared_worth(AsyncMock(), context, currency="USD", lookup=_LOOKUP, as_of_date=AS_OF)
         single.assert_not_awaited()
         assert mocks["compute_account_balances_at"].await_count == 1
 
@@ -134,7 +137,7 @@ class TestTheEvolutionReadsEveryPotOnce:
         mocks = _wire(monkeypatch)
         single = AsyncMock()
         monkeypatch.setattr(pot_service, "compute_share_series", single)
-        context = shared_worth_service.SharedContext(seats=[], pots=_seats(), positions=[])
-        await shared_worth_service.get_shared_series(AsyncMock(), 1, context, months=[(2026, 6)], month_ends=[AS_OF], currency="USD", lookup=_LOOKUP)
+        context = shared_worth_service.SharedContext(seats=[], pots=_seats(), positions=[], lookup=_LOOKUP)
+        await shared_worth_service.get_shared_series(AsyncMock(), context, months=[(2026, 6)], month_ends=[AS_OF], currency="USD", lookup=_LOOKUP)
         single.assert_not_awaited()
         assert mocks["compute_account_balance_series"].await_count == 1
