@@ -136,6 +136,8 @@ The snapshot grid returns both converted and original values:
 | `transaction.amount`          | Display amount (converted)                                 |
 | `transaction.original_amount` | Base currency amount (for form editing)                    |
 
+`period_return_pct` is NOT converted: it is computed from the base-currency series, as are `/metrics/investment/{id}`'s `simple_return`, `twr` and `period_returns[].return_pct` (its `irr` and every portfolio-level return use converted cashflows, so they are in the display currency). The grid therefore names the base currency beside a return whose row is shown in another currency, and its tooltip always states it.
+
 The snapshot form always uses `original_value` / `original_amount` to populate fields, ensuring edits are saved in the investment's `base_currency` regardless of the display currency.
 
 **Expenses and income** follow the same principle: the API response includes both `amount` (original) and `converted_amount` (display). The edit form always populates from `amount`, and the delete confirmation shows the original amount. Amount values are formatted with `String(Number())` in forms (strips trailing `.00`) and `formatAmount()` with `Intl.NumberFormat` in tables (adds thousand separators).

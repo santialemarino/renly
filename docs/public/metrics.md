@@ -48,6 +48,8 @@ Take the current value, subtract any net deposits/withdrawals during the period,
 
 The investment grew 5%, and the remaining $1,000 increase came from the money you added.
 
+**Which currency it's measured in:** an investment's own returns (period return, simple return and TWR) are measured in the investment's own currency, before any conversion. A peso investment can show +25% while its value in dollars barely moved, because the peso lost value in the meantime. When the snapshots grid shows a holding's values in another currency, the return names its currency next to it (for example `+25% ARS`). Portfolio-level returns are measured in the display currency.
+
 ## Time-Weighted Return (TWR)
 
 **What it answers:** "How did the investment itself perform, regardless of when I added or removed money?"
