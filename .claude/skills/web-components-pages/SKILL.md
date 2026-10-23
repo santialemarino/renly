@@ -261,8 +261,8 @@ Never render the raw `detail` as the primary message — resolve the `code` to a
 params) and **falls back to `detail`** for a code it doesn't map. Parse the response with
 `parseApiError(res)`; get the translator from `useTranslations('apiErrors')` (client) or
 `await getTranslations('apiErrors')` (server action / server-only lib). Add a new `apiErrors.<code>`
-key in BOTH `en.json` and `es.json` (keyset parity is tested) whenever the backend adds a code worth
-localizing. Success copy is owned by the frontend per action — don't render backend success prose.
+key in BOTH `en.json` and `es.json` (keyset parity is tested) whenever the backend adds a code —
+`api-error-coverage.cross-app.test.ts` derives every code the API emits and fails on one without both. Success copy is owned by the frontend per action — don't render backend success prose.
 
 ## Translations
 

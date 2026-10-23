@@ -56,6 +56,11 @@ the one backend-localized exception — no frontend renderer.)
   frontend falls back to it). Prefer a domain error when the condition is a domain rule.
 - Reuse an existing `code` when the condition is the same across sites (e.g. login and re-auth both
   use `invalid_credentials`), so the frontend maps it once.
+- Every code the API can send, from any source above (or a hand-built `JSONResponse` body such as the
+  IntegrityError handler's), needs an `apiErrors.<code>` in BOTH `en.json` and `es.json`:
+  `apps/web/tests/unit/api-error-coverage.cross-app.test.ts` scans all of `app/` for them. Pass a code
+  as a string literal or a module-level string constant so the scan can read it; any other expression
+  in a `code=` / `"code":` position fails the test until it is pinned there with a reason.
 - **Success responses** don't carry localized prose either — the frontend owns success copy per
   action. Give a success ack a machine field only when a caller must branch on it (e.g. a token type).
 
