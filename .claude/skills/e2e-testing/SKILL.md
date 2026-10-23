@@ -416,10 +416,11 @@ label.**
 
 `e2e-required` is the check to mark REQUIRED (a repository setting, not something the workflow
 decides). It reports on every run and fails when a job it needs failed or was cancelled, so a PR
-whose gate skipped `e2e-web` passes. One exception keeps it honest: a run cancelled because a NEWER run on
-the same commit superseded it (a label added at PR creation fires `opened` then `labeled`) waits for the
-newest run and reports that run's `e2e-required` conclusion as its own, instead of a false red; cancelled
-with no successor, it fails. The gate lives in the job rather than in `on.paths` because a
+whose gate skipped `e2e-web` passes. One exception keeps it honest: a run cancelled because ANOTHER run on
+the same commit superseded it (labels added at PR creation fire `opened` and one `labeled` per label in
+the same second) waits for the run that actually ran the gate — its `changes` job succeeded and its suite
+was not cancelled, whatever its run id — and reports that run's `e2e-required` conclusion as its own,
+instead of a false red; cancelled with no run that ran the gate, it fails. The gate lives in the job rather than in `on.paths` because a
 workflow skipped by a path filter leaves a required check pending forever.
 
 ### What the job does

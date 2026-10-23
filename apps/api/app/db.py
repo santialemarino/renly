@@ -13,8 +13,9 @@ RLS_USER_INFO_KEY = "rls_user_id"
 # out 4-7 parallel API calls, each borrowing a connection, so the request pool must absorb a few
 # concurrent navigations; pre_ping revalidates pooled connections dropped by DB restarts/failovers
 # (otherwise they surface as 500s) and recycle retires connections before typical idle timeouts.
-# The two privileged pools split by caller: the admin pool serves the scheduler (whose hourly jobs
-# measured a peak of 4 checkouts) and the authenticated admin surface; the auth pool serves only the
+# The two privileged pools split by caller: the admin pool serves the scheduler (each job runs on one
+# connection of its own, dispatch included, and the hourly jobs start at distinct minutes) and the
+# authenticated admin surface; the auth pool serves only the
 # pre-auth paths (login, register, refresh, email verification, password reset, invite preview,
 # API-key verification), so a job holding every admin connection can never queue a login or the
 # refresh every session makes twice an hour. Per process: 20 + 5 + 5 = 30 connections at most.
