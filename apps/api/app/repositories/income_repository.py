@@ -11,7 +11,7 @@ from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.shared_income import SharedIncome, SharedIncomeSplit
-from app.repositories.utils import apply_entry_sort
+from app.repositories.utils import apply_entry_sort, chunked
 
 # The two things a row in the unioned income list can be. A private income_entries row of the caller's
 # own, or the caller's SHARE of income their group recorded.
@@ -355,15 +355,18 @@ async def sum_by_account_ids(
 ) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = (
-        select(IncomeEntry.account_id, func.coalesce(func.sum(IncomeEntry.amount), 0))
-        .join(Account, Account.id == IncomeEntry.account_id)
-        .where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id, IncomeEntry.date >= Account.opening_date)
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(IncomeEntry.date <= as_of_date)
-    result = await session.execute(stmt.group_by(IncomeEntry.account_id))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(IncomeEntry.account_id, func.coalesce(func.sum(IncomeEntry.amount), 0))
+            .join(Account, Account.id == IncomeEntry.account_id)
+            .where(IncomeEntry.account_id.in_(chunk), IncomeEntry.user_id == user_id, IncomeEntry.date >= Account.opening_date)
+        )
+        if as_of_date is not None:
+            stmt = stmt.where(IncomeEntry.date <= as_of_date)
+        result = await session.execute(stmt.group_by(IncomeEntry.account_id))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # Income totals linked to each account, grouped by (account_id, date), for a caller deriving those
@@ -381,18 +384,21 @@ async def sum_by_account_ids_dated(
 ) -> list[tuple[int, date_type, Decimal]]:
     if not account_ids:
         return []
-    result = await session.execute(
-        select(IncomeEntry.account_id, IncomeEntry.date, func.coalesce(func.sum(IncomeEntry.amount), 0))
-        .join(Account, Account.id == IncomeEntry.account_id)
-        .where(
-            IncomeEntry.account_id.in_(account_ids),
-            IncomeEntry.user_id == user_id,
-            IncomeEntry.date >= Account.opening_date,
-            IncomeEntry.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(IncomeEntry.account_id, IncomeEntry.date, func.coalesce(func.sum(IncomeEntry.amount), 0))
+            .join(Account, Account.id == IncomeEntry.account_id)
+            .where(
+                IncomeEntry.account_id.in_(chunk),
+                IncomeEntry.user_id == user_id,
+                IncomeEntry.date >= Account.opening_date,
+                IncomeEntry.date <= until,
+            )
+            .group_by(IncomeEntry.account_id, IncomeEntry.date)
         )
-        .group_by(IncomeEntry.account_id, IncomeEntry.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Monthly income totals linked to each account, grouped by account_id, year, month (the account's

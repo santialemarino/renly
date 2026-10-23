@@ -125,6 +125,13 @@ pnpm test:e2e        # Playwright E2E
     cursor listener for users holding 1, 5 and 20 pots — and every batch-over-pots read answers exactly
     what the per-pot read it replaced answers, over a fixture reaching every valuation branch. Its
     DB-free half, `tests/unit/test_pot_fanout_batching.py`, pins one read per source at twenty pots.
+  - `test_bind_parameter_cliff.py` — `LEDGER_TEST_DATABASE_URL`. asyncpg refuses a statement carrying more
+    than 32,767 bind parameters and `in_(ids)` binds one per id, so every repository read chunked through
+    `repositories/utils.chunked` is driven PAST the cap and must answer what it answers under it — ids
+    repeated and shuffled, and again one id per chunk (rows and order unchanged) — plus the auto-snapshot
+    job over more holdings than the cap. Its DB-free half, `tests/unit/test_in_chunking.py`, DERIVES every
+    repository `IN` over a caller list and fails on one that is neither chunked nor named bounded with a
+    reason, and on any unchunked one the scheduler can reach.
   - `test_reminder_dispatch_batching.py` — `LEDGER_TEST_DATABASE_URL`. The overdue-pot reminder costs a
     FIXED number of statements and holds ONE connection however many pots are due — counted on the wire
     and at the pool for 1, 10 and 100 due pots — and the batched dispatch tells everybody exactly what one

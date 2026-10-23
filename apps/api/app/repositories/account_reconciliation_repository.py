@@ -6,7 +6,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
-from app.repositories.utils import account_scope_matches
+from app.repositories.utils import account_scope_matches, chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -79,12 +79,15 @@ async def get_latest_dates_by_account_ids(session: AsyncSession, account_ids: li
 async def get_latest_dates_across_users(session: AsyncSession, account_ids: list[int]) -> dict[int, date_type]:
     if not account_ids:
         return {}
-    result = await session.execute(
-        select(AccountReconciliation.account_id, func.max(AccountReconciliation.as_of_date))
-        .where(AccountReconciliation.account_id.in_(account_ids))
-        .group_by(AccountReconciliation.account_id)
-    )
-    return {account_id: as_of_date for account_id, as_of_date in result.all()}
+    latest: dict[int, date_type] = {}
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(AccountReconciliation.account_id, func.max(AccountReconciliation.as_of_date))
+            .where(AccountReconciliation.account_id.in_(chunk))
+            .group_by(AccountReconciliation.account_id)
+        )
+        latest.update({account_id: as_of_date for account_id, as_of_date in result.all()})
+    return latest
 
 
 # Insert a new reconciliation.

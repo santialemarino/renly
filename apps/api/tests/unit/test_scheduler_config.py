@@ -1,5 +1,10 @@
+import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 
+import pytest
+from apscheduler.events import EVENT_JOB_ERROR
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app import scheduler as scheduler_module
@@ -16,6 +21,7 @@ _CRON_FIELDS = {"year", "month", "day", "week", "day_of_week", "hour", "minute",
 class _AddJobRecorder:
     def __init__(self):
         self.calls: list[tuple] = []
+        self.listeners: list[tuple] = []
 
     def __call__(self, func, trigger=None, **kwargs):
         self.calls.append((func, trigger, kwargs))
@@ -25,6 +31,7 @@ class TestSchedulerConfig:
     def _record(self, monkeypatch) -> _AddJobRecorder:
         recorder = _AddJobRecorder()
         monkeypatch.setattr(scheduler_module.scheduler, "add_job", recorder)
+        monkeypatch.setattr(scheduler_module.scheduler, "add_listener", lambda callback, mask: recorder.listeners.append((callback, mask)))
         monkeypatch.setattr(scheduler_module.scheduler, "start", lambda: None)
         scheduler_module.start_scheduler()
         return recorder
@@ -107,3 +114,60 @@ class TestSchedulerConfig:
                 fires += 1
                 fire = trigger.get_next_fire_time(fire, fire + timedelta(seconds=1))
             assert fires > 0, f"{job_id} never fired inside the window, so the check proved nothing for it"
+
+
+# U19: a job's failure is reported by the scheduler, once, rather than swallowed inside the job. The
+# auto-snapshot job failed identically on every run once its reads passed the bind-parameter cap, and its
+# wrapper turned that into one routine "failed" log line a month.
+class _Boom(Exception):
+    pass
+
+
+# Stands in for AdminSessionLocal: opening the session raises, as a dead database would.
+class _RaisingSession:
+    async def __aenter__(self):
+        raise _Boom("database unreachable")
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class TestJobFailuresAreReported:
+    # Every registered job lets its exception out, so APScheduler sees it — derived from what
+    # start_scheduler registers, so a new job that swallows again fails here.
+    @pytest.mark.asyncio
+    async def test_no_job_swallows_its_exception(self, monkeypatch):
+        recorder = TestSchedulerConfig()._record(monkeypatch)
+        monkeypatch.setattr(scheduler_module, "AdminSessionLocal", _RaisingSession)
+        assert len(recorder.calls) == 9
+        for func, _trigger, _kwargs in recorder.calls:
+            with pytest.raises(_Boom):
+                await func()
+
+    # The report is wired to APScheduler's own error event, on the scheduler the app starts.
+    def test_the_failure_listener_is_registered(self, monkeypatch):
+        recorder = TestSchedulerConfig()._record(monkeypatch)
+        assert recorder.listeners == [(scheduler_module._report_job_failure, EVENT_JOB_ERROR)]
+
+    # End to end on a real scheduler: a raising job reaches the listener, which logs it at CRITICAL with
+    # the job's id and the prefix an alert keys on, and the scheduler keeps running.
+    @pytest.mark.asyncio
+    async def test_a_raising_job_is_logged_critical_with_its_id(self, caplog):
+        async def failing_job():
+            raise _Boom("past the cap")
+
+        scheduler = AsyncIOScheduler(timezone="UTC")
+        scheduler.add_listener(scheduler_module._report_job_failure, EVENT_JOB_ERROR)
+        scheduler.add_job(failing_job, "date", run_date=datetime.now(UTC), id="u19_failing_job")
+        with caplog.at_level(logging.CRITICAL, logger=scheduler_module.logger.name):
+            scheduler.start()
+            for _ in range(50):
+                if any(r.levelno == logging.CRITICAL for r in caplog.records):
+                    break
+                await asyncio.sleep(0.02)
+            assert scheduler.running
+            scheduler.shutdown(wait=False)
+        critical = [r for r in caplog.records if r.levelno == logging.CRITICAL]
+        assert len(critical) == 1
+        assert critical[0].getMessage().startswith("SCHEDULED JOB FAILED: u19_failing_job")
+        assert isinstance(critical[0].exc_info[1], _Boom)

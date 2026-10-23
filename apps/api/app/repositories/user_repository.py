@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.user import User
+from app.repositories.utils import chunked
 
 
 # Returns all admin users, for admin notifications (e.g. new feedback) that need each admin's id
@@ -25,8 +26,11 @@ async def get_by_id(session: AsyncSession, user_id: int) -> User | None:
 async def get_by_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, User]:
     if not user_ids:
         return {}
-    result = await session.execute(select(User).where(User.id.in_(user_ids)))
-    return {user.id: user for user in result.scalars().all()}
+    users: dict[int, User] = {}
+    for chunk in chunked(user_ids):
+        result = await session.execute(select(User).where(User.id.in_(chunk)))
+        users.update({user.id: user for user in result.scalars().all()})
+    return users
 
 
 # Fetches user by email from the database. Lowercases the input so lookups are case-insensitive.

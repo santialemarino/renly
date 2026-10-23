@@ -18,6 +18,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
+from app.repositories.utils import chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 # Every status whose amount moves a balance. All of them, today — a pending settlement counts because
@@ -180,19 +181,22 @@ async def _sum_leg(session: AsyncSession, account_ids: list[int], *, leg: str, a
         return {}
     account_column = GroupSettlement.to_account_id if leg == "to" else GroupSettlement.from_account_id
     leg_amount = GroupSettlement.to_amount if leg == "to" else GroupSettlement.from_amount
-    stmt = (
-        select(account_column, func.coalesce(func.sum(func.coalesce(leg_amount, GroupSettlement.amount)), 0))
-        .join(Account, Account.id == account_column)
-        .where(
-            account_column.in_(account_ids),
-            GroupSettlement.status.in_(_CASH_STATUSES),
-            GroupSettlement.date >= Account.opening_date,
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(account_column, func.coalesce(func.sum(func.coalesce(leg_amount, GroupSettlement.amount)), 0))
+            .join(Account, Account.id == account_column)
+            .where(
+                account_column.in_(chunk),
+                GroupSettlement.status.in_(_CASH_STATUSES),
+                GroupSettlement.date >= Account.opening_date,
+            )
         )
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(GroupSettlement.date <= as_of_date)
-    result = await session.execute(stmt.group_by(account_column))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+        if as_of_date is not None:
+            stmt = stmt.where(GroupSettlement.date <= as_of_date)
+        result = await session.execute(stmt.group_by(account_column))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # The `to` leg grouped by (account_id, date), for a caller deriving balances at many dates in one pass.
@@ -211,18 +215,21 @@ async def _sum_leg_dated(session: AsyncSession, account_ids: list[int], *, leg: 
         return []
     account_column = GroupSettlement.to_account_id if leg == "to" else GroupSettlement.from_account_id
     leg_amount = GroupSettlement.to_amount if leg == "to" else GroupSettlement.from_amount
-    result = await session.execute(
-        select(account_column, GroupSettlement.date, func.coalesce(func.sum(func.coalesce(leg_amount, GroupSettlement.amount)), 0))
-        .join(Account, Account.id == account_column)
-        .where(
-            account_column.in_(account_ids),
-            GroupSettlement.status.in_(_CASH_STATUSES),
-            GroupSettlement.date >= Account.opening_date,
-            GroupSettlement.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(account_column, GroupSettlement.date, func.coalesce(func.sum(func.coalesce(leg_amount, GroupSettlement.amount)), 0))
+            .join(Account, Account.id == account_column)
+            .where(
+                account_column.in_(chunk),
+                GroupSettlement.status.in_(_CASH_STATUSES),
+                GroupSettlement.date >= Account.opening_date,
+                GroupSettlement.date <= until,
+            )
+            .group_by(account_column, GroupSettlement.date)
         )
-        .group_by(account_column, GroupSettlement.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Which of the given accounts any settlement leg touches. Feeds the currency lock: an account a

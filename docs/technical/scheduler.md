@@ -8,7 +8,7 @@ APScheduler-based background job system for periodic data fetching and auto-snap
 
 The scheduler uses `APScheduler.AsyncIOScheduler` and integrates with FastAPI's lifespan. `start_scheduler()` is called on app startup; `stop_scheduler()` on shutdown. It is pinned to UTC (`AsyncIOScheduler(timezone="UTC")`), so every cron hour below (the `*_HOUR_UTC` constants) fires at that UTC hour regardless of the host's local timezone — matching the startup catch-up's UTC reasoning.
 
-Each job wrapper creates its own `AdminSessionLocal()` session (not tied to a request, on the admin pool — login and the other pre-auth paths have a pool of their own, so a job can never queue them) and catches all exceptions at the top level — a failing job logs the error and does not crash the application. Background jobs run with no user context, so they use the **privileged** session (`DATABASE_ADMIN_URL`, the `renly_admin` role) which bypasses Row-Level Security through its `BYPASSRLS` attribute (SEC-15) — a single job legitimately spans every user's rows.
+Each job wrapper creates its own `AdminSessionLocal()` session (not tied to a request, on the admin pool — login and the other pre-auth paths have a pool of their own, so a job can never queue them) and lets an exception propagate to APScheduler, which isolates the failing run (the application and every other job keep running) and reports it once — see Error handling below. Background jobs run with no user context, so they use the **privileged** session (`DATABASE_ADMIN_URL`, the `renly_admin` role) which bypasses Row-Level Security through its `BYPASSRLS` attribute (SEC-15) — a single job legitimately spans every user's rows.
 
 ## Configuration constants
 
@@ -160,23 +160,20 @@ The queue is cleared whether or not the send succeeded, the same posture every o
 
 ## Error handling
 
-Every job wrapper follows the same pattern:
+Every job wrapper is the same shape, with no `try/except`:
 
 ```python
 async def _job_name() -> None:
-    try:
-        async with AdminSessionLocal() as session:
-            await service.method(session)
-    except Exception:
-        logger.exception("Scheduled <job> failed.")
+    async with AdminSessionLocal() as session:
+        await service.method(session)
 ```
 
-Failures are logged but never propagated — the scheduler continues running other jobs.
+A raising job is isolated by APScheduler itself: the run is abandoned, the scheduler and the other jobs keep running, and the next tick runs normally. APScheduler emits `EVENT_JOB_ERROR` for it, and the one listener `_report_job_failure` logs it at **CRITICAL** with the fixed prefix `SCHEDULED JOB FAILED:`, the job id, the due time and the traceback — a level and a prefix nothing a job logs on its own path uses, so a log alert can key on them; with `SENTRY_DSN` set it is also a Sentry error event carrying the exception. Swallowing the exception inside the wrapper is what let a job that failed identically every run read as one routine log line among many.
 
 ## Adding a new job
 
 1. Create an async wrapper function that opens a session and calls the service method.
-2. Wrap the body in `try/except Exception` with `logger.exception()`.
+2. Do not catch exceptions in it: a raising job is isolated and reported by the `EVENT_JOB_ERROR` listener (see Error handling).
 3. Add `scheduler.add_job(...)` in `start_scheduler()` with the appropriate trigger (`interval`, `cron`, or `date`).
 4. Use `replace_existing=True` and assign a unique `id`.
 5. Always set `misfire_grace_time=MISFIRE_GRACE_SECONDS, coalesce=True` (the in-memory store makes a stricter grace unsafe; jobs must be idempotent so a coalesced late run is fine).

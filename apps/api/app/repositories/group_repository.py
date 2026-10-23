@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from app.models.group import Group, GroupMember, GroupMemberRole
+from app.repositories.utils import chunked
 from app.utils.pagination import apply_limit, capped
 
 
@@ -35,8 +36,11 @@ async def get_by_id(session: AsyncSession, group_id: int) -> Group | None:
 async def get_by_ids(session: AsyncSession, group_ids: list[int]) -> list[Group]:
     if not group_ids:
         return []
-    result = await session.execute(select(Group).where(Group.id.in_(group_ids)))
-    return list(result.scalars().all())
+    groups: list[Group] = []
+    for chunk in chunked(group_ids):
+        result = await session.execute(select(Group).where(Group.id.in_(chunk)))
+        groups.extend(result.scalars().all())
+    return groups
 
 
 # Persists a new group and flushes to get the id.
@@ -113,10 +117,11 @@ async def list_members(session: AsyncSession, group_id: int) -> list[GroupMember
 async def list_members_by_groups(session: AsyncSession, group_ids: list[int]) -> dict[int, list[GroupMember]]:
     if not group_ids:
         return {}
-    result = await session.execute(select(GroupMember).where(GroupMember.group_id.in_(group_ids)).order_by(GroupMember.id))
     members_by_group: dict[int, list[GroupMember]] = defaultdict(list)
-    for member in result.scalars().all():
-        members_by_group[member.group_id].append(member)
+    for chunk in chunked(group_ids):
+        result = await session.execute(select(GroupMember).where(GroupMember.group_id.in_(chunk)).order_by(GroupMember.id))
+        for member in result.scalars().all():
+            members_by_group[member.group_id].append(member)
     return dict(members_by_group)
 
 

@@ -7,6 +7,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
+from app.repositories.utils import chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -111,15 +112,18 @@ async def sum_by_account_ids(
 ) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = (
-        select(CardSettlement.account_id, func.coalesce(func.sum(settlement_cash_leg()), 0))
-        .join(Account, Account.id == CardSettlement.account_id)
-        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(CardSettlement.date <= as_of_date)
-    result = await session.execute(stmt.group_by(CardSettlement.account_id))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(CardSettlement.account_id, func.coalesce(func.sum(settlement_cash_leg()), 0))
+            .join(Account, Account.id == CardSettlement.account_id)
+            .where(CardSettlement.account_id.in_(chunk), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
+        )
+        if as_of_date is not None:
+            stmt = stmt.where(CardSettlement.date <= as_of_date)
+        result = await session.execute(stmt.group_by(CardSettlement.account_id))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # Returns whether any settlement draws from this account (used to lock the account's currency once linked).
@@ -138,18 +142,21 @@ async def sum_by_account_ids_dated(
 ) -> list[tuple[int, date_type, Decimal]]:
     if not account_ids:
         return []
-    result = await session.execute(
-        select(CardSettlement.account_id, CardSettlement.date, func.coalesce(func.sum(settlement_cash_leg()), 0))
-        .join(Account, Account.id == CardSettlement.account_id)
-        .where(
-            CardSettlement.account_id.in_(account_ids),
-            CardSettlement.user_id == user_id,
-            CardSettlement.date >= Account.opening_date,
-            CardSettlement.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(CardSettlement.account_id, CardSettlement.date, func.coalesce(func.sum(settlement_cash_leg()), 0))
+            .join(Account, Account.id == CardSettlement.account_id)
+            .where(
+                CardSettlement.account_id.in_(chunk),
+                CardSettlement.user_id == user_id,
+                CardSettlement.date >= Account.opening_date,
+                CardSettlement.date <= until,
+            )
+            .group_by(CardSettlement.account_id, CardSettlement.date)
         )
-        .group_by(CardSettlement.account_id, CardSettlement.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Monthly settlement totals drawn from each account, grouped by account_id, year, month. Sums the CASH

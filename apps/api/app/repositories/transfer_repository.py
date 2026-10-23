@@ -8,7 +8,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.transfer import Transfer
-from app.repositories.utils import account_scope_matches
+from app.repositories.utils import account_scope_matches, chunked
 from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
@@ -85,15 +85,18 @@ async def _sum_leg(
 ) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = (
-        select(leg, func.coalesce(func.sum(amount), 0))
-        .join(Account, Account.id == leg)
-        .where(leg.in_(account_ids), account_scope_matches(Transfer, user_id), Transfer.date >= Account.opening_date)
-    )
-    if as_of_date is not None:
-        stmt = stmt.where(Transfer.date <= as_of_date)
-    result = await session.execute(stmt.group_by(leg))
-    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+    totals: dict[int, Decimal] = {}
+    for chunk in chunked(account_ids):
+        stmt = (
+            select(leg, func.coalesce(func.sum(amount), 0))
+            .join(Account, Account.id == leg)
+            .where(leg.in_(chunk), account_scope_matches(Transfer, user_id), Transfer.date >= Account.opening_date)
+        )
+        if as_of_date is not None:
+            stmt = stmt.where(Transfer.date <= as_of_date)
+        result = await session.execute(stmt.group_by(leg))
+        totals.update({account_id: Decimal(str(total)) for account_id, total in result.all()})
+    return totals
 
 
 # Total transferred OUT of each account (debits the balance).
@@ -140,18 +143,21 @@ async def _sum_leg_dated(
 ) -> list[tuple[int, date_type, Decimal]]:
     if not account_ids:
         return []
-    result = await session.execute(
-        select(leg, Transfer.date, func.coalesce(func.sum(amount), 0))
-        .join(Account, Account.id == leg)
-        .where(
-            leg.in_(account_ids),
-            account_scope_matches(Transfer, user_id),
-            Transfer.date >= Account.opening_date,
-            Transfer.date <= until,
+    rows: list[tuple[int, date_type, Decimal]] = []
+    for chunk in chunked(account_ids):
+        result = await session.execute(
+            select(leg, Transfer.date, func.coalesce(func.sum(amount), 0))
+            .join(Account, Account.id == leg)
+            .where(
+                leg.in_(chunk),
+                account_scope_matches(Transfer, user_id),
+                Transfer.date >= Account.opening_date,
+                Transfer.date <= until,
+            )
+            .group_by(leg, Transfer.date)
         )
-        .group_by(leg, Transfer.date)
-    )
-    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+        rows.extend([(row[0], row[1], Decimal(str(row[2]))) for row in result.all()])
+    return rows
 
 
 # Dated totals transferred OUT of each account.

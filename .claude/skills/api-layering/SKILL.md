@@ -167,6 +167,14 @@ for inv, results in zip(investments, fetch_results):
         await repository.upsert(session, ...)
 ```
 
+### Chunk an `IN` whose list is not bounded by one user
+
+asyncpg refuses a statement carrying more than 32,767 bind parameters, and `column.in_(ids)` binds one per id. A
+repository read whose id list grows with the user base — anything the scheduler reaches, or a fan-out over every
+pot a household holds — loops `for chunk in chunked(ids):` (`app/repositories/utils.py`) and merges the results.
+A list drawn from one request's own rows stays a single `IN`. `tests/unit/test_in_chunking.py` derives every
+repository `IN` over a caller list and fails until a new one is chunked or named bounded with a reason.
+
 ### Use bulk upserts for batch writes
 
 When storing multiple rows (prices, exchange rates, ratios), prefer PostgreSQL `INSERT ... ON CONFLICT DO UPDATE` over individual SELECT + INSERT/UPDATE loops. Use `sqlalchemy.dialects.postgresql.insert` for this.

@@ -1,7 +1,31 @@
+from collections.abc import Iterable
+
 from sqlalchemy import asc, desc, or_
 
 from app.domain.list_scope import ListScope
 from app.models.account import Account
+
+# The most ids one `IN (...)` list carries. `column.in_(ids)` binds one parameter PER id, and asyncpg
+# refuses a statement carrying more than 32,767 parameters (measured: 32,767 run, 32,768 raise
+# InterfaceError; the wire protocol counts them in 16 bits) — so a read over a list that grows with the
+# whole user base stops working outright once the list passes it, for every user at once. Twenty
+# thousand leaves the statement's own other parameters ample room; a statement that binds its list
+# TWICE must pass half this as `size`.
+IN_CHUNK_SIZE = 20_000
+
+
+# The ids for an `IN (...)` predicate, de-duplicated, sorted and split into lists of at most `size`: a
+# repository read over a caller list that is not bounded by one user's own rows runs one statement per
+# chunk and merges the results, instead of one statement that fails past the cap. Every function doing
+# so is named in tests/unit/test_in_chunking.py, which fails on an unbounded `IN` that does not.
+#
+# Sorted so the chunks are deterministic and a read ordered by the listed column comes back in the same
+# order chunked or not; de-duplicated because `IN` ignores a repeat anyway, and a repeat must not push a
+# chunk past the cap. A loop over the chunks costs len(ids) / size statements — one in practice — which
+# is not the per-row N+1 the performance rules forbid.
+def chunked[T: (int, str)](ids: Iterable[T], size: int = IN_CHUNK_SIZE) -> list[list[T]]:
+    unique = sorted(set(ids))
+    return [unique[start : start + size] for start in range(0, len(unique), size)]
 
 
 # The dual-scope predicate for a movement table joined to the Account it moves, mirroring the RLS
