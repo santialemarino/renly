@@ -192,3 +192,56 @@ class TestJobFailuresAreReported:
         print(f"\nscheduled dispatch call sites: {sorted(name for name, _ in calls)}")
         assert len(calls) >= 3
         assert [name for name, node in calls if not any(kw.arg == "session" for kw in node.keywords)] == []
+
+
+# Stands in for AdminSessionLocal when a job's body is driven with its service faked.
+class _InertSession:
+    async def __aenter__(self):
+        return object()
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+# U25: the month-end auto-snapshot schedule, and the startup catch-up's idea of when that schedule last
+# fired. The no-overlap test above walks this job's trigger but only asks that it collide with nothing —
+# moving it to the 28th, or to another hour, passed. Each month's valuation is the one the evolution chart
+# carries for that month, so a run on the 28th dates it days early and a month whose last day is the 31st
+# misses its last three days of prices.
+class TestTheMonthEndAutoSnapshot:
+    # Fires on every month's LAST day — 28, 29, 30 or 31 — at AUTO_SNAPSHOTS_HOUR_UTC, and on no other day.
+    # Walked across fourteen months that include a leap February.
+    def test_it_fires_on_the_last_day_of_every_month_and_only_then(self, monkeypatch):
+        recorder = TestSchedulerConfig()._record(monkeypatch)
+        _func, trigger, kwargs = next(call for call in recorder.calls if call[2]["id"] == "generate_auto_snapshots")
+        assert trigger == "cron"
+        cron = CronTrigger(timezone=UTC, **{k: v for k, v in kwargs.items() if k in _CRON_FIELDS})
+        fires = []
+        fire = cron.get_next_fire_time(None, datetime(2027, 12, 1, tzinfo=UTC))
+        while fire is not None and fire < datetime(2029, 2, 1, tzinfo=UTC):
+            fires.append(fire)
+            fire = cron.get_next_fire_time(fire, fire + timedelta(seconds=1))
+        last_days = [
+            (2027, 12, 31), (2028, 1, 31), (2028, 2, 29), (2028, 3, 31), (2028, 4, 30), (2028, 5, 31), (2028, 6, 30),
+            (2028, 7, 31), (2028, 8, 31), (2028, 9, 30), (2028, 10, 31), (2028, 11, 30), (2028, 12, 31), (2029, 1, 31),
+        ]  # fmt: skip
+        assert fires == [datetime(y, m, d, scheduler_module.AUTO_SNAPSHOTS_HOUR_UTC, tzinfo=UTC) for y, m, d in last_days]
+
+    # The catch-up decides "the month-end tick was missed" by rebuilding that tick's time, so it must be
+    # handed the hour the cron really fires at — read off what start_scheduler registers rather than off
+    # the constant both happen to name today.
+    @pytest.mark.asyncio
+    async def test_the_startup_catch_up_rebuilds_the_tick_the_cron_fires_at(self, monkeypatch):
+        recorder = TestSchedulerConfig()._record(monkeypatch)
+        cron_hour = next(kwargs["hour"] for _f, _t, kwargs in recorder.calls if kwargs["id"] == "generate_auto_snapshots")
+        catch_up = next(func for func, _t, kwargs in recorder.calls if kwargs["id"] == "auto_snapshots_startup_catchup")
+        seen: dict = {}
+
+        async def recorded(_session, **kwargs):
+            seen.update(kwargs)
+            return False
+
+        monkeypatch.setattr(scheduler_module, "AdminSessionLocal", _InertSession)
+        monkeypatch.setattr(scheduler_module.auto_snapshot_service, "run_startup_catchup", recorded)
+        await catch_up()
+        assert seen == {"catchup_days": scheduler_module.AUTO_SNAPSHOTS_CATCHUP_DAYS, "snapshots_hour_utc": cron_hour}
