@@ -1,4 +1,5 @@
 import collections.abc
+import dataclasses
 import gc
 import importlib
 import pkgutil
@@ -9,7 +10,8 @@ from decimal import Decimal
 from typing import get_args, get_origin
 
 import pytest
-from pydantic import AfterValidator, BaseModel, Field, ValidationError
+from pydantic import AfterValidator, AnyUrl, BaseModel, Field, HttpUrl, SecretBytes, SecretStr, TypeAdapter, ValidationError
+from pydantic.networks import _BaseMultiHostUrl, _BaseUrl
 
 import app.schemas
 from app.models.investment import Currency
@@ -40,8 +42,9 @@ from app.schemas.transaction import TransactionCreate, TransactionUpdate
 # BYTES, because bcrypt's limit is 72 bytes and `max_length` counts CHARACTERS (`á` is two bytes, an
 # emoji four), so a character cap there would be the wrong rule rather than a stricter one.
 #
-# ▸ AND A BEHAVIOURAL TIE. `TestTheCapsAreRealAtRuntime` below builds actual bodies, because every
-# assertion above reads a schema, and a schema-only guard proves nothing about what a request does.
+# ▸ AND A BEHAVIOURAL TIE. `TestTheCapsAreRealAtRuntime` below runs every plain-str field's real
+# validator, because every assertion above reads a schema, and a schema-only guard proves nothing about
+# what a request does.
 # It is what caught this unit's own defect: an edit meant for `GroupSettlementPlanCreate.notes` landed
 # on `GroupSettlementResponse.notes` instead — same field name, different description text, a response
 # schema — so the scan read as capped while the endpoint still took 100,000 characters.
@@ -52,7 +55,7 @@ for _module in pkgutil.iter_modules(app.schemas.__path__):
 NOTES_MAX_LENGTH = 500
 
 
-# Every model a request body can carry: RequestBase's subclasses, transitively, PLUS every pydantic model
+# Every model a request body can carry: RequestBase's subclasses, transitively, PLUS every structured type
 # reachable from their fields at any depth. The second half is what covers a plain `BaseModel` nested in a
 # request (a `list[Item]` field): its own string fields are payload the request accepts, and a scan of
 # RequestBase subclasses alone would never read them.
@@ -65,11 +68,27 @@ def _request_schemas():
     return sorted(_reachable_models(set(subclasses(RequestBase))), key=lambda c: (c.__module__, c.__name__))
 
 
-# The given models plus every pydantic model their fields reach, at any depth and through any container.
+# Whether a type is a structure pydantic validates field by field: a pydantic model, a `TypedDict` or a
+# dataclass (standard or pydantic). The last two are not models, so a walk keyed on `BaseModel` alone
+# passed straight over them — and their string fields are payload exactly as a nested model's are.
+def _is_structure(annotation) -> bool:
+    if not isinstance(annotation, type):
+        return False
+    return issubclass(annotation, BaseModel) or typing.is_typeddict(annotation) or dataclasses.is_dataclass(annotation)
+
+
+# {field name: annotation} for any structure `_is_structure` accepts, `Annotated` metadata kept.
+def _structure_fields(structure) -> dict:
+    if issubclass(structure, BaseModel):
+        return {name: field.annotation for name, field in structure.model_fields.items()}
+    return typing.get_type_hints(structure, include_extras=True)
+
+
+# The given models plus every structure their fields reach, at any depth and through any container.
 def _reachable_models(roots: set) -> set:
     def models_in(annotation):
         annotation = _unwrap(annotation)
-        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if _is_structure(annotation):
             yield annotation
         for arg in get_args(annotation):
             yield from models_in(arg)
@@ -77,12 +96,27 @@ def _reachable_models(roots: set) -> set:
     found = set(roots)
     pending = list(found)
     while pending:
-        for field in pending.pop().model_fields.values():
-            for model in models_in(field.annotation):
+        for annotation in _structure_fields(pending.pop()).values():
+            for model in models_in(annotation):
                 if model not in found:
                     found.add(model)
                     pending.append(model)
     return found
+
+
+# The compiled JSON Schema of a structure: a model's own, a TypedDict's or dataclass's through a TypeAdapter.
+def _compiled(structure) -> dict:
+    if issubclass(structure, BaseModel):
+        return structure.model_json_schema()
+    return TypeAdapter(structure).json_schema()
+
+
+# Whether a structure keeps keys it does not declare. A model or pydantic dataclass with `extra="allow"`
+# stores every unknown key verbatim, and those keys and values are free text no field annotation describes,
+# so nothing in this file can bound them.
+def _allows_extra(structure) -> bool:
+    config = structure.model_config if issubclass(structure, BaseModel) else getattr(structure, "__pydantic_config__", {})
+    return config.get("extra") == "allow"
 
 
 # An annotation with any `Annotated[...]` wrapping removed — its metadata is constraints, not a type.
@@ -107,9 +141,18 @@ def _plain_str(annotation) -> bool:
     return _unwrap(annotation) is str
 
 
-# `Any` and `object` accept a string of any length, so wherever they appear they are free text too.
+# `Any` and `object` accept a string of any length, so wherever they appear they are free text too. So do
+# `bytes`, the secret types and every URL type: each arrives as a JSON string of any length, and none is
+# bounded by a parser the way a date or an enum is (`AnyUrl` takes any length; `HttpUrl` carries its own
+# 2083 cap, which the compiled schema shows, so it reads as capped rather than being exempted by name).
+_STRING_LIKE = (str, typing.Any, object, bytes, SecretStr, SecretBytes)
+
+
 def _accepts_any_string(annotation) -> bool:
-    return _unwrap(annotation) in (str, typing.Any, object)
+    annotation = _unwrap(annotation)
+    if annotation in _STRING_LIKE:
+        return True
+    return isinstance(annotation, type) and issubclass(annotation, (_BaseUrl, _BaseMultiHostUrl))
 
 
 # Whether a plain `str` appears ANYWHERE in an annotation's type arguments, at any depth and through
@@ -166,16 +209,21 @@ _UNCAPPED = {"type": "string"}
 # held to a key cap. That errs in one direction only: an int-keyed mapping sitting beside a capped
 # str-keyed one is flagged although it is bounded. It never lets an uncapped key through.
 #
-# NOT covered here, and covered elsewhere: an object WITH `properties` is a nested pydantic model, whose
-# fields are scanned as a schema of their own (`_request_schemas` reaches every pydantic model a request
-# can carry), so this does not descend into it. NOT covered at all: a `TypedDict` or dataclass nested in
-# a request (also an object with `properties`, but not a pydantic model, so nothing scans it); `bytes`,
-# `SecretStr` and URL types, which accept unbounded input but are never selected as free text; the extra
-# keys of a nested model with `extra="allow"`; nesting deeper than ten levels; and a pattern or a custom
-# validator that bounds a string without a `maxLength`, which reads as uncapped (the bcrypt byte cap is
-# the one such rule recognised, by name). No request schema uses any of these today.
+# NOT covered here, and covered elsewhere: an object WITH `properties` is a nested structure — a pydantic
+# model, a `TypedDict` or a dataclass — whose fields are scanned as a schema of their own (`_request_schemas`
+# reaches every one a request can carry), so this does not descend into it. The extra keys a structure with
+# `extra="allow"` keeps are refused outright by `test_no_request_structure_keeps_undeclared_keys`, since no
+# annotation describes them. Nesting deeper than MAX_DEPTH yields an uncapped leaf rather than stopping
+# quietly, so a field too deep to read (or a recursive type alias) fails the scan by name instead of
+# passing unread. Still read as UNCAPPED although bounded: a pattern or a custom validator that bounds a
+# string without a `maxLength` (the bcrypt byte cap is the one such rule recognised, by name) — an error
+# in the safe direction.
+MAX_DEPTH = 10
+
+
 def _string_leaves(prop, defs, depth=0, str_keys=False):
-    if depth > 10:
+    if depth > MAX_DEPTH:
+        yield _UNCAPPED
         return
     if prop is True or prop == {}:
         yield _UNCAPPED
@@ -201,8 +249,9 @@ def _string_leaves(prop, defs, depth=0, str_keys=False):
             yield prop.get("propertyNames", _UNCAPPED)
 
 
-# Whether a field carries the bcrypt BYTE ceiling instead of a character one.
-def _carries_the_password_cap(field) -> bool:
+# Whether a field carries the bcrypt BYTE ceiling instead of a character one. A model field keeps its
+# validators in `metadata`; a TypedDict or dataclass field keeps them in its `Annotated` annotation.
+def _carries_the_password_cap(structure, name) -> bool:
     def deep(annotation) -> bool:
         for meta in get_args(annotation):
             if isinstance(meta, AfterValidator) and meta.func is _within_bcrypt_limit:
@@ -211,24 +260,28 @@ def _carries_the_password_cap(field) -> bool:
                 return True
         return False
 
-    return any(isinstance(m, AfterValidator) and m.func is _within_bcrypt_limit for m in field.metadata) or deep(field.annotation)
+    metadata = structure.model_fields[name].metadata if issubclass(structure, BaseModel) else []
+    return any(isinstance(m, AfterValidator) and m.func is _within_bcrypt_limit for m in metadata) or deep(_structure_fields(structure)[name])
 
 
-# [(dotted name, is_capped)] for every free-text request field in the app.
-def _free_text_fields():
+def _dotted(structure, name) -> str:
+    return f"{structure.__module__.removeprefix('app.schemas.')}.{structure.__name__}.{name}"
+
+
+# [(dotted name, is_capped)] for every free-text field of the given structures (every request one by default).
+def _free_text_fields(structures=None):
     found = []
-    for schema in _request_schemas():
-        compiled = schema.model_json_schema()
+    for schema in _request_schemas() if structures is None else structures:
+        compiled = _compiled(schema)
         defs = compiled.get("$defs", {})
-        for name, field in schema.model_fields.items():
-            if _free_text_kind(field.annotation) is None:
+        for name, annotation in _structure_fields(schema).items():
+            if _free_text_kind(annotation) is None:
                 continue
-            dotted = f"{schema.__module__.removeprefix('app.schemas.')}.{schema.__name__}.{name}"
-            if _carries_the_password_cap(field):
-                found.append((dotted, True))
+            if _carries_the_password_cap(schema, name):
+                found.append((_dotted(schema, name), True))
                 continue
-            leaves = _string_leaves(compiled["properties"][name], defs, str_keys=_has_str_keys(field.annotation))
-            found.append((dotted, _all_capped(leaves)))
+            leaves = _string_leaves(compiled["properties"][name], defs, str_keys=_has_str_keys(annotation))
+            found.append((_dotted(schema, name), _all_capped(leaves)))
     return found
 
 
@@ -301,10 +354,10 @@ class TestEveryFreeTextRequestFieldIsBounded:
         # is, so a new one capped at 50 or at 5000 fails rather than being merely "capped".
         wrong = {}
         for schema in _request_schemas():
-            compiled = schema.model_json_schema()
+            compiled = _compiled(schema)
             defs = compiled.get("$defs", {})
-            for name in schema.model_fields:
-                if name != "notes" or _free_text_kind(schema.model_fields[name].annotation) is None:
+            for name, annotation in _structure_fields(schema).items():
+                if name != "notes" or _free_text_kind(annotation) is None:
                     continue
                 for leaf in _string_leaves(compiled["properties"][name], defs):
                     if leaf.get("maxLength") != NOTES_MAX_LENGTH:
@@ -316,6 +369,12 @@ class TestEveryFreeTextRequestFieldIsBounded:
         # schemas, and it was already short by five when it was written.
         notes_fields = [name for name, _ in _free_text_fields() if name.endswith(".notes")]
         assert len(notes_fields) >= 17, f"only {len(notes_fields)} notes fields found — the scan has narrowed"
+
+    def test_no_request_structure_keeps_undeclared_keys(self):
+        # `extra="allow"` stores every unknown key and its value verbatim — free text that no field
+        # annotation describes and so nothing above can bound. Refused outright rather than scanned.
+        allowing = sorted(_dotted(s, "*") for s in _request_schemas() if _allows_extra(s))
+        assert allowing == [], f"these request structures keep undeclared keys (extra='allow'): {allowing}"
 
     def test_it_recognises_the_byte_capped_passwords_rather_than_demanding_a_character_cap(self):
         # The one exception, asserted so it stays deliberate. If this stops holding, the guard above
@@ -471,33 +530,142 @@ class TestNestedModelsAreScanned:
             gc.collect()
 
 
-class TestTheCapsAreRealAtRuntime:
-    # The scan reads compiled schemas. These build actual bodies, so "the schema says maxLength" and
-    # "the request is refused" are tied together rather than assumed to mean the same thing.
+class TestWhatTheScanOnceCouldNotSee:
+    # Each case below passed the scan while being read by nothing: no request schema used any of them, so
+    # the guard was green, and it would have stayed green the day one did. Built from probes rather than
+    # found, so each is proved against the shape it claims. Probes are plain models, never RequestBase
+    # subclasses, so none can join the real scan for the rest of the session.
+
+    @pytest.mark.parametrize("annotation", [bytes, SecretStr, SecretBytes, AnyUrl, HttpUrl, list[bytes], dict[int, AnyUrl] | None])
+    def test_string_like_types_are_free_text(self, annotation):
+        assert _free_text_kind(annotation) is not None
 
     @pytest.mark.parametrize(
-        ("schema_path", "field", "body"),
+        ("annotation", "capped"),
         [
-            (
-                "app.schemas.group_settlement:GroupSettlementPlanCreate",
-                "notes",
-                {"from_member_id": 1, "to_member_id": 2, "date": date(2026, 1, 1), "amount": Decimal("1"), "currency": "ARS"},
-            ),
-            (
-                "app.schemas.pot:PotMovementCreate",
-                "notes",
-                {"pot_id": 1, "member_id": 1, "type": "contribution", "date": date(2026, 1, 1), "amount": Decimal("1"), "currency": "ARS"},
-            ),
-            ("app.schemas.auth:RegisterRequest", "name", {"email": "a@b.com", "password": "P4ssw0rd1234"}),
-            ("app.schemas.settings:SettingsUpdate", "primary_currency", {}),
-            ("app.schemas.settings:SettingsUpdate", "dollar_rate_preference", {}),
+            (bytes, False),
+            (typing.Annotated[bytes, Field(max_length=10)], True),
+            (SecretStr, False),
+            (typing.Annotated[SecretStr, Field(max_length=10)], True),
+            (AnyUrl, False),
+            # HttpUrl carries pydantic's own 2083-character ceiling in the compiled schema.
+            (HttpUrl, True),
         ],
     )
-    def test_an_over_long_value_is_refused_by_the_real_body(self, schema_path, field, body):
-        module, name = schema_path.split(":")
-        schema = getattr(importlib.import_module(module), name)
-        with pytest.raises(ValidationError):
-            schema(**body, **{field: "x" * 100_000})
+    def test_an_uncapped_string_like_field_reads_as_uncapped(self, annotation, capped):
+        class Probe(BaseModel):
+            value: annotation
+
+        assert _free_text_fields({Probe}) == [(_dotted(Probe, "value"), capped)]
+
+    def test_a_typeddict_nested_in_a_request_is_reached_and_its_text_checked(self):
+        class Labels(typing.TypedDict):
+            label: str
+            code: typing.Annotated[str, Field(max_length=5)]
+
+        class Probe(BaseModel):
+            labels: list[Labels]
+
+        reached = _reachable_models({Probe})
+        assert Labels in reached
+        assert dict(_free_text_fields({Labels})) == {_dotted(Labels, "label"): False, _dotted(Labels, "code"): True}
+
+    def test_a_dataclass_nested_in_a_request_is_reached_and_its_text_checked(self):
+        @dataclasses.dataclass
+        class Line:
+            text: str
+            ref: typing.Annotated[str, Field(max_length=5)]
+
+        class Probe(BaseModel):
+            lines: dict[int, Line] | None = None
+
+        reached = _reachable_models({Probe})
+        assert Line in reached
+        assert dict(_free_text_fields({Line})) == {_dotted(Line, "text"): False, _dotted(Line, "ref"): True}
+
+    def test_a_structure_keeping_undeclared_keys_is_flagged(self):
+        from pydantic import ConfigDict
+
+        class Open(BaseModel):
+            model_config = ConfigDict(extra="allow")
+
+        class Closed(BaseModel):
+            pass
+
+        assert _allows_extra(Open) and not _allows_extra(Closed)
+        assert _allows_extra(RequestBase) is False
+
+    def test_nesting_past_the_depth_limit_reads_as_uncapped_rather_than_unread(self):
+        from pydantic import StringConstraints
+
+        capped = typing.Annotated[str, StringConstraints(max_length=10)]
+
+        def nested(levels):
+            annotation = capped
+            for _ in range(levels):
+                annotation = list[annotation]
+            return annotation
+
+        def reads_capped(annotation):
+            compiled = TypeAdapter(annotation).json_schema()
+            return _all_capped(_string_leaves(compiled, compiled.get("$defs", {})))
+
+        assert reads_capped(nested(MAX_DEPTH)) is True
+        assert reads_capped(nested(MAX_DEPTH + 1)) is False
+
+
+# Every plain-str request field the scan found, as (dotted name, model, field) — the population the runtime
+# checks below are driven over. A pydantic model only: a TypedDict or dataclass has no instance to assign to,
+# and none is carried by a request today (the static scan above reads them all the same).
+def _runtime_str_fields(name_filter=None):
+    found = []
+    for schema in _request_schemas():
+        if not issubclass(schema, BaseModel):
+            continue
+        for name, field in schema.model_fields.items():
+            if _free_text_kind(field.annotation) != "str" or (name_filter is not None and name != name_filter):
+                continue
+            found.append(pytest.param(schema, name, id=_dotted(schema, name)))
+    return found
+
+
+# Runs one field's REAL validation — its annotation, its constraints and every field validator the model
+# declares — by assigning to an instance built without validation, and returns (the errors located AT that
+# field, the stored value or None). That is what lets the check reach every field without a hand-written
+# valid body per schema: the body is what made the old list a list. A model-level validator then runs too,
+# against an instance missing every other field, so its verdict (an error at no field, or an
+# AttributeError reading a field that was never set) says nothing about this one and is set aside — it
+# can only run once the field itself has validated.
+def _assign(schema, name, value):
+    instance = schema.model_construct()
+    try:
+        schema.__pydantic_validator__.validate_assignment(instance, name, value)
+    except ValidationError as error:
+        return [e for e in error.errors() if e["loc"][:1] == (name,)], None
+    except AttributeError:
+        return [], None
+    return [], getattr(instance, name)
+
+
+class TestTheCapsAreRealAtRuntime:
+    # The scan reads compiled schemas. These run the real validator, so "the schema says maxLength" and
+    # "the request is refused" are tied together rather than assumed to mean the same thing — for EVERY
+    # plain-str request field, derived, where this used to name five.
+
+    @pytest.mark.parametrize(("schema", "name"), _runtime_str_fields())
+    def test_an_over_long_value_is_refused_by_the_real_validator(self, schema, name):
+        errors, _ = _assign(schema, name, "x" * 100_000)
+        assert errors, f"{_dotted(schema, name)} took 100,000 characters"
+
+    def test_the_runtime_population_is_the_scan_population(self):
+        # Anti-vacuity, and agreement: every plain-str field the static scan reads is driven here too.
+        runtime = {param.id for param in _runtime_str_fields()}
+        assert len(runtime) > 100, f"only {len(runtime)} plain-str request fields are driven at runtime"
+        assert {
+            "group_settlement.GroupSettlementPlanCreate.notes",
+            "auth.RegisterRequest.name",
+            "settings.SettingsUpdate.primary_currency",
+        } <= runtime
 
     def test_a_list_of_codes_is_bounded_per_item_and_not_only_per_list(self):
         # Both dimensions, because capping only the list length leaves one item carrying the payload.
@@ -509,30 +677,24 @@ class TestTheCapsAreRealAtRuntime:
             SettingsUpdate(preferred_currencies=["ARS"] * 100_000)
 
 
-# A note exactly at the cap is accepted and preserved verbatim; one character over is refused. Driven
-# over every capped `notes` the scan finds rather than a list, so a newly-capped one joins by existing.
-_NOTES_CASES = [
-    ("app.schemas.expense:ExpenseCreate", {"date": date(2026, 1, 1), "amount": Decimal("100.00"), "currency": "USD"}),
-    ("app.schemas.expense:ExpenseUpdate", {}),
-    ("app.schemas.income:IncomeCreate", {"date": date(2026, 1, 1), "amount": Decimal("100.00"), "currency": "USD"}),
-    ("app.schemas.card_settlement:CardSettlementCreate", {"date": date(2026, 1, 1), "amount": Decimal("100.00"), "currency": "USD"}),
-    (
-        "app.schemas.transaction:TransactionCreate",
-        {"date": date(2026, 1, 1), "amount": Decimal("100.00"), "currency": Currency.USD, "type": TransactionType.buy},
-    ),
-    ("app.schemas.account:AccountCreate", {"name": "A", "type": "bank", "currency": "USD", "opening_date": date(2026, 1, 1)}),
-    ("app.schemas.pot:PotOpeningCreate", {"pot_id": 1, "date": date(2026, 1, 1), "value": Decimal("1"), "shares": {}}),
-]
+# A note exactly at the cap is accepted and preserved verbatim; one character over is refused. Driven over
+# every request `notes` the scan finds rather than a list, so a new one joins by existing.
+_NOTES_FIELDS = _runtime_str_fields("notes")
 
 
-@pytest.mark.parametrize(("schema_path", "base"), _NOTES_CASES, ids=[p.split(":")[1] for p, _ in _NOTES_CASES])
-def test_notes_at_the_cap_are_kept_and_one_character_over_is_refused(schema_path, base):
-    module, name = schema_path.split(":")
-    schema = getattr(importlib.import_module(module), name)
+@pytest.mark.parametrize(("schema", "name"), _NOTES_FIELDS)
+def test_notes_at_the_cap_are_kept_and_one_character_over_is_refused(schema, name):
     note = "x" * NOTES_MAX_LENGTH
-    assert schema(**base, notes=note).notes == note
-    with pytest.raises(ValidationError):
-        schema(**base, notes="x" * (NOTES_MAX_LENGTH + 1))
+    errors, stored = _assign(schema, name, note)
+    assert errors == []
+    assert stored in (None, note), "the note was rewritten on the way in"
+    errors, _ = _assign(schema, name, "x" * (NOTES_MAX_LENGTH + 1))
+    assert errors, "one character over the cap was accepted"
+
+
+def test_the_notes_population_is_not_a_short_list():
+    # The hand list this replaced named seven schemas; the scan finds every request `notes` (27 today).
+    assert len(_NOTES_FIELDS) >= 25, f"only {len(_NOTES_FIELDS)} notes fields are driven"
 
 
 # A zero or negative transaction amount is rejected — a negative "deposit" would silently

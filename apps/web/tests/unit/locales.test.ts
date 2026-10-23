@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -23,6 +26,29 @@ describe('locale registry', () => {
       { value: 'en', label: 'English' },
       { value: 'es', label: 'Español' },
     ]);
+  });
+});
+
+/*
+ * The registry and the message files are two transcriptions of one fact. `i18n/request.ts` loads
+ * `translations/<code>.json` with a dynamic import for whichever supported locale a request resolves to,
+ * so a registry entry without its file is a 500 on every page in that one language — the default locale
+ * keeps working and nothing at build time notices. A file without a registry entry is copy no user can
+ * reach. Compared both ways, for the main files and for the error-boundary files `global-error.tsx` imports.
+ */
+describe('locale registry vs translation files', () => {
+  const translations = resolve(dirname(fileURLToPath(import.meta.url)), '../../translations');
+  const codesIn = (dir: string) =>
+    readdirSync(dir)
+      .filter((file) => file.endsWith('.json'))
+      .map((file) => file.slice(0, -'.json'.length))
+      .sort();
+
+  it.each([
+    ['translations', translations],
+    ['translations/error-boundary', join(translations, 'error-boundary')],
+  ])('%s holds exactly one file per supported locale', (_, dir) => {
+    expect(codesIn(dir)).toEqual([...SUPPORTED_LOCALES].sort());
   });
 });
 

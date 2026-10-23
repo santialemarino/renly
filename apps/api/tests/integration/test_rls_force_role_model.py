@@ -7,6 +7,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from tests.unit.test_schema_parity import GLOBAL_REFERENCE_TABLES
+
 # The three-role model and `FORCE ROW LEVEL SECURITY`, asserted against a real database because every
 # one of these facts lives in the Postgres catalogue or in how Postgres answers a statement.
 #
@@ -112,6 +114,17 @@ class TestEveryPoliciedTableIsForced:
             )
         ).scalars()
         assert list(rows) == []
+
+    @pytest.mark.asyncio
+    async def test_the_only_tables_without_rls_are_the_named_global_reference_tables(self, admin):
+        # The direction neither check above sees: a per-tenant table keyed by some OTHER column (an
+        # `owner_id`, a `member_id`) and created with no policy and no ENABLE is in neither population.
+        # So the tables without RLS are compared, as a set, against the pinned exception list the static
+        # twin also uses — plus alembic's version table, which only a migration database has.
+        rows = (
+            await admin.execute(text(f"SELECT t.relname FROM ({_PUBLIC_TABLES}) t WHERE NOT (t.relrowsecurity AND t.relforcerowsecurity) ORDER BY 1"))
+        ).scalars()
+        assert set(rows) == set(GLOBAL_REFERENCE_TABLES) | {"alembic_version"}
 
     @pytest.mark.asyncio
     async def test_the_catalogue_queries_find_policied_tables_at_all(self, admin):

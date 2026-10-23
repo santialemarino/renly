@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.db import get_admin_session, get_auth_session, get_session
+from app.deps.api_key_auth import get_jwt_or_api_key_user
 from app.deps.auth import get_current_user
 from app.main import app, create_app
 from app.models.user import User
@@ -260,6 +261,62 @@ class TestThePaginatedOnesActuallyPage:
             # ge=1 on the page number is load-bearing: page 0 computes a NEGATIVE offset, which Postgres
             # rejects at runtime — a 500 on a query string anyone can type.
             assert _constraint(params["page"], "ge") == 1, key
+
+
+class TestTheCappedOnesActuallyCap:
+    # Classifying an endpoint as CAPPED used to be the whole check: deleting `limit=MAX_LIST_ROWS` from
+    # the accounts list left every test here green, because nothing asked whether the query that serves the
+    # list carries the ceiling. This drives each capped endpoint over HTTP against a session that records
+    # every statement it is handed, and requires one of them to be a SELECT bounded at exactly
+    # MAX_LIST_ROWS. Compiled with literal binds, so the number checked is the one Postgres would receive.
+
+    @staticmethod
+    def _statements_for(path: str) -> tuple[int, list[str]]:
+        seen: list[str] = []
+
+        class _Result:
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: _Empty()
+
+        class _Empty(list):
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: _Empty() if name in ("all", "scalars", "unique", "mappings") else None
+
+        class _RecordingSession:
+            async def execute(self, statement, *args, **kwargs):
+                seen.append(str(statement.compile(compile_kwargs={"literal_binds": True})))
+                return _Result()
+
+            def __getattr__(self, name):
+                async def _noop(*args, **kwargs):
+                    return None
+
+                return _noop
+
+        async def _session():
+            yield _RecordingSession()
+
+        test_app = create_app(Settings(database_url="postgresql+asyncpg://u:p@localhost:5432/renly", jwt_secret="x" * 32))
+        for dependency in (get_session, get_admin_session, get_auth_session):
+            test_app.dependency_overrides[dependency] = _session
+        test_app.dependency_overrides[get_current_user] = lambda: USER
+        test_app.dependency_overrides[get_jwt_or_api_key_user] = lambda: USER
+        status = TestClient(test_app, raise_server_exceptions=False).get(path).status_code
+        return status, seen
+
+    @pytest.mark.parametrize(("method", "path"), sorted(CAPPED))
+    def test_the_list_query_carries_the_ceiling(self, method, path):
+        status, statements = self._statements_for(path)
+        assert status == 200, f"{path} answered {status} — the probe never reached its query"
+        bounded = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT") and f"LIMIT {MAX_LIST_ROWS}" in sql]
+        assert bounded, f"{path} issued no SELECT bounded at LIMIT {MAX_LIST_ROWS}: {statements}"
+
+    def test_the_probe_can_see_an_unbounded_read(self):
+        # The other half: a paginated endpoint's page read carries its page size, never the list ceiling,
+        # so the check above is reading the statement rather than finding the number anywhere.
+        _, statements = self._statements_for("/expenses")
+        assert any(f"LIMIT {DEFAULT_PAGE_SIZE}" in sql for sql in statements), statements
+        assert not any(f"LIMIT {MAX_LIST_ROWS}" in sql for sql in statements)
 
 
 class TestAnOversizedPageIsRefused:
