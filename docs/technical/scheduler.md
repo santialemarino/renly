@@ -30,7 +30,7 @@ AUTO_SNAPSHOTS_CATCHUP_DAYS = 3
 
 ### Staggered start times
 
-No two cron jobs start in the same minute. The daily and monthly jobs (asset prices, auto-snapshots, CEDEAR ratios) fire at minute 0 of distinct hours; the four hourly jobs take minutes 10, 20, 30 and 40 (the `*_MINUTE` constants). Every job borrows from the small admin pool, and four jobs starting together at minute 0 measured a peak of 4 of its 5 connections. The minute does not affect the per-user local-hour filter: each UTC hour still maps to exactly one local hour per user, half-hour timezones included. `tests/unit/test_scheduler_config.py` walks every registered cron trigger across 40 days and fails on any shared start time.
+No two cron jobs start in the same minute. The daily and monthly jobs (asset prices, auto-snapshots, CEDEAR ratios) fire at minute 0 of distinct hours; the four hourly jobs take minutes 10, 20, 30 and 40 (the `*_MINUTE` constants). Every job borrows from the small admin pool, and four jobs starting together at minute 0 measured a peak of 4 of its 5 connections. The minute does not affect the per-user local-hour filter: each UTC hour still maps to exactly one local hour per user, half-hour timezones included. `tests/unit/test_scheduler_config.py` walks every registered cron trigger across 40 days and fails on any shared start time. The interval job (exchange rates, every 6 hours from process start) and the startup jobs are not on a cron minute and are left out on purpose: they can coincide with an hourly job, which is harmless now that every job holds a single admin connection for its whole run.
 
 ### Misfire policy
 
