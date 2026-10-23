@@ -340,9 +340,10 @@ async def _obligation_items(
 # Credit-card due-date events for the requested month. One event per card per bucket with
 # non-zero balance, dated on the card's resolved due_day in the month. The amount is the
 # bucket's running-balance snapshot at the matching statement closing date (Phase 3, Step 5 —
-# running-balance model). When closing_day <= due_day, the bill due in month M is for the
-# statement closed in M; otherwise it's the previous month's statement. Carryover from older
-# unpaid statements is implicit in the snapshot, matching how a real bank resumen reads.
+# running-balance model). Which statement a bill pays is decided by the card's configured days
+# (see _statement_closing_for_due): closing_day < due_day bills M's statement, anything else the
+# previous month's. Carryover from older unpaid statements is implicit in the snapshot, matching
+# how a real bank resumen reads.
 # Archived cards are included (an archived card with outstanding balance still has real due
 # dates — archive is a UI filter, P04). Balances are batched: one grouped expenses + one grouped
 # settlements query per DISTINCT closing date (typically 1-2 for 1-3 cards) instead of two
@@ -378,7 +379,7 @@ async def _card_due_items(
         if due_date < period_start or due_date > period_end:
             continue
         due_by_card[card.id] = due_date
-        closing_date = _statement_closing_for_due(card.closing_day, due_date)
+        closing_date = _statement_closing_for_due(card.closing_day, card.due_day, due_date)
         closing_by_card[card.id] = closing_date
         cards_by_closing.setdefault(closing_date, []).append(card.id)
 
@@ -450,14 +451,17 @@ async def _settlements_at_dates(
     return sums
 
 
-# Resolves the statement closing date that a given due_date is paying for.
-# When closing_day <= due_day (closing happens before due in the same month), the bill
-# due in month M is for M's statement. Otherwise it's the previous month's statement
-# (closing in M is in the future relative to due in M, so the bill is for the prior cycle).
-def _statement_closing_for_due(closing_day: int, due_date: date_type) -> date_type:
-    candidate_in_month = resolve_day_in_month(closing_day, due_date.year, due_date.month)
-    if candidate_in_month <= due_date:
-        return candidate_in_month
+# Resolves the statement closing date that a given due_date is paying for, decided by the card's
+# configured days (not by the dates they clamp to in a short month): when closing_day < due_day the
+# bill due in month M is for M's statement; otherwise — equal days included — it is the previous
+# month's. Comparing days keeps the due-month -> statement mapping one-to-one: a closing day of 29-31
+# with due day 28 bills January 31's statement in February and February 28's in March, where comparing
+# clamped dates billed February 28's twice and January 31's never. Equal days are a one-month gap
+# (a statement can't close the day it is due — Ley 25.065 issues it at least 5 days before), which
+# also leaves the paid window (closing, due] a real month long instead of empty.
+def _statement_closing_for_due(closing_day: int, due_day: int, due_date: date_type) -> date_type:
+    if closing_day < due_day:
+        return resolve_day_in_month(closing_day, due_date.year, due_date.month)
     prev_total = due_date.year * 12 + (due_date.month - 1) - 1
     prev_year, prev_month = divmod(prev_total, 12)
     prev_month += 1

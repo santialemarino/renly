@@ -180,7 +180,8 @@ pnpm test:e2e        # Playwright E2E
   - `test_card_liability_queries.py` — `LEDGER_TEST_DATABASE_URL`. Two figures a card debt reaches the
     user through, each one operator from a wrong answer: the net-worth evolution SUBTRACTS a real card's
     balance (every earlier assertion ran with a zero card, where `- card` and `+ card` agree), and the
-    payments calendar bills the statement a due date pays when the closing and due days coincide.
+    payments calendar bills the statement a due date pays when the closing and due days coincide (last
+    month's, turning Paid on a settlement inside the month between them).
   - `test_auth_lifecycle.py` — the two `RLS_TEST_*` vars. The real app with only its sessions swapped and
     `get_current_user` NOT overridden (every unit endpoint test overrides it): logout ends every session
     through the session-epoch check, the RLS user is set before the user row is read, an unverified address
