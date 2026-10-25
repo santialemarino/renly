@@ -25,7 +25,8 @@ import pytest
 
 # ENVIRONMENT has no default (the app refuses to boot without it), and tests build Settings from the
 # process environment, sometimes with the .env file switched off. Set before the app is imported, so the
-# suite runs the same with or without a .env; CI sets it explicitly as well.
+# suite runs the same with or without a .env; CI sets it explicitly as well. A process variable beats
+# .env, so a .env saying `production` still runs the suite as development unless the shell sets it.
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.config import EmailProvider, settings  # noqa: E402
