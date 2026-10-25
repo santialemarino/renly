@@ -19,7 +19,8 @@ import { describe, expect, it } from 'vitest';
  * Deciding "server-safe" for certain needs types, so this check only FLAGS a file when every one of the
  * following is absent, and treats anything it cannot prove inert as a client feature:
  *
- *   * a hook call (`use…(` or `use(`), except `useTranslations`, whose server twin is `getTranslations`
+ *   * a hook call (`use…(` or `use(`, bare or namespaced as in `React.useState(`) or `createContext(`,
+ *     except `useTranslations`, whose server twin is `getTranslations`
  *     — and only in a file no client file imports, since an async server component cannot render
  *     under a client parent;
  *   * a browser global (`window`, `document`, timers, observers, storage, …);
@@ -101,11 +102,17 @@ function walk(node: ts.Node, visit: (node: ts.Node) => void) {
   ts.forEachChild(node, (child) => walk(child, visit));
 }
 
+// A bare or namespaced (`React.useState`) hook call, or `createContext`, which only runs on the client.
 function isHookCall(node: ts.Node, allowTranslations: boolean): boolean {
-  if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return false;
-  const name = node.expression.text;
-  if (allowTranslations && name === 'useTranslations') return false;
-  return name === 'use' || /^use[A-Z]/.test(name);
+  if (!ts.isCallExpression(node)) return false;
+  const callee = node.expression;
+  const name = ts.isIdentifier(callee)
+    ? callee.text
+    : ts.isPropertyAccessExpression(callee)
+      ? callee.name.text
+      : undefined;
+  if (!name || (allowTranslations && name === 'useTranslations')) return false;
+  return name === 'use' || name === 'createContext' || /^use[A-Z]/.test(name);
 }
 
 // A module with no directive that still calls a hook: it only works when a client file imports it.
@@ -328,10 +335,26 @@ describe('component boundaries', () => {
     ).toEqual([]);
   });
 
+  it('counts namespaced hook calls and createContext as client features', () => {
+    const probe = join(WEB, 'components', '__probe__.tsx');
+    const source = [
+      "'use client';",
+      "import * as React from 'react';",
+      'const ThemeContext = React.createContext(null);',
+      'export function Probe() {',
+      '  const [open] = React.useState(false);',
+      '  return <ThemeContext.Provider value={open}>x</ThemeContext.Provider>;',
+      '}',
+    ].join('\n');
+    parsed.set(probe, ts.createSourceFile(probe, source, ts.ScriptTarget.Latest, true));
+    expect(clientFeatures(probe)).toEqual(['calls React.createContext', 'calls React.useState']);
+  });
+
   it('lists only exceptions that still exist and are still client boundaries', () => {
-    Object.keys(CLIENT_BOUNDARY_EXCEPTIONS).forEach((path) => {
+    Object.entries(CLIENT_BOUNDARY_EXCEPTIONS).forEach(([path, reason]) => {
       expect(existsSync(join(WEB, path)), path).toBe(true);
       expect(isUseClient(parse(join(WEB, path))), path).toBe(true);
+      expect(reason.trim(), path).not.toBe('');
     });
   });
 });
