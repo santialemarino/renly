@@ -28,8 +28,12 @@ import {
   ENV_SAVINGS_RATE_HEALTHY_PCT,
   ENV_SAVINGS_RATE_MODERATE_PCT,
 } from '@/lib/constants/health-thresholds';
-import { ENV_LIQUIDITY_THRESHOLD_PCT } from '@/lib/constants/liquidity';
 import { formatAmountForInput } from '@/lib/i18n/numeric-input';
+
+// Default liquidity threshold percentage, shown as the field's placeholder and default hint when the
+// user hasn't saved one. The API mirrors it as `DEFAULT_LIQUIDITY_THRESHOLD_PCT` in
+// `app/utils/liquidity.py` — keep the two in sync.
+const ENV_LIQUIDITY_THRESHOLD_PCT = Number(process.env.NEXT_PUBLIC_LIQUIDITY_THRESHOLD_PCT ?? 40);
 
 interface AlertsFormProps {
   initialSettings: SettingsData;

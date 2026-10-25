@@ -46,7 +46,7 @@ export interface Transfer {
 
 // --- Mappers ---
 
-export function mapTransfer(raw: TransferRaw): Transfer {
+function mapTransfer(raw: TransferRaw): Transfer {
   return {
     id: raw.id,
     fromAccountId: raw.from_account_id,

@@ -30,8 +30,8 @@ interface PaymentsCalendarPageProps {
 }
 
 export default async function PaymentsCalendarPage({ searchParams }: PaymentsCalendarPageProps) {
-  const t = await getTranslations('paymentsCalendar');
   const fmt = await getFormatters();
+  const t = await getTranslations('paymentsCalendar');
   const params = await searchParams;
   const cookieStore = await cookies();
 

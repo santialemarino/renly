@@ -23,7 +23,6 @@ import 'server-only';
 
 import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import type { SettlementStatus } from '@/lib/constants/group-settlements';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -108,6 +107,14 @@ interface GroupMoneySettingsRaw {
 }
 
 // --- Frontend types (camelCase) ---
+
+/*
+ * The settlement status, mirroring the API's `group_settlement_status`. `written_off` is a status
+ * rather than a separate table because a write-off clears the same bucket a payment does and the
+ * arithmetic is identical — the creditor gives up the claim. What differs is only that no money moved,
+ * which is why it can carry no cash leg and why only the creditor may record or remove one.
+ */
+export type SettlementStatus = 'pending' | 'confirmed' | 'written_off';
 
 export interface GroupMemberBalance {
   memberId: number;

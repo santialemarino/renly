@@ -69,7 +69,7 @@ _TWINS: tuple[Twin, ...] = (
     Twin("FeedbackCategory", "lib/constants/feedback.ts", "FEEDBACK_CATEGORIES"),
     Twin("GroupKind", "lib/constants/groups.ts", "GROUP_KINDS"),
     Twin("GroupMemberRole", "lib/constants/groups.ts", "GROUP_ROLES"),
-    Twin("GroupSettlementStatus", "lib/constants/group-settlements.ts", "SETTLEMENT_STATUSES"),
+    Twin("GroupSettlementStatus", "lib/api/group-settlements.ts", "SettlementStatus"),
     Twin("ImportEntity", "app/(protected)/data/_components/import-section.tsx", "DATA_TYPES"),
     # As for expenses: system-written categories are not offered by the picker.
     Twin("IncomeCategory", _CATEGORIES, "INCOME_CATEGORIES", web_omits=frozenset(c.value for c in SYSTEM_INCOME_CATEGORIES)),

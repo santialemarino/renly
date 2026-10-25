@@ -38,8 +38,8 @@ interface FinanceDashboardPageProps {
 
 export default async function FinanceDashboardPage({ searchParams }: FinanceDashboardPageProps) {
   const cookieStore = await cookies();
-  const t = await getTranslations('financeDashboard');
   const fmt = await getFormatters();
+  const t = await getTranslations('financeDashboard');
   const params = await searchParams;
 
   const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;

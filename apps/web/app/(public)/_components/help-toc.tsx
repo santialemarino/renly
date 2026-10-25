@@ -1,7 +1,7 @@
 'use client';
 
+import { useSmoothScrollToHash } from '@/app/(public)/_components/use-smooth-scroll-to-hash';
 import { InlineLink } from '@/components/inline-link';
-import { useSmoothScrollToHash } from '@/lib/hooks/use-smooth-scroll-to-hash';
 
 interface HelpTocProps {
   label: string;
