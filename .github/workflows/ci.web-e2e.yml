@@ -45,6 +45,8 @@ env:
   # database/00_roles.sql, which `pnpm db:init` applies. The database is compose's own `renly`.
   DATABASE_URL: postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly
   DATABASE_ADMIN_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
+  # Required: the API refuses to boot without it.
+  ENVIRONMENT: development
   EMAIL_PROVIDER: console
   NEXT_PUBLIC_API_URL: http://localhost:8000
   NEXTAUTH_URL: http://localhost:3000

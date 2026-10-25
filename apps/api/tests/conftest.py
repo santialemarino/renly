@@ -18,11 +18,18 @@
 # silently. A test that means to show a request being refused (tests/unit/test_no_real_providers.py)
 # takes the recorder as a fixture and empties it.
 
+import os
+
 import httpx
 import pytest
 
-from app.config import EmailProvider, settings
-from app.services import email_service
+# ENVIRONMENT has no default (the app refuses to boot without it), and tests build Settings from the
+# process environment, sometimes with the .env file switched off. Set before the app is imported, so the
+# suite runs the same with or without a .env; CI sets it explicitly as well.
+os.environ.setdefault("ENVIRONMENT", "development")
+
+from app.config import EmailProvider, settings  # noqa: E402
+from app.services import email_service  # noqa: E402
 
 
 # Collects every request a test tried to send to the real network, refusing each one.

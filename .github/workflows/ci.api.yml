@@ -55,6 +55,8 @@ jobs:
       LEDGER_TEST_DATABASE_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
       GROUPS_TEST_DATABASE_URL: postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly
       JWT_SECRET: ci-dummy-jwt-secret-min-32-chars-padding
+      # Required: the app refuses to import without it.
+      ENVIRONMENT: development
       EMAIL_PROVIDER: console
 
     steps:
