@@ -308,8 +308,9 @@ userSignOut()                    // server action in auth.ts
   → signOut({ redirect: false }) // clears NextAuth session
   → cookies().delete('NEXT_LOCALE') // drop the locale cookie so the next logged-out visitor gets
                                     // their own browser language. A 'manual' language is not lost:
-                                    // i18n/request.ts reads it from settings on the first signed-in
-                                    // request, and LanguageAutoSync re-seeds the cookie
+                                    // the login form writes it back to the cookie
+                                    // (seedLocalizationCookies), i18n/request.ts reads it from settings
+                                    // on every document load, and LanguageAutoSync re-seeds the cookie
   → client handles redirect
 ```
 

@@ -31,12 +31,12 @@ export async function syncBrowserLanguage(language: string): Promise<void> {
   revalidatePath('/', 'layout');
 }
 
-// Writes the NEXT_LOCALE cookie only — no settings PUT, no revalidation. Called from LanguageAutoSync
-// when the user's language is pinned ('manual') and this browser's cookie is absent or names another
-// locale (a fresh browser, or the first page after a login, since logout drops the cookie). The page
-// already rendered in the pinned language (i18n/request.ts reads the pin); this brings the cookie,
-// which the root error boundary reads with no server context, into agreement. An unsupported value is
-// ignored.
+// Writes the NEXT_LOCALE cookie only — no settings PUT, no revalidation. Called at login
+// (seedLocalizationCookies), and from LanguageAutoSync when the user's language is pinned ('manual')
+// and this browser's cookie is absent or names another locale (the pin changed on another device, or
+// the cookie was cleared). A document already renders in the pinned language (i18n/request.ts reads the
+// pin); this brings the cookie — which link prefetches, client-side navigations and the root error
+// boundary render from — into agreement. An unsupported value is ignored.
 export async function seedLocaleCookie(language: string): Promise<void> {
   if (!isSupportedLocale(language)) return;
   const cookieStore = await cookies();

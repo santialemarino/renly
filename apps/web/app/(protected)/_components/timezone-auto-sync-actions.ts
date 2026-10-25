@@ -31,10 +31,11 @@ export async function syncBrowserTimezone(timezone: string): Promise<void> {
   revalidatePath('/', 'layout');
 }
 
-// Writes the NEXT_TIMEZONE cookie only — no settings PUT, no revalidation. Called from
-// TimezoneAutoSync when the user's zone is pinned ('manual') and this browser's cookie is absent or
-// names another zone. The page already rendered in the pinned zone (i18n/request.ts reads the pin);
-// this brings the cookie into agreement. An unknown zone is ignored.
+// Writes the NEXT_TIMEZONE cookie only — no settings PUT, no revalidation. Called at login
+// (seedLocalizationCookies), and from TimezoneAutoSync when the user's zone is pinned ('manual') and
+// this browser's cookie is absent or names another zone. A document already renders in the pinned zone
+// (i18n/request.ts reads the pin); this brings the cookie, which every other request renders from, into
+// agreement. An unknown zone is ignored.
 export async function seedTimezoneCookie(timezone: string): Promise<void> {
   if (!isValidTimezone(timezone)) return;
   const cookieStore = await cookies();

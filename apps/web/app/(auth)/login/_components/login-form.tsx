@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 
 import { Button, Checkbox, Input } from '@repo/ui/components';
 import { loginFormSchema, type LoginFormData } from '@/app/(auth)/login/form-schema';
+import { seedLocalizationCookies } from '@/app/(auth)/login/login-actions';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
@@ -58,6 +59,8 @@ export function LoginForm({ nextPath }: LoginFormProps) {
        * it. The new document renders in the signed-in user's language from its first paint.
        */
       setRedirecting(true);
+      // Best effort: should it fail, the document still renders in the pin and the layout seeds them.
+      await seedLocalizationCookies().catch(() => {});
       window.location.assign(nextPath ?? ROUTES.home);
     } catch {
       form.setError('password', { message: tCommon('form.errors.serverError') });

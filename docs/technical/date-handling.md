@@ -95,9 +95,11 @@ negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIM
 (mirrors `NEXT_LOCALE`; written by the localization save + timezone auto-sync actions, read in
 `apps/web/i18n/request.ts` and returned as next-intl's `timeZone`, which the `useFormatters` /
 `getFormatters` hook binds). A signed-in user whose timezone mode is `manual` gets their stored zone
-even when the cookie is absent or names another zone — `request.ts` reads the settings and the pin
-outranks the cookie, and the protected layout's `TimezoneAutoSync` re-seeds the cookie from it; the
-language follows the same rule. When neither a pin nor a cookie resolves, the timestamp falls back to
+even when the cookie is absent or names another zone: login writes the pin to the cookie, a document
+load has `request.ts` read the settings (sharing the protected layout's one `/settings` call) with the
+pin outranking the cookie, and the protected layout's `TimezoneAutoSync` re-seeds the cookie from it.
+Link prefetches, client-side navigations and server actions render from the cookie alone, so they cost
+no API call each; the language follows the same rule. When neither a pin nor a cookie resolves, the timestamp falls back to
 the ambient (browser/server) zone. Once the day is resolved it is worded by the same date-fns `PP` pattern
 `fmt.date` uses, so a timestamp and a plain date for the same day read identically in every locale.
 

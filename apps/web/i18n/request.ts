@@ -18,20 +18,32 @@ function parseAcceptLanguage(headersList: Headers): string[] {
     .filter((lang): lang is string => Boolean(lang));
 }
 
-// The signed-in user's stored settings, or null for a visitor or when they cannot be read. Both reads
-// are request-memoized, so on a protected page this shares the layout's session decode and /settings call.
-async function getStoredSettings(): Promise<SettingsData | null> {
+// Whether this request loads a document (a browser navigation), as opposed to an RSC request: a link
+// prefetch, a client-side navigation, a server action or a refresh. Browsers set Sec-Fetch-Mode to
+// 'navigate' only for navigations.
+function isDocumentRequest(headersList: Headers): boolean {
+  return headersList.get('sec-fetch-mode') === 'navigate';
+}
+
+/*
+ * The signed-in user's stored settings, or null for a visitor or when they cannot be read — read only
+ * when the request loads a document. There the read is request-memoized, so on a protected page it is
+ * the layout's own /settings call, shared. Every other request is a render of its own with nothing to
+ * share the read with — a page's links alone prefetch several routes at once — and each read would
+ * count against the API's per-user rate limit. Those requests follow the cookies, which hold the pin
+ * from the login on (seedLocalizationCookies) and which the protected layout's auto-sync brings back
+ * into agreement whenever a document finds them out of step.
+ */
+async function getStoredSettings(headersList: Headers): Promise<SettingsData | null> {
+  if (!isDocumentRequest(headersList)) return null;
   const session = await getSession();
   if (!isAuthenticatedSession(session)) return null;
   return getSettings().catch(() => null);
 }
 
 export default getRequestConfig(async () => {
-  const [cookieStore, headersList, settings] = await Promise.all([
-    cookies(),
-    headers(),
-    getStoredSettings(),
-  ]);
+  const [cookieStore, headersList] = await Promise.all([cookies(), headers()]);
+  const settings = await getStoredSettings(headersList);
 
   // A manual language pinned in the user's settings wins, then the cookie (set by saveLocalization,
   // syncBrowserLanguage and seedLocaleCookie), then Accept-Language. See resolveLocale.

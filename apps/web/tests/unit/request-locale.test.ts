@@ -15,6 +15,8 @@ import requestConfigExport from '../../i18n/request';
 const req = vi.hoisted(() => ({
   cookies: {} as Record<string, string>,
   acceptLanguage: null as string | null,
+  fetchMode: 'navigate' as string | null,
+  settingsReads: 0,
   session: null as { user: { accessToken: string; error?: string } } | null,
   settings: null as Partial<SettingsData> | null,
 }));
@@ -24,7 +26,10 @@ vi.mock('next/headers', () => ({
     get: (name: string) => (name in req.cookies ? { name, value: req.cookies[name] } : undefined),
   }),
   headers: async () =>
-    new Headers(req.acceptLanguage ? { 'accept-language': req.acceptLanguage } : {}),
+    new Headers({
+      ...(req.acceptLanguage ? { 'accept-language': req.acceptLanguage } : {}),
+      ...(req.fetchMode ? { 'sec-fetch-mode': req.fetchMode } : {}),
+    }),
 }));
 
 vi.mock('next-intl/server', () => ({
@@ -38,6 +43,7 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/api/settings', () => ({
   getSettings: async () => {
+    req.settingsReads += 1;
     if (!req.settings) throw new Error('Failed to fetch settings');
     return req.settings;
   },
@@ -57,6 +63,8 @@ function signedIn(settings: Partial<SettingsData>) {
 beforeEach(() => {
   req.cookies = {};
   req.acceptLanguage = 'en-US,en;q=0.9';
+  req.fetchMode = 'navigate';
+  req.settingsReads = 0;
   req.session = null;
   req.settings = null;
 });
@@ -130,5 +138,43 @@ describe('request timezone', () => {
     signedIn({ timezone: 'Mars/Olympus', timezoneMode: 'manual' });
     req.cookies.NEXT_TIMEZONE = 'America/New_York';
     expect((await requestConfig()).timeZone).toBe('America/New_York');
+  });
+});
+
+/*
+ * The settings read costs an API call, and every request that renders runs this config: a page's link
+ * prefetches, client-side navigations and server actions too, each a render of its own that cannot
+ * share the document's memoized read. Reading on all of them multiplied the account's /settings calls
+ * about sevenfold and ran it into the API's per-user rate limit. So one read, through the memoized
+ * getSettings the protected layout shares, and only on a document load.
+ */
+describe('settings reads', () => {
+  it('reads the settings once on a document load', async () => {
+    signedIn({ language: 'es', languageMode: 'manual' });
+    await requestConfig();
+    expect(req.settingsReads).toBe(1);
+  });
+
+  it('reads no settings for a request that is not a document load, and follows the cookies', async () => {
+    signedIn({
+      language: 'es',
+      languageMode: 'manual',
+      timezone: 'Asia/Tokyo',
+      timezoneMode: 'manual',
+    });
+    req.cookies.NEXT_LOCALE = 'en';
+    req.cookies.NEXT_TIMEZONE = 'America/New_York';
+    for (const mode of ['cors', 'same-origin', null]) {
+      req.fetchMode = mode;
+      const config = await requestConfig();
+      expect(config.locale).toBe('en');
+      expect(config.timeZone).toBe('America/New_York');
+    }
+    expect(req.settingsReads).toBe(0);
+  });
+
+  it('reads no settings for a visitor', async () => {
+    await requestConfig();
+    expect(req.settingsReads).toBe(0);
   });
 });
