@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Archive,
@@ -45,13 +45,9 @@ import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
-import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { useExpandablePagedList } from '@/lib/hooks/use-expandable-paged-list';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
-
-// Minimum time (ms) from fetch start before showing the result.
-// Prevents layout flash when the fetch resolves instantly.
-const SETTLEMENTS_DISPLAY_DELAY_MS = 500;
 
 interface SettlementsSectionProps {
   cardId: number;
@@ -77,57 +73,20 @@ function SettlementsSection({
   const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
-  // Monotonic ticket per fetch; only the newest one may commit its result.
-  const requestRef = useRef(0);
-  // Whether anything has loaded yet — the display floor is for the first paint only.
-  const fetchedPageRef = useRef<number | null>(null);
-  const [settlements, setSettlements] = useState<CardSettlement[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const {
+    items: settlements,
+    total,
+    pageSize,
+    page,
+    setPage,
+    loading,
+    invalidate,
+  } = useExpandablePagedList({
+    expanded,
+    fetchPage: (requestedPage: number) => fetchSettlements(cardId, requestedPage),
+  });
   const [addOpen, setAddOpen] = useState(false);
   const [deleteSettlementState, setDeleteSettlementState] = useState<CardSettlement | null>(null);
-
-  /*
-   * A monotonic ticket so the LAST REQUESTED page wins rather than the last response to arrive, and a
-   * display floor that applies to the first load only — on a page change the rows are already on
-   * screen, so padding the swap manufactures the layout jump the delay was added to prevent.
-   */
-  const loadSettlements = useCallback(async () => {
-    const ticket = ++requestRef.current;
-    const isFirstLoad = fetchedPageRef.current === null;
-    setLoading(true);
-    const start = Date.now();
-    try {
-      const data = await fetchSettlements(cardId, page);
-      const elapsed = Date.now() - start;
-      if (isFirstLoad && elapsed < SETTLEMENTS_DISPLAY_DELAY_MS) {
-        await new Promise((r) => setTimeout(r, SETTLEMENTS_DISPLAY_DELAY_MS - elapsed));
-      }
-      if (ticket !== requestRef.current) return;
-      fetchedPageRef.current = page;
-      setSettlements(data.items);
-      setTotal(data.total);
-      setPageSize(data.pageSize);
-    } catch {
-      if (ticket !== requestRef.current) return;
-      setSettlements([]);
-      setTotal(0);
-    } finally {
-      if (ticket === requestRef.current) setLoading(false);
-    }
-  }, [cardId, page]);
-
-  // Fetch on first expand. Re-expand shows cached data instantly; a page change asks for different
-  // rows, so it re-fetches rather than reading that cache.
-  const [fetchedPage, setFetchedPage] = useState<number | null>(null);
-  useEffect(() => {
-    if (expanded && fetchedPage !== page) {
-      setFetchedPage(page);
-      loadSettlements();
-    }
-  }, [expanded, fetchedPage, page, loadSettlements]);
 
   return (
     <AnimatePresence>
@@ -276,11 +235,10 @@ function SettlementsSection({
                     // nowhere else. Staying put redraws the current page identically and the user is
                     // told it saved while seeing no sign of it.
                     //
-                    // The cache marker is cleared rather than load() being called here, because this
-                    // callback closes over the page that is being left — invoking it would fetch the
-                    // OLD page and could land after the effect's fetch of the new one.
+                    // The cache is invalidated rather than a load started here, so the panel's own
+                    // effect fetches page 1 once — not the page being left, which could land after it.
                     setPage(1);
-                    setFetchedPage(null);
+                    invalidate();
                     router.refresh();
                   }}
                 />
@@ -294,7 +252,7 @@ function SettlementsSection({
                   settlement={deleteSettlementState}
                   onSuccess={() => {
                     // A delete stays on the page the reader is looking at; only the rows change.
-                    setFetchedPage(null);
+                    invalidate();
                     router.refresh();
                   }}
                 />
