@@ -33,10 +33,21 @@ import { bySectionPot, sectionedRows } from '@/lib/list-scope';
 
 interface CellContentProps {
   cell: SnapshotGridCell;
+  // The holding's own currency, which its period return is measured in.
+  baseCurrency: string;
+  // The currency the cell's VALUES are shown in; null when they are shown in the base currency.
+  displayCurrency: string | null;
 }
 
-function CellContent({ cell }: CellContentProps) {
+/*
+ * A period return is measured in the holding's OWN currency, not the display currency its value is
+ * converted to: a peso holding can return +25% while its dollar value is flat. So the return names
+ * its currency whenever the figure beside it is in another one, and its tooltip always says which.
+ */
+function CellContent({ cell, baseCurrency, displayCurrency }: CellContentProps) {
   const fmt = useFormatters();
+  const t = useTranslations('snapshots');
+  const returnInOtherCurrency = displayCurrency !== null && displayCurrency !== baseCurrency;
   return (
     <div className="flex items-center justify-center gap-x-1.5">
       {cell.quantity !== null ? (
@@ -53,24 +64,32 @@ function CellContent({ cell }: CellContentProps) {
       )}
 
       {cell.periodReturnPct !== null && (
-        <span
-          className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums ${
-            cell.periodReturnPct > 0
-              ? 'text-emerald-600'
-              : cell.periodReturnPct < 0
-                ? 'text-red-500'
-                : 'text-muted-foreground'
-          }`}
-        >
-          {cell.periodReturnPct > 0 ? (
-            <ArrowUp className="size-3" />
-          ) : cell.periodReturnPct < 0 ? (
-            <ArrowDown className="size-3" />
-          ) : (
-            <Minus className="size-3" />
-          )}
-          {fmt.signedPct(cell.periodReturnPct)}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums cursor-default ${
+                cell.periodReturnPct > 0
+                  ? 'text-emerald-600'
+                  : cell.periodReturnPct < 0
+                    ? 'text-red-500'
+                    : 'text-muted-foreground'
+              }`}
+            >
+              {cell.periodReturnPct > 0 ? (
+                <ArrowUp className="size-3" />
+              ) : cell.periodReturnPct < 0 ? (
+                <ArrowDown className="size-3" />
+              ) : (
+                <Minus className="size-3" />
+              )}
+              {fmt.signedPct(cell.periodReturnPct)}
+              {returnInOtherCurrency && (
+                <span className="text-muted-foreground">{baseCurrency}</span>
+              )}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{t('grid.returnIn', { currency: baseCurrency })}</TooltipContent>
+        </Tooltip>
       )}
 
       {cell.hasTransaction && cell.transaction && (
@@ -95,10 +114,12 @@ function CellContent({ cell }: CellContentProps) {
 
 interface SnapshotsGridProps {
   grid: SnapshotGridResponse;
+  // The display currency the values are converted to; null shows each holding in its own.
+  currency: string | null;
   firstRun?: boolean;
 }
 
-export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
+export function SnapshotsGrid({ grid, currency, firstRun }: SnapshotsGridProps) {
   const fmt = useFormatters();
   const t = useTranslations('snapshots');
   const tCommon = useTranslations('common');
@@ -285,7 +306,11 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                         onClick={cell ? (e) => handleCellClick(row, cell, e) : undefined}
                       >
                         {cell ? (
-                          <CellContent cell={cell} />
+                          <CellContent
+                            cell={cell}
+                            baseCurrency={row.baseCurrency}
+                            displayCurrency={currency}
+                          />
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

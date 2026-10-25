@@ -1235,7 +1235,8 @@
         "settleUpPaid": "Le pagaste a {person}",
         "settleUpReceived": "{person} te pagó",
         "settlement": "Pago a {card}",
-        "sharedExpense": "Compartido con {group}"
+        "sharedExpense": "Compartido con {group}",
+        "sharedIncome": "Ingreso compartido de {group}"
       },
       "table": {
         "title": "Movimientos",
@@ -1886,7 +1887,8 @@
       "neverValued": "Nunca se valuó, y el fondo espera una cifra {cadence}.",
       "lockedAdd": "Solo un integrante con permiso de escritura puede valuar este fondo. Pediselo a un admin del grupo.",
       "skippedInvestments": "Quedaron afuera porque no se puede convertir su moneda: {names}.",
-      "lockedAddLabel": "Gestionado por el fondo"
+      "lockedAddLabel": "Gestionado por el fondo",
+      "returnIn": "Variación desde el snapshot anterior, medida en {currency}, la moneda propia de la inversión."
     },
     "form": {
       "titleCreate": "Agregar snapshot",
