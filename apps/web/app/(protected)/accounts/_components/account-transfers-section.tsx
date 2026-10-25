@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -24,11 +24,8 @@ import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { Account } from '@/lib/api/accounts';
 import type { Transfer } from '@/lib/api/transfers';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
-import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { useExpandablePagedList } from '@/lib/hooks/use-expandable-paged-list';
 import { useFormatters } from '@/lib/i18n/formatters';
-
-// Minimum time (ms) from fetch start before showing the result, so an instant resolve doesn't flash.
-const TRANSFERS_DISPLAY_DELAY_MS = 500;
 
 interface AccountTransfersSectionProps {
   account: Account;
@@ -51,72 +48,20 @@ export function AccountTransfersSection({
   const fmt = useFormatters();
   const t = useTranslations('accounts.transfers');
 
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
-  const [page, setPage] = useState(1);
-  // Loading until the first fetch lands, so the panel's first frame is the loading line rather than an
-  // empty state the account may not be in.
-  const [loading, setLoading] = useState(true);
+  const {
+    items: transfers,
+    total,
+    pageSize,
+    page,
+    setPage,
+    loading,
+  } = useExpandablePagedList({
+    expanded,
+    reloadToken,
+    fetchPage: (requestedPage: number) => fetchAccountTransfers(account.id, requestedPage),
+  });
   const [deleteTarget, setDeleteTarget] = useState<Transfer | null>(null);
   const [deleting, setDeleting] = useState(false);
-  // The reloadToken whose data is currently loaded; null until the first fetch.
-  const loadedTokenRef = useRef<number | null>(null);
-  // The page that token was loaded for, so a page change re-fetches while a re-expand does not.
-  const loadedPageRef = useRef<number | null>(null);
-  // Monotonic ticket per fetch; only the newest one may commit its result.
-  const requestRef = useRef(0);
-  // Whether a load has landed yet. The display floor reads this, and only a load that commits sets
-  // it — `loadedPageRef` cannot answer, because the effect writes it BEFORE it calls `load()`.
-  const hasLoadedRef = useRef(false);
-
-  /*
-   * `requestRef` is what makes the LAST REQUESTED page win rather than the last response to arrive.
-   * Paging made that reachable: two clicks put two fetches in flight, and without the check the slower
-   * one repaints over the newer, leaving the pager and the rows describing different pages with
-   * nothing to resync them. Each call claims a ticket and only the current holder commits.
-   *
-   * The display floor applies to the FIRST load only. It exists to stop a sub-perceptual flash when
-   * the panel opens with nothing on screen; on a page change the rows are already there, so padding
-   * the swap replaces a real table with one line of text for half a second and manufactures the very
-   * layout jump it was added to prevent.
-   */
-  const load = useCallback(async () => {
-    const ticket = ++requestRef.current;
-    const isFirstLoad = !hasLoadedRef.current;
-    setLoading(true);
-    const start = Date.now();
-    try {
-      const data = await fetchAccountTransfers(account.id, page);
-      const elapsed = Date.now() - start;
-      if (isFirstLoad && elapsed < TRANSFERS_DISPLAY_DELAY_MS) {
-        await new Promise((r) => setTimeout(r, TRANSFERS_DISPLAY_DELAY_MS - elapsed));
-      }
-      if (ticket !== requestRef.current) return;
-      setTransfers(data.items);
-      setTotal(data.total);
-      setPageSize(data.pageSize);
-    } catch {
-      if (ticket !== requestRef.current) return;
-      setTransfers([]);
-      setTotal(0);
-    } finally {
-      if (ticket === requestRef.current) {
-        hasLoadedRef.current = true;
-        setLoading(false);
-      }
-    }
-  }, [account.id, page]);
-
-  // Fetch on first expand; re-expand shows cached data instantly. A bumped reloadToken invalidates it,
-  // and so does a page change — that asks for different rows rather than re-opening the loaded ones.
-  useEffect(() => {
-    if (!expanded) return;
-    if (loadedTokenRef.current === reloadToken && loadedPageRef.current === page) return;
-    loadedTokenRef.current = reloadToken;
-    loadedPageRef.current = page;
-    load();
-  }, [expanded, reloadToken, page, load]);
 
   async function handleDelete() {
     if (!deleteTarget) return;

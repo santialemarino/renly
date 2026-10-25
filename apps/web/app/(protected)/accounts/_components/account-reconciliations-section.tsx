@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Lock, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -23,12 +23,8 @@ import { TablePagination } from '@/components/table-pagination';
 import type { AccountReconciliation } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
-import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { useExpandablePagedList } from '@/lib/hooks/use-expandable-paged-list';
 import { useFormatters } from '@/lib/i18n/formatters';
-
-// Minimum time (ms) from fetch start before showing the result.
-// Prevents layout flash when the fetch resolves instantly.
-const RECONCILIATIONS_DISPLAY_DELAY_MS = 500;
 
 interface AccountReconciliationsSectionProps {
   account: Account;
@@ -51,24 +47,21 @@ export function AccountReconciliationsSection({
   const fmt = useFormatters();
   const t = useTranslations('accounts.reconciliations');
 
-  const [reconciliations, setReconciliations] = useState<AccountReconciliation[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
-  const [latestDate, setLatestDate] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  // Loading until the first fetch lands, so the panel's first frame is the loading line rather than an
-  // empty state the account may not be in.
-  const [loading, setLoading] = useState(true);
+  const {
+    data,
+    items: reconciliations,
+    total,
+    pageSize,
+    page,
+    setPage,
+    loading,
+    invalidate,
+  } = useExpandablePagedList({
+    expanded,
+    reloadToken,
+    fetchPage: (requestedPage: number) => fetchAccountReconciliations(account.id, requestedPage),
+  });
   const [deleteTarget, setDeleteTarget] = useState<AccountReconciliation | null>(null);
-  // The reloadToken whose data is currently loaded; null until the first fetch.
-  const loadedTokenRef = useRef<number | null>(null);
-  // The page that token was loaded for, so a page change re-fetches while a re-expand does not.
-  const loadedPageRef = useRef<number | null>(null);
-  // Monotonic ticket per fetch; only the newest one may commit its result.
-  const requestRef = useRef(0);
-  // Whether a load has landed yet. The display floor reads this, and only a load that commits sets
-  // it — `loadedPageRef` cannot answer, because the effect writes it BEFORE it calls `load()`.
-  const hasLoadedRef = useRef(false);
 
   /*
    * Only the account's most recent reconciliation can be deleted — an older one's adjustment is
@@ -79,6 +72,7 @@ export function AccountReconciliationsSection({
    * to: this list is one page now, so the first row of page 2 is the newest row ON THAT PAGE and not
    * the account's — the UI would offer a delete the API then refuses with 409.
    */
+  const latestDate = data?.latestAsOfDate ?? null;
 
   /*
    * A shared account's history gains a WHO column and a subtitle that says the difference divides.
@@ -86,56 +80,6 @@ export function AccountReconciliationsSection({
    * possible author, so a column naming them on every row is noise, and the API sends no name for it.
    */
   const isShared = account.scope === 'shared';
-
-  /*
-   * A monotonic ticket so the LAST REQUESTED page wins rather than the last response to arrive — two
-   * pager clicks put two fetches in flight, and without it the slower one repaints over the newer.
-   * The display floor applies to the first load only: it exists to stop a flash when the panel opens
-   * empty, and on a page change it replaces a rendered table with one line of text for half a second.
-   */
-  const load = useCallback(async () => {
-    const ticket = ++requestRef.current;
-    const isFirstLoad = !hasLoadedRef.current;
-    setLoading(true);
-    const start = Date.now();
-    try {
-      const data = await fetchAccountReconciliations(account.id, page);
-      const elapsed = Date.now() - start;
-      if (isFirstLoad && elapsed < RECONCILIATIONS_DISPLAY_DELAY_MS) {
-        await new Promise((r) => setTimeout(r, RECONCILIATIONS_DISPLAY_DELAY_MS - elapsed));
-      }
-      if (ticket !== requestRef.current) return;
-      setReconciliations(data.items);
-      setTotal(data.total);
-      setPageSize(data.pageSize);
-      setLatestDate(data.latestAsOfDate);
-    } catch {
-      if (ticket !== requestRef.current) return;
-      setReconciliations([]);
-      setTotal(0);
-      setLatestDate(null);
-    } finally {
-      if (ticket === requestRef.current) {
-        hasLoadedRef.current = true;
-        setLoading(false);
-      }
-    }
-  }, [account.id, page]);
-
-  /*
-   * Fetch on first expand; re-expand shows cached data instantly. A bumped reloadToken (a
-   * reconciliation landed) invalidates the cache, so comparing the loaded token covers both cases
-   * without a separate "fetched" flag.
-   */
-  useEffect(() => {
-    if (!expanded) return;
-    // The token guard caches across a re-expand; the page is not part of it, because changing page is
-    // a request for different rows rather than a re-open of the ones already loaded.
-    if (loadedTokenRef.current === reloadToken && loadedPageRef.current === page) return;
-    loadedTokenRef.current = reloadToken;
-    loadedPageRef.current = page;
-    load();
-  }, [expanded, reloadToken, page, load]);
 
   // Which side the adjustment landed on. Positive means the account held more than Renly knew.
   function adjustmentLabel(reconciliation: AccountReconciliation): string {
@@ -306,7 +250,7 @@ export function AccountReconciliationsSection({
                   accountId={account.id}
                   reconciliation={deleteTarget}
                   onSuccess={() => {
-                    load();
+                    invalidate();
                     onChanged();
                   }}
                 />

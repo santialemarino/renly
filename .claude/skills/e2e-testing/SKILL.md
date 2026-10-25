@@ -156,7 +156,7 @@ Two things about where the attribute goes:
   of a testid per call site — the currency hint is `hint-currency-hint-dismissed`. Reach for this
   whenever a family of instances is already distinguished by a prop.
 
-### Hovering a server-rendered element
+### Acting on a server-rendered element
 
 A page loaded with `goto` is visible and actionable before React has hydrated it, and React does not
 replay a pointer MOVE aimed at content it has not hydrated yet. Radix opens a tooltip on `pointermove`,
@@ -166,6 +166,12 @@ hover card), call `waitForHydration(locator)` from `tests/e2e/helpers/hydration.
 React has attached that element's props, which is the moment its handlers exist. Do not retry the
 hover in a `toPass` loop instead: that hides the race rather than waiting for the condition. A CSS
 `:hover` needs neither.
+
+The same window loses a keystroke and can lose a click: a server-rendered trigger takes focus before it
+has handlers, so `focus()` + `Enter` (or typing into a field) right after `goto` can open or change
+nothing, and the spec then fails on a state that never came (seen 2026-10-25 in
+`focus-system.auth.spec.ts`, failing every retry on one CI run and passing on the next). So the first
+key or click a spec sends to a freshly loaded page waits for that target's hydration too.
 
 ### Auth and storage state — how the harness actually works
 
