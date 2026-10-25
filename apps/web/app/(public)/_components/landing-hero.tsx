@@ -1,6 +1,4 @@
-'use client';
-
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
 import { Button } from '@repo/ui/components';
 import { RevealGroup, RevealItem } from '@/app/(public)/_components/reveal';
@@ -8,19 +6,18 @@ import { Section } from '@/app/(public)/_components/section';
 import { ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';
 
+interface LandingHeroProps {
+  isAuthenticated: boolean;
+  signupMode: SignupMode;
+}
+
 // Above-the-fold marketing hero: headline, sub-headline, and the primary CTAs. Logged-out visitors
 // get signup / login; logged-in visitors get a single "go to the app" CTA instead. In invite-only
 // mode the primary CTA reads "Request access" (it routes to the invite-only signup screen).
 // Entrance staggers in on mount (the public surface's on-load animation).
-export function LandingHero({
-  isAuthenticated,
-  signupMode,
-}: {
-  isAuthenticated: boolean;
-  signupMode: SignupMode;
-}) {
-  const t = useTranslations('landing.hero');
-  const tCommon = useTranslations('common');
+export async function LandingHero({ isAuthenticated, signupMode }: LandingHeroProps) {
+  const t = await getTranslations('landing.hero');
+  const tCommon = await getTranslations('common');
 
   return (
     <Section width="default" className="pt-20 pb-16">

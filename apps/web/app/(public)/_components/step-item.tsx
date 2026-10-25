@@ -1,5 +1,3 @@
-'use client';
-
 import { RevealItem } from '@/app/(public)/_components/reveal';
 
 interface StepItemProps {

@@ -1,12 +1,10 @@
-'use client';
-
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
 import { ExportDataButton } from '@/components/export-data-button';
 import { SectionHeader } from '@/components/section-header';
 
-export function ExportSection() {
-  const t = useTranslations('data');
+export async function ExportSection() {
+  const t = await getTranslations('data');
 
   return (
     <section className="flex flex-col gap-y-4">
