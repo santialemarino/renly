@@ -12,6 +12,7 @@ import { MotionProvider } from '@/components/motion-provider';
 import { OG_SITE_DEFAULTS, siteConfig, TWITTER_SITE_DEFAULTS } from '@/config/site';
 import { BRAND_SURFACE } from '@/lib/constants/brand';
 import { plusJakartaSans } from '@/lib/fonts/plus-jakarta-sans';
+import { getLocaleDirection } from '@/lib/i18n/locales';
 
 // Absolute base for resolving the favicon / Open Graph image URLs. Reuses NEXTAUTH_URL, the app's
 // canonical web origin (see docs/technical/env-vars.md) — a runtime env, so it carries the real
@@ -72,7 +73,7 @@ export default async function RootLayout({
   };
 
   return (
-    <html className={plusJakartaSans.className} lang={locale}>
+    <html className={plusJakartaSans.className} dir={getLocaleDirection(locale)} lang={locale}>
       <body
         className={cn(
           'min-h-safe-bottom md:min-h-screen w-full bg-muted/30 antialiased overflow-x-hidden',
