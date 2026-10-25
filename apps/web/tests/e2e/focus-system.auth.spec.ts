@@ -8,6 +8,7 @@ import {
   measureRing,
   tabTo,
 } from './helpers/focus';
+import { waitForHydration } from './helpers/hydration';
 
 // Route literals mirror apps/web/config/routes.ts, like every spec's.
 const EXPENSES = '/expenses';
@@ -37,12 +38,17 @@ const QUICK_ADD_OPEN_MS = 20_000;
  * sheet (its hamburger sits outside any Dialog.Trigger). `tests/unit/focus-system.test.ts` proves
  * every Radix dialog in the codebase goes through those wrappers; `use-return-focus.test.tsx` covers
  * the hook's logic case by case.
+ *
+ * Every key pressed on a freshly loaded page first waits for React to hydrate its target: a
+ * server-rendered trigger is focusable before it has handlers, and an Enter that lands in that window
+ * opens nothing (see `helpers/hydration.ts`).
  */
 test.describe('focus returns to what opened an overlay (signed in)', () => {
   const dialog = (page: Page) => page.getByRole('dialog');
 
   async function openAddExpense(page: Page): Promise<Locator> {
     const add = page.getByTestId('entity-list-add');
+    await waitForHydration(add);
     await add.focus();
     await page.keyboard.press('Enter');
     await expect(dialog(page)).toBeVisible();
@@ -92,6 +98,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
   test('a toolbar popover returns to its trigger', async ({ page }) => {
     await page.goto(EXPENSES);
     const filter = page.getByTestId('filter-combobox-trigger').first();
+    await waitForHydration(filter);
     await filter.focus();
     await page.keyboard.press('Enter');
     await expect(filter).toHaveAttribute('aria-expanded', 'true');
@@ -155,6 +162,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
       await page.goto(SUBSCRIPTIONS);
       // The row's last action is its Delete (the RowActionButton order is edit, archive, delete).
       const remove = page.getByRole('row').filter({ hasText: marker }).getByRole('button').last();
+      await waitForHydration(remove);
       const open = async () => {
         await remove.focus();
         await page.keyboard.press('Enter');
@@ -215,6 +223,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
         .filter({ hasText: marker })
         .getByRole('button')
         .first();
+      await waitForHydration(markPaid);
       await markPaid.focus();
       await page.keyboard.press('Enter');
       const form = dialog(page);
@@ -310,6 +319,7 @@ test.describe('the skip link (signed in)', () => {
       await page.setViewportSize(viewport);
       await page.goto(EXPENSES);
       const skip = page.getByTestId('skip-link');
+      await waitForHydration(skip);
 
       await page.keyboard.press('Tab');
       await expect(skip).toBeFocused();
@@ -346,7 +356,9 @@ test('the neutral ring clears 3:1 on the app’s controls (signed in)', async ({
   expect(await filter.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
   expectRingContrast(await measureRing(filter));
 
-  await page.getByTestId('entity-list-add').focus();
+  const add = page.getByTestId('entity-list-add');
+  await waitForHydration(add);
+  await add.focus();
   await page.keyboard.press('Enter');
   const cancel = page
     .getByRole('dialog')
