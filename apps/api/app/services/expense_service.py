@@ -40,8 +40,8 @@ from app.services.utils import group_names_by_id, group_sections
 from app.utils.dates import OBLIGATION_MONTH_STEP
 from app.utils.metrics import RateLookup, convert_optional
 
-# Match window for the manual-dupe expense warning (Phase 3, Step D). Mirrors the
-# user-facing constant DUPE_MATCH_WINDOW_DAYS in apps/web/lib/constants/expenses.ts.
+# Match window (± days) for the manual-dupe expense warning (Phase 3, Step D). The only copy:
+# the web asks the auto-charge-match endpoint and never applies a window of its own.
 DUPE_MATCH_WINDOW_DAYS = 15
 
 # Cap for the multi-cycle Mark Paid path (Phase 3, follow-up Item 2). Mirrors the web

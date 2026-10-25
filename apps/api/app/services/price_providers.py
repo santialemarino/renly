@@ -547,7 +547,7 @@ async def fetch_byma_ratios() -> RatioFetchResult:
     import re
 
     pdf_match = re.search(
-        r'(https://cdn\.prod\.website-files\.com/[^"\']+CEDEARs[^"\']*\.pdf)',
+        rf'({re.escape(BYMA_PDF_CDN_PREFIX)}[^"\']+CEDEARs[^"\']*\.pdf)',
         page_html,
         re.IGNORECASE,
     )
@@ -595,7 +595,7 @@ async def fetch_byma_ratios() -> RatioFetchResult:
 
                     # Format: "Company Name  TICKER  EXCHANGE  RATIO:1"
                     # The ratio is always at the end, in "N:N" format.
-                    ratio_match = re.search(r"(\d+):(\d+)\s*$", line)
+                    ratio_match = re.search(rf"(\d+){re.escape(BYMA_RATIO_SEPARATOR)}(\d+)\s*$", line)
                     if not ratio_match:
                         continue
 

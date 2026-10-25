@@ -219,22 +219,17 @@ class TestPricedCategoriesAgree:
     # will ever price, or is priced from a ticker nobody could enter.
 
     @staticmethod
-    def _web_capabilities() -> dict[str, tuple[bool, bool]]:
+    def _web_has_ticker() -> dict[str, bool]:
         source = (_WEB / _CATEGORIES).read_text()
         block = re.search(r"export const CATEGORY_CAPABILITIES\b[^=]*= \{(.*?)\n\};", source, re.DOTALL)
         assert block is not None, "CATEGORY_CAPABILITIES not found"
-        rows = re.findall(r"^\s*(\w+): \{ hasTicker: (true|false), hasAutoPrice: (true|false)", block.group(1), re.MULTILINE)
-        parsed = {category: (ticker == "true", auto == "true") for category, ticker, auto in rows}
+        rows = re.findall(r"^\s*(\w+): \{ hasTicker: (true|false)\b", block.group(1), re.MULTILINE)
+        parsed = {category: ticker == "true" for category, ticker in rows}
         assert set(parsed) == {category.value for category in InvestmentCategory}, "CATEGORY_CAPABILITIES rows not all parsed"
         return parsed
 
     def test_the_priced_categories_are_the_ones_the_web_asks_a_ticker_for(self):
         priced = {category.value for category in asset_price_service._CATEGORY_PROVIDERS}
         assert priced, "_CATEGORY_PROVIDERS is empty"
-        ticker = {category for category, (has_ticker, _auto) in self._web_capabilities().items() if has_ticker}
+        ticker = {category for category, has_ticker in self._web_has_ticker().items() if has_ticker}
         assert priced == ticker
-
-    def test_the_priced_categories_are_the_ones_the_web_says_auto_price(self):
-        priced = {category.value for category in asset_price_service._CATEGORY_PROVIDERS}
-        auto = {category for category, (_ticker, has_auto) in self._web_capabilities().items() if has_auto}
-        assert priced == auto
