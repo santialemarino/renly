@@ -150,7 +150,7 @@ pnpm test:e2e        # Playwright E2E
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue) and the tables WITHOUT RLS are exactly the pinned global reference
     tables (`GLOBAL_REFERENCE_TABLES` in `tests/unit/test_schema_parity.py`, whose static twin reads
-    `01_create_tables.sql` so CI sees it too), the roles carry the attributes the model depends on, the
+    `01_create_tables.sql` on every commit, without a database), the roles carry the attributes the model depends on, the
     `SECURITY DEFINER` functions are owned by `renly_policy_definer` and it reads only what they read
     (table and column grants alike) and each pins its `search_path`, tables a migration creates reach `renly_app` with their grants, and `row_security = off` is the loud
     guard. It also reads a group and a pot as `renly_app` under a NOSUPERUSER owner — directly when the
@@ -180,7 +180,8 @@ pnpm test:e2e        # Playwright E2E
   - `test_card_liability_queries.py` — `LEDGER_TEST_DATABASE_URL`. Two figures a card debt reaches the
     user through, each one operator from a wrong answer: the net-worth evolution SUBTRACTS a real card's
     balance (every earlier assertion ran with a zero card, where `- card` and `+ card` agree), and the
-    payments calendar bills the statement a due date pays when the closing and due days coincide.
+    payments calendar bills the statement a due date pays when the closing and due days coincide (last
+    month's, turning Paid on a settlement inside the month between them).
   - `test_auth_lifecycle.py` — the two `RLS_TEST_*` vars. The real app with only its sessions swapped and
     `get_current_user` NOT overridden (every unit endpoint test overrides it): logout ends every session
     through the session-epoch check, the RLS user is set before the user row is read, an unverified address

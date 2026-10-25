@@ -16,8 +16,9 @@ from sqlalchemy.orm import sessionmaker
 #     shown a debt as wealth on the chart (and in the overview's month-over-month delta, which is the same
 #     series' last two points) with the whole suite green.
 #   * The payments calendar bills the statement the due date PAYS. When the closing day and the due day
-#     coincide, the statement closes the day it is due and that day's balance is the bill; a strict
-#     comparison picks the previous month's statement and shows last month's balance as due.
+#     coincide, the bill is LAST month's statement (a one-month gap, not a same-day close); reading it as
+#     that day's statement shows a balance not yet due and leaves an empty paid window, so it never turns
+#     Paid.
 #
 # Admin role (renly_admin, BYPASSRLS): this is about what a read answers, not about who may see it.
 from app.models.user import User
@@ -128,9 +129,9 @@ class TestTheEvolutionSubtractsTheCard:
 
 class TestThePaymentsCalendarBillsTheStatementTheDueDatePays:
     @pytest.mark.asyncio
-    async def test_a_card_closing_the_day_it_is_due_bills_that_days_balance(self, factory):
+    async def test_a_card_closing_on_its_due_day_bills_last_months_statement(self, factory):
         # Closes and falls due on the 15th. 1,000 charged before February's statement and 500 more before
-        # March's: the bill due on March 15 is March 15's statement, 1,500 — not February's 1,000.
+        # March's: the bill due on March 15 is February 15's statement, 1,000 — not March 15's 1,500.
         async with factory() as s:
             user = await _user(s, "calendar")
             card = await _card(s, user.id, closing_day=15, due_day=15)
@@ -141,5 +142,25 @@ class TestThePaymentsCalendarBillsTheStatementTheDueDatePays:
         async with factory() as s:
             response = await payments_calendar_service.get_calendar(s, user, year=2026, month=3)
 
-        bills = [(item.date, item.amount, item.currency) for item in response.items if item.type == "card_due"]
-        assert bills == [(date(2026, 3, 15), Decimal("1500.00"), "USD")]
+        bills = [(item.date, item.amount, item.currency, item.is_paid) for item in response.items if item.type == "card_due"]
+        assert bills == [(date(2026, 3, 15), Decimal("1000.00"), "USD", False)]
+
+    @pytest.mark.asyncio
+    async def test_a_card_closing_on_its_due_day_turns_paid_when_settled_in_the_window(self, factory):
+        # Same card: February 15's 1,000 statement, settled in full on March 1 — inside (Feb 15, Mar 15]. Read
+        # as a same-day close, the window would be (Mar 15, Mar 15], empty, and the bill could never be Paid.
+        async with factory() as s:
+            user = await _user(s, "paid")
+            card = await _card(s, user.id, closing_day=15, due_day=15)
+            await _charge(s, user.id, card, date(2026, 2, 10), "1000.00")
+            await s.execute(
+                text("INSERT INTO card_settlements (credit_card_id, user_id, date, amount, currency) VALUES (:c, :u, '2026-03-01', 1000, 'USD')"),
+                {"c": card, "u": user.id},
+            )
+            await s.commit()
+
+        async with factory() as s:
+            response = await payments_calendar_service.get_calendar(s, user, year=2026, month=3)
+
+        bills = [(item.date, item.amount, item.is_paid) for item in response.items if item.type == "card_due"]
+        assert bills == [(date(2026, 3, 15), Decimal("1000.00"), True)]

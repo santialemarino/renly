@@ -122,6 +122,8 @@ This is a running-balance **snapshot** at `closing_date` per bucket. Carryover f
 
 Pure helper: `compute_bucket_balance_at(card_id, currency, as_of_date)` — used by both the Payments Calendar's `_card_due_items` and the reconciliation service.
 
+**Which statement a due date pays.** Decided by the card's configured days, not by the dates they clamp to in a short month: when `closing_day < due_day` the bill due in month M is for the statement that closed in M; otherwise — equal days included — it is the previous month's statement. Equal days are a one-month gap, not a same-day close (a statement is issued at least 5 days before it is due under Ley 25.065), so the paid window below is a full month. Comparing days keeps every statement billed exactly once: a card closing on the 29th–31st and due on the 28th bills January 31's statement in February and February 28's in March.
+
 **Paid-marking for `card_due` events.** The statement amount stays frozen at its closing-date snapshot, but the calendar flips a `card_due` event's `is_paid` to true when settlements dated inside `(closing_date, due_date]` for that card+currency sum to **at least** the snapshot. A partially-settled statement stays unpaid. A negative snapshot (net credit balance) is never a bill — it keeps `is_paid = false` and its card is left out of the settlements reads. Those reads are batched: the sum inside `(closing_date, due_date]` is the settlements up to the due date less those up to the closing date, each read with `card_reconciliation_repository.sum_settlements_by_bucket_at` once per distinct date rather than once per card and bucket.
 
 ### Statement periods
