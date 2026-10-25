@@ -99,18 +99,18 @@ EXCHANGE_RATE_PROVIDERS = [
 
 ### Frontend category capabilities (`lib/constants/categories.ts`)
 
-The frontend mirrors provider capabilities for UI decisions:
+The frontend mirrors which categories have a price provider:
 
 ```typescript
 CATEGORY_CAPABILITIES: Record<InvestmentCategory, CategoryCapability> = {
-  stocks: { hasTicker: true, hasAutoPrice: true, supportsHistory: true },
-  crypto: { hasTicker: true, hasAutoPrice: true, supportsHistory: false },
-  corporate_bonds: { hasTicker: false, hasAutoPrice: false, supportsHistory: false },
+  stocks: { hasTicker: true },
+  crypto: { hasTicker: true },
+  corporate_bonds: { hasTicker: false },
   // ...
 };
 ```
 
-Used by the investment form to show/hide the ticker field and display category-specific ticker hints.
+Used by the investment form to show/hide the ticker field and display category-specific ticker hints. The `hasTicker` set must equal `_CATEGORY_PROVIDERS`; `tests/unit/test_enum_parity.py` fails when they drift.
 
 ## Current providers
 

@@ -251,7 +251,7 @@ export function CurrencyCombobox({
               // px-3, the text-paragraph-sm token, a hover border highlight, and a muted fill on hover
               // (Button's outline base supplies hover:bg-muted / aria-expanded:bg-muted once the
               // static-bg override is dropped).
-              surface ? 'bg-background' : 'bg-input dark:bg-input',
+              surface ? 'bg-background' : 'bg-input',
               hasError &&
                 'border-destructive hover:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
             )}

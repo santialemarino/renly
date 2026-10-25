@@ -25,7 +25,7 @@ function Switch({
         'peer inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border shadow-xs transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50',
         surface
           ? 'data-[state=unchecked]:bg-muted data-[state=unchecked]:border-border'
-          : 'data-[state=unchecked]:bg-input data-[state=unchecked]:border-transparent dark:data-[state=unchecked]:bg-input/80',
+          : 'data-[state=unchecked]:bg-input data-[state=unchecked]:border-transparent',
         blue
           ? 'data-[state=checked]:bg-blue-800 data-[state=checked]:border-blue-800 data-[state=checked]:focus-visible:ring-blue-800/20 data-[state=checked]:focus-visible:border-blue-800/50'
           : 'data-[state=checked]:bg-primary data-[state=checked]:border-primary',
@@ -36,7 +36,7 @@ function Switch({
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          'bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0',
+          'bg-background pointer-events-none block size-4 rounded-full ring-0 transition-transform data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0',
           thumbClassName,
         )}
       />
