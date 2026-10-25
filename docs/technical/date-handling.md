@@ -95,7 +95,8 @@ negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIM
 (mirrors `NEXT_LOCALE`; written by the localization save + timezone auto-sync actions, read in
 `apps/web/i18n/request.ts` and returned as next-intl's `timeZone`, which the `useFormatters` /
 `getFormatters` hook binds). When no cookie is present the timestamp falls back to the ambient
-(browser/server) zone.
+(browser/server) zone. Once the day is resolved it is worded by the same date-fns `PP` pattern
+`fmt.date` uses, so a timestamp and a plain date for the same day read identically in every locale.
 
 **Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** Every date-only label goes through a
 `fmt.*` method — `fmt.date` / `fmt.month`, plus `fmt.monthLong` (long month name), `fmt.monthYear`

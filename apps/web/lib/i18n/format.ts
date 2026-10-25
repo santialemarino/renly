@@ -104,8 +104,9 @@ export function valueColor(value: number | null): string {
  * Date formatters split by engine on purpose: `formatDateForLocale` uses date-fns for its `PP`
  * token (locale-ordered day-month-year, which dodges DD/MM vs MM/DD ambiguity); every other date
  * label passes EXPLICIT field options ({month, day, weekday, year}) whose ordering is unambiguous,
- * so they use `Intl.DateTimeFormat` (via the cache) — and `formatTimestampDate` needs Intl anyway
- * for its IANA-timezone shift, which date-fns core can't do. All date-only helpers anchor at local
+ * so they use `Intl.DateTimeFormat` (via the cache). `formatTimestampDate` uses Intl only for its
+ * IANA-timezone shift, which date-fns core can't do, and hands the shifted day to
+ * `formatDateForLocale` so the two render the same label. All date-only helpers anchor at local
  * midnight and are never timezone-shifted; only `formatTimestampDate` carries a timeZone.
  */
 
@@ -158,14 +159,27 @@ export function formatDateForLocale(
   return format(date, dateFormat, { locale: getDateFnsLocale(locale) });
 }
 
-// Formats a full ISO timestamp (e.g. "2026-07-16T12:00:00Z") as a short, locale-aware date label (e.g. "Jul 16, 2026" / "16 jul 2026"), dropping the time. Renders in `timeZone` when given (the user's stored zone) so the calendar day is correct for the viewer; falls back to the ambient zone otherwise. For date-only (YYYY-MM-DD) strings use formatDateForLocale — those must stay on the local-midnight anchor and must NOT be timezone-shifted.
+/*
+ * Formats a full ISO timestamp (e.g. "2026-07-16T12:00:00Z") as a short, locale-aware date label
+ * (e.g. "Jul 16, 2026" / "16 jul 2026"), dropping the time. Renders the calendar day in `timeZone`
+ * when given (the user's stored zone) so it is correct for the viewer; falls back to the ambient
+ * zone otherwise. For date-only (YYYY-MM-DD) strings use formatDateForLocale — those must stay on
+ * the local-midnight anchor and must NOT be timezone-shifted.
+ *
+ * Intl only resolves WHICH day it is (as numeric parts, so no locale wording leaks in); the label
+ * itself comes from formatDateForLocale. A timestamp and a plain date then read identically side by
+ * side — Intl's own es-AR pattern would say "9 de mar de 2026" where date-fns says "9 mar 2026".
+ */
 export function formatTimestampDate(iso: string, locale?: string, timeZone?: string): string {
-  return dateTimeFormat(getLocaleTag(locale), {
-    month: 'short',
-    day: 'numeric',
+  const parts = dateTimeFormat('en-US', {
     year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     timeZone,
-  }).format(new Date(iso));
+  }).formatToParts(new Date(iso));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value;
+  return formatDateForLocale(`${part('year')}-${part('month')}-${part('day')}`, locale);
 }
 
 // Formats a number as a compact value for chart Y axes and tooltips (e.g. 1500000 → "1.5M", 23000 → "23K").

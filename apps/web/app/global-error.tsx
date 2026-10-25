@@ -7,7 +7,13 @@ import { useSyncExternalStore } from 'react';
 import { GlobalErrorContent } from '@/components/global-error-content';
 import { plusJakartaSans } from '@/lib/fonts/plus-jakarta-sans';
 import { useReportBoundaryError } from '@/lib/hooks/use-report-boundary-error';
-import { DEFAULT_LOCALE, LOCALE_COOKIE, resolveLocale, type Locale } from '@/lib/i18n/locales';
+import {
+  DEFAULT_LOCALE,
+  getLocaleDirection,
+  LOCALE_COOKIE,
+  resolveLocale,
+  type Locale,
+} from '@/lib/i18n/locales';
 
 // Reads the locale cookie from `document.cookie`.
 function readLocaleCookie(): string | undefined {
@@ -34,7 +40,7 @@ interface GlobalErrorProps {
 
 /*
  * The last boundary: it replaces the ROOT layout when that layout itself throws, so none of what the
- * root layout provides exists here — no next-intl provider, no messages, no `<html lang>`, no styles.
+ * root layout provides exists here — no next-intl provider, no messages, no `<html lang dir>`, no styles.
  * This page supplies each of them itself, and its copy is imported statically (see
  * `lib/i18n/error-boundary-messages.ts`), so it can never render without a heading and a retry.
  *
@@ -46,7 +52,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useReportBoundaryError(error);
 
   return (
-    <html className={plusJakartaSans.className} lang={locale}>
+    <html className={plusJakartaSans.className} dir={getLocaleDirection(locale)} lang={locale}>
       <body className="min-h-screen w-full bg-muted/30 antialiased">
         <GlobalErrorContent locale={locale} reset={reset} />
       </body>

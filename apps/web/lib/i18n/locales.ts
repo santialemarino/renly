@@ -41,7 +41,7 @@ export function getDateFnsLocale(locale?: string): DateFnsLocale {
   return localeEntry(locale).dateFns;
 }
 
-// Resolves a short locale code to its text direction ('ltr' | 'rtl'). Falls back to the default locale. Every supported locale is 'ltr' today; the field readies the registry for a future RTL language.
+// Resolves a short locale code to its text direction ('ltr' | 'rtl'). Falls back to the default locale. Every supported locale is 'ltr' today; the field readies the registry for a future RTL language. Both root layouts (`app/layout.tsx`, `app/global-error.tsx`) set it as `<html dir>`.
 export function getLocaleDirection(locale?: string): TextDirection {
   return localeEntry(locale).dir;
 }
