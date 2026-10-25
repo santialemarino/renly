@@ -48,6 +48,25 @@ export function isValidTimezone(tz: string): boolean {
   }
 }
 
+// The zone a signed-in user pinned: their stored zone when its mode is 'manual' and the runtime knows
+// it, else null. Mirrors `pinnedLocale` — 'auto' (or a null mode) pins nothing.
+export function pinnedTimezone(
+  timezone: string | null | undefined,
+  mode: string | null | undefined,
+): string | null {
+  return mode === TIMEZONE_MODE_MANUAL && timezone && isValidTimezone(timezone) ? timezone : null;
+}
+
+// The zone a request renders timestamps in: the pinned zone, else a valid timezone cookie, else
+// undefined (timestamps fall back to the ambient browser/server zone). Mirrors `resolveLocale`.
+export function resolveTimezone(
+  cookieValue: string | null | undefined,
+  pinned: string | null = null,
+): string | undefined {
+  if (pinned) return pinned;
+  return cookieValue && isValidTimezone(cookieValue) ? cookieValue : undefined;
+}
+
 // Formats an IANA timezone for display: underscores -> spaces, slashes -> " / ".
 // Storage and validation always operate on the raw IANA value; this is presentation-only.
 // "America/Argentina/Buenos_Aires" -> "America / Argentina / Buenos Aires".

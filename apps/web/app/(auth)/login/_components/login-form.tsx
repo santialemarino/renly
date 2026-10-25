@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signIn } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 
 import { Button, Checkbox, Input } from '@repo/ui/components';
 import { loginFormSchema, type LoginFormData } from '@/app/(auth)/login/form-schema';
+import { seedLocalizationCookies } from '@/app/(auth)/login/login-actions';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
@@ -21,7 +22,8 @@ interface LoginFormProps {
 export function LoginForm({ nextPath }: LoginFormProps) {
   const t = useTranslations('login');
   const tCommon = useTranslations('common');
-  const router = useRouter();
+  // Holds the submit button in its loading state while the post-login document loads.
+  const [redirecting, setRedirecting] = useState(false);
   const form = useForm<LoginFormData>({
     defaultValues: {
       email: '',
@@ -30,6 +32,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
     },
     resolver: zodResolver(loginFormSchema(tCommon)),
   });
+  const pending = form.formState.isSubmitting || redirecting;
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -49,7 +52,16 @@ export function LoginForm({ nextPath }: LoginFormProps) {
         return;
       }
 
-      router.push(nextPath ?? ROUTES.home);
+      /*
+       * A full document load, not `router.push`: a soft navigation keeps the root layout — and with it
+       * the next-intl provider holding the login page's messages — so a user whose stored language
+       * differs from this browser's would see the app in the wrong language until something refreshed
+       * it. The new document renders in the signed-in user's language from its first paint.
+       */
+      setRedirecting(true);
+      // Best effort: should it fail, the document still renders in the pin and the layout seeds them.
+      await seedLocalizationCookies().catch(() => {});
+      window.location.assign(nextPath ?? ROUTES.home);
     } catch {
       form.setError('password', { message: tCommon('form.errors.serverError') });
     }
@@ -124,14 +136,8 @@ export function LoginForm({ nextPath }: LoginFormProps) {
           </div>
         </div>
 
-        <Button
-          blue
-          type="submit"
-          size="lg"
-          disabled={form.formState.isSubmitting}
-          data-testid="login-submit"
-        >
-          {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
+        <Button blue type="submit" size="lg" disabled={pending} data-testid="login-submit">
+          {pending ? t('form.cta.loading') : t('form.cta.label')}
         </Button>
       </form>
     </Form>

@@ -2,31 +2,51 @@
 
 import { useEffect, useRef } from 'react';
 
-import { syncBrowserTimezone } from '@/app/(protected)/_components/timezone-auto-sync-actions';
-import { detectBrowserTimezone, TIMEZONE_MODE_AUTO } from '@/lib/constants/timezones';
+import {
+  seedTimezoneCookie,
+  syncBrowserTimezone,
+} from '@/app/(protected)/_components/timezone-auto-sync-actions';
+import {
+  detectBrowserTimezone,
+  pinnedTimezone,
+  TIMEZONE_MODE_AUTO,
+} from '@/lib/constants/timezones';
 
 interface TimezoneAutoSyncProps {
   storedTimezone: string | null;
   storedMode: string | null;
+  timezoneCookie: string | null;
 }
 
 /*
- * Silently keeps the user's timezone setting in sync with the browser-detected IANA zone
- * while mode is 'auto'. Runs once per mount: reads Intl.DateTimeFormat, compares to
- * stored value, and PUTs the diff via a server action. Skipped when mode = 'manual'.
- * No UI surface — purely a side-effect mount on the protected layout.
+ * Keeps the user's timezone setting and this browser's timezone cookie in step, once per mount. In
+ * 'auto' it follows the browser: reads Intl.DateTimeFormat, compares it to the stored value, and PUTs
+ * the diff via a server action. In 'manual' the stored zone is pinned and never updated; instead, when
+ * the cookie is absent or names another zone, it seeds the cookie from the pin. No UI surface —
+ * purely a side-effect mount on the protected layout.
  */
-export function TimezoneAutoSync({ storedTimezone, storedMode }: TimezoneAutoSyncProps) {
+export function TimezoneAutoSync({
+  storedTimezone,
+  storedMode,
+  timezoneCookie,
+}: TimezoneAutoSyncProps) {
   const ran = useRef(false);
 
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
 
-    // Mode 'manual' locks the stored value — never auto-update.
     // Treat a null mode as 'auto' (first-fill for existing users).
     const mode = storedMode ?? TIMEZONE_MODE_AUTO;
-    if (mode !== TIMEZONE_MODE_AUTO) return;
+    if (mode !== TIMEZONE_MODE_AUTO) {
+      const pinned = pinnedTimezone(storedTimezone, mode);
+      if (pinned && pinned !== timezoneCookie) {
+        seedTimezoneCookie(pinned).catch(() => {
+          // Intentional no-op — the next page load retries.
+        });
+      }
+      return;
+    }
 
     const browserTz = detectBrowserTimezone();
     if (!browserTz) return;
@@ -36,7 +56,7 @@ export function TimezoneAutoSync({ storedTimezone, storedMode }: TimezoneAutoSyn
     syncBrowserTimezone(browserTz).catch(() => {
       // Intentional no-op — non-blocking sync.
     });
-  }, [storedTimezone, storedMode]);
+  }, [storedTimezone, storedMode, timezoneCookie]);
 
   return null;
 }

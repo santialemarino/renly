@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import {
+  isValidTimezone,
   TIMEZONE_COOKIE,
   TIMEZONE_COOKIE_MAX_AGE,
   TIMEZONE_MODE_AUTO,
@@ -28,4 +29,19 @@ export async function syncBrowserTimezone(timezone: string): Promise<void> {
     sameSite: 'lax',
   });
   revalidatePath('/', 'layout');
+}
+
+// Writes the NEXT_TIMEZONE cookie only — no settings PUT, no revalidation. Called at login
+// (seedLocalizationCookies), and from TimezoneAutoSync when the user's zone is pinned ('manual') and
+// this browser's cookie is absent or names another zone. A document already renders in the pinned zone
+// (i18n/request.ts reads the pin); this brings the cookie, which every other request renders from, into
+// agreement. An unknown zone is ignored.
+export async function seedTimezoneCookie(timezone: string): Promise<void> {
+  if (!isValidTimezone(timezone)) return;
+  const cookieStore = await cookies();
+  cookieStore.set(TIMEZONE_COOKIE, timezone, {
+    maxAge: TIMEZONE_COOKIE_MAX_AGE,
+    path: '/',
+    sameSite: 'lax',
+  });
 }
