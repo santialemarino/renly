@@ -214,7 +214,6 @@
       "success": "Your data export has been downloaded."
     },
     "accountField": {
-      "placeholder": "Select an account",
       "none": "None",
       "noneForCurrency": "No {currency} accounts",
       "archived": "{name} (archived)"
@@ -1491,12 +1490,6 @@
     },
     "installment": {
       "progress": "Installment {index} of {total}"
-    },
-    "paymentMethods": {
-      "cash": "Cash",
-      "debit": "Debit",
-      "transfer": "Transfer",
-      "credit_card": "Credit card"
     }
   },
   "installments": {
@@ -2721,7 +2714,6 @@
       "table": {
         "date": "Date",
         "amount": "Amount",
-        "category": "Category",
         "source": "From",
         "wentTo": "Went to",
         "notes": "Notes",
@@ -2772,9 +2764,7 @@
         },
         "source": {
           "label": "Where it came from",
-          "placeholder": "Select a shared asset",
           "none": "Nothing in particular",
-          "empty": "This group's shared money holds no assets yet",
           "hint": "Picking a shared asset divides the income the way that asset is owned. Change any share below.",
           "applied": "Split by how {asset} is owned.",
           "ownerNotInGroup": "{count, plural, one {The split was left alone: {names} owns part of this asset but has left the group, so the shares would not add up to 100%. Divide it yourself.} other {The split was left alone: {names} own part of this asset but have left the group, so the shares would not add up to 100%. Divide it yourself.}}"
@@ -3112,9 +3102,7 @@
       "preferredCurrencies": {
         "label": "Preferred currencies",
         "hint": "Shown in a separate group at the top of the currency selector.",
-        "placeholder": "Search currencies...",
         "inputPlaceholder": "Enter ISO codes (e.g. BRL, EUR)",
-        "empty": "No currencies found.",
         "format": "Comma-separated ISO codes. Leave empty to disable.",
         "formatWithDefaults": "Comma-separated ISO codes. Defaults to {defaults} if left empty."
       },

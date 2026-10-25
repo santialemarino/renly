@@ -267,6 +267,41 @@ describe('ICU placeholder parity', () => {
   });
 });
 
+/*
+ * Spanish writes a decimal with a comma, and the amount field (`LocaleAmountInput`) refuses a dot in
+ * es — so a message showing "0.00" or "0.1" is an example the user cannot type. A dot followed by
+ * exactly three digits is a thousands group ("1.000 filas", "$100.000") and is correct; any other dot
+ * between digits, or one after a lone leading zero, is a decimal written the English way.
+ */
+const DOT_DECIMAL = /(?<!\d)0\.\d|\d\.(?!\d{3}(?!\d))\d/;
+
+describe('Spanish number examples', () => {
+  const esLeaves = { ...flattenLeaves(es), ...flattenLeaves(ebEs) };
+
+  it('tells a dot decimal from a thousands group', () => {
+    expect(DOT_DECIMAL.test('0.00')).toBe(true);
+    expect(DOT_DECIMAL.test('entre 0.1 y 10')).toBe(true);
+    expect(DOT_DECIMAL.test('1.5')).toBe(true);
+    expect(DOT_DECIMAL.test('12.3456')).toBe(true);
+    expect(DOT_DECIMAL.test('0.125')).toBe(true);
+    expect(DOT_DECIMAL.test('0,00')).toBe(false);
+    expect(DOT_DECIMAL.test('hasta 1.000 filas')).toBe(false);
+    expect(DOT_DECIMAL.test('vale 100.000, tu lado son 60.000')).toBe(false);
+    expect(DOT_DECIMAL.test('1.234.567,89')).toBe(false);
+  });
+
+  it('finds Spanish messages to check', () => {
+    expect(Object.keys(esLeaves).length).toBeGreaterThan(1000);
+  });
+
+  it('writes every decimal with a comma', () => {
+    const dotted = Object.entries(esLeaves)
+      .filter(([, message]) => DOT_DECIMAL.test(message))
+      .map(([key, message]) => `${key}: ${message}`);
+    expect(dotted).toEqual([]);
+  });
+});
+
 describe('help page anchors', () => {
   const enSections = en.help.sections as ProseSectionData[];
   const esSections = es.help.sections as ProseSectionData[];
