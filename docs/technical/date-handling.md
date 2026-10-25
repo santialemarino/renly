@@ -96,12 +96,13 @@ negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIM
 `apps/web/i18n/request.ts` and returned as next-intl's `timeZone`, which the `useFormatters` /
 `getFormatters` hook binds). A signed-in user whose timezone mode is `manual` gets their stored zone
 even when the cookie is absent or names another zone: login writes the pin to the cookie, a document
-load has `request.ts` read the settings (sharing the protected layout's one `/settings` call) with the
-pin outranking the cookie, and the protected layout's `TimezoneAutoSync` re-seeds the cookie from it.
-Link prefetches, client-side navigations and server actions render from the cookie alone, so they cost
-no API call each; the language follows the same rule. When neither a pin nor a cookie resolves, the timestamp falls back to
-the ambient (browser/server) zone. Once the day is resolved it is worded by the same date-fns `PP` pattern
-`fmt.date` uses, so a timestamp and a plain date for the same day read identically in every locale.
+load has `request.ts` read the settings (sharing the protected layout's one `/settings` call) with
+the pin outranking the cookie, and the protected layout's `TimezoneAutoSync` re-seeds the cookie
+from it. Link prefetches, client-side navigations and server actions render from the cookie alone,
+so they cost no API call each; the language follows the same rule. When neither a pin nor a cookie
+resolves, the timestamp falls back to the ambient (browser/server) zone. Once the day is resolved it
+is worded by the same date-fns `PP` pattern `fmt.date` uses, so a timestamp and a plain date for the
+same day read identically in every locale.
 
 **Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** Every date-only label goes through a
 `fmt.*` method — `fmt.date` / `fmt.month`, plus `fmt.monthLong` (long month name), `fmt.monthYear`
