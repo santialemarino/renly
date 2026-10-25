@@ -1,32 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
-import { DonutLegend, DonutLegendLayout } from '@/components/donut-legend';
+import { DistributionDonut } from '@/app/(protected)/_components/distribution-donut';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import type { AllocationResponse, CollectionAllocationResponse } from '@/lib/api/metrics';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { UNASSIGNED_LABEL } from '@/lib/constants/api-constants';
-import {
-  CHART_ANIMATION_DURATION,
-  CHART_ANIMATION_EASING,
-  DONUT_COLORS,
-  DONUT_HEIGHT,
-  DONUT_INNER_RADIUS,
-  DONUT_OUTER_RADIUS,
-  DONUT_PADDING_ANGLE,
-  DONUT_STROKE_WIDTH,
-  TOOLTIP_ANIMATION_DURATION,
-  TOOLTIP_BG,
-  TOOLTIP_BORDER,
-  TOOLTIP_BORDER_RADIUS,
-  TOOLTIP_FONT_SIZE,
-  TOOLTIP_TEXT,
-} from '@/lib/constants/charts';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 type Mode = 'category' | 'collection';
@@ -70,39 +52,36 @@ export function InvestorDashboardDistribution({
         difference: item.difference,
       }));
 
-  const hasData = chartData.length > 0;
   const hasTargets = !isCategoryMode && chartData.some((e) => e.targetPercentage != null);
 
-  // Measure legend height for smooth bottom-edge animation.
-  const legendRef = useRef<HTMLDivElement>(null);
-  const [legendHeight, setLegendHeight] = useState<number>(0);
-  const initialized = useRef(false);
-
-  useEffect(() => {
-    const el = legendRef.current;
-    if (!el) return;
-
-    // Set initial height without transition to avoid flash.
-    if (!initialized.current) {
-      setLegendHeight(el.scrollHeight);
-      initialized.current = true;
-    }
-
-    const observer = new ResizeObserver((entries) => {
-      const h = entries[0]?.contentRect.height;
-      if (h != null) setLegendHeight(h);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  // A collection with a target shows it after its share, coloured by which side of it the share is.
+  const slices = chartData.map((entry) => ({
+    name: entry.name,
+    value: entry.value,
+    percentage: entry.percentage,
+    extra: entry.targetPercentage != null && (
+      <span
+        className={`shrink-0 text-paragraph-mini ${
+          entry.difference != null && entry.difference > 0
+            ? 'text-red-500'
+            : entry.difference != null && entry.difference < 0
+              ? 'text-amber-500'
+              : 'text-muted-foreground'
+        }`}
+      >
+        ({fmt.pct(entry.targetPercentage)}%)
+      </span>
+    ),
+  }));
 
   return (
-    <Card className="flex-1">
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-6">
-        <CardTitle className="text-paragraph-sm text-muted-foreground">
-          {t('distribution.title')}
-        </CardTitle>
-        {!forcedMode && (
+    <DistributionDonut
+      title={t('distribution.title')}
+      slices={slices}
+      dataKey={activeMode}
+      emptyLabel={t('noData')}
+      toggle={
+        !forcedMode && (
           <PillToggleGroup
             items={[
               { value: 'category', label: t('distribution.byCategory') },
@@ -111,120 +90,29 @@ export function InvestorDashboardDistribution({
             value={mode}
             onValueChange={(v) => setMode(v as Mode)}
           />
-        )}
-      </CardHeader>
-      <CardContent className="px-6">
-        {hasData ? (
-          <div
-            className="overflow-hidden transition-[height] duration-300 ease-in-out"
-            style={{ height: legendHeight }}
-          >
-            <div ref={legendRef} className="flex flex-col gap-y-4">
-              {/* Chart (top in a narrow card, right in a wide one) + Legend */}
-              <DonutLegendLayout
-                legend={
-                  /* Legend items — content fades on mode switch. */
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={activeMode}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_DEFAULT }}
-                    >
-                      <DonutLegend
-                        items={chartData.map((entry, index) => ({
-                          key: entry.name,
-                          name: entry.name,
-                          color: DONUT_COLORS[index % DONUT_COLORS.length],
-                          percentage: entry.percentage,
-                          extra: entry.targetPercentage != null && (
-                            <span
-                              className={`shrink-0 text-paragraph-mini ${
-                                entry.difference != null && entry.difference > 0
-                                  ? 'text-red-500'
-                                  : entry.difference != null && entry.difference < 0
-                                    ? 'text-amber-500'
-                                    : 'text-muted-foreground'
-                              }`}
-                            >
-                              ({fmt.pct(entry.targetPercentage)}%)
-                            </span>
-                          ),
-                        }))}
-                      />
-                    </motion.div>
-                  </AnimatePresence>
-                }
-                chart={
-                  /* Donut chart — key forces remount so Recharts replays the draw animation. */
-                  <div
-                    style={{ height: DONUT_HEIGHT, maxWidth: DONUT_HEIGHT }}
-                    className="w-full shrink-0"
-                  >
-                    <ResponsiveContainer key={activeMode} width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={chartData}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={DONUT_INNER_RADIUS}
-                          outerRadius={DONUT_OUTER_RADIUS}
-                          animationDuration={CHART_ANIMATION_DURATION}
-                          animationEasing={CHART_ANIMATION_EASING}
-                          paddingAngle={DONUT_PADDING_ANGLE}
-                          strokeWidth={DONUT_STROKE_WIDTH}
-                        >
-                          {chartData.map((_entry, index) => (
-                            <Cell key={index} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          animationDuration={TOOLTIP_ANIMATION_DURATION}
-                          formatter={(value) => fmt.value(Number(value), { compact: true })}
-                          contentStyle={{
-                            backgroundColor: TOOLTIP_BG,
-                            color: TOOLTIP_TEXT,
-                            borderRadius: TOOLTIP_BORDER_RADIUS,
-                            border: TOOLTIP_BORDER,
-                            fontSize: TOOLTIP_FONT_SIZE,
-                          }}
-                          labelStyle={{ color: TOOLTIP_TEXT }}
-                          itemStyle={{ color: TOOLTIP_TEXT }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                }
-              />
-
-              {/* Target color legend — only when collections have targets. */}
-              <AnimatePresence initial={false}>
-                {hasTargets && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    className="flex items-center justify-center gap-x-4 text-paragraph-xs text-muted-foreground"
-                  >
-                    <span>
-                      <span className="text-red-500">●</span> {t('distribution.overAllocated')}
-                    </span>
-                    <span>
-                      <span className="text-amber-500">●</span> {t('distribution.underAllocated')}
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        ) : (
-          <div style={{ height: DONUT_HEIGHT }} className="flex items-center justify-center">
-            <p className="text-paragraph-sm text-muted-foreground">{t('noData')}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        )
+      }
+      footer={
+        /* Target color legend — only when collections have targets. */
+        <AnimatePresence initial={false}>
+          {hasTargets && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: ANIMATION_DEFAULT }}
+              className="flex items-center justify-center gap-x-4 text-paragraph-xs text-muted-foreground"
+            >
+              <span>
+                <span className="text-red-500">●</span> {t('distribution.overAllocated')}
+              </span>
+              <span>
+                <span className="text-amber-500">●</span> {t('distribution.underAllocated')}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      }
+    />
   );
 }
