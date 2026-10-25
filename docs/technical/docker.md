@@ -29,7 +29,8 @@ Environment variables with defaults: `POSTGRES_USER=renly`, `POSTGRES_PASSWORD=r
 Reads an **optional** root `.env` (`env_file` long syntax, `required: false`) — the stack boots
 zero-config without it. `environment` provides working local defaults with **service-name hosts**:
 `DATABASE_URL` defaults to `renly_app` and `DATABASE_ADMIN_URL` to `renly_admin`, both on the
-`postgres` service host, plus a dev placeholder `JWT_SECRET` and `WEB_BASE_URL`. Every other API var
+`postgres` service host, plus a dev placeholder `JWT_SECRET`, `WEB_BASE_URL`, and `ENVIRONMENT=development`
+(required by the API, which has no in-code default for it). Every other API var
 comes from the root `.env` (if present) or its in-code default (`config.py`). **Compose is not
 single-role**: the owner connection this used to default to is compose's own `renly` superuser, which
 bypasses every policy whatever the tables say, so Row-Level Security would be inert. With the two
@@ -69,8 +70,8 @@ shares the api service's network namespace (`network_mode: service:api`), so por
 
 Two-stage build:
 
-1. **builder** — `python:3.13-slim`. Installs `uv` from the official image, copies `pyproject.toml`, runs `uv sync --no-dev --no-editable` to create the venv, then copies the app code.
-2. **runner** — `python:3.13-slim`. Copies the `.venv` and `app/` from builder. Installs `ca-certificates`. Runs `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+1. **builder** — `python:3.14-slim`. Installs a pinned `uv` from the official image, copies `pyproject.toml` and `uv.lock`, runs `uv sync --locked --no-dev --no-editable` to create the venv from the lockfile (the build fails if `uv.lock` is out of date with `pyproject.toml`, so the image runs the versions CI tested), then copies the app code.
+2. **runner** — `python:3.14-slim`. Copies the `.venv` and `app/` from builder. Installs `ca-certificates`. Runs `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
 
 ### Web (`docker/web.Dockerfile`)
 
