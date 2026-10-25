@@ -116,21 +116,17 @@ export function GroupMembersSection({ group }: GroupMembersSectionProps) {
   );
 }
 
-// One table for both rosters — active and former seats differ only in which rows they hold and which
-// actions those rows offer, so the columns are defined once.
-function RosterTable({
-  label,
-  group,
-  members,
-  isAdmin,
-  onSuccess,
-}: {
+interface RosterTableProps {
   label: string;
   group: Group;
   members: GroupMember[];
   isAdmin: boolean;
   onSuccess: () => void;
-}) {
+}
+
+// One table for both rosters — active and former seats differ only in which rows they hold and which
+// actions those rows offer, so the columns are defined once.
+function RosterTable({ label, group, members, isAdmin, onSuccess }: RosterTableProps) {
   const t = useTranslations('shared');
 
   return (
@@ -158,17 +154,14 @@ function RosterTable({
   );
 }
 
-function MemberRow({
-  group,
-  member,
-  isAdmin,
-  onSuccess,
-}: {
+interface MemberRowProps {
   group: Group;
   member: GroupMember;
   isAdmin: boolean;
   onSuccess: () => void;
-}) {
+}
+
+function MemberRow({ group, member, isAdmin, onSuccess }: MemberRowProps) {
   const t = useTranslations('shared');
   const [editOpen, setEditOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);

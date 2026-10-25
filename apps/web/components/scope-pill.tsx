@@ -8,6 +8,11 @@ import type { ListScope } from '@/lib/api/types';
 
 const SCOPES: readonly ListScope[] = ['all', 'private', 'shared'];
 
+interface ScopePillProps {
+  value: ListScope;
+  onChange: (scope: ListScope) => void;
+}
+
 /*
  * X2's scope filter: All / Yours / Shared, in every scope-aware list toolbar.
  *
@@ -23,13 +28,7 @@ const SCOPES: readonly ListScope[] = ['all', 'private', 'shared'];
  * Rendered ONLY where the caller belongs to a group (the page decides), so a solo user — which is
  * every public user at launch — sees no added control at all.
  */
-export function ScopePill({
-  value,
-  onChange,
-}: {
-  value: ListScope;
-  onChange: (scope: ListScope) => void;
-}) {
+export function ScopePill({ value, onChange }: ScopePillProps) {
   const tCommon = useTranslations('common');
 
   return (

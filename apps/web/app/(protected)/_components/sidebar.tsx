@@ -82,21 +82,19 @@ const NAV_ITEM_STYLES =
 const SUB_BUTTON_EXTRAS =
   'hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground transition-[background-color,color] duration-200 ease-out [&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-out';
 
+interface RevealSubItemProps {
+  show: boolean;
+  reduce: boolean;
+  children: React.ReactNode;
+}
+
 /*
  * Animates an advanced sub-item's reveal/collapse (height + opacity, both directions) when a
  * newcomer toggles "Show more". It IS the `<li>` (matching SidebarMenuSubItem's markup) so the
  * `<ul>` stays valid. `AnimatePresence initial={false}` suppresses the enter animation on first
  * paint; reduced motion collapses it to an instant show/hide.
  */
-function RevealSubItem({
-  show,
-  reduce,
-  children,
-}: {
-  show: boolean;
-  reduce: boolean;
-  children: React.ReactNode;
-}) {
+function RevealSubItem({ show, reduce, children }: RevealSubItemProps) {
   return (
     <AnimatePresence initial={false}>
       {show && (
@@ -117,6 +115,17 @@ function RevealSubItem({
   );
 }
 
+type NavSubItemProps = {
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  advanced?: boolean;
+  advancedVisible?: boolean;
+  reduce?: boolean;
+  // For an onClick action that opens an overlay (e.g. a dialog), so screen readers announce it.
+  ariaHasPopup?: React.AriaAttributes['aria-haspopup'];
+} & ({ href: string; onClick?: never } | { href?: never; onClick: () => void });
+
 /*
  * A leaf nav sub-item (icon + label) — either a link (href) or an in-place action (onClick, e.g.
  * opening a dialog). Advanced items animate their reveal via RevealSubItem; the rest render as a
@@ -132,16 +141,7 @@ function NavSubItem({
   advanced = false,
   advancedVisible = true,
   reduce = false,
-}: {
-  icon: LucideIcon;
-  label: string;
-  active: boolean;
-  advanced?: boolean;
-  advancedVisible?: boolean;
-  reduce?: boolean;
-  // For an onClick action that opens an overlay (e.g. a dialog), so screen readers announce it.
-  ariaHasPopup?: React.AriaAttributes['aria-haspopup'];
-} & ({ href: string; onClick?: never } | { href?: never; onClick: () => void })) {
+}: NavSubItemProps) {
   const subButtonClass = cn(
     'h-8 text-paragraph-sm-medium',
     NAV_ITEM_STYLES,

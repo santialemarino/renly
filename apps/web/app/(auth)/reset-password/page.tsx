@@ -9,11 +9,11 @@ export async function generateMetadata() {
   return await generatePageMetadata('resetPassword');
 }
 
-export default async function ResetPasswordPage({
-  searchParams,
-}: {
+interface ResetPasswordPageProps {
   searchParams: Promise<{ token?: string }>;
-}) {
+}
+
+export default async function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
   const session = await getSession();
   if (session?.user && !session.user.error) {
     redirect(ROUTES.home);

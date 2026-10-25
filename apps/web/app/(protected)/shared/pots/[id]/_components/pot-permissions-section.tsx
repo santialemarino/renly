@@ -105,21 +105,16 @@ export function PotPermissionsSection({ pot, group }: PotPermissionsSectionProps
   );
 }
 
-function PermissionRow({
-  seat,
-  pot,
-  explicit,
-  pending,
-  onSet,
-  onReset,
-}: {
+interface PermissionRowProps {
   seat: GroupMember;
   pot: Pot;
   explicit: { canView: boolean; canWrite: boolean } | undefined;
   pending: boolean;
   onSet: (canView: boolean, canWrite: boolean) => void;
   onReset: () => void;
-}) {
+}
+
+function PermissionRow({ seat, pot, explicit, pending, onSet, onReset }: PermissionRowProps) {
   const t = useTranslations('shared');
 
   /*

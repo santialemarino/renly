@@ -85,19 +85,17 @@ export function PotShareRows({ form, seats, showTotalError }: PotShareRowsProps)
   );
 }
 
+interface ShareRowProps {
+  seat: GroupMember;
+  index: number;
+  form: UseFormReturn<PotOpeningFormValues>;
+}
+
 /*
  * One owner's percentage. A blank field means "owns none of it" rather than 0 — the action drops those
  * rows, so an opening never writes an event granting nobody anything.
  */
-function ShareRow({
-  seat,
-  index,
-  form,
-}: {
-  seat: GroupMember;
-  index: number;
-  form: UseFormReturn<PotOpeningFormValues>;
-}) {
+function ShareRow({ seat, index, form }: ShareRowProps) {
   const t = useTranslations('shared');
 
   return (

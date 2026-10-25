@@ -41,6 +41,19 @@ import { bySectionGroup, sectionedRows } from '@/lib/list-scope';
 import { isReconciliationOwned } from '@/lib/reconciliation';
 import { isSystemExpenseCategory } from '@/lib/utils/categories';
 
+interface RowActionsProps {
+  expense: Expense;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  creditCards?: CreditCard[];
+  accounts?: Account[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
+  onMismatch: (mismatch: LinkedPlanMismatch) => void;
+  onSuccess: () => void;
+}
+
 function RowActions({
   expense,
   preferredCurrencies,
@@ -52,18 +65,7 @@ function RowActions({
   activeInstallments,
   onMismatch,
   onSuccess,
-}: {
-  expense: Expense;
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  creditCards?: CreditCard[];
-  accounts?: Account[];
-  activeObligations?: PaymentObligation[];
-  activeSubscriptions?: Subscription[];
-  activeInstallments?: Installment[];
-  onMismatch: (mismatch: LinkedPlanMismatch) => void;
-  onSuccess: () => void;
-}) {
+}: RowActionsProps) {
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
@@ -163,6 +165,19 @@ function RowActions({
   );
 }
 
+interface ExpensesDataTableProps {
+  data: ExpenseListResponse;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  creditCards?: CreditCard[];
+  accounts?: Account[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
+  activeCurrency?: string;
+  firstRun?: boolean;
+}
+
 export function ExpensesDataTable({
   data,
   preferredCurrencies,
@@ -174,18 +189,7 @@ export function ExpensesDataTable({
   activeInstallments,
   activeCurrency,
   firstRun,
-}: {
-  data: ExpenseListResponse;
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  creditCards?: CreditCard[];
-  accounts?: Account[];
-  activeObligations?: PaymentObligation[];
-  activeSubscriptions?: Subscription[];
-  activeInstallments?: Installment[];
-  activeCurrency?: string;
-  firstRun?: boolean;
-}) {
+}: ExpensesDataTableProps) {
   const t = useTranslations('expenses');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
@@ -308,6 +312,20 @@ export function ExpensesDataTable({
   );
 }
 
+interface ExpenseRowProps {
+  expense: Expense;
+  activeCurrency?: string;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  creditCards?: CreditCard[];
+  accounts?: Account[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
+  onMismatch: (mismatch: LinkedPlanMismatch) => void;
+  onSuccess: () => void;
+}
+
 // One expense row. Extracted so the section walk composes rows and headers by mapping one list,
 // rather than nesting a conditional around fifty lines of markup.
 function ExpenseRow({
@@ -322,19 +340,7 @@ function ExpenseRow({
   activeInstallments,
   onMismatch,
   onSuccess,
-}: {
-  expense: Expense;
-  activeCurrency?: string;
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  creditCards?: CreditCard[];
-  accounts?: Account[];
-  activeObligations?: PaymentObligation[];
-  activeSubscriptions?: Subscription[];
-  activeInstallments?: Installment[];
-  onMismatch: (mismatch: LinkedPlanMismatch) => void;
-  onSuccess: () => void;
-}) {
+}: ExpenseRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');

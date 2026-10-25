@@ -5,13 +5,13 @@ export async function generateMetadata() {
   return await generatePageMetadata('verifyEmail');
 }
 
+interface VerifyEmailPageProps {
+  searchParams: Promise<{ token?: string }>;
+}
+
 // Landing page for the emailed verification / email-change link. Does not redirect logged-in users:
 // confirming an email change happens while still authenticated. The card confirms the token client-side.
-export default async function VerifyEmailPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string }>;
-}) {
+export default async function VerifyEmailPage({ searchParams }: VerifyEmailPageProps) {
   const { token } = await searchParams;
   return <VerifyEmailCard token={token ?? null} />;
 }

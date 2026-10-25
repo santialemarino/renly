@@ -8,6 +8,10 @@ export async function generateMetadata() {
   return await generatePageMetadata('join');
 }
 
+interface JoinGroupPageProps {
+  searchParams: Promise<{ token?: string }>;
+}
+
 /*
  * Landing page for a group-invite link. Public on purpose — most recipients open it with no session,
  * and a protected route would bounce them to /login and lose the token from the URL. It deliberately
@@ -17,11 +21,7 @@ export async function generateMetadata() {
  * group's name and kind, the seat's label, and who sent it. A dead token renders the same "invalid or
  * expired" state as an unknown one, so nothing here can be probed.
  */
-export default async function JoinGroupPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string }>;
-}) {
+export default async function JoinGroupPage({ searchParams }: JoinGroupPageProps) {
   const { token } = await searchParams;
   const session = await getSession();
   const isLoggedIn = !!session?.user && !(session.user as { error?: string }).error;

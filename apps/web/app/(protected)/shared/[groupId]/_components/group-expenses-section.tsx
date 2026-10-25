@@ -216,6 +216,12 @@ export function GroupExpensesSection({
   );
 }
 
+interface ExpenseRowProps {
+  expense: SharedExpense;
+  onEdit: () => void;
+  onRemove: () => void;
+}
+
 /*
  * One shared expense.
  *
@@ -224,15 +230,7 @@ export function GroupExpensesSection({
  * does front the whole amount. Saying "Nico paid" there would claim he paid personally for money that
  * came out of the joint account, which is a statement about a different pot of money entirely.
  */
-function ExpenseRow({
-  expense,
-  onEdit,
-  onRemove,
-}: {
-  expense: SharedExpense;
-  onEdit: () => void;
-  onRemove: () => void;
-}) {
+function ExpenseRow({ expense, onEdit, onRemove }: ExpenseRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');

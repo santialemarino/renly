@@ -217,6 +217,17 @@ export function GroupSettlementsSection({
   );
 }
 
+interface SettlementRowProps {
+  settlement: GroupSettlement;
+  mySeatId: number | null;
+  accounts: Account[];
+  disabled: boolean;
+  onConfirm: () => void;
+  onUnconfirm: () => void;
+  onAttach: () => void;
+  onRemove: () => void;
+}
+
 /*
  * One recorded settlement.
  *
@@ -234,16 +245,7 @@ function SettlementRow({
   onUnconfirm,
   onAttach,
   onRemove,
-}: {
-  settlement: GroupSettlement;
-  mySeatId: number | null;
-  accounts: Account[];
-  disabled: boolean;
-  onConfirm: () => void;
-  onUnconfirm: () => void;
-  onAttach: () => void;
-  onRemove: () => void;
-}) {
+}: SettlementRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
 

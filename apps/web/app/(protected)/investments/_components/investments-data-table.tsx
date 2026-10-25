@@ -26,14 +26,7 @@ import type {
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { bySectionPot, sectionedRows } from '@/lib/list-scope';
 
-function RowActions({
-  investment,
-  collections,
-  preferredCurrencies,
-  supportedCurrencies,
-  canWrite,
-  onSuccess,
-}: {
+interface RowActionsProps {
   investment: Investment;
   collections: InvestmentCollection[];
   preferredCurrencies?: string[];
@@ -42,7 +35,16 @@ function RowActions({
   // Always true for the caller's own holdings.
   canWrite: boolean;
   onSuccess: () => void;
-}) {
+}
+
+function RowActions({
+  investment,
+  collections,
+  preferredCurrencies,
+  supportedCurrencies,
+  canWrite,
+  onSuccess,
+}: RowActionsProps) {
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
@@ -136,19 +138,21 @@ function RowActions({
   );
 }
 
+interface InvestmentsDataTableProps {
+  data: InvestmentListResponse;
+  collections: InvestmentCollection[];
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  firstRun?: boolean;
+}
+
 export function InvestmentsDataTable({
   data,
   collections,
   preferredCurrencies,
   supportedCurrencies,
   firstRun,
-}: {
-  data: InvestmentListResponse;
-  collections: InvestmentCollection[];
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  firstRun?: boolean;
-}) {
+}: InvestmentsDataTableProps) {
   const t = useTranslations('investments');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
@@ -273,6 +277,16 @@ export function InvestmentsDataTable({
   );
 }
 
+interface InvestmentRowProps {
+  investment: Investment;
+  collections: InvestmentCollection[];
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  canWrite: boolean;
+  onRowClick: (investment: Investment) => void;
+  onSuccess: () => void;
+}
+
 // One investment row. Extracted so the section walk composes rows and headers by mapping one list,
 // rather than nesting a conditional around forty lines of markup.
 function InvestmentRow({
@@ -283,15 +297,7 @@ function InvestmentRow({
   canWrite,
   onRowClick,
   onSuccess,
-}: {
-  investment: Investment;
-  collections: InvestmentCollection[];
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  canWrite: boolean;
-  onRowClick: (investment: Investment) => void;
-  onSuccess: () => void;
-}) {
+}: InvestmentRowProps) {
   const tCommon = useTranslations('common');
 
   return (

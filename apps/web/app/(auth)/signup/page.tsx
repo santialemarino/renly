@@ -11,11 +11,11 @@ export async function generateMetadata() {
   return await generatePageMetadata('signup');
 }
 
-export default async function SignupPage({
-  searchParams,
-}: {
+interface SignupPageProps {
   searchParams: Promise<{ invite?: string }>;
-}) {
+}
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
   const session = await getSession();
   if (session?.user && !session.user.error) {
     redirect(ROUTES.home);

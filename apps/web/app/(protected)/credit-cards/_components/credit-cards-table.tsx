@@ -53,15 +53,7 @@ import { useFormatters } from '@/lib/i18n/formatters';
 // Prevents layout flash when the fetch resolves instantly.
 const SETTLEMENTS_DISPLAY_DELAY_MS = 500;
 
-function SettlementsSection({
-  cardId,
-  bucketCurrencies,
-  accounts,
-  defaultAccountId,
-  oficialRate,
-  oficialRateDate,
-  expanded,
-}: {
+interface SettlementsSectionProps {
   cardId: number;
   bucketCurrencies: string[];
   accounts?: Account[];
@@ -71,7 +63,17 @@ function SettlementsSection({
   oficialRate: number | null;
   oficialRateDate: string | null;
   expanded: boolean;
-}) {
+}
+
+function SettlementsSection({
+  cardId,
+  bucketCurrencies,
+  accounts,
+  defaultAccountId,
+  oficialRate,
+  oficialRateDate,
+  expanded,
+}: SettlementsSectionProps) {
   const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
@@ -313,15 +315,7 @@ function SettlementsSection({
   );
 }
 
-export function CreditCardsTable({
-  cards,
-  preferredCurrencies,
-  supportedCurrencies,
-  accounts,
-  oficialRate,
-  oficialRateDate,
-  firstRun,
-}: {
+interface CreditCardsTableProps {
   cards: CreditCard[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
@@ -331,7 +325,17 @@ export function CreditCardsTable({
   oficialRate: number | null;
   oficialRateDate: string | null;
   firstRun?: boolean;
-}) {
+}
+
+export function CreditCardsTable({
+  cards,
+  preferredCurrencies,
+  supportedCurrencies,
+  accounts,
+  oficialRate,
+  oficialRateDate,
+  firstRun,
+}: CreditCardsTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const tCommon = useTranslations('common');

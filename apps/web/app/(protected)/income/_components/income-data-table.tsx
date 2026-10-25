@@ -33,19 +33,21 @@ import { bySectionGroup, sectionedRows } from '@/lib/list-scope';
 import { isReconciliationOwned } from '@/lib/reconciliation';
 import { isSystemIncomeCategory } from '@/lib/utils/categories';
 
+interface RowActionsProps {
+  income: IncomeEntry;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  accounts?: Account[];
+  onSuccess: () => void;
+}
+
 function RowActions({
   income,
   preferredCurrencies,
   supportedCurrencies,
   accounts,
   onSuccess,
-}: {
-  income: IncomeEntry;
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  accounts?: Account[];
-  onSuccess: () => void;
-}) {
+}: RowActionsProps) {
   const t = useTranslations('income');
   const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
@@ -127,6 +129,15 @@ function RowActions({
   );
 }
 
+interface IncomeDataTableProps {
+  data: IncomeListResponse;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  accounts?: Account[];
+  activeCurrency?: string;
+  firstRun?: boolean;
+}
+
 export function IncomeDataTable({
   data,
   preferredCurrencies,
@@ -134,14 +145,7 @@ export function IncomeDataTable({
   accounts,
   activeCurrency,
   firstRun,
-}: {
-  data: IncomeListResponse;
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  accounts?: Account[];
-  activeCurrency?: string;
-  firstRun?: boolean;
-}) {
+}: IncomeDataTableProps) {
   const t = useTranslations('income');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
@@ -239,6 +243,15 @@ export function IncomeDataTable({
   );
 }
 
+interface IncomeRowProps {
+  entry: IncomeEntry;
+  activeCurrency?: string;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  accounts?: Account[];
+  onSuccess: () => void;
+}
+
 // One income row. Extracted so the section walk composes rows and headers by mapping one list,
 // rather than nesting a conditional around forty lines of markup.
 function IncomeRow({
@@ -248,14 +261,7 @@ function IncomeRow({
   supportedCurrencies,
   accounts,
   onSuccess,
-}: {
-  entry: IncomeEntry;
-  activeCurrency?: string;
-  preferredCurrencies?: string[];
-  supportedCurrencies?: string[];
-  accounts?: Account[];
-  onSuccess: () => void;
-}) {
+}: IncomeRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('income');
   const tCommon = useTranslations('common');

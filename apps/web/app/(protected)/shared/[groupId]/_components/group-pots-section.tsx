@@ -113,11 +113,15 @@ export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPots
   );
 }
 
+interface SinglePotCardProps {
+  pot: Pot;
+}
+
 /*
  * The group's only pot, rendered as itself rather than as a row in a list of one. The three figures are
  * what the hub is for: what it is worth, what share is yours, and whether you can change anything.
  */
-function SinglePotCard({ pot }: { pot: Pot }) {
+function SinglePotCard({ pot }: SinglePotCardProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');
@@ -167,9 +171,13 @@ function SinglePotCard({ pot }: { pot: Pot }) {
   );
 }
 
+interface PotsTableProps {
+  pots: Pot[];
+}
+
 // Two or more pots: a list, where the name finally carries meaning because there is something to tell
 // apart. The default pot still shows its fallback label rather than a blank cell.
-function PotsTable({ pots }: { pots: Pot[] }) {
+function PotsTable({ pots }: PotsTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');

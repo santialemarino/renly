@@ -191,6 +191,14 @@ export function GroupBalancesSection({
   );
 }
 
+interface BucketCardProps {
+  bucket: GroupCurrencyBalance;
+  displayCurrency: string | null;
+  mySeatId: number | null;
+  onSettle: (suggestion: GroupSettleSuggestion) => void;
+  onWriteOff: (suggestion: GroupSettleSuggestion) => void;
+}
+
 /*
  * One currency's standing: who is up, who is down, and the fewest payments that clear it.
  *
@@ -198,19 +206,7 @@ export function GroupBalancesSection({
  * can be the person who remembers to write it down. What the viewer's seat changes is emphasis, and
  * whether a write-off is offered at all: giving up a claim belongs to whoever holds it.
  */
-function BucketCard({
-  bucket,
-  displayCurrency,
-  mySeatId,
-  onSettle,
-  onWriteOff,
-}: {
-  bucket: GroupCurrencyBalance;
-  displayCurrency: string | null;
-  mySeatId: number | null;
-  onSettle: (suggestion: GroupSettleSuggestion) => void;
-  onWriteOff: (suggestion: GroupSettleSuggestion) => void;
-}) {
+function BucketCard({ bucket, displayCurrency, mySeatId, onSettle, onWriteOff }: BucketCardProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
 

@@ -210,6 +210,12 @@ export function GroupIncomeSection({
   );
 }
 
+interface IncomeRowProps {
+  income: SharedIncome;
+  onEdit: () => void;
+  onRemove: () => void;
+}
+
 /*
  * One piece of shared income.
  *
@@ -222,15 +228,7 @@ export function GroupIncomeSection({
  * asset, or it names one sitting in a pot this viewer is not permitted to see. Neither is worth a
  * different sentence — both mean "not something this reader can attribute".
  */
-function IncomeRow({
-  income,
-  onEdit,
-  onRemove,
-}: {
-  income: SharedIncome;
-  onEdit: () => void;
-  onRemove: () => void;
-}) {
+function IncomeRow({ income, onEdit, onRemove }: IncomeRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');

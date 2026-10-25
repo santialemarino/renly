@@ -14,6 +14,11 @@ export interface DonutLegendItem {
   extra?: ReactNode;
 }
 
+interface DonutLegendLayoutProps {
+  legend: ReactNode;
+  chart: ReactNode;
+}
+
 /*
  * A donut beside its legend when the CARD has room for both, the legend beneath it when it does not.
  *
@@ -23,7 +28,7 @@ export interface DonutLegendItem {
  * with no category left to name. `@lg` (32rem) is the donut plus its gap plus a legend column wide
  * enough to hold a name.
  */
-export function DonutLegendLayout({ legend, chart }: { legend: ReactNode; chart: ReactNode }) {
+export function DonutLegendLayout({ legend, chart }: DonutLegendLayoutProps) {
   return (
     <div className="@container">
       <div className="flex flex-col-reverse items-center gap-y-4 @lg:flex-row @lg:gap-x-6 @lg:gap-y-0">
@@ -32,6 +37,10 @@ export function DonutLegendLayout({ legend, chart }: { legend: ReactNode; chart:
       </div>
     </div>
   );
+}
+
+interface DonutLegendProps {
+  items: DonutLegendItem[];
 }
 
 /*
@@ -44,7 +53,7 @@ export function DonutLegendLayout({ legend, chart }: { legend: ReactNode; chart:
  * first line so a wrapped name still reads as one entry. Must sit inside `DonutLegendLayout`, whose
  * container its column count steps on.
  */
-export function DonutLegend({ items }: { items: DonutLegendItem[] }) {
+export function DonutLegend({ items }: DonutLegendProps) {
   const fmt = useFormatters();
 
   return (

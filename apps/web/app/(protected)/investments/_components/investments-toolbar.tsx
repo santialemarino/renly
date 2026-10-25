@@ -19,19 +19,21 @@ import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveListScope } from '@/lib/list-scope';
 
-export function InvestmentsToolbar({
-  collections,
-  preferredCurrencies,
-  supportedCurrencies,
-  showScope,
-}: {
+interface InvestmentsToolbarProps {
   collections: InvestmentCollection[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
   // so a solo user (every public user at launch) sees no added control.
   showScope?: boolean;
-}) {
+}
+
+export function InvestmentsToolbar({
+  collections,
+  preferredCurrencies,
+  supportedCurrencies,
+  showScope,
+}: InvestmentsToolbarProps) {
   const t = useTranslations('investments');
   const router = useRouter();
   const searchParams = useSearchParams();
