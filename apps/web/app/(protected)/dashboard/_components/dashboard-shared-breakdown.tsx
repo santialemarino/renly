@@ -78,6 +78,12 @@ export function DashboardSharedBreakdown({ overview }: DashboardSharedBreakdownP
   );
 }
 
+interface SharedLineProps {
+  label: React.ReactNode;
+  amount: number;
+  muted?: boolean;
+}
+
 /*
  * One label/figure row of the breakdown. Extracted because four of them differ only in their words, and
  * the label is a node rather than a string so one of them can be a link without a second layout.
@@ -88,15 +94,7 @@ export function DashboardSharedBreakdown({ overview }: DashboardSharedBreakdownP
  * the figure on its own line, still right-aligned by `ml-auto`, instead of truncating a ten-letter word
  * or hiding a digit of somebody's money.
  */
-function SharedLine({
-  label,
-  amount,
-  muted,
-}: {
-  label: React.ReactNode;
-  amount: number;
-  muted?: boolean;
-}) {
+function SharedLine({ label, amount, muted }: SharedLineProps) {
   const fmt = useFormatters();
 
   return (

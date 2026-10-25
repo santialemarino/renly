@@ -172,6 +172,15 @@ export function EntrySplitRows<T extends SplitFormValues & FieldValues>({
   );
 }
 
+interface SplitRowProps {
+  seat: GroupMember;
+  index: number;
+  control: Control<SplitFormValues>;
+  currency: string;
+  // Null when the method takes no figures, which is the one case that renders no input at all.
+  figureKind: SplitFigureKind | null;
+}
+
 /*
  * One participant: whether they were in on it, and their figure.
  *
@@ -179,20 +188,7 @@ export function EntrySplitRows<T extends SplitFormValues & FieldValues>({
  * mistake gets their number back — the action drops every unchecked row before sending, and the
  * running total ignores them, so a stale figure can reach neither the API nor the sum.
  */
-function SplitRow({
-  seat,
-  index,
-  control,
-  currency,
-  figureKind,
-}: {
-  seat: GroupMember;
-  index: number;
-  control: Control<SplitFormValues>;
-  currency: string;
-  // Null when the method takes no figures, which is the one case that renders no input at all.
-  figureKind: SplitFigureKind | null;
-}) {
+function SplitRow({ seat, index, control, currency, figureKind }: SplitRowProps) {
   const t = useTranslations('shared');
 
   const included = useWatch({ control, name: `splits.${index}.included` });

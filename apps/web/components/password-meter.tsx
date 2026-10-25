@@ -17,15 +17,13 @@ const STRENGTH_COMPLETION_MAP: Record<PasswordStrength, number> = {
   strong: 100,
 };
 
-const CheckItem = ({
-  checked,
-  label,
-  isInvalid,
-}: {
+interface CheckItemProps {
   checked: boolean;
   label: string;
   isInvalid: boolean;
-}) => (
+}
+
+const CheckItem = ({ checked, label, isInvalid }: CheckItemProps) => (
   <div className="flex items-center gap-x-1.5" aria-invalid={isInvalid}>
     <div className="size-3 flex items-center justify-center relative shrink-0">
       <Check
@@ -53,15 +51,17 @@ const CheckItem = ({
   </div>
 );
 
+interface PasswordMeterProps {
+  passingChecks: Record<PasswordCheck, boolean>;
+  showErrors?: boolean;
+  className?: string;
+}
+
 export function PasswordMeter({
   passingChecks,
   showErrors = false,
   className,
-}: {
-  passingChecks: Record<PasswordCheck, boolean>;
-  showErrors?: boolean;
-  className?: string;
-}) {
+}: PasswordMeterProps) {
   const t = useTranslations('common.passwordMeter');
 
   const checkStrength = useCallback((checks: Record<PasswordCheck, boolean>): PasswordStrength => {

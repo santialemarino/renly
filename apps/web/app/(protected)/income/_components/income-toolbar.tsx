@@ -19,14 +19,7 @@ import { useDeferredDialogSwap } from '@/lib/hooks/use-deferred-dialog-swap';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveListScope } from '@/lib/list-scope';
 
-export function IncomeToolbar({
-  showScope,
-  preferredCurrencies,
-  supportedCurrencies,
-  accounts,
-  groups,
-  timeZone,
-}: {
+interface IncomeToolbarProps {
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
   // so a solo user (every public user at launch) sees no added control.
   showScope?: boolean;
@@ -37,7 +30,16 @@ export function IncomeToolbar({
   // a solo user, and the control then renders nothing at all.
   groups?: Group[];
   timeZone?: string;
-}) {
+}
+
+export function IncomeToolbar({
+  showScope,
+  preferredCurrencies,
+  supportedCurrencies,
+  accounts,
+  groups,
+  timeZone,
+}: IncomeToolbarProps) {
   const t = useTranslations('income');
   const router = useRouter();
   const searchParams = useSearchParams();

@@ -188,6 +188,12 @@ export function PotHoldingsSection({
   );
 }
 
+interface HoldingsTableProps {
+  caption: string;
+  holdings: PotHolding[];
+  baseCurrency: string;
+}
+
 /*
  * One kind of holding. Two figures per row because they answer different questions: what the holding is
  * worth in its own currency, and what it contributes to a pot denominated in another. The second column
@@ -199,15 +205,7 @@ export function PotHoldingsSection({
  * valuation date, which is the investments: an account's balance is derived at the moment it is asked
  * for, so it has no recorded date and can never be the stale one.
  */
-function HoldingsTable({
-  caption,
-  holdings,
-  baseCurrency,
-}: {
-  caption: string;
-  holdings: PotHolding[];
-  baseCurrency: string;
-}) {
+function HoldingsTable({ caption, holdings, baseCurrency }: HoldingsTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
 

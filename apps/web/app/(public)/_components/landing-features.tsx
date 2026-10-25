@@ -1,7 +1,5 @@
-'use client';
-
 import { Blocks, Globe, LineChart, ShieldCheck, Wallet, Zap, type LucideIcon } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
 import { FeatureCard } from '@/app/(public)/_components/feature-card';
 import { Reveal, RevealGroup } from '@/app/(public)/_components/reveal';
@@ -25,8 +23,8 @@ export const FEATURE_ICONS: Record<string, LucideIcon> = {
 };
 
 // "Why Renly" — the six core product values rendered as a responsive grid of icon cards.
-export function LandingFeatures() {
-  const t = useTranslations('landing.features');
+export async function LandingFeatures() {
+  const t = await getTranslations('landing.features');
   const items = t.raw('items') as FeatureItem[];
 
   return (

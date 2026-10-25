@@ -64,6 +64,14 @@ export function obligationMatchStatus(
   return anyUnknown ? 'unknown' : 'match';
 }
 
+interface ObligationRowContentProps {
+  obligation: PaymentObligation;
+  status: MatchStatus;
+  isSelected: boolean;
+  disabled: boolean | undefined;
+  nextCycleHint: (params: { date: string }) => string;
+}
+
 // Renders the content of one obligation row (used as a FormCombobox option's `render`). Extracted so
 // the active and the archived-currently-linked groups share rendering — the only difference between
 // them is the option's `group` heading.
@@ -73,13 +81,7 @@ function ObligationRowContent({
   isSelected,
   disabled,
   nextCycleHint,
-}: {
-  obligation: PaymentObligation;
-  status: MatchStatus;
-  isSelected: boolean;
-  disabled: boolean | undefined;
-  nextCycleHint: (params: { date: string }) => string;
-}) {
+}: ObligationRowContentProps) {
   const fmt = useFormatters();
   // Dot color rules:
   //   - match               -> emerald (positive selection aid, regardless of selection).

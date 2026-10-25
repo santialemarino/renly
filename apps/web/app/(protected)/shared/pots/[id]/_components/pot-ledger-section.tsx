@@ -221,21 +221,16 @@ export function PotLedgerSection({ pot, events, total, page, pageSize }: PotLedg
   );
 }
 
-function LedgerRow({
-  pot,
-  event,
-  disabled,
-  onConfirm,
-  onUnconfirm,
-  onDelete,
-}: {
+interface LedgerRowProps {
   pot: Pot;
   event: PotOwnershipEvent;
   disabled: boolean;
   onConfirm: () => void;
   onUnconfirm: () => void;
   onDelete: () => void;
-}) {
+}
+
+function LedgerRow({ pot, event, disabled, onConfirm, onUnconfirm, onDelete }: LedgerRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
 

@@ -70,11 +70,9 @@ const useFormField = () => {
   };
 };
 
-function FormItem({
-  className,
-  required,
-  ...props
-}: React.ComponentProps<'div'> & { required?: boolean }) {
+type FormItemProps = React.ComponentProps<'div'> & { required?: boolean };
+
+function FormItem({ className, required, ...props }: FormItemProps) {
   const id = React.useId();
   return (
     <FormItemContext.Provider value={{ id, required }}>
@@ -132,7 +130,12 @@ function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {
   );
 }
 
-function FormMessage({ className, children }: { className?: string; children?: React.ReactNode }) {
+interface FormMessageProps {
+  className?: string;
+  children?: React.ReactNode;
+}
+
+function FormMessage({ className, children }: FormMessageProps) {
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message ?? '') : children;
   // Key by content so a changed message animates as a separate element. `mode="wait"` keeps the
@@ -168,10 +171,15 @@ function FormMessage({ className, children }: { className?: string; children?: R
   );
 }
 
+interface FormErrorProps {
+  message?: string;
+  className?: string;
+}
+
 // Form-level (root) error, animated identically to FormMessage so submit/server errors enter and
 // clear with the same smooth height collapse — no layout snap. For errors not tied to one field.
 // Expects a `flex flex-col gap-y-5` (20px) parent — the marginTop/pt cancel that gap (see FormMessage).
-function FormError({ message, className }: { message?: string; className?: string }) {
+function FormError({ message, className }: FormErrorProps) {
   return (
     <AnimatePresence mode="wait" initial={false}>
       {message && (

@@ -37,8 +37,8 @@ interface SettlementPlanStepProps {
  * currency, and what it costs is in the one being paid. Both name their currency for that reason.
  */
 export function SettlementPlanStep({ plan, onToggle, pending }: SettlementPlanStepProps) {
-  const t = useTranslations('shared');
   const fmt = useFormatters();
+  const t = useTranslations('shared');
 
   const rows = plannedRows(plan);
 

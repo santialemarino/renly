@@ -27,7 +27,11 @@ import {
   ORIGINAL_CURRENCY,
 } from '@/lib/stores/currency-store';
 
-export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+interface ProtectedLayoutProps {
+  children: React.ReactNode;
+}
+
+export default async function ProtectedLayout({ children }: ProtectedLayoutProps) {
   const session = await getSession();
 
   if (!session?.user || (session.user as { error?: string }).error) {

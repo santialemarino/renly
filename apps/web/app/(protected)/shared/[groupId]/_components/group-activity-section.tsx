@@ -49,7 +49,12 @@ export function GroupActivitySection({ groupId, entries }: GroupActivitySectionP
   );
 }
 
-function ActivityLine({ entry, groupId }: { entry: ActivityEntry; groupId: number }) {
+interface ActivityLineProps {
+  entry: ActivityEntry;
+  groupId: number;
+}
+
+function ActivityLine({ entry, groupId }: ActivityLineProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');

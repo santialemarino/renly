@@ -296,11 +296,15 @@ function SizedPlaceholder({ className, children }: SizedPlaceholderProps) {
   );
 }
 
+interface NoticePlaceholderProps {
+  children: React.ReactNode;
+}
+
 /*
  * A `WarningHint`'s line(s) under a header: its icon box and its text, invisible and free to wrap at
  * the column's width exactly as the real warning does, under a Skeleton.
  */
-function NoticePlaceholder({ children }: { children: React.ReactNode }) {
+function NoticePlaceholder({ children }: NoticePlaceholderProps) {
   return (
     <div className="relative flex items-center gap-x-2" data-testid="page-skeleton-notice">
       <span className="size-4 shrink-0" />
@@ -310,8 +314,12 @@ function NoticePlaceholder({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface IconBoxProps {
+  small?: boolean;
+}
+
 // An empty box the size of an icon, standing where the control draws one.
-function IconBox({ small = false }: { small?: boolean }) {
+function IconBox({ small = false }: IconBoxProps) {
   return <span className={cn('shrink-0', small ? 'size-3.5' : 'size-4')} />;
 }
 
@@ -326,8 +334,12 @@ const PRESET_BOX =
 // The box classes of an outline or a blue `Button` at the default size — the toolbar's pills and actions.
 const BUTTON_BOX = cn(buttonVariants({ variant: 'outline' }), 'border-transparent shadow-none');
 
+interface ControlPlaceholderProps {
+  control: ToolbarControl;
+}
+
 // One toolbar control's placeholder, by kind — each mirroring that control's own box.
-function ControlPlaceholder({ control }: { control: ToolbarControl }) {
+function ControlPlaceholder({ control }: ControlPlaceholderProps) {
   switch (control.kind) {
     case 'filter':
       // `FilterCombobox`: its root takes the item classes, its trigger `h-9 w-full px-3 gap-x-2`.

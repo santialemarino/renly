@@ -29,18 +29,7 @@ import { useDeferredDialogSwap } from '@/lib/hooks/use-deferred-dialog-swap';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveListScope } from '@/lib/list-scope';
 
-export function ExpensesToolbar({
-  showScope,
-  preferredCurrencies,
-  supportedCurrencies,
-  creditCards,
-  accounts,
-  groups,
-  activeObligations,
-  activeSubscriptions,
-  activeInstallments,
-  timeZone,
-}: {
+interface ExpensesToolbarProps {
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
   // so a solo user (every public user at launch) sees no added control.
   showScope?: boolean;
@@ -63,7 +52,20 @@ export function ExpensesToolbar({
    * whose stored zone is not the machine's.
    */
   timeZone?: string;
-}) {
+}
+
+export function ExpensesToolbar({
+  showScope,
+  preferredCurrencies,
+  supportedCurrencies,
+  creditCards,
+  accounts,
+  groups,
+  activeObligations,
+  activeSubscriptions,
+  activeInstallments,
+  timeZone,
+}: ExpensesToolbarProps) {
   const t = useTranslations('expenses');
   const router = useRouter();
   const searchParams = useSearchParams();

@@ -32,16 +32,14 @@ interface PaymentMethodFieldsProps<T extends PaymentMethodFormValues & FieldValu
   disabledTooltip?: string;
 }
 
-// Wraps a control in the locked-tooltip pattern only when a tooltip string is provided.
-function MaybeLockedTooltip({
-  tooltip,
-  show,
-  children,
-}: {
+interface MaybeLockedTooltipProps {
   tooltip?: string;
   show: boolean;
   children: React.ReactNode;
-}) {
+}
+
+// Wraps a control in the locked-tooltip pattern only when a tooltip string is provided.
+function MaybeLockedTooltip({ tooltip, show, children }: MaybeLockedTooltipProps) {
   if (!tooltip) return <>{children}</>;
   return (
     <Tooltip>

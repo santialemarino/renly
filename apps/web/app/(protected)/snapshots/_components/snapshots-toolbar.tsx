@@ -23,15 +23,14 @@ import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 
 const INTERVALS: readonly SnapshotGridInterval[] = ['monthly', 'weekly'];
 
-export function SnapshotsToolbar({
-  collections,
-  showScope,
-}: {
+interface SnapshotsToolbarProps {
   collections: InvestmentCollection[];
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
   // so a solo user (every public user at launch) sees no added control.
   showScope?: boolean;
-}) {
+}
+
+export function SnapshotsToolbar({ collections, showScope }: SnapshotsToolbarProps) {
   const t = useTranslations('snapshots');
   const router = useRouter();
   const searchParams = useSearchParams();

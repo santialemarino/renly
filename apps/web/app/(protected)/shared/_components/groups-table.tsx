@@ -62,7 +62,12 @@ export function GroupsTable({ groups, firstRun }: GroupsTableProps) {
   );
 }
 
-function GroupRow({ group, onSuccess }: { group: Group; onSuccess: () => void }) {
+interface GroupRowProps {
+  group: Group;
+  onSuccess: () => void;
+}
+
+function GroupRow({ group, onSuccess }: GroupRowProps) {
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);

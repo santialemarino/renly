@@ -28,11 +28,15 @@ const STATIC_ANIMATION_PROPS = {
   transition: { duration: 0 },
 };
 
+interface NotFoundContentProps {
+  isAuthenticated: boolean;
+}
+
 // Presentational 404 screen (animated blob + copy + CTAs). Logged-in visitors get a primary "Go to
 // Dashboard" plus a secondary "Go to Homepage"; logged-out visitors get only "Go to Homepage" (the
 // dashboard CTA would just bounce them to login). `isAuthenticated` is resolved on the server in
 // not-found.tsx — this client component only needs it to pick the CTAs.
-export function NotFoundContent({ isAuthenticated }: { isAuthenticated: boolean }) {
+export function NotFoundContent({ isAuthenticated }: NotFoundContentProps) {
   const t = useTranslations('common.notFound');
   const tCommon = useTranslations('common');
   const reduced = useReducedMotion();

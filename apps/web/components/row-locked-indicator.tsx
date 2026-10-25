@@ -1,5 +1,3 @@
-'use client';
-
 import type { LucideIcon } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components';

@@ -11,6 +11,13 @@ import type { ListSection } from '@/lib/api/types';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { potLabel } from '@/lib/pots';
 
+interface TableSectionRowProps {
+  section: ListSection;
+  colSpan: number;
+  // The already-translated row count, because the noun differs per list ("4 holdings", "12 expenses").
+  countLabel: string;
+}
+
 /*
  * One labelled section header inside a scope-grouped table (X2). The same row on all five surfaces, so
  * the label, the count and the totals cannot drift between /investments, /accounts, /expenses, /income
@@ -25,16 +32,7 @@ import { potLabel } from '@/lib/pots';
  * A section whose rows carry no money column (an investment has no value here) shows its count alone —
  * a header figure the visible rows cannot add up to is exactly what X2's grouping exists to avoid.
  */
-export function TableSectionRow({
-  section,
-  colSpan,
-  countLabel,
-}: {
-  section: ListSection;
-  colSpan: number;
-  // The already-translated row count, because the noun differs per list ("4 holdings", "12 expenses").
-  countLabel: string;
-}) {
+export function TableSectionRow({ section, colSpan, countLabel }: TableSectionRowProps) {
   const fmt = useFormatters();
   const tCommon = useTranslations('common');
 

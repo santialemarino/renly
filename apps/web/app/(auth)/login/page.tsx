@@ -10,6 +10,10 @@ export async function generateMetadata() {
   return await generatePageMetadata('login');
 }
 
+interface LoginPageProps {
+  searchParams: Promise<{ next?: string }>;
+}
+
 /*
  * `?next=` exists for one flow: a group-invite link opened without a session sends the recipient here
  * and needs them back on the invite afterwards, token intact. It is run through safeNextPath, which
@@ -17,11 +21,7 @@ export async function generateMetadata() {
  * an already-logged-in visitor is sent there too rather than to the dashboard, which is what makes
  * clicking the link twice work.
  */
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string }>;
-}) {
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const [session, { next }] = await Promise.all([getSession(), searchParams]);
   const nextPath = safeNextPath(next);
 

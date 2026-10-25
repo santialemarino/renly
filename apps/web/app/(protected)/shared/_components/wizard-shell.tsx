@@ -102,19 +102,17 @@ export function WizardShell({
   );
 }
 
+interface WizardPanelProps {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}
+
 /*
  * One step's panel: its heading, what the step is for, and the controls. Every flow's every step is
  * one of these, so the heading level and the spacing cannot drift between them.
  */
-export function WizardPanel({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
+export function WizardPanel({ title, description, children }: WizardPanelProps) {
   return (
     <div className="flex flex-col min-w-0 gap-y-4">
       <div className="flex flex-col gap-y-1">
@@ -126,17 +124,27 @@ export function WizardPanel({
   );
 }
 
+interface WizardConfirmRowProps {
+  label: string;
+  value: React.ReactNode;
+}
+
 /*
  * One line of a confirmation: a label and its figure. A definition pair rather than a table row —
  * there is no second column of the same kind, and each line answers its own question.
  */
-export function WizardConfirmRow({ label, value }: { label: string; value: React.ReactNode }) {
+export function WizardConfirmRow({ label, value }: WizardConfirmRowProps) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <dt className="text-paragraph-sm text-muted-foreground">{label}</dt>
       <dd className="text-paragraph-sm-medium tabular-nums text-foreground">{value}</dd>
     </div>
   );
+}
+
+interface StepIndicatorProps {
+  steps: string[];
+  current: number;
 }
 
 /*
@@ -147,7 +155,7 @@ export function WizardConfirmRow({ label, value }: { label: string; value: React
  * row — the hard no-layout-shift rule. A completed step swaps its number for a tick in the same
  * fixed-size circle for the same reason.
  */
-function StepIndicator({ steps, current }: { steps: string[]; current: number }) {
+function StepIndicator({ steps, current }: StepIndicatorProps) {
   return (
     <ol className="flex flex-wrap max-w-2xl items-center gap-x-2 gap-y-2">
       {steps.map((label, index) => {

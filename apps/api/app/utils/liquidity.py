@@ -16,7 +16,7 @@ from app.utils.metrics import RateLookup, convert_value
 ZERO = Decimal("0")
 
 # Threshold default. JSONB key 'liquidity_threshold_pct' overrides at runtime when set.
-# Mirrors the frontend default in apps/web/lib/constants/liquidity.ts.
+# Mirrors the frontend default in apps/web/app/(protected)/alerts/_components/alerts-form.tsx.
 DEFAULT_LIQUIDITY_THRESHOLD_PCT = 40
 
 # Percentage-points above the user's threshold where state flips from caution to at_risk.

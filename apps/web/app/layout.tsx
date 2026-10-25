@@ -46,11 +46,11 @@ export const viewport: Viewport = {
   themeColor: BRAND_SURFACE,
 };
 
-export default async function RootLayout({
-  children,
-}: Readonly<{
+interface RootLayoutProps {
   children: React.ReactNode;
-}>) {
+}
+
+export default async function RootLayout({ children }: Readonly<RootLayoutProps>) {
   const locale = await getLocale();
   const messages = await getMessages();
   const t = await getTranslations('common.ui');

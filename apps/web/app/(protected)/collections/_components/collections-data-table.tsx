@@ -103,17 +103,14 @@ export function CollectionsDataTable({
   );
 }
 
-function CollectionRow({
-  collection,
-  investmentMap,
-  investments,
-  onSuccess,
-}: {
+interface CollectionRowProps {
   collection: InvestmentCollection;
   investmentMap: Map<number, string>;
   investments: { id: number; name: string }[];
   onSuccess: () => void;
-}) {
+}
+
+function CollectionRow({ collection, investmentMap, investments, onSuccess }: CollectionRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('collections');
   const [editOpen, setEditOpen] = useState(false);
