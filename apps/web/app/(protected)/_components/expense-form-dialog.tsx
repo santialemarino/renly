@@ -396,7 +396,7 @@ export function ExpenseFormDialog({
   const [novelCurrencyPending, setNovelCurrencyPending] = useState<ExpenseFormValues | null>(null);
 
   // Soft confirmation when the candidate entry matches a scheduler-generated expense
-  // within DUPE_MATCH_WINDOW_DAYS on card / currency / exact amount (Phase 3, Step D).
+  // on card / currency / exact amount within the API's match window (Phase 3, Step D).
   // Fires on BOTH create and edit (edit excludes the row being modified so it can't
   // match itself).
   const [autoChargeMatch, setAutoChargeMatch] = useState<{
@@ -970,7 +970,7 @@ export function ExpenseFormDialog({
 
       {/* Auto-charge match confirmation (Phase 3, Step D). Same sibling pattern
           as novel-currency — fires when the candidate entry matches an existing
-          scheduler-generated expense within DUPE_MATCH_WINDOW_DAYS. */}
+          scheduler-generated expense within the API's match window. */}
       <Dialog open={!!autoChargeMatch} onOpenChange={(open) => !open && setAutoChargeMatch(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

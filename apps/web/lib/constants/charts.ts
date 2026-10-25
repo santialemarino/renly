@@ -105,9 +105,6 @@ export const DONUT_COLORS = [
   'oklch(0.932 0.032 255.585)', // blue-100
 ] as const;
 
-export const DONUT_CENTER_FONT_SIZE = 14;
-export const DONUT_CENTER_VALUE_FONT_SIZE = 20;
-
 // --- Animation ---
 
 export const CHART_ANIMATION_DURATION = 800;

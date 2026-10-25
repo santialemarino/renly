@@ -19,6 +19,7 @@ import {
   DONUT_INNER_RADIUS,
   DONUT_OUTER_RADIUS,
   DONUT_PADDING_ANGLE,
+  DONUT_STROKE_WIDTH,
   TOOLTIP_ANIMATION_DURATION,
   TOOLTIP_BG,
   TOOLTIP_BORDER,
@@ -172,7 +173,7 @@ export function InvestorDashboardDistribution({
                           animationDuration={CHART_ANIMATION_DURATION}
                           animationEasing={CHART_ANIMATION_EASING}
                           paddingAngle={DONUT_PADDING_ANGLE}
-                          strokeWidth={0}
+                          strokeWidth={DONUT_STROKE_WIDTH}
                         >
                           {chartData.map((_entry, index) => (
                             <Cell key={index} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />

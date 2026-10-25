@@ -137,7 +137,3 @@ export function InfoHint(props: HintWrapperProps) {
 export function WarningHint(props: HintWrapperProps) {
   return <StyledHint variant="warning" {...props} />;
 }
-
-export function ErrorHint(props: HintWrapperProps) {
-  return <StyledHint variant="error" {...props} />;
-}
