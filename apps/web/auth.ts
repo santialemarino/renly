@@ -22,6 +22,7 @@ export const userSignOut = async (): Promise<void> => {
   await signOut({ redirect: false });
   // Drop the locale cookie so the next (logged-out) visitor falls back to their own browser
   // language instead of inheriting the previous user's. Safe: the user's language is persisted in
-  // user_settings and reapplied on next login by LanguageAutoSync.
+  // user_settings — a manual one is read by i18n/request.ts on the first signed-in request (and the
+  // cookie re-seeded by LanguageAutoSync), an auto one follows the browser as it did before.
   (await cookies()).delete(LOCALE_COOKIE);
 };

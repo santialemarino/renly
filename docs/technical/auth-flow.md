@@ -307,7 +307,9 @@ userSignOut()                    // server action in auth.ts
   → logoutRequest(accessToken)   // POST /auth/logout (bumps session_epoch)
   → signOut({ redirect: false }) // clears NextAuth session
   → cookies().delete('NEXT_LOCALE') // drop the locale cookie so the next logged-out visitor gets
-                                    // their own browser language (re-applied on login from settings)
+                                    // their own browser language. A 'manual' language is not lost:
+                                    // i18n/request.ts reads it from settings on the first signed-in
+                                    // request, and LanguageAutoSync re-seeds the cookie
   → client handles redirect
 ```
 

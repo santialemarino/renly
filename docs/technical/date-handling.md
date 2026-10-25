@@ -94,8 +94,11 @@ user's stored timezone, so a value logged at 02:00 UTC reads as the previous day
 negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIMEZONE` cookie
 (mirrors `NEXT_LOCALE`; written by the localization save + timezone auto-sync actions, read in
 `apps/web/i18n/request.ts` and returned as next-intl's `timeZone`, which the `useFormatters` /
-`getFormatters` hook binds). When no cookie is present the timestamp falls back to the ambient
-(browser/server) zone.
+`getFormatters` hook binds). A signed-in user whose timezone mode is `manual` gets their stored zone
+even when the cookie is absent or names another zone — `request.ts` reads the settings and the pin
+outranks the cookie, and the protected layout's `TimezoneAutoSync` re-seeds the cookie from it; the
+language follows the same rule. When neither a pin nor a cookie resolves, the timestamp falls back to
+the ambient (browser/server) zone.
 
 **Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** Every date-only label goes through a
 `fmt.*` method — `fmt.date` / `fmt.month`, plus `fmt.monthLong` (long month name), `fmt.monthYear`

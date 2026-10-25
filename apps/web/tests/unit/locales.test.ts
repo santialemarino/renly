@@ -11,6 +11,7 @@ import {
   getLocaleTag,
   LANGUAGE_OPTIONS,
   mapBrowserLanguageToSupported,
+  pinnedLocale,
   resolveLocale,
   SUPPORTED_LOCALES,
 } from '@/lib/i18n/locales';
@@ -136,5 +137,21 @@ describe('resolveLocale', () => {
   it('falls back to the default when nothing resolves', () => {
     expect(resolveLocale(undefined, [])).toBe(DEFAULT_LOCALE);
     expect(resolveLocale('xx', ['pt-BR', 'de'])).toBe(DEFAULT_LOCALE);
+  });
+
+  it('puts a pinned language ahead of the cookie and every language', () => {
+    expect(resolveLocale('en', ['en-US'], 'es')).toBe('es');
+    expect(resolveLocale(undefined, ['en-US'], 'es')).toBe('es');
+    expect(resolveLocale('es', ['en-US'], null)).toBe('es');
+  });
+});
+
+describe('pinnedLocale', () => {
+  it('pins only a supported language whose mode is manual', () => {
+    expect(pinnedLocale('es', 'manual')).toBe('es');
+    expect(pinnedLocale('es', 'auto')).toBeNull();
+    expect(pinnedLocale('es', null)).toBeNull();
+    expect(pinnedLocale('fr', 'manual')).toBeNull();
+    expect(pinnedLocale(null, 'manual')).toBeNull();
   });
 });

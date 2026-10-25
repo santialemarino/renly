@@ -65,16 +65,34 @@ export function isSupportedLocale(value: string | null | undefined): value is Lo
 }
 
 /*
- * The one rule for which locale a request renders in: the locale cookie when it names a supported
- * locale, else the first of the visitor's languages that is supported — exactly, or by its language
- * prefix ('es-AR' → 'es') — else the default. `i18n/request.ts` feeds it the cookie and the parsed
- * Accept-Language header; `app/global-error.tsx`, which renders with no server context at all, feeds it
- * `document.cookie` and `navigator.languages`. One function, so the two can never pick differently.
+ * The language a signed-in user pinned: their stored language when its mode is 'manual' and it is a
+ * supported locale, else null. 'auto' (and a null mode, which reads as 'auto') pins nothing — the
+ * request follows the cookie and the browser, which LanguageAutoSync keeps the stored value equal to.
+ */
+export function pinnedLocale(
+  language: string | null | undefined,
+  mode: string | null | undefined,
+): Locale | null {
+  return mode === LANGUAGE_MODE_MANUAL && isSupportedLocale(language) ? language : null;
+}
+
+/*
+ * The one rule for which locale a request renders in: a signed-in user's pinned language (see
+ * `pinnedLocale`) when there is one, else the locale cookie when it names a supported locale, else
+ * the first of the visitor's languages that is supported — exactly, or by its language prefix
+ * ('es-AR' → 'es') — else the default. The pin outranks the cookie because the cookie belongs to the
+ * browser and is dropped on logout, while the pin belongs to the account: a fresh browser, or the
+ * first page after a login, must not render in another language first. `i18n/request.ts` feeds it
+ * the cookie, the parsed Accept-Language header and the pin; `app/global-error.tsx`, which renders
+ * with no server context at all, feeds it `document.cookie` and `navigator.languages` (the protected
+ * layout seeds the cookie from the pin, so the two agree). One function, so they never pick differently.
  */
 export function resolveLocale(
   cookieValue: string | null | undefined,
   languages: readonly string[],
+  pinned: Locale | null = null,
 ): Locale {
+  if (pinned) return pinned;
   if (isSupportedLocale(cookieValue)) return cookieValue;
   for (const raw of languages) {
     const lang = raw.trim().toLowerCase();

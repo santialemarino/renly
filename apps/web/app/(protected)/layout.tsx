@@ -18,6 +18,8 @@ import { getSignupContext } from '@/lib/api/signup-context';
 import { getSession } from '@/lib/auth';
 import { FALLBACK_PRIMARY_CURRENCY, FALLBACK_SECONDARY_CURRENCY } from '@/lib/constants/currency';
 import { NOTIFICATION_POPOVER_SIZE } from '@/lib/constants/notifications';
+import { TIMEZONE_COOKIE } from '@/lib/constants/timezones';
+import { LOCALE_COOKIE } from '@/lib/i18n/locales';
 import { hasNoCoreData } from '@/lib/onboarding';
 import {
   ACTIVE_CURRENCY_COOKIE,
@@ -82,8 +84,16 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <SkipLink />
       {settings && (
         <>
-          <TimezoneAutoSync storedTimezone={settings.timezone} storedMode={settings.timezoneMode} />
-          <LanguageAutoSync storedLanguage={settings.language} storedMode={settings.languageMode} />
+          <TimezoneAutoSync
+            storedTimezone={settings.timezone}
+            storedMode={settings.timezoneMode}
+            timezoneCookie={cookieStore.get(TIMEZONE_COOKIE)?.value ?? null}
+          />
+          <LanguageAutoSync
+            storedLanguage={settings.language}
+            storedMode={settings.languageMode}
+            localeCookie={cookieStore.get(LOCALE_COOKIE)?.value ?? null}
+          />
         </>
       )}
       {/*
