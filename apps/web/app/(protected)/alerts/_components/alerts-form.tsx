@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -29,15 +29,23 @@ import {
   ENV_SAVINGS_RATE_MODERATE_PCT,
 } from '@/lib/constants/health-thresholds';
 import { ENV_LIQUIDITY_THRESHOLD_PCT } from '@/lib/constants/liquidity';
+import { formatAmountForInput } from '@/lib/i18n/numeric-input';
 
 interface AlertsFormProps {
   initialSettings: SettingsData;
 }
 
 export function AlertsForm({ initialSettings }: AlertsFormProps) {
+  const locale = useLocale();
   const t = useTranslations('alerts');
 
   const router = useRouter();
+
+  // The ratio default written the way the field displays it, so Spanish shows "1,5", not a dot the field refuses.
+  const incomeExpenseRatioDefault = formatAmountForInput(
+    String(ENV_INCOME_EXPENSE_RATIO_HEALTHY),
+    locale,
+  );
 
   const schema = buildAlertsFormSchema({
     maxCollectionsInvalidMsg: t('form.maxCollections.invalidRange', {
@@ -255,13 +263,13 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
                     <LocaleAmountInput
                       {...field}
                       maxDecimals={2}
-                      placeholder={String(ENV_INCOME_EXPENSE_RATIO_HEALTHY)}
+                      placeholder={incomeExpenseRatioDefault}
                     />
                   </FormControl>
                   <FormMessage />
                   <InfoHint>
                     {t('form.incomeExpenseRatio.default', {
-                      value: String(ENV_INCOME_EXPENSE_RATIO_HEALTHY),
+                      value: incomeExpenseRatioDefault,
                     })}
                   </InfoHint>
                 </FormItem>

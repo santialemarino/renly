@@ -196,6 +196,36 @@ describe('date formatters', () => {
     expect(formatTimestampDate('2026-07-16T02:00:00Z', 'en', 'UTC')).toBe('Jul 16, 2026');
   });
 
+  it('formatTimestampDate reads exactly like formatDateForLocale, in every locale and month', () => {
+    // Timestamp labels and plain-date labels share the app's screens, so the two must not word the
+    // same day differently — Intl's own es-AR pattern says
+    // "9 de mar de 2026" where date-fns says "9 mar 2026". One date per month covers every
+    // abbreviation (es "sept" included), plus a single-digit day and the year boundary.
+    const dates = [
+      '2026-01-01',
+      '2026-02-28',
+      '2026-03-09',
+      '2026-04-30',
+      '2026-05-15',
+      '2026-06-01',
+      '2026-07-16',
+      '2026-08-31',
+      '2026-09-09',
+      '2026-10-25',
+      '2026-11-11',
+      '2026-12-31',
+    ];
+    for (const locale of ['en', 'es']) {
+      for (const date of dates) {
+        expect(formatTimestampDate(`${date}T12:00:00Z`, locale, 'UTC')).toBe(
+          formatDateForLocale(date, locale),
+        );
+      }
+    }
+    expect(formatTimestampDate('2026-03-09T12:00:00Z', 'es', 'UTC')).toBe('9 mar 2026');
+    expect(formatTimestampDate('2026-03-09T12:00:00Z', 'en', 'UTC')).toBe('Mar 9, 2026');
+  });
+
   it('formatDateForLocale is date-only and never timezone-shifted (stays on the local-midnight anchor)', () => {
     // A YYYY-MM-DD value renders its own calendar day regardless of any ambient/stored tz.
     expect(formatDateForLocale('2026-07-16', 'en')).toBe('Jul 16, 2026');

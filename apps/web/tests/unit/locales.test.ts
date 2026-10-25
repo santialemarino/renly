@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -82,6 +82,24 @@ describe('getLocaleDirection', () => {
     expect(getLocaleDirection('en')).toBe('ltr');
     expect(getLocaleDirection('es')).toBe('ltr');
     expect(getLocaleDirection(undefined)).toBe('ltr');
+  });
+
+  /*
+   * The registry's `dir` only matters if the document carries it. Every file under `app/` that renders
+   * `<html>` (the root layout, and global-error, which replaces it) is found by its JSX, not listed, so
+   * a new root layout without `dir` fails here instead of rendering a future RTL language left-to-right.
+   */
+  it('is set as dir on every <html> the app renders', () => {
+    const app = resolve(dirname(fileURLToPath(import.meta.url)), '../../app');
+    const sources = readdirSync(app, { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.tsx'))
+      .map((file) => [file, readFileSync(join(app, file), 'utf8')] as const)
+      .filter(([, source]) => /^\s*<html\b/m.test(source));
+    expect(sources.map(([file]) => file).sort()).toEqual(['global-error.tsx', 'layout.tsx']);
+    for (const [file, source] of sources) {
+      const tag = source.match(/^\s*<html\b[^>]*>/m)?.[0];
+      expect(tag, file).toContain('dir={getLocaleDirection(locale)}');
+    }
   });
 });
 

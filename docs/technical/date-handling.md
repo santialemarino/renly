@@ -98,7 +98,8 @@ negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIM
 even when the cookie is absent or names another zone — `request.ts` reads the settings and the pin
 outranks the cookie, and the protected layout's `TimezoneAutoSync` re-seeds the cookie from it; the
 language follows the same rule. When neither a pin nor a cookie resolves, the timestamp falls back to
-the ambient (browser/server) zone.
+the ambient (browser/server) zone. Once the day is resolved it is worded by the same date-fns `PP` pattern
+`fmt.date` uses, so a timestamp and a plain date for the same day read identically in every locale.
 
 **Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** Every date-only label goes through a
 `fmt.*` method — `fmt.date` / `fmt.month`, plus `fmt.monthLong` (long month name), `fmt.monthYear`

@@ -214,7 +214,6 @@
       "success": "Tu exportación de datos fue descargada."
     },
     "accountField": {
-      "placeholder": "Seleccioná una cuenta",
       "none": "Ninguna",
       "noneForCurrency": "Sin cuentas en {currency}",
       "archived": "{name} (archivada)"
@@ -865,7 +864,7 @@
         "searchPlaceholder": "Buscar monedas...",
         "noResults": "No se encontraron monedas."
       },
-      "invalidDay": "Debe ser un numero entre 1 y 31.",
+      "invalidDay": "Debe ser un número entre 1 y 31.",
       "monthlyPayment": {
         "label": "Pago mensual",
         "placeholder": "0",
@@ -966,7 +965,7 @@
         "subtitle": "{period}",
         "periodRange": "Período: {start} → {end}",
         "bankBalance": "Saldo del resumen del banco",
-        "bankBalancePlaceholder": "0.00",
+        "bankBalancePlaceholder": "0,00",
         "computedBalance": "Saldo calculado por la app",
         "computedBalanceHint": "Lo que la app cree que debías a la fecha de cierre.",
         "difference": "Diferencia",
@@ -1059,7 +1058,7 @@
       },
       "openingBalance": {
         "label": "Saldo inicial",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "openingDate": {
         "label": "Fecha de apertura",
@@ -1491,12 +1490,6 @@
     },
     "installment": {
       "progress": "Cuota {index} de {total}"
-    },
-    "paymentMethods": {
-      "cash": "Efectivo",
-      "debit": "Débito",
-      "transfer": "Transferencia",
-      "credit_card": "Tarjeta de crédito"
     }
   },
   "installments": {
@@ -2721,7 +2714,6 @@
       "table": {
         "date": "Fecha",
         "amount": "Monto",
-        "category": "Categoría",
         "source": "De",
         "wentTo": "Fue a",
         "notes": "Notas",
@@ -2772,9 +2764,7 @@
         },
         "source": {
           "label": "De dónde viene",
-          "placeholder": "Elegí un activo compartido",
           "none": "De nada en particular",
-          "empty": "El dinero compartido de este grupo todavía no tiene activos",
           "hint": "Al elegir un activo compartido, el ingreso se divide según cómo está repartido ese activo. Podés cambiar cualquier parte abajo.",
           "applied": "Dividido según cómo está repartido {asset}.",
           "ownerNotInGroup": "{count, plural, one {La división quedó como estaba: {names} es dueño de una parte de este activo pero dejó el grupo, así que las partes no sumarían 100%. Dividilo vos.} other {La división quedó como estaba: {names} son dueños de una parte de este activo pero dejaron el grupo, así que las partes no sumarían 100%. Dividilo vos.}}"
@@ -3112,9 +3102,7 @@
       "preferredCurrencies": {
         "label": "Monedas preferidas",
         "hint": "Se muestran en un grupo separado en el selector de monedas.",
-        "placeholder": "Buscar monedas...",
         "inputPlaceholder": "Ingresá códigos ISO (ej. BRL, EUR)",
-        "empty": "No se encontraron monedas.",
         "format": "Códigos ISO separados por coma. Dejá vacío para desactivar.",
         "formatWithDefaults": "Códigos ISO separados por coma. Por defecto {defaults} si se deja vacío."
       },
@@ -3194,7 +3182,7 @@
         "label": "Ratio ingreso / gasto — saludable",
         "hint": "Ratio ingreso/gasto a partir de este valor se muestra en verde. El break-even (1) se muestra en ámbar. Por debajo, rojo.",
         "default": "Por defecto {value} si se deja vacío.",
-        "invalidRange": "Debe ser un número entre 0.1 y 10."
+        "invalidRange": "Debe ser un número entre 0,1 y 10."
       },
       "cta": {
         "label": "Guardar",
