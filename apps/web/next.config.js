@@ -1,5 +1,6 @@
 /* global process */
-import { withSentryConfig } from '@sentry/nextjs';
+import path from 'node:path';
+import { withSentryConfig } from '@sentry/nextjs/config';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 // Content-Security-Policy value, served in report-only mode (SEC-10). Report-only collects
@@ -78,7 +79,7 @@ const nextConfig = {
     return config;
   },
   turbopack: {
-    root: '../..', // Workspace root for monorepo (fixes Docker build)
+    root: path.resolve(import.meta.dirname, '../..'), // Workspace root for monorepo (fixes Docker build)
     rules: {
       '*.svg': {
         as: '*.js',
