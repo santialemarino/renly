@@ -39,9 +39,9 @@ const QUICK_ADD_OPEN_MS = 20_000;
  * every Radix dialog in the codebase goes through those wrappers; `use-return-focus.test.tsx` covers
  * the hook's logic case by case.
  *
- * Every key pressed on a freshly loaded page first waits for React to hydrate its target: a
- * server-rendered trigger is focusable before it has handlers, and an Enter that lands in that window
- * opens nothing (see `helpers/hydration.ts`).
+ * Every key pressed or click made on a freshly loaded page first waits for React to hydrate its
+ * target: a server-rendered trigger is focusable and clickable before it has handlers, and an Enter,
+ * a keystroke or a click that lands in that window does nothing (see `helpers/hydration.ts`).
  */
 test.describe('focus returns to what opened an overlay (signed in)', () => {
   const dialog = (page: Page) => page.getByRole('dialog');
@@ -112,6 +112,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
     await page.goto(EXPENSES);
     const quickAdd = page.getByTestId('quick-add-trigger');
 
+    await waitForHydration(quickAdd);
     await quickAdd.click();
     await expect(page.getByTestId('expense-form-notes')).toBeVisible({
       timeout: QUICK_ADD_OPEN_MS,
@@ -263,6 +264,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
     // as on hover. It only joins the tab order once the field has a value.
     await page.goto(EXPENSES);
     const search = page.locator('main [data-slot="input"]').first();
+    await waitForHydration(search);
     await search.focus();
     await page.keyboard.type('x');
     const clear = search.locator('xpath=..').locator('button');
@@ -282,6 +284,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
     test('the nav sheet returns to the hamburger', async ({ page }) => {
       await page.goto(EXPENSES);
       const hamburger = page.locator(TRIGGER);
+      await waitForHydration(hamburger);
       await hamburger.click();
       await expect(page.locator(NAV)).toBeVisible();
 
@@ -296,6 +299,7 @@ test.describe('focus returns to what opened an overlay (signed in)', () => {
       // recent-interaction scan skips the vanished trigger and finds the hamburger directly.
       await page.goto(EXPENSES);
       const hamburger = page.locator(TRIGGER);
+      await waitForHydration(hamburger);
       await hamburger.click();
       await page.getByTestId('quick-add-trigger').click();
       await expect(page.getByTestId('expense-form-notes')).toBeVisible({
