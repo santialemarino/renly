@@ -9,7 +9,9 @@ import { useExpandablePagedList } from '@/lib/hooks/use-expandable-paged-list';
  * reconciliations). Three hand-written copies of it drifted, and one of the drifts stranded a panel:
  * a failed first load was recorded as loaded, so the panel showed its empty state for good and
  * closing and reopening it never asked again. What is pinned is the retry, plus the cache it must not
- * break: a re-expand after a SUCCESSFUL load serves what is already there.
+ * break: a re-expand after a SUCCESSFUL load serves what is already there. Now that the hook is the only
+ * place they live, its two timing promises are pinned too: the last requested page wins, and the
+ * display floor pads the first load only.
  */
 
 const ROWS: Page<string> = { items: ['a', 'b'], total: 2, pageSize: 25 };
@@ -77,5 +79,40 @@ describe('useExpandablePagedList', () => {
     await settle();
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(fetchPage).toHaveBeenLastCalledWith(1);
+  });
+
+  it('shows the last REQUESTED page when two page fetches resolve out of order', async () => {
+    let resolvePage2: (page: Page<string>) => void = () => {};
+    const fetchPage = vi.fn((page: number) =>
+      page === 2
+        ? new Promise<Page<string>>((resolve) => (resolvePage2 = resolve))
+        : Promise.resolve({ ...ROWS, items: [`p${page}`] }),
+    );
+    const panel = renderPanel(fetchPage);
+
+    panel.rerender({ expanded: true });
+    await settle();
+    act(() => panel.result.current.setPage(2));
+    act(() => panel.result.current.setPage(3));
+    await settle();
+    await act(async () => resolvePage2({ ...ROWS, items: ['p2'] }));
+    await settle();
+    expect(panel.result.current.page).toBe(3);
+    expect(panel.result.current.items).toEqual(['p3']);
+  });
+
+  it('applies the display floor to the first load only, not to a page change', async () => {
+    const fetchPage = vi.fn((page: number) => Promise.resolve({ ...ROWS, items: [`p${page}`] }));
+    const panel = renderPanel(fetchPage);
+
+    panel.rerender({ expanded: true });
+    await settle();
+    act(() => panel.result.current.setPage(2));
+    // Well under the 500 ms floor: a padded swap would still be loading here.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(panel.result.current.loading).toBe(false);
+    expect(panel.result.current.items).toEqual(['p2']);
   });
 });

@@ -67,7 +67,9 @@ export function DistributionDonut({
 
   const hasData = slices.length > 0;
 
-  // Measure legend height for smooth bottom-edge animation.
+  // Measure legend height for smooth bottom-edge animation. The legend only exists while there is
+  // data, so the measuring follows `hasData`: a card that opens on its empty label and then switches
+  // to a set with data must measure the legend that just mounted, or it stays at height 0.
   useEffect(() => {
     const el = legendRef.current;
     if (!el) return;
@@ -84,7 +86,7 @@ export function DistributionDonut({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [hasData]);
 
   return (
     <Card className="flex-1">
