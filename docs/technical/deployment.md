@@ -15,7 +15,8 @@ Both build from the repo root (the build context must be the root so the API ima
 `apps/api/` and the web image can resolve the pnpm workspace):
 
 ```bash
-# API (FastAPI) — listens on $PORT
+# API (FastAPI) — listens on $PORT. Installs exactly what apps/api/uv.lock pins (`uv sync --locked`),
+# so the build fails if the lockfile is out of date with pyproject.toml.
 docker build -f docker/api.Dockerfile -t renly-api .
 
 # Web (Next.js) — NEXT_PUBLIC_* values are inlined at build time, so both must be set at image
@@ -30,7 +31,7 @@ Run commands (both honor `$PORT`):
 
 ```bash
 # API
-docker run -e PORT=8000 -e DATABASE_URL=... -e DATABASE_ADMIN_URL=... -e JWT_SECRET=... renly-api
+docker run -e PORT=8000 -e ENVIRONMENT=production -e DATABASE_URL=... -e DATABASE_ADMIN_URL=... -e JWT_SECRET=... renly-api
 #   image CMD: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}   (binds $PORT, defaults to 8000)
 
 # Web
@@ -53,7 +54,7 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 | `DATABASE_URL`        | The **restricted `renly_app` role** (NOBYPASSRLS, non-owner) — request connections are subject to RLS.                                             |
 | `DATABASE_ADMIN_URL`  | The **`renly_admin` role** (BYPASSRLS, not a superuser, a member of the owner) — migrations, the scheduler, and pre-auth lookups. Never the owner. |
 | `JWT_SECRET`          | Must equal the web app's `NEXTAUTH_SECRET`; min 32 chars.                                                                                          |
-| `ENVIRONMENT`         | `production` disables `/docs` and tracebacks.                                                                                                      |
+| `ENVIRONMENT`         | `production` disables `/docs` and tracebacks. **Required** — the API refuses to start without it.                                                  |
 | `CORS_ORIGINS`        | Comma-separated allowed origins (the production web URL).                                                                                          |
 | `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                            |
 | `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                              |

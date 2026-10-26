@@ -34,7 +34,8 @@ class SignupMode(StrEnum):
 
 # App configuration loaded from the environment (.env); imported app-wide via the settings singleton.
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # hide_input_in_errors: a startup error must not print the raw settings, which carry secrets.
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
     # Request connections use this URL — a restricted, NOBYPASSRLS, non-owner role subject to
     # Row-Level Security (SEC-15). Must NOT be a superuser or renly_admin, or RLS is silently bypassed.
@@ -55,7 +56,9 @@ class Settings(BaseSettings):
     # log in again.
     refresh_token_remember_days: int = 30
     refresh_token_default_hours: int = 2
-    environment: Environment = Environment.development
+    # Required, with no default (P7-A): a deployment that forgets it must refuse to boot rather than run
+    # as development, which would expose /docs and debug in production.
+    environment: Environment
     # Allowed CORS origins, comma-separated in the env (e.g. "https://app.renly.com,https://renly.com").
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
     # Number of trusted reverse proxies in front of the app. 0 (default) means the app is reached
@@ -128,6 +131,17 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    # Refuses to boot when ENVIRONMENT is unset, naming the variable and its values instead of pydantic's
+    # generic "Field required" on a lowercase field name.
+    @model_validator(mode="before")
+    @classmethod
+    def _require_environment(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("environment") in (None, ""):
+            raise ValueError(
+                "ENVIRONMENT must be set to 'development' or 'production'; it has no default, so a deployment cannot run as development by accident."
+            )
+        return data
 
     # Rejects the resend email provider without an API key at startup; otherwise account emails
     # (verification, reset) would silently fail to send once the app is live.
