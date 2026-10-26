@@ -77,6 +77,7 @@ _REFUSED = {
     "right secret, wrong HMAC alg": lambda: _hs512({**_CLAIMS, "exp": _FAR_EXP}),
     "alg none, unsigned": lambda: _unsigned({**_CLAIMS, "exp": _FAR_EXP}),
     "asymmetric alg (ES256)": lambda: jwt.encode({**_CLAIMS, "exp": _FAR_EXP}, ec.generate_private_key(ec.SECP256R1()), algorithm="ES256"),
+    "no exp": lambda: _hs(_CLAIMS),
     "no sub": lambda: _hs({"session_epoch": 3, "exp": _FAR_EXP}),
     "no session_epoch": lambda: _hs({"sub": "42", "exp": _FAR_EXP}),
     "non-numeric sub": lambda: _hs({**_CLAIMS, "sub": "abc", "exp": _FAR_EXP}),

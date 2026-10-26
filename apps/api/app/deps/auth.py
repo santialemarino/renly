@@ -31,6 +31,7 @@ async def get_current_user(
             credentials.credentials,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
+            options={"require": ["exp"]},
         )
         raw_sub = payload.get("sub")
         user_id: int | None = int(raw_sub) if raw_sub is not None else None

@@ -56,7 +56,7 @@ def rate_limit_key(request: Request) -> str:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() == "bearer" and token:
         try:
-            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm], options={"require": ["exp"]})
             sub = payload.get("sub")
             if sub is not None:
                 return f"user:{sub}"

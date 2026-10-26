@@ -42,7 +42,7 @@ async def get_jwt_or_api_key_user(
     from app.config import settings
 
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm], options={"require": ["exp"]})
         raw_sub = payload.get("sub")
         user_id: int | None = int(raw_sub) if raw_sub is not None else None
         token_epoch: int | None = payload.get("session_epoch")
