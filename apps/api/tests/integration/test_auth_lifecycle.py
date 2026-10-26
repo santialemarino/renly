@@ -3,9 +3,9 @@ from datetime import date
 
 import bcrypt
 import httpx
+import jwt
 import pytest
 import pytest_asyncio
-from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker

@@ -131,14 +131,14 @@ Transactional emails are the one place the backend produces user-facing prose (t
 | `REFRESH_TOKEN_REMEMBER_DAYS` | `30`     | Refresh token lifetime for a "remember me" login    |
 | `REFRESH_TOKEN_DEFAULT_HOURS` | `2`      | Refresh token lifetime for an ordinary login        |
 
-**Signing:** `jose.jwt.encode(payload, secret, algorithm="HS256")`.
+**Signing:** PyJWT, `jwt.encode(payload, secret, algorithm="HS256")`.
 
 ## Token validation
 
 The `get_current_user()` dependency in `app/deps/auth.py` runs on every protected endpoint:
 
 1. Extracts Bearer token from `Authorization` header via `HTTPBearer()`.
-2. Decodes JWT with `jose.jwt.decode()` using `JWT_SECRET` and `HS256`.
+2. Decodes JWT with PyJWT's `jwt.decode()` using `JWT_SECRET` and an explicit `algorithms=[JWT_ALGORITHM]` allow-list, so `none` and any other algorithm are refused, and requires the `exp` claim.
 3. Extracts `sub` (user ID) and `session_epoch` from the payload.
 4. Sets the request's RLS context from the (trusted) token's user id (`set_session_user`), then fetches the user from the DB by ID — the `users` policy lets the user read its own row.
 5. Compares token's `session_epoch` with the user's current `session_epoch` — rejects if they differ (token was issued before a logout).

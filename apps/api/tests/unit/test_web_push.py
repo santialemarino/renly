@@ -9,10 +9,10 @@ import base64
 from datetime import UTC, datetime
 
 import httpx
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from jose import jwt
 
 from app.services import web_push
 
@@ -97,7 +97,7 @@ class TestVapidHeader:
         private = web_push._private_key()
         header = web_push._authorization(endpoint, private, now=1_700_000_000)
         token = header.removeprefix("vapid t=").split(",", 1)[0]
-        return jwt.get_unverified_claims(token)
+        return jwt.decode(token, options={"verify_signature": False})
 
     def test_the_audience_is_the_push_services_origin_and_not_the_subscription(self, monkeypatch):
         # The rest of the endpoint IS the subscription. Signing it would let the push service correlate
@@ -205,13 +205,37 @@ def test_the_vapid_token_verifies_against_the_public_key_the_browser_holds(monke
     token, key = header.removeprefix("vapid t=").split(",k=")
     claims = jwt.decode(
         token,
-        {
-            "kty": "EC",
-            "crv": "P-256",
-            "x": base64.urlsafe_b64encode(_unb64(key)[1:33]).rstrip(b"=").decode(),
-            "y": base64.urlsafe_b64encode(_unb64(key)[33:]).rstrip(b"=").decode(),
-        },
+        jwt.PyJWK(
+            {
+                "kty": "EC",
+                "crv": "P-256",
+                "x": base64.urlsafe_b64encode(_unb64(key)[1:33]).rstrip(b"=").decode(),
+                "y": base64.urlsafe_b64encode(_unb64(key)[33:]).rstrip(b"=").decode(),
+            }
+        ),
         algorithms=["ES256"],
         options={"verify_aud": False},
     )
     assert claims["aud"] == "https://push.example.net"
+    # The header push services read: ES256, typed JWT, nothing else (no `kid`, no `jwk`).
+    assert jwt.get_unverified_header(token) == {"alg": "ES256", "typ": "JWT"}
+
+
+# The signer moved from python-jose to PyJWT. This token was minted by python-jose 3.5.0 with the same
+# local key, before the swap: it verifies against the public key derived the way `k=` is, so the
+# two libraries produce the same JOSE header, claims encoding and raw r||s signature format.
+_JOSE_MINTED_VAPID = (
+    "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJodHRwczovL3B1c2guZXhhbXBsZS5uZXQiLCJleHAiOjQxMDI0NDQ4MDAsInN1YiI6Imh0dHBzOi8vcmVubHku"
+    "ZXhhbXBsZSJ9.uvDytW_NHx-1nGuhtccOJommVgHXapzlyH8QpzGsrjkEckVLp0mKOcWNFZ-wSZl9STIq1jLOx0khBAQ9wtfy6Q"
+)
+
+
+def test_a_vapid_token_minted_by_python_jose_verifies_under_the_current_signer(monkeypatch):
+    monkeypatch.setattr(web_push.settings, "vapid_private_key", _LOCAL_PRIVATE)
+    public = web_push._private_key().public_key()
+    claims = jwt.decode(_JOSE_MINTED_VAPID, public, algorithms=["ES256"], audience="https://push.example.net")
+    assert claims == {"aud": "https://push.example.net", "exp": 4102444800, "sub": "https://renly.example"}
+    # And the header our signer writes today is the one python-jose wrote.
+    header = web_push._authorization("https://push.example.net/x", web_push._private_key(), now=1_700_000_000)
+    token = header.removeprefix("vapid t=").split(",", 1)[0]
+    assert jwt.get_unverified_header(token) == jwt.get_unverified_header(_JOSE_MINTED_VAPID)

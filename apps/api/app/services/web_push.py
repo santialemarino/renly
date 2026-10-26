@@ -5,7 +5,7 @@
 # trade rather than a preference for hand-rolling. The usual library is synchronous — it would put the
 # only blocking HTTP client in an otherwise fully async service, dragged in for one POST — while the
 # three primitives this actually needs (ECDH, HKDF, AES-128-GCM) are already present via cryptography,
-# and python-jose already signs the app's own tokens. The decisive half is that RFC 8291 §5 publishes a
+# and PyJWT already signs the app's own tokens. The decisive half is that RFC 8291 §5 publishes a
 # complete worked example with fixed keys and a fixed salt, so this implementation is pinned to the
 # specification's own vector in tests/unit/test_web_push.py — which is stronger evidence than a
 # dependency's version number.
@@ -25,12 +25,12 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import httpx
+import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from jose import jwt
 
 from app.config import settings
 
@@ -146,12 +146,7 @@ def _authorization(endpoint: str, private: ec.EllipticCurvePrivateKey, *, now: i
         "exp": (now if now is not None else int(time.time())) + _VAPID_TOKEN_TTL_SECONDS,
         "sub": settings.vapid_subject or settings.web_base_url,
     }
-    pem = private.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    ).decode()
-    token = jwt.encode(claims, pem, algorithm="ES256")
+    token = jwt.encode(claims, private, algorithm="ES256")
     return f"vapid t={token},k={_b64(_point(private.public_key()))}"
 
 

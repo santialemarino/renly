@@ -1,8 +1,8 @@
 from typing import Annotated
 
+import jwt
 from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 
 from app.config import settings
 from app.db import set_session_user
@@ -31,13 +31,14 @@ async def get_current_user(
             credentials.credentials,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
+            options={"require": ["exp"]},
         )
         raw_sub = payload.get("sub")
         user_id: int | None = int(raw_sub) if raw_sub is not None else None
         token_epoch: int | None = payload.get("session_epoch")
         if user_id is None or token_epoch is None:
             raise invalid
-    except (JWTError, ValueError):
+    except (jwt.InvalidTokenError, ValueError):
         raise invalid
 
     # Set the RLS context from the trusted token before any DB read so the user's own row is
