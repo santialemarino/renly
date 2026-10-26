@@ -37,7 +37,7 @@ async def get_jwt_or_api_key_user(
     token = credentials.credentials
 
     # Try JWT first.
-    from jose import JWTError, jwt
+    import jwt
 
     from app.config import settings
 
@@ -52,7 +52,7 @@ async def get_jwt_or_api_key_user(
             user = await session.get(User, user_id)
             if user is not None and user.session_epoch == token_epoch:
                 return user
-    except (JWTError, ValueError):
+    except (jwt.InvalidTokenError, ValueError):
         pass
 
     # Fall back to API key. The prefix lookup has no user context yet, so it runs on the
