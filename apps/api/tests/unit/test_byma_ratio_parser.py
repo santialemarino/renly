@@ -6,8 +6,9 @@ import pytest
 from app.services import price_providers
 
 # The BYMA CEDEAR ratio PDF, read end to end through `fetch_byma_ratios` — the one place the API parses a
-# PDF (pdfplumber, and through it Pillow). It pins what the parser extracts so a dependency bump that
-# changes `extract_text()` shows up here rather than as silently wrong ratios.
+# PDF. It pins what the parser extracts, so a pdfplumber or pdfminer bump that changes `extract_text()`
+# shows up here rather than as silently wrong ratios. (Pillow, which pdfplumber pulls in, is only loaded
+# for `to_image`, so text extraction never touches it.)
 #
 # The PDF is built in the test, not committed: BYMA's own file carries no licence to redistribute. It
 # copies the live file's layout (checked against the 2026-09-16 edition): Letter pages, one row per CEDEAR
