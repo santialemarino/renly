@@ -41,6 +41,8 @@ services:
       # Local-dev placeholder (32+ chars, validated at startup). Must equal web's NEXTAUTH_SECRET.
       JWT_SECRET: ${JWT_SECRET:-renly-local-compose-dev-secret-0123456789}
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:3000}
+      # Required by the api (no in-code default). Compose is a local stack, so it defaults to development.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
 
   web:
     container_name: renly-web
