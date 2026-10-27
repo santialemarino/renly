@@ -1,8 +1,10 @@
 import logging
 
 import sentry_sdk
+from sentry_sdk.scrubber import DEFAULT_DENYLIST, EventScrubber
 
 from app.config import Settings
+from app.rate_limit import CLIENT_IP_HEADER, INTERNAL_SECRET_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,9 @@ def init_sentry(app_settings: Settings) -> None:
         environment=app_settings.environment.value,
         # Don't attach request bodies / headers — this app handles financial data.
         send_default_pii=False,
+        # Sentry keeps request headers it does not know to be sensitive, so the web server's shared
+        # secret and the client IP it forwards are named here; the default lists still apply.
+        event_scrubber=EventScrubber(denylist=[*DEFAULT_DENYLIST, CLIENT_IP_HEADER, INTERNAL_SECRET_HEADER]),
         # Errors only by default; performance tracing stays off to keep the free tier light.
         traces_sample_rate=0.0,
     )

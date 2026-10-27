@@ -1,5 +1,6 @@
 from app.config import Environment, Settings
 from app.observability import init_sentry
+from app.rate_limit import CLIENT_IP_HEADER, INTERNAL_SECRET_HEADER
 
 _DB_URL = "postgresql+asyncpg://user:pass@localhost:5432/renly"
 _SECRET = "x" * 32
@@ -43,3 +44,16 @@ class TestSentryInit:
         assert recorder.calls[0]["dsn"] == _DSN
         assert recorder.calls[0]["environment"] == "production"
         assert recorder.calls[0]["send_default_pii"] is False
+
+    # The web server's shared secret and the client IP it forwards ride on request headers Sentry does
+    # not know to be sensitive; an event carrying them must reach Sentry with both scrubbed.
+    def test_forwarding_headers_are_scrubbed(self, monkeypatch):
+        recorder = _InitRecorder()
+        monkeypatch.setattr("app.observability.sentry_sdk.init", recorder)
+        init_sentry(_settings(sentry_dsn=_DSN))
+        headers = {CLIENT_IP_HEADER.lower(): "203.0.113.7", INTERNAL_SECRET_HEADER.lower(): "s" * 40, "accept": "*/*"}
+        event = {"request": {"headers": headers}}
+        recorder.calls[0]["event_scrubber"].scrub_event(event)
+        assert event["request"]["headers"]["accept"] == "*/*"
+        assert event["request"]["headers"][CLIENT_IP_HEADER.lower()] != "203.0.113.7"
+        assert event["request"]["headers"][INTERNAL_SECRET_HEADER.lower()] != "s" * 40

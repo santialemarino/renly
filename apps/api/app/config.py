@@ -7,6 +7,8 @@ from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_JWT_SECRET_LENGTH = 32
+# The web server's shared secret proves a forwarded client IP came from it; a short one is guessable.
+MIN_INTERNAL_API_SECRET_LENGTH = 32
 # A P-256 private key is a 32-byte scalar. The VAPID key is that scalar, base64url-encoded.
 VAPID_PRIVATE_KEY_BYTES = 32
 
@@ -67,6 +69,12 @@ class Settings(BaseSettings):
     # is spoof-resistant; set it to the real proxy/LB hop count in production or per-IP limits collapse
     # onto the proxy address. Must match the deployment — too high lets clients spoof their rate-limit key.
     trusted_proxy_count: int = 0
+    # Secret shared with the web server (never with the browser). The web server's own API calls —
+    # login, token refresh, the signup context — reach this app from ITS address, so it names the real
+    # client in X-Renly-Client-IP and proves it with this secret in X-Renly-Internal-Secret; the client
+    # IP used for rate limiting comes from that header only when the secret matches. Unset (default) =
+    # the header is ignored and every server-side call shares the web server's own limit bucket.
+    internal_api_secret: str | None = None
     # Sentry error-tracking DSN (INFRA-5). When unset (default), Sentry is not initialized and the
     # app sends nothing — so local dev, tests, and CI are unaffected. Set it (even on localhost) to
     # start capturing errors; the environment tag is taken from the environment setting above.
@@ -122,6 +130,16 @@ class Settings(BaseSettings):
     def _validate_jwt_secret(cls, value: str) -> str:
         if len(value) < MIN_JWT_SECRET_LENGTH:
             raise ValueError(f"jwt_secret must be at least {MIN_JWT_SECRET_LENGTH} characters.")
+        return value
+
+    # Rejects a weak internal API secret at startup; an empty value means unset.
+    @field_validator("internal_api_secret")
+    @classmethod
+    def _validate_internal_api_secret(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        if len(value) < MIN_INTERNAL_API_SECRET_LENGTH:
+            raise ValueError(f"internal_api_secret must be at least {MIN_INTERNAL_API_SECRET_LENGTH} characters.")
         return value
 
     # Splits the comma-separated CORS origins env string into a list (no-op when already a list default).
