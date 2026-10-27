@@ -3113,7 +3113,6 @@
         "hint": "Botones de acceso rápido de periodo en el dashboard.",
         "format": "Formato: 1M, 3M, 6M, 1A, YTD. \"Todo\" se agrega siempre.",
         "invalidFormat": "Formato inválido. Usá NM (meses), NA (años) o YTD.",
-        "emptyDefault": "Dejá todos los campos vacíos para usar los presets predeterminados.",
         "emptyDefaultWithValues": "Dejá todos los campos vacíos para usar los presets predeterminados ({defaults}).",
         "partialWarning": "Completar al menos un campo reemplaza todos los predeterminados.\nUna vez completado un campo, solo se mostrarán los presets que ingreses."
       },

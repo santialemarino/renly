@@ -3113,7 +3113,6 @@
         "hint": "Quick-access period buttons on the dashboard.",
         "format": "Format: 1M, 3M, 6M, 1Y, YTD. \"All\" is always added.",
         "invalidFormat": "Invalid format. Use NM (months), NY (years) or YTD.",
-        "emptyDefault": "Leave all fields empty to use the default presets.",
         "emptyDefaultWithValues": "Leave all fields empty to use the defaults ({defaults}).",
         "partialWarning": "Filling in at least one field replaces all defaults.\nOnce you fill in a field, only the presets you enter will be shown."
       },
