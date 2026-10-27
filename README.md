@@ -11,7 +11,7 @@ pnpm db:init # start Postgres and apply schema (first time only)
 pnpm dev
 ```
 
-**Requirements:** Node.js 22+, pnpm 10+, Python 3.13+, Docker (for local Postgres).
+**Requirements:** Node.js 24+ (`.nvmrc`), pnpm 10+, Python 3.14+, Docker (for local Postgres).
 
 **First-time DB:** From repo root, run `pnpm db:init` to start the Postgres container (docker compose) and apply the schema. Then set both database URLs in `apps/api/.env`:
 

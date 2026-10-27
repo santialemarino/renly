@@ -3,7 +3,6 @@ name: CI API
 run-name: 'CI API by @${{ github.actor }}'
 
 on:
-  workflow_call:
   # Every merge to main runs the whole suite, integration suites included, whatever it touched.
   push:
     branches:
@@ -64,13 +63,14 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Install uv
         run: pip install uv
 
+      # `--locked` fails when uv.lock is out of step with pyproject.toml, as the API image build does.
       - name: Install dependencies
-        run: uv sync --no-install-project --extra dev
+        run: uv sync --locked --no-install-project --extra dev
 
       - name: Ruff format check
         run: uv run ruff format --check .
@@ -88,6 +88,68 @@ jobs:
           psql -v ON_ERROR_STOP=1 -h localhost -U renly -d renly -f database/00_roles.sql
           psql -v ON_ERROR_STOP=1 -h localhost -U renly -d renly -f database/01_create_tables.sql
           uv run alembic stamp head
+
+      # The schema file builds every fresh database; the migration chain upgrades every live one. This
+      # replays the chain from its baseline twice — online, and as the script `alembic upgrade --sql`
+      # writes, applied as renly_admin — and fails when either database differs from the one the
+      # schema file built. The baseline is the schema file as it stood when Alembic was adopted (the
+      # parent of the commit that added `user_plan`, which 0002 then adds): 0001 is an empty anchor, so
+      # it is read from history rather than kept as a second copy in the tree.
+      - name: Compare the migration chain with the schema file
+        env:
+          PGPASSWORD: renly
+          BASELINE_COMMIT: 876e656a23cd9a30c1de9931b3f0201c65ea8e3f
+          POSTGRES: ${{ job.services.postgres.id }}
+        run: |
+          git fetch --quiet --depth=1 origin "$BASELINE_COMMIT"
+          git show "$BASELINE_COMMIT:apps/api/database/01_create_tables.sql" > /tmp/baseline.sql
+          for db in renly_chain renly_offline; do
+            psql -v ON_ERROR_STOP=1 -q -h localhost -U renly -d renly -c "CREATE DATABASE $db"
+            psql -v ON_ERROR_STOP=1 -q -h localhost -U renly -d "$db" -f database/00_roles.sql
+            psql -v ON_ERROR_STOP=1 -q -h localhost -U renly -d "$db" -f /tmp/baseline.sql
+            DATABASE_ADMIN_URL="postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/$db" \
+              uv run alembic stamp 0001_baseline
+          done
+          DATABASE_ADMIN_URL=postgresql+asyncpg://renly_admin:renly_admin@localhost:5432/renly_chain \
+            uv run alembic upgrade head
+          uv run alembic upgrade 0001_baseline:head --sql > /tmp/offline.sql
+          PGPASSWORD=renly_admin psql -v ON_ERROR_STOP=1 -q -h localhost -U renly_admin -d renly_offline -f /tmp/offline.sql
+          for db in renly renly_chain renly_offline; do
+            docker exec "$POSTGRES" pg_dump -U renly --schema-only --no-comments -d "$db" > "/tmp/$db.dump"
+          done
+          python3 - <<'PY'
+          import difflib
+          import re
+
+          # A dump as a sorted list of statements, with each table's columns sorted: ADD COLUMN appends,
+          # so a migrated table lists its columns in a different order than the CREATE TABLE that
+          # declares them, and the order means nothing. Skipped: session settings, and the owner's own
+          # default privileges, which 01_create_tables.sql declares as the owner while a replay runs as
+          # renly_admin (which 00_roles.sql already gives the same defaults).
+          def statements(path):
+              text = "\n".join(l for l in open(path).read().splitlines() if not l.startswith(("--", "\\")))
+              out = []
+              for stmt in (s.strip() for s in re.split(r";\n", text)):
+                  if not stmt or stmt.startswith(("SET ", "SELECT pg_catalog.set_config", "ALTER DEFAULT PRIVILEGES FOR ROLE renly ")):
+                      continue
+                  if stmt.startswith("CREATE TABLE"):
+                      head, rest = stmt.split("(\n", 1)
+                      body, tail = rest.rsplit("\n)", 1)
+                      stmt = head + "(\n" + "\n".join(sorted(c.strip().rstrip(",") for c in body.splitlines())) + "\n)" + tail
+                  out.append(stmt)
+              return sorted(out)
+
+          expected = statements("/tmp/renly.dump")
+          tables = sum(s.startswith("CREATE TABLE") for s in expected)
+          failed = tables == 0
+          for db in ("renly_chain", "renly_offline"):
+              diff = list(difflib.unified_diff(expected, statements(f"/tmp/{db}.dump"), "schema file", db, lineterm="", n=0))
+              print(f"{db}: {len(expected)} statements, {tables} tables, {'differs' if diff else 'identical'}")
+              if diff:
+                  print("\n".join(diff))
+              failed = failed or bool(diff)
+          raise SystemExit(1 if failed else 0)
+          PY
 
       - name: Run tests
         run: uv run pytest tests/ -v --junitxml=pytest-results.xml

@@ -137,7 +137,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Install uv
         run: pip install uv
@@ -168,7 +168,8 @@ jobs:
 
       - name: Install API dependencies
         working-directory: apps/api
-        run: uv sync --no-install-project
+        # `--locked` fails when uv.lock is out of step with pyproject.toml, as the API image build does.
+        run: uv sync --locked --no-install-project
 
       - name: Initialize the database
         # The local flow, unchanged: compose's Postgres, then 00_roles.sql, 01_create_tables.sql and

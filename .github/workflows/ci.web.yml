@@ -3,7 +3,6 @@ name: CI Web
 run-name: 'CI Web by @${{ github.actor }}'
 
 on:
-  workflow_call:
   # Every merge to main runs the whole suite, whatever it touched.
   push:
     branches:
@@ -35,17 +34,28 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Prettier over the whole tree, as the pre-commit hook runs it on staged files: a commit made
+      # without the hook would otherwise land unformatted.
+      - name: Format check
+        run: pnpm format:check:web
+
       - name: Lint
         run: pnpm --filter web run lint
 
+      - name: Lint UI package
+        run: pnpm --filter @repo/ui run lint
+
       - name: Type check
         run: pnpm --filter web run check-types
+
+      - name: Type check UI package
+        run: pnpm --filter @repo/ui run check-types
 
       - name: Unit tests
         run: pnpm --filter web run test:run

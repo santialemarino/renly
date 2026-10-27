@@ -77,10 +77,10 @@ Two-stage build:
 
 Three-stage build:
 
-1. **base** — `node:22-alpine`. Enables corepack (pnpm), sets `NEXT_TELEMETRY_DISABLED=1`.
+1. **base** — `node:24-alpine`. Enables corepack (pnpm), sets `NEXT_TELEMETRY_DISABLED=1`.
 2. **deps** — Copies workspace manifests (`pnpm-workspace.yaml`, `pnpm-lock.yaml`, and all `package.json` files), runs `pnpm install --frozen-lockfile`.
 3. **builder** — Copies source code and node_modules from deps. Builds `@repo/ui` first, then the `web` app. Both `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SENTRY_DSN` are injected as build args (inlined into the client bundle).
-4. **runner** — `node:22-alpine`. Copies `.next`, `public`, `package.json`, `next.config.js`, `node_modules`, and the UI package. Re-declares both `NEXT_PUBLIC_*` build args (ARGs reset per stage). Runs `node_modules/.bin/next start`.
+4. **runner** — `node:24-alpine`. Copies `.next`, `public`, `package.json`, `next.config.js`, `node_modules`, and the UI package. Re-declares both `NEXT_PUBLIC_*` build args (ARGs reset per stage). Runs `node_modules/.bin/next start`.
 
 ## Running the full stack
 
