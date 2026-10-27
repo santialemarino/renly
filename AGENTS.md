@@ -14,6 +14,7 @@ pnpm db:init
 pnpm check:api
 pnpm check:web
 pnpm test:api
+pnpm test:web
 pnpm format
 pnpm lint:fix
 ```
@@ -29,31 +30,15 @@ pnpm lint:fix
 
 ## Hard rules
 
-- Never `git add .` or `git add -A`; stage files individually by name.
-- Never stage `.claude/plans/`.
-- Never stage `docs/internal/`.
-- Never stage temporary markdown files unless the user explicitly names them.
-- Pre-commit (`scripts/pre-commit.sh`) runs lint-staged, then `check:*` + `test:*` for each app that is staged plus both apps' cross-app tests; do not commit code that would fail any of these.
+- Never `git add .` or `git add -A` — stage files individually by name
+- Never stage `.claude/plans/` or `docs/internal/` — both gitignored
+- Never stage temporary or scratch `.md` files unless the user explicitly names them
+- Pre-commit (`scripts/pre-commit.sh`) is scoped by the staged paths: lint-staged always, then `check:api` + `test:api` for staged API paths, `check:web` + `test:web` for staged web/`packages/` paths, everything for root config and scripts, nothing more for docs and skills — plus the other app's cross-app tests whenever code is staged (see `agent-workflow` §2). Don't commit code that would fail any of these
 
 ## PR asset upload policy
 
 OFF by default. The agent verifies every UI change with `playwright-cli` per the `e2e-testing` skill — capturing screenshots/videos locally as part of that verification is fine — but the Screenshots & Recordings section is omitted from the PR body unless I explicitly ask for assets on that PR. Per-PR opt-in only; no standing "upload always" mode. When I ask, follow the hosting paths in the `pr-format` skill.
 
-## Architecture rules
+## Architecture and review rules
 
-- Use API skills for backend work: `api-layering` and `api-methods-entities`.
-- Use web skills for frontend work: `web-structure` and `web-components-pages`.
-- Services own API transaction boundaries; repositories do not commit.
-- Avoid N+1 queries. Add batch repository methods when data is needed in loops.
-- API comments above function/class definitions end with periods.
-- Web code uses the project type scale; avoid raw typography classes when project tokens exist.
-
-## Review guidelines
-
-- Flag P0/P1 issues only unless the PR asks for a broader review.
-- Treat financial miscalculation, balance/currency errors, auth/session regressions, data-loss bugs, broken DB schema updates, and transaction mistakes as high priority.
-- Check backend layer boundaries, repository/service method order, schema/model conventions, and no commits from repositories.
-- Check frontend routing, translations, typography tokens, component ordering, and shared UI reuse.
-- If schema changes were made, verify `apps/api/database/01_create_tables.sql` still represents a clean rebuild from zero.
-- If behavior, setup, or public API changed, verify the relevant README or docs were updated.
-- Treat missing tests as high priority when calculations, persistence, auth, API contracts, or shared UI behavior changed.
+The architecture rules and the review standard (P0/P1 rubric) live in the `agent-workflow` skill (§1 and §7), so Claude and Codex follow the same ones.

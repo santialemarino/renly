@@ -22,17 +22,33 @@ Use **api-\*** skills when touching the backend; **web-\*** when touching the fr
 - **testing** — Where tests live, how to run them, what to cover. Load when writing or running tests.
 - **e2e-testing** — End-to-end browser testing with Playwright in `apps/web`. Load when writing or running E2E tests, or when using `playwright-cli` to verify a feature during implementation.
 
+**Architecture rules that hold everywhere** (the skills above carry the detail):
+
+- Services own the API transaction boundary; repositories never commit.
+- No N+1 queries: add a batch repository method when data is needed in a loop.
+- API comments above function/class definitions end with periods.
+- Web code uses the project type scale; no raw typography classes where a project token exists.
+
 ## 2. Lints and checks before commit
 
-Before committing (or suggesting a commit), ensure lints and checks pass. The repo runs them on every commit via Husky, scoped to what is staged (`scripts/pre-commit.sh`: lint-staged, then each app's check and tests when that app is staged, plus both apps' cross-app tests — see the `testing` skill), so the tree should stay green — but don’t leave broken state or rely on “fix later.” If you’re about to commit, run from repo root:
+Before committing (or suggesting a commit), ensure lints and checks pass. The repo runs them on every commit via Husky (`scripts/pre-commit.sh`), **scoped by the staged paths**:
+
+1. **lint-staged** always (ruff + format on staged Python, ESLint fix + Prettier on staged web/`packages/ui` code, Prettier on staged JSON/Markdown/CSS/YAML).
+2. **`check:api` + `test:api`** when anything under `apps/api/` (or `docs/public/api-reference.md`, which the API suite reads) is staged.
+3. **`check:web` + `test:web`** when anything under `apps/web/` or `packages/`, or `pnpm-lock.yaml` / `pnpm-workspace.yaml` / `turbo.json` / `tsconfig*`, is staged. `test:web` is where the accessibility, translation-parity and route-coverage guards live.
+4. **Nothing more** for docs, `.claude/`, `.agents/`, `.github/`, `*.md` and `LICENSE`; **everything** for any other path (the root `package.json`, root config, `scripts/`, `.husky/`, docker).
+5. **The cross-app tests of the side not fully run** (`pnpm --filter <app> run test:cross-app`) whenever any code is staged, because they read the other app's source.
+
+`PRE_COMMIT_DRY_RUN=1 bash scripts/pre-commit.sh` prints the plan for the current staged set (and then fails, so it can never let a commit through). The `testing` skill has the cross-app tagging. So the tree should stay green — but don’t leave broken state or rely on “fix later.” If you’re about to commit a change the hook will not fully check, or want the whole picture, run from repo root:
 
 - `pnpm lint` (and fix if needed)
 - `pnpm format:check` (or `pnpm format` to fix)
 - `pnpm check:api`
 - `pnpm check:web`
 - `pnpm test:api`
+- `pnpm test:web`
 
-So: no strict obligation to run these manually every time, since pre-commit runs them; the obligation is not to commit code that would fail these checks.
+So: no strict obligation to run these manually every time, since pre-commit runs the ones the staged paths can affect; the obligation is not to commit code that would fail any of them.
 
 ## 3. Exhaustive compliance check before finishing
 
@@ -61,7 +77,7 @@ After implementation and before committing, audit every changed or created file 
 
 - **`__init__.py` / `__all__` / import blocks** are alphabetically ordered.
 - **No dead imports** from deleted files.
-- **Env vars:** every new `process.env.NEXT_PUBLIC_*` read on the web or `os.getenv(...)` read on the API must have a matching entry in `.env.example` (in the right topical position) AND in `.env` (the gitignored local-dev copy). PR body must call them out under an `**Env vars:**` sub-section.
+- **Env vars:** every new `process.env.NEXT_PUBLIC_*` read on the web or `os.getenv(...)` read on the API must have a matching entry in `.env.example` (in the right topical position) AND in `.env` (the gitignored local-dev copy). The PR body names each new var, inline in a Summary sentence (`pr-format`).
 - **Docs and memory** updated per section 4 below.
 
 **A proposed new guard or sweep states its CI and local run time next to its value**, so the cost is decided, not discovered.
@@ -103,7 +119,7 @@ Docs describe **how things work now**, not “what we changed” (no changelog-s
 ### READMEs and DB schema
 
 - **On every change:** If your change affects setup, structure, a specific flow or how to run/check something, update the relevant README (root, `apps/api`, `apps/web`) so it still says how things work. One source of truth; no drift.
-- **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, do BOTH: (1) update `apps/api/database/01_create_tables.sql` to reflect the current state — it must always rebuild the DB from zero correctly, so never add migration-style comments (“added column X”), just keep the CREATE statements current; and (2) add an Alembic migration under `apps/api/migrations/versions/` for the same change so existing databases upgrade without a rebuild. The SQL script is the canonical full schema for fresh builds (`pnpm db:init` applies it and stamps Alembic to head); migrations carry incremental changes for live DBs (`pnpm db:migrate` = `alembic upgrade head`). Generate one with `pnpm --filter api run migrate:make "message"`, review it, then run it. Keep the two in sync in the same change — `ci-api` replays the chain from its baseline and fails when the result's schema differs from the script's. A migration that has to read the database does it inside one SQL statement (a `DO` block), never through `op.get_bind()` in Python, so `alembic upgrade --sql` can still write the offline script.
+- **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, do BOTH: (1) update `apps/api/database/01_create_tables.sql` to reflect the current state — it must always rebuild the DB from zero correctly, so never add migration-style comments (“added column X”), just keep the CREATE statements current; and (2) add an Alembic migration under `apps/api/migrations/versions/` for the same change so existing databases upgrade without a rebuild. The SQL script is the canonical full schema for fresh builds (`pnpm db:init` applies it and stamps Alembic to head); migrations carry incremental changes for live DBs (`pnpm db:migrate` = `alembic upgrade head`). Generate one with `pnpm --filter api run migrate:make "message"`, review it, rename it to the `NNNN_<slug>.py` convention (api-layering → "Schema ↔ migration parity"), then run it. Keep the two in sync in the same change — `ci-api` replays the chain from its baseline and fails when the result's schema differs from the script's. A migration that has to read the database does it inside one SQL statement (a `DO` block), never through `op.get_bind()` in Python, so `alembic upgrade --sql` can still write the offline script.
 - **DB roles** live in `apps/api/database/00_roles.sql`, not in the schema: creating a role or granting a membership needs a superuser, and the production owner is not one. A migration that needs a new role checks for it and stops with a hint naming that file; it never tries to create it. A **new `SECURITY DEFINER` function** must be handed to `renly_policy_definer` (with `SELECT` on exactly what it reads) in both the schema and its migration — otherwise it runs as the table owner, which the FORCEd policies apply to. `apps/api/README.md` → Migrations has the recipe, and `tests/integration/test_rls_force_role_model.py` fails until it is done.
 
 ### Documentation tiers (`docs/`)
@@ -129,9 +145,12 @@ The project has three documentation tiers:
 
 ## 5. What NOT to commit
 
+The same list appears in `CLAUDE.md`, `AGENTS.md` and the `commit` skill; keep the four identical.
+
+- **Never `git add .` or `git add -A`** — stage files individually by name, so stray files are not accidentally included.
 - **Never stage `.claude/plans/`** — agent plans are ephemeral working docs, gitignored.
 - **Never stage `docs/internal/`** — internal docs (architecture, phase specs, costs, decisions) are gitignored.
-- **Never stage temporary markdown files** (e.g. scratch notes, plan drafts, ad-hoc `.md` files) unless the user explicitly asks to commit a specific file by name. When staging, always list files individually — never `git add .` or `git add -A` — so stray files are not accidentally included.
+- **Never stage temporary or scratch `.md` files** (scratch notes, plan drafts, ad-hoc `.md` files) unless the user explicitly asks to commit a specific file by name.
 
 ## 6. Skill mirrors (`.claude/skills/` ↔ `.agents/skills/`)
 
@@ -145,7 +164,19 @@ Skills under `.claude/skills/` and `.agents/skills/` are mirrored — Claude rea
 - **Use agent-agnostic language for things that vary per agent.** "Manage per the agent's local memory rules" works for both Claude and Codex (each interprets it in its own environment). "Update Claude memory files" or "Codex doesn't have memory" would force drift.
 - When in doubt about whether content should mirror, default to **mirror it**. Drift creates a maintenance tax that has rarely been worth it in this repo.
 
-## 7. Other habits
+## 7. Reviewing a pull request
+
+The same standard for every agent that reviews here:
+
+- Flag P0/P1 issues only unless the PR asks for a broader review.
+- Treat financial miscalculation, balance/currency errors, auth/session regressions (including a route on a privileged session it does not need — api-layering → "Which session a route takes"), data-loss bugs, broken DB schema updates, and transaction mistakes as high priority.
+- Check backend layer boundaries, repository/service method order, schema/model conventions, and no commits from repositories.
+- Check frontend routing, translations, typography tokens, component ordering, and shared UI reuse.
+- If schema changes were made, verify `apps/api/database/01_create_tables.sql` still represents a clean rebuild from zero and the migration follows the parity rules.
+- If behavior, setup, or public API changed, verify the relevant README or docs were updated.
+- Treat missing tests as high priority when calculations, persistence, auth, API contracts, or shared UI behavior changed.
+
+## 8. Other habits
 
 - **Scope:** Know which app you’re in (`apps/api` vs `apps/web`). Use the right tooling (e.g. `uv` in API, `pnpm --filter web` for web).
 - **After big refactors:** Run `pnpm check:api` and `pnpm check:web` once to catch import/model/type errors before the user hits pre-commit.

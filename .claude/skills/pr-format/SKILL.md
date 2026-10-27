@@ -25,6 +25,10 @@ Examples:
 
 ## PR body
 
+A PR body is a **summary, not a report**: a reviewer should know in about 30 seconds what changed and
+where to look. The shape is fixed — the H1, the Card line, a short Summary, and nothing else unless a
+rule below adds it.
+
 ```
 # [{TYPE}] NO-TICKET {Detailed Title}
 
@@ -34,23 +38,9 @@ N/A
 
 ## Summary
 
-{One-paragraph overview.}
+{At most three short paragraphs, one idea each.}
 
-{**Bold section headers with file paths** — detailed bullet points per change area.}
-
-{**Translations:** — when i18n keys were added/changed (EN + ES).}
-
-## ⚠️ Migration Required          ← only when DB schema changes exist
-
-{SQL code block with the migration commands.}
-
-## Acceptance Criteria
-
-N/A
-
-## Screenshots & Recordings       ← only when UI changes exist; omit for backend/docs-only PRs
-
-{<img> tags or video URLs.}
+## ⚠️ Migration Required          ← only when the PR changes the DB schema
 ```
 
 ## Section rules
@@ -86,30 +76,41 @@ Always `N/A`. Renly does not use a ticket tracker.
 
 ### Summary
 
-- Lead with a one-paragraph overview of what and why.
-- Group changes under **bold headers** that name the affected area with file paths in backticks. Format: `**Description — (file/path.ext):**` or `**Backend — 3 new endpoints under '/dashboard/' (routers/dashboard.py, ...):**`
-- Be detailed — close to implementation-plan level. Mention component names, file paths, props, patterns.
-- End with cross-cutting sub-sections when applicable:
-  - **`Translations:`** — when i18n keys were added or changed (EN + ES).
-  - **`Env vars:`** — when new environment variables were added or removed (`NEXT_PUBLIC_*` on the web, backend `os.getenv` reads). List each key, its default, and which `.env.example` was updated. Reviewers should not have to grep for new env surface.
-- Do not include a Docs sub-section. Documentation changes are part of the feature — the code summary already conveys what changed.
+- **At most three short paragraphs, one idea per paragraph:** what changed and why first, then the
+  parts a reviewer should look at, naming the files or areas in backticks. Prose, not a bullet list per
+  file.
+- **Cross-cutting surface goes inline, in a sentence:** a new environment variable (its name, its
+  default, and which `.env.example` gained it), new translation keys when the copy is the point, a
+  label the reviewer should know about. Never its own `Env vars:` / `Translations:` sub-section.
+- **Verification is one clause, if it matters** ("verified on a production build at 390 and 1280"),
+  never a section.
 
-**What NOT to include in the summary:**
+**What NOT to include:**
 
-- **Internal docs / meta-documentation changes.** Don't mention updates to skills, `CLAUDE.md`, `AGENTS.md`, `README.md`, memory files, `.claude/`, or `.agents/` contents.
+- **The path taken** — alternatives considered, earlier attempts, review rounds, findings and their
+  fixes. The commits and the diff carry that.
+- **Measurement dumps** — if the reviewer needs one number, put that number in a sentence.
+- **Internal docs / meta-documentation changes** — don't mention updates to skills, `CLAUDE.md`,
+  `AGENTS.md`, memory files, `.claude/` or `.agents/` contents, unless that IS the PR.
 - **External platform changes.** Don't describe actions taken on external platforms as changes "we made."
+- **Sections the shape does not have:** no `## Testing`, no `## Acceptance Criteria`, no
+  `## Open items`, no "why X over Y" section — unless the user asks for one on this PR.
 
 ### Migration Required
 
-Include `## ⚠️ Migration Required` **only** when the PR includes database schema changes. Place it between Summary and Acceptance Criteria. Always include the SQL migration commands in a code block.
+`## ⚠️ Migration Required` is the one section the shape adds, and only when the PR changes the database
+schema (a new migration under `apps/api/migrations/versions/`). It is a **before-merge prerequisite**,
+not a description of the change: name the migration, the command a deployed environment runs
+(`pnpm db:migrate`), and anything that must happen first (a role from `apps/api/database/00_roles.sql`
+created by a superuser, an order relative to a deploy).
 
-### Acceptance criteria
-
-Always `N/A`. Renly does not use formal acceptance criteria from tickets.
+Any OTHER external prerequisite a merger must act on — an env var to set in a deployed environment, a
+conflicting sibling PR — goes in a `## Before merge` section in the same place. Never for anything the
+diff already says.
 
 ### Screenshots & Recordings
 
-**Whether to include this section is governed by the repo's PR asset upload policy.** Check the repo's `CLAUDE.md` / `AGENTS.md` for a "PR asset upload policy" section. Default behavior when no policy is declared: **OFF — omit the section unless the user explicitly asks for assets on the current PR.** Verification of UI changes via `playwright-cli` (see the `e2e-testing` skill) is **always required** regardless of the upload policy — only the "paste the captured assets into the PR body" step is toggled.
+**Omitted by default.** Whether to include this section is governed by the repo's PR asset upload policy. Check the repo's `CLAUDE.md` / `AGENTS.md` for a "PR asset upload policy" section. Default behavior when no policy is declared: **OFF — omit the section unless the user explicitly asks for assets on the current PR.** Verification of UI changes via `playwright-cli` (see the `e2e-testing` skill) is **always required** regardless of the upload policy — only the "paste the captured assets into the PR body" step is toggled.
 
 **When the section is included** (policy opts in, OR the user explicitly asks for assets on this PR):
 
@@ -201,12 +202,12 @@ Apply `api`, `web`, or both depending on which apps the PR touches. These are in
 
 ## Example
 
-**Title:** `Implement iOS Shortcut Integration with Currency Config & Expense Source Tracking`
+**Title:** `Skip Non-Finite yfinance Closes and Auto-Snapshot Prices`
 
 **Body:**
 
-````
-# [FEAT] NO-TICKET iOS Shortcut Integration — Currency Config, Expense Source Tracking & Quick-Add Pipeline
+```
+# [FIX] NO-TICKET Skip Non-Finite yfinance Closes and Auto-Snapshot Prices
 
 ## Card Link
 
@@ -214,33 +215,7 @@ N/A
 
 ## Summary
 
-Adds an iOS Shortcuts integration so expenses can be logged from the phone lock screen. The shortcut calls a new API endpoint that validates currency, resolves the source, and creates the expense.
+Yahoo serves the day still trading as a row with a NaN close. `fetch_yfinance` only checked for `None`, so the NaN reached `asset_prices`, where the price endpoints then fail response validation. The provider now keeps finite closes only.
 
-**Backend — new endpoint and models (`routers/expenses.py`, `services/expense_service.py`):**
-- `POST /expenses/quick-add` accepts amount, currency, description, source.
-- Service resolves currency against user's configured list, falls back to default.
-- ...
-
-**Frontend — settings page (`app/[locale]/(app)/settings/shortcuts/page.tsx`):**
-- New settings sub-page for managing shortcut configurations.
-- ...
-
-**Translations:**
-- `shortcuts` namespace: EN + ES keys for settings page, validation errors, success messages.
-
-## ⚠️ Migration Required
-
-Run after merging:
-
-```sql
-ALTER TABLE expenses ADD COLUMN source TEXT DEFAULT 'manual';
-````
-
-## Acceptance Criteria
-
-N/A
-
-## Screenshots & Recordings
-
-<img src="..." width="1440" height="777" alt="Shortcut settings page" />
+As a second line, `generate_auto_snapshots` skips an investment whose latest price is not finite, with a warning, which covers rows written before this fix. Both are pinned by unit tests.
 ```
