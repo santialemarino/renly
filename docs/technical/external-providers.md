@@ -37,6 +37,14 @@ Only the second advances the chain. Returning `[]` for both, as every provider o
 throttled API indistinguishable from a quiet market — so a chain built on it would walk every provider
 every weekend and still could not report an outage.
 
+**Every price a provider returns is finite.** Yahoo serves the day still trading with a NaN close, and
+`json.loads` (behind `response.json()`) reads the `NaN` and `Infinity` literals, as `Decimal` reads them
+from a string. Each provider drops a non-finite value where it parses one — a float through
+`math.isfinite`, a `Decimal` through `is_finite()` — treating it like a missing price: CoinGecko and
+yfinance skip that point, Finnhub and Coinbase answer `[]`, data912 and CAFCI leave the symbol out of the
+cycle's snapshot, and ArgentinaDatos moves to the next match. A NaN stored as a price fails the price
+endpoints' response validation and freezes into an auto-snapshot's value.
+
 **Registry** (in `asset_price_service.py`) — an ordered chain per category, primary first:
 
 ```python
@@ -156,7 +164,8 @@ The service fetches both in parallel (`asyncio.gather`). Selection: newer source
 
 1. Create the fetch function in the appropriate providers file.
 2. Follow the uniform signature — return the standard result type, and raise `PriceProviderUnavailable`
-   (rather than returning `[]`) for anything that means the provider could not answer.
+   (rather than returning `[]`) for anything that means the provider could not answer. Keep finite
+   prices only.
 3. Add it to the mapping (`_CATEGORY_PROVIDERS` or `EXCHANGE_RATE_PROVIDERS`). For prices that means a
    position in the category's chain; set `supports_history` honestly and give it an `is_configured` if
    it needs a credential.
