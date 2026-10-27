@@ -54,13 +54,13 @@ so login fails in a way that looks exactly like a wrong password.
 
 **DB**
 
-| Command           | Description                                                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm db:init`    | Start Postgres and apply schema (first time)                                                                                      |
-| `pnpm db:fork`    | Fork DB from `DATABASE_URL` into a local container (see [docs/technical/local-db-forking.md](docs/technical/local-db-forking.md)) |
-| `pnpm db:migrate` | Apply pending Alembic migrations to the DB (`alembic upgrade head`)                                                               |
-| `pnpm db:backup`  | Dump the DB to `backups/renly-<ts>.sql.gz` (see [docs/technical/backups.md](docs/technical/backups.md))                           |
-| `pnpm db:restore` | Restore a dump into `$RESTORE_DATABASE_URL` (`pnpm db:restore <file> --force`)                                                    |
+| Command           | Description                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm db:init`    | Start Postgres and apply schema (first time)                                                                                            |
+| `pnpm db:fork`    | Fork DB from `DATABASE_ADMIN_URL` into a local container (see [docs/technical/local-db-forking.md](docs/technical/local-db-forking.md)) |
+| `pnpm db:migrate` | Apply pending Alembic migrations to the DB (`alembic upgrade head`)                                                                     |
+| `pnpm db:backup`  | Dump the DB to `backups/renly-<ts>.sql.gz` (see [docs/technical/backups.md](docs/technical/backups.md))                                 |
+| `pnpm db:restore` | Restore a dump into `$RESTORE_DATABASE_URL` (`pnpm db:restore <file> --force`)                                                          |
 
 **Lint & format**
 

@@ -36,7 +36,7 @@ Each snapshot stores:
 - The **value** in the investment's currency (e.g., $9,125.00)
 - Optionally, the **quantity** of shares or units held (e.g., 50 shares)
 
-There can only be **one snapshot per investment per month**. If you enter a new value for the same month, it replaces the previous one.
+There can only be **one snapshot per investment per date**. If you enter a new value for the same date, it replaces the previous one.
 
 For investments with a ticker, snapshots can be generated **automatically** using market prices. For everything else, you enter the value yourself during monthly data entry.
 
@@ -471,7 +471,7 @@ User
  |-- has many --> Investments
  |                  |
  |                  |-- has many --> Snapshots
- |                  |                (one per month: the value at that point in time)
+ |                  |                (one per date: the value at that point in time)
  |                  |
  |                  |-- has many --> Transactions
  |                  |                (buys, sells, deposits, withdrawals)
@@ -567,7 +567,7 @@ CEDEAR Ratios ...... how many CEDEARs equal one underlying share
 
 **Original currency storage.** All values (snapshots, transactions) are stored in their original currency. If you buy Apple stock, the value is stored in USD. If you have a plazo fijo, it's stored in ARS. Conversion to your display currency happens on the fly using the exchange rates table. This means no information is ever lost, and switching your display currency always gives you accurate numbers.
 
-**One snapshot per month.** Each investment gets exactly one snapshot per date. If you enter a value for March 2026 and later correct it, the old value is replaced. This keeps things simple -- one number per month, just like a spreadsheet column.
+**One snapshot per date.** Each investment gets at most one snapshot per date. If you enter a value for March 31, 2026 and later correct it, the old value is replaced. Most investments carry one a month, at month end, like a spreadsheet column; the grid can also show them weekly.
 
 **Transactions are separate from value.** Your portfolio value (snapshots) and your money movements (transactions) are tracked independently. This separation is what makes accurate return calculations possible.
 

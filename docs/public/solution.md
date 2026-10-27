@@ -29,15 +29,15 @@ Renly does not connect to your bank, wallet, or broker, and never asks for those
 
 ## Product phases
 
-| Phase | Name                | Status  | What it adds                                                                                                                                           |
-| ----- | ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | Investments         | Built   | Track investments, automatic pricing for stocks/CEDEARs/crypto/bonds, multi-currency support, monthly snapshots, dashboard with returns and allocation |
-| 2     | Money Flow          | Built   | Income and expense tracking, financial dashboard, iOS Shortcut for quick expense entry                                                                 |
-| 3     | Structured Expenses | Built   | Subscriptions, installment payments, upcoming-payment alerts, iOS Shortcut v2 for logging subscriptions and installments                               |
-| 4     | Accounts & Debt     | Built   | Cash, bank, and wallet accounts; credit cards and their statements; transfers between your own accounts; reconciliation; net worth across all three    |
-| 5     | Planning            | Planned | Savings goals, future commitments timeline, liquidity alerts                                                                                           |
-| 6     | Utilities           | Planned | Return calculators, goal simulators, scenario comparators                                                                                              |
-| 7     | Automation          | Planned | Assisted expense capture, broker integrations                                                                                                          |
+| Phase | Name                | Status  | What it adds                                                                                                                                                  |
+| ----- | ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Investments         | Built   | Track investments, automatic pricing for stocks/CEDEARs/crypto/bonds, multi-currency support, monthly snapshots, dashboard with returns and allocation        |
+| 2     | Money Flow          | Built   | Income and expense tracking, financial dashboard, iOS Shortcut for quick expense entry                                                                        |
+| 3     | Structured Expenses | Built   | Subscriptions, installment payments, payment obligations, the payments calendar, liquidity alerts, iOS Shortcut v2 for logging subscriptions and installments |
+| 4     | Accounts & Debt     | Built   | Cash, bank, and wallet accounts; credit cards and their statements; transfers between your own accounts; reconciliation; net worth across all three           |
+| 5     | Planning            | Planned | Savings goals                                                                                                                                                 |
+| 6     | Utilities           | Planned | Return calculators, goal simulators, scenario comparators                                                                                                     |
+| 7     | Automation          | Planned | Assisted expense capture, broker integrations                                                                                                                 |
 
 Shared money crosses all of them rather than being a phase of its own: groups, co-owned pots, shared expenses and income, settle-up, and the group's activity trail are **built**, and every screen above understands the difference between what is yours and what is shared.
 

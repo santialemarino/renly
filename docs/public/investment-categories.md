@@ -112,11 +112,11 @@ Anything that doesn't fit the categories above: collectibles, private equity, lo
 
 ## How automatic pricing works
 
-For investments with a ticker (stocks, CEDEARs, crypto, government bonds), Renly:
+For investments with a ticker (stocks, CEDEARs, crypto, government bonds, FCIs), Renly:
 
-1. **Fetches prices daily** from the relevant market data provider (Yahoo Finance or CoinGecko). Each category also has a backup source, used only when the main one cannot be reached, so a single provider having a bad day does not leave your portfolio on yesterday's prices.
+1. **Fetches prices daily** from the relevant market data provider (Yahoo Finance, CoinGecko or CAFCI). Each category also has a backup source, used only when the main one cannot be reached, so a single provider having a bad day does not leave your portfolio on yesterday's prices.
 2. **Generates automatic snapshots** at the end of each month. If you hold 50 shares of AAPL and the price on January 31st is $182.50, the app creates a snapshot with a value of $9,125.00 automatically.
-3. **Lets you look up prices** when entering past data. If you're entering a snapshot for November 2025, the app can fetch the price from that date so you don't have to look it up yourself.
+3. **Lets you look up prices** when entering past data, where the provider keeps a history (stocks, CEDEARs and government bonds through Yahoo Finance, and crypto); an FCI's value is published daily only, so a past cuotaparte has to be entered by hand. If you're entering a snapshot for November 2025, the app can fetch the price from that date so you don't have to look it up yourself.
 
 ## What "manual entry" means
 
