@@ -86,6 +86,17 @@ describe('a rate-limited response reads as itself, in both locales', () => {
     const err = await parseApiError(fakeResponse(RATE_LIMITED, { 'Retry-After': retryAfter }));
     expect(resolveApiError(t as never, err, 'fallback')).toBe(expected);
   });
+
+  // A 429 whose Retry-After was dropped on the way cannot fill the plural: next-intl would render the
+  // raw key `apiErrors.rate_limited`, so the detail stands in.
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)('%s, no Retry-After: the detail, never the raw key', async (locale, messages) => {
+    const t = createTranslator({ locale, messages, namespace: 'apiErrors', onError: () => {} });
+    const err = await parseApiError(fakeResponse(RATE_LIMITED));
+    expect(resolveApiError(t as never, err, 'fallback')).toBe(RATE_LIMITED.detail);
+  });
 });
 
 describe('encodeApiError / decodeApiError', () => {

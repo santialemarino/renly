@@ -34,6 +34,12 @@ export const HEADER_PARAMS = {
   },
 };
 
+// The header param each code's copy cannot format without. A response that lost the header on the way
+// (a proxy, a CORS config that does not expose it) resolves to its `detail` instead of the raw key.
+const REQUIRED_HEADER_PARAM: Partial<Record<string, keyof typeof HEADER_PARAMS>> = {
+  rate_limited: 'retry_after_minutes',
+};
+
 // Parses a failed Response into { code, detail, params }. Never throws — a non-JSON body yields empty.
 // Header-derived params (HEADER_PARAMS) join the body's extras when the response carries them.
 export async function parseApiError(res: Response): Promise<ApiError> {
@@ -88,6 +94,8 @@ export function decodeApiError(encoded: string | undefined | null): ApiError | n
 // Resolves an API error to a user-facing message: the localized `apiErrors.<code>` string when the
 // code is mapped (interpolating the extra params), else the raw English `detail`, else `fallback`.
 export function resolveApiError(t: ApiErrorTranslator, error: ApiError, fallback: string): string {
-  if (error.code && t.has(error.code)) return t(error.code, error.params);
+  const required = error.code ? REQUIRED_HEADER_PARAM[error.code] : undefined;
+  const formattable = required === undefined || error.params[required] !== undefined;
+  if (error.code && formattable && t.has(error.code)) return t(error.code, error.params);
   return error.detail || fallback;
 }
