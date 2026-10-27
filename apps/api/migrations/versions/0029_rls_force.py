@@ -14,15 +14,26 @@ branch_labels = None
 depends_on = None
 
 
-# Every table this migration FORCEs. Derived from the live catalogue rather than listed, so the set is
-# whatever actually has RLS enabled at the moment it runs — a table added between this being written
-# and being applied is covered, and one that is not policied is not touched.
-_ENABLED = """
-    SELECT c.relname
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity AND NOT c.relforcerowsecurity
-    ORDER BY c.relname
+# FORCEs every table that has RLS enabled and is not yet forced. Derived from the live catalogue rather
+# than listed, so the set is whatever actually has RLS enabled at the moment it runs — a table added
+# between this being written and being applied is covered, and one that is not policied is not touched.
+# The loop runs server-side so that `alembic upgrade --sql` can emit it too: an offline run has no
+# connection to read the catalogue through.
+_FORCE_ENABLED = """
+    DO $$
+    DECLARE
+      t TEXT;
+    BEGIN
+      FOR t IN
+        SELECT c.relname
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity AND NOT c.relforcerowsecurity
+        ORDER BY c.relname
+      LOOP
+        EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', t);
+      END LOOP;
+    END $$
 """
 
 
@@ -41,8 +52,6 @@ _ENABLED = """
 # while migrations are per-database: a database built from the script has it, an existing one upgraded
 # through this chain does not. Both spellings guard on existence for exactly that reason.
 def upgrade() -> None:
-    bind = op.get_bind()
-
     op.execute(
         """
         DO $$ BEGIN
@@ -66,8 +75,7 @@ def upgrade() -> None:
     )
     op.execute("GRANT USAGE ON SCHEMA public TO renly_admin")
 
-    for (table,) in bind.exec_driver_sql(_ENABLED).fetchall():
-        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+    op.execute(_FORCE_ENABLED)
 
 
 # Lifts FORCE back off, leaving ENABLE — the two-role shape, where owning a table is enough to bypass

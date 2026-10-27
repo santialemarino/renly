@@ -16,6 +16,29 @@ depends_on = None
 _CONSTRAINT = "account_reconciliations_account_date_key"
 _REDUNDANT_INDEX = "idx_account_reconciliations_account_date"
 
+# Raises, naming every offending pair, when two rows share an (account_id, as_of_date). Written as one
+# server-side block rather than a Python read so that `alembic upgrade --sql` can emit it too: an offline
+# run has no connection to read through, and the check belongs in the script a DBA applies.
+_REFUSE_DUPLICATES = """
+    DO $$
+    DECLARE
+      listed TEXT;
+    BEGIN
+      SELECT string_agg(format('account %s on %s (%s rows)', account_id, as_of_date, n), ', ' ORDER BY account_id, as_of_date)
+      INTO listed
+      FROM (
+        SELECT account_id, as_of_date, count(*) AS n
+        FROM account_reconciliations
+        GROUP BY account_id, as_of_date
+        HAVING count(*) > 1
+      ) duplicates;
+      IF listed IS NOT NULL THEN
+        RAISE EXCEPTION 'account_reconciliations holds rows that share an (account_id, as_of_date) pair, so the uniqueness this revision introduces cannot be applied: %.', listed
+          USING HINT = 'Resolve each pair by hand before upgrading: keep the newest row''s statement_balance, restore the oldest row''s computed_balance, and re-post a single adjustment for the difference between them.';
+      END IF;
+    END $$
+"""
+
 
 # Makes (account_id, as_of_date) unique, which is what turns re-reconciling a date into a replace.
 #
@@ -38,19 +61,7 @@ _REDUNDANT_INDEX = "idx_account_reconciliations_account_date"
 # a btree backwards, so it already serves both the newest-first history read and the max(as_of_date)
 # lookup the old DESC index was created for.
 def upgrade() -> None:
-    duplicates = op.get_bind().exec_driver_sql(
-        "SELECT account_id, as_of_date, count(*) FROM account_reconciliations"
-        " GROUP BY account_id, as_of_date HAVING count(*) > 1 ORDER BY account_id, as_of_date"
-    ).fetchall()
-    if duplicates:
-        listed = ", ".join(f"account {account_id} on {as_of_date} ({count} rows)" for account_id, as_of_date, count in duplicates)
-        raise RuntimeError(
-            "account_reconciliations holds rows that share an (account_id, as_of_date) pair, so the"
-            f" uniqueness this revision introduces cannot be applied: {listed}."
-            " Resolve each pair by hand before upgrading — keep the newest row's statement_balance,"
-            " restore the oldest row's computed_balance, and re-post a single adjustment for the"
-            " difference between them."
-        )
+    op.execute(_REFUSE_DUPLICATES)
 
     op.execute(f"DROP INDEX IF EXISTS {_REDUNDANT_INDEX}")
     op.execute(f"ALTER TABLE account_reconciliations ADD CONSTRAINT {_CONSTRAINT} UNIQUE (account_id, as_of_date)")

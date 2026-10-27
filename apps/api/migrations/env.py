@@ -14,7 +14,28 @@ target_metadata = SQLModel.metadata
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Hands everything this run created to whoever owns `users`; `do_run_migrations` says why. A constant
+# because the offline script (`alembic upgrade --sql`) has to end with the same statement.
+_REASSIGN_TO_TABLE_OWNER = """
+    DO $$
+    DECLARE
+      table_owner TEXT;
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin') AND CURRENT_USER = 'renly_admin' THEN
+        SELECT pg_get_userbyid(relowner) INTO table_owner FROM pg_class WHERE oid = to_regclass('public.users');
+        IF table_owner IS NULL THEN
+          RAISE EXCEPTION 'cannot reassign objects created by renly_admin: public.users does not exist, so the table owner is unknown';
+        END IF;
+        IF table_owner <> 'renly_admin' THEN
+          EXECUTE format('REASSIGN OWNED BY renly_admin TO %I', table_owner);
+        END IF;
+      END IF;
+    END $$
+    """
 
+
+# Writes the upgrade as a SQL script instead of running it. The script carries the same guard and the
+# same ownership handover as an online run, so applying it as renly_admin leaves the same database.
 def run_migrations_offline() -> None:
     context.configure(
         url=settings.admin_database_url,
@@ -23,7 +44,9 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
     )
     with context.begin_transaction():
+        context.execute("SET row_security = off")
         context.run_migrations()
+        context.execute(_REASSIGN_TO_TABLE_OWNER)
 
 
 def do_run_migrations(connection):
@@ -72,24 +95,7 @@ def do_run_migrations(connection):
     #
     # Guarded on the role rather than assumed: a cluster with no `renly_admin` (a developer running as
     # their own superuser) has nothing to reassign and should not fail for it.
-    connection.exec_driver_sql(
-        """
-        DO $$
-        DECLARE
-          table_owner TEXT;
-        BEGIN
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_admin') AND CURRENT_USER = 'renly_admin' THEN
-            SELECT pg_get_userbyid(relowner) INTO table_owner FROM pg_class WHERE oid = to_regclass('public.users');
-            IF table_owner IS NULL THEN
-              RAISE EXCEPTION 'cannot reassign objects created by renly_admin: public.users does not exist, so the table owner is unknown';
-            END IF;
-            IF table_owner <> 'renly_admin' THEN
-              EXECUTE format('REASSIGN OWNED BY renly_admin TO %I', table_owner);
-            END IF;
-          END IF;
-        END $$
-        """
-    )
+    connection.exec_driver_sql(_REASSIGN_TO_TABLE_OWNER)
     connection.commit()
 
 
