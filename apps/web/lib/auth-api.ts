@@ -1,3 +1,5 @@
+import { parseApiError, type ApiError } from '@/lib/i18n/api-errors';
+
 const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
 
 export interface RegisterPayload {
@@ -25,6 +27,21 @@ export class InviteInvalidError extends Error {
     super('invite_invalid');
     this.name = 'InviteInvalidError';
   }
+}
+
+// Thrown when the API rate-limits an auth request (429). Carries the parsed error — its
+// `rate_limited` code and the Retry-After wait — so the form shows the localized "too many attempts,
+// try again in N minutes" rather than reading the refusal as a wrong password or a server error.
+export class RateLimitedError extends Error {
+  constructor(readonly apiError: ApiError) {
+    super('rate_limited');
+    this.name = 'RateLimitedError';
+  }
+}
+
+// Throws RateLimitedError for a rate-limited response; any other response passes through.
+async function throwIfRateLimited(res: Response): Promise<void> {
+  if (res.status === 429) throw new RateLimitedError(await parseApiError(res));
 }
 
 export type SignupMode = 'invite' | 'open';
@@ -79,6 +96,7 @@ export async function registerRequest(data: RegisterPayload): Promise<void> {
       language: data.language,
     }),
   });
+  await throwIfRateLimited(res);
   if (res.status === 403) throw new InviteInvalidError();
   if (res.status === 400) throw new PasswordRejectedError();
   if (!res.ok) throw new Error(await errorDetail(res, 'register_failed'));
@@ -100,7 +118,8 @@ export async function getSignupContext(inviteToken?: string): Promise<SignupCont
 }
 
 // Logs in (AUTH-7). `rememberMe` controls the refresh token's lifetime — a longer, persistent
-// session when checked. Returns the access + refresh tokens, or null for any non-OK status.
+// session when checked. Returns the access + refresh tokens, null for any other non-OK status, and
+// throws RateLimitedError on a 429 so it is not mistaken for wrong credentials.
 export async function loginRequest(
   email: string,
   password: string,
@@ -111,6 +130,7 @@ export async function loginRequest(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, remember_me: rememberMe }),
   });
+  await throwIfRateLimited(res);
   if (!res.ok) return null;
   return res.json() as Promise<TokenResponse>;
 }
@@ -177,6 +197,7 @@ export async function forgotPasswordRequest(email: string): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
+  await throwIfRateLimited(res);
   if (!res.ok) throw new Error(await errorDetail(res, 'forgot_failed'));
 }
 
@@ -187,6 +208,7 @@ export async function resetPasswordRequest(token: string, password: string): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, password }),
   });
+  await throwIfRateLimited(res);
   if (!res.ok) throw new Error(await errorDetail(res, 'reset_failed'));
 }
 
@@ -197,6 +219,7 @@ export async function requestVerificationEmail(email: string): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
+  await throwIfRateLimited(res);
   if (!res.ok) throw new Error(await errorDetail(res, 'verify_request_failed'));
 }
 

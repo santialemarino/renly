@@ -293,6 +293,8 @@ class TestAValidationErrorNeverEchoesTheSubmittedValue:
         response = self._client().post("/auth/login", json={"email": "nobody@example.com", "password": "a" * 200})
 
         body = response.json()
+        # The stable code sits beside the field-error list, so a client can key off it like any refusal.
+        assert body["code"] == "validation_error"
         assert isinstance(body["detail"], list) and body["detail"], "the error list went missing"
         first = body["detail"][0]
         assert first["loc"][-1] == "password"

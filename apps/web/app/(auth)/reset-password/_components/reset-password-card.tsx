@@ -25,7 +25,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { InlineLink } from '@/components/inline-link';
 import { PasswordMeter } from '@/components/password-meter';
 import { ROUTES } from '@/config/routes';
-import { PasswordRejectedError, resetPasswordRequest } from '@/lib/auth-api';
+import { PasswordRejectedError, RateLimitedError, resetPasswordRequest } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import {
   PASSWORD_CONTAINS_LOWERCASE_REGEX,
@@ -34,6 +34,7 @@ import {
   PASSWORD_CONTAINS_UPPERCASE_REGEX,
   PASSWORD_MIN_LENGTH,
 } from '@/lib/constants/form';
+import { resolveApiError } from '@/lib/i18n/api-errors';
 
 const FADE_PROPS = {
   initial: { opacity: 0 },
@@ -51,6 +52,7 @@ interface ResetPasswordCardProps {
 export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
   const t = useTranslations('resetPassword');
   const tCommon = useTranslations('common');
+  const tApiErrors = useTranslations('apiErrors');
   // No token in the link → straight to the error screen; otherwise show the form.
   const [stage, setStage] = useState<Stage>(token ? 'form' : 'error');
 
@@ -82,6 +84,11 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
     } catch (err) {
       if (err instanceof PasswordRejectedError) {
         form.setError('password', { message: t('form.errors.passwordRejected') });
+      } else if (err instanceof RateLimitedError) {
+        // Not a dead link: the token is still good once the wait is over, so stay on the form.
+        form.setError('password', {
+          message: resolveApiError(tApiErrors, err.apiError, tCommon('form.errors.serverError')),
+        });
       } else {
         // Invalid/expired token (or server error) — show the error screen with a way back.
         setStage('error');

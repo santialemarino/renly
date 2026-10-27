@@ -127,9 +127,11 @@ async def integrity_error_handler(_request: Request, exc: IntegrityError):
 # same mistake in a different spelling: it would leak the next field somebody calls `secret`,
 # `passphrase` or `pin`. Nothing needs the value echoed — the caller is the one who sent it — so the
 # loc/msg/type that say WHICH field was wrong and WHY are kept and the value is simply dropped.
+# The body carries the stable `validation_error` code like every other refusal; `detail` stays the
+# field-error list.
 async def validation_error_handler(_request: Request, exc: RequestValidationError):
     errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
-    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors}))
+    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors, "code": "validation_error"}))
 
 
 # Catch-all for any unhandled exception (SEC-8). Logs the trace server-side and returns a
@@ -229,6 +231,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # A browser hides non-safelisted response headers; the web reads Retry-After to say how long a
+        # rate-limited form has to wait.
+        expose_headers=["Retry-After"],
     )
 
     # Liveness probe; exempt from rate limiting so uptime checks never trip the limiter.

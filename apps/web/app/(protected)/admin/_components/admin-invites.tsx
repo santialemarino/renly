@@ -111,7 +111,7 @@ export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInv
         return;
       }
       if (result.status === 'error') {
-        toast.error(t('invite.error'));
+        toast.error(result.message ?? t('invite.error'));
         return;
       }
       // Re-arm replaces the existing row for that email; a fresh invite is prepended.
@@ -127,11 +127,12 @@ export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInv
   async function handleResend(invite: Invite) {
     setActingId(invite.id);
     try {
-      const updated = await resendInvite(invite.id);
-      if (!updated) {
-        toast.error(t('actions.resendError'));
+      const result = await resendInvite(invite.id);
+      if (result.status === 'error') {
+        toast.error(result.message ?? t('actions.resendError'));
         return;
       }
+      const updated = result.invite;
       setInvites((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
       startCooldown(updated.id);
       toast.success(t('actions.resendSuccess', { email: updated.email }));

@@ -1,9 +1,10 @@
-import type { NextAuthConfig, Session, User } from 'next-auth';
+import { CredentialsSignin, type NextAuthConfig, type Session, type User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import Credentials from 'next-auth/providers/credentials';
 
 import { AUTH_ROUTES, LOGIN_ROUTE, PROTECTED_ROUTES, PUBLIC_ROUTES } from '@/config/routes';
-import { loginRequest, meRequest, refreshRequest } from '@/lib/auth-api';
+import { loginRequest, meRequest, RateLimitedError, refreshRequest } from '@/lib/auth-api';
+import { encodeApiError, type ApiError } from '@/lib/i18n/api-errors';
 
 // Renew the access token slightly before it expires so a request never races a just-expired token.
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
@@ -49,6 +50,18 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
   };
 }
 
+/*
+ * A sign-in the API refused for a reason the form must show as itself (a rate limit), not as wrong
+ * credentials. Auth.js only forwards a `CredentialsSignin`'s `code` to the browser, so the parsed API
+ * error travels packed into it; the login form unpacks it with `decodeApiError`.
+ */
+class ApiErrorSignin extends CredentialsSignin {
+  constructor(apiError: ApiError) {
+    super();
+    this.code = encodeApiError(apiError);
+  }
+}
+
 export const authConfig: NextAuthConfig = {
   pages: {
     signIn: LOGIN_ROUTE,
@@ -68,7 +81,13 @@ export const authConfig: NextAuthConfig = {
         // signIn serializes credentials, so the boolean arrives as the string 'true'.
         const rememberMe = credentials?.rememberMe === 'true' || credentials?.rememberMe === true;
 
-        const tokens = await loginRequest(email, password, rememberMe);
+        let tokens;
+        try {
+          tokens = await loginRequest(email, password, rememberMe);
+        } catch (error) {
+          if (error instanceof RateLimitedError) throw new ApiErrorSignin(error.apiError);
+          throw error;
+        }
         if (!tokens) return null;
 
         const me = await meRequest(tokens.access_token);

@@ -22,6 +22,9 @@ export default defineConfig({
           name: 'node',
           environment: 'node',
           include: ['tests/unit/**/*.test.ts'],
+          // next-auth's ESM imports `next/server` without an extension, which Node's resolver refuses;
+          // bundling it through Vite resolves it (the login rate-limit test imports the auth config).
+          server: { deps: { inline: ['next-auth'] } },
         },
       },
       {

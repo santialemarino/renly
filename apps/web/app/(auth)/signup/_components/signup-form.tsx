@@ -18,7 +18,12 @@ import {
   FormMessage,
 } from '@/components/form';
 import { PasswordMeter } from '@/components/password-meter';
-import { InviteInvalidError, PasswordRejectedError, registerRequest } from '@/lib/auth-api';
+import {
+  InviteInvalidError,
+  PasswordRejectedError,
+  RateLimitedError,
+  registerRequest,
+} from '@/lib/auth-api';
 import {
   PASSWORD_CONTAINS_LOWERCASE_REGEX,
   PASSWORD_CONTAINS_NUMBER_REGEX,
@@ -26,6 +31,7 @@ import {
   PASSWORD_CONTAINS_UPPERCASE_REGEX,
   PASSWORD_MIN_LENGTH,
 } from '@/lib/constants/form';
+import { resolveApiError } from '@/lib/i18n/api-errors';
 
 interface SignupFormProps {
   // Invite-only mode (valid link): the email is locked to the invited address and the token is sent
@@ -45,6 +51,7 @@ export function SignupForm({
   const locale = useLocale();
   const t = useTranslations('signup');
   const tCommon = useTranslations('common');
+  const tApiErrors = useTranslations('apiErrors');
 
   const form = useForm<SignupFormData>({
     defaultValues: { name: '', email: lockedEmail ?? '', password: '', confirmPassword: '' },
@@ -86,6 +93,10 @@ export function SignupForm({
         form.setError('password', { message: t('form.errors.passwordRejected') });
       } else if (err instanceof InviteInvalidError) {
         form.setError('root', { message: t('form.errors.inviteInvalid') });
+      } else if (err instanceof RateLimitedError) {
+        form.setError('root', {
+          message: resolveApiError(tApiErrors, err.apiError, tCommon('form.errors.serverError')),
+        });
       } else {
         form.setError('root', { message: tCommon('form.errors.serverError') });
       }

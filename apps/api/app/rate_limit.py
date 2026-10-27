@@ -74,10 +74,11 @@ limiter = Limiter(
 )
 
 
-# Returns a generic 429 (no internal detail leaked) and injects Retry-After / X-RateLimit headers.
+# Returns a generic 429 (no internal detail leaked) with the stable `rate_limited` code, and injects
+# Retry-After / X-RateLimit headers; a client reads how long to wait from Retry-After.
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:
     response = JSONResponse(
         status_code=429,
-        content={"detail": "Too many requests. Please slow down and try again later."},
+        content={"detail": "Too many requests. Please slow down and try again later.", "code": "rate_limited"},
     )
     return request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
