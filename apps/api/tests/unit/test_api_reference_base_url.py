@@ -103,6 +103,29 @@ class TestTheDocumentedEndpointsAreWhereTheApiServesThem:
         )
 
 
+# Routes the app serves that the endpoint table deliberately leaves out: FastAPI's own interactive docs
+# and schema, and the liveness probe. Nothing else may be undocumented — an endpoint described only in
+# prose has no row for an integrator (or this guard) to find.
+def _is_undocumented_by_design(path: str) -> bool:
+    return path in {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"} or path == "/health" or path.startswith("/health/")
+
+
+class TestEveryServedEndpointHasARow:
+    def test_every_served_endpoint_is_in_the_table(self):
+        prefix = _documented_prefix()
+        root = app.root_path.rstrip("/")
+        documented = {(method, _shape(f"{prefix}{path}")) for method, path in _documented_routes()}
+        missing = sorted(
+            (method, path)
+            for method, path in _served_routes()
+            if (method, path) not in documented and not _is_undocumented_by_design(path.removeprefix(root))
+        )
+        assert missing == [], (
+            f"{len(missing)} served endpoints have no row in {_DOC.name}'s endpoint tables — add one "
+            f"(a prose mention is not enough). First few: {missing[:5]}"
+        )
+
+
 class TestTheBaseUrlLineIsReadStrictly:
     def test_a_backticked_path_is_the_prefix(self):
         assert _parse_prefix("Base URL: `/api/` — every path below is relative to it.") == "/api"
