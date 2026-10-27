@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { MIN_INTERNAL_API_SECRET_LENGTH } from '@/lib/internal-api-secret';
+
 /*
  * The web server names the visitor in one header and proves it in another, and the API reads both by
  * name. A rename on either side alone would leave every server-side call keyed by the web server
@@ -26,4 +28,13 @@ describe('client-forwarding header names', () => {
       expect(web).toBe(api);
     });
   }
+});
+
+describe('internal secret length', () => {
+  it('the web warns below the same minimum the API enforces', () => {
+    const apiConfig = readFileSync(join(WEB, '..', 'api', 'app', 'config.py'), 'utf8');
+    const api = constant(apiConfig, /^MIN_INTERNAL_API_SECRET_LENGTH = (\d+)$/m);
+    expect(api).toBeTruthy();
+    expect(MIN_INTERNAL_API_SECRET_LENGTH).toBe(Number(api));
+  });
 });
