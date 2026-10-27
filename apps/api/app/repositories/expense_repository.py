@@ -363,17 +363,6 @@ async def delete(session: AsyncSession, entry: ExpenseEntry) -> None:
     await session.delete(entry)
 
 
-# Count expenses linked to a specific credit card.
-async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_id: int) -> int:
-    result = await session.execute(
-        select(func.count()).where(
-            ExpenseEntry.credit_card_id == credit_card_id,
-            ExpenseEntry.user_id == user_id,
-        )
-    )
-    return int(result.scalar_one())
-
-
 # Count expenses grouped by credit card id. Returns {card_id: count}.
 async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int], user_id: int) -> dict[int, int]:
     if not credit_card_ids:
@@ -847,7 +836,6 @@ async def linked_account_ids(session: AsyncSession, account_ids: list[int], user
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
     bulk_create = staticmethod(bulk_create)
-    count_by_credit_card = staticmethod(count_by_credit_card)
     count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
     delete = staticmethod(delete)

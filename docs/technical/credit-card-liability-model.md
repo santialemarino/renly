@@ -69,17 +69,17 @@ A settlement of $30,000 just reduces the total balance by $30,000 -- it doesn't 
 
 ## Card fields
 
-| Field                | Description                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`               | User-chosen label (e.g., "Visa BBVA", "Amex Platinum").                                                                                     |
-| `closing_day`        | Day of month (1-31) when the billing period ends. Drives statement periods, reconciliation and the Payments Calendar.                       |
-| `due_day`            | Day of month (1-31) when payment is due. Dates the Payments Calendar's `card_due` events.                                                   |
-| `currency`           | The card's primary (statement) currency (ISO 4217). Always shown as a bucket; charges in other currencies open further buckets.             |
-| `is_active`          | Whether the card is in use (archive). Set on update; a new card always starts active.                                                       |
-| `monthly_payment`    | Optional typical monthly payment, for revolving-debt users; counts as a fixed commitment on the Liquidity card. Null = pay-in-full.         |
-| `default_account_id` | Optional account the card is normally paid from (_débito automático_), in any currency; pre-fills a settlement's funding account.           |
-| `balances`           | Computed: one `{currency, balance}` per bucket.                                                                                             |
-| `has_expenses`       | Computed: whether the caller's own expenses link to the card (see [Archive and delete](#archive-and-delete) for what else blocks a delete). |
+| Field                | Description                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `name`               | User-chosen label (e.g., "Visa BBVA", "Amex Platinum").                                                                             |
+| `closing_day`        | Day of month (1-31) when the billing period ends. Drives statement periods, reconciliation and the Payments Calendar.               |
+| `due_day`            | Day of month (1-31) when payment is due. Dates the Payments Calendar's `card_due` events.                                           |
+| `currency`           | The card's primary (statement) currency (ISO 4217). Always shown as a bucket; charges in other currencies open further buckets.     |
+| `is_active`          | Whether the card is in use (archive). Set on update; a new card always starts active.                                               |
+| `monthly_payment`    | Optional typical monthly payment, for revolving-debt users; counts as a fixed commitment on the Liquidity card. Null = pay-in-full. |
+| `default_account_id` | Optional account the card is normally paid from (_débito automático_), in any currency; pre-fills a settlement's funding account.   |
+| `balances`           | Computed: one `{currency, balance}` per bucket.                                                                                     |
+| `has_expenses`       | Computed: whether anything blocks deleting the card — the five kinds listed under [Archive and delete](#archive-and-delete).        |
 
 ## Settlement fields
 
@@ -111,7 +111,7 @@ Cards can be **archived** (set `is_active = false`) to hide them from the expens
 
 **Archive is a UI filter, not an accounting event.** An archived card's outstanding balance stays a liability in every aggregation — net worth, the finance overview `credit_card_balance`, dashboard composition, the net-worth evolution series, and Payments Calendar `card_due` events all include archived cards. Archiving only hides the card from pickers and list pages. (The single exception is the liquidity indicator, which measures forward-looking monthly commitments from _active_ entities — an archived card's `monthly_payment` is no longer a commitment.)
 
-Cards can only be **deleted** when nothing links to them: expenses, a group's shared expenses, subscriptions, installment plans or payment obligations. The refusal (409 Conflict, `HasLinkedExpensesError`) names every kind that blocks it — shared expenses separately, because the fix is different: the user has to go to the group, not to their own list. Settlements cascade on delete. The `has_expenses` field on the response reports only the first of the five (the caller's own expenses), so a card with `has_expenses = false` can still be refused.
+Cards can only be **deleted** when nothing links to them: expenses, a group's shared expenses, subscriptions, installment plans or payment obligations. The refusal (409 Conflict, `HasLinkedExpensesError`) names every kind that blocks it — shared expenses separately, because the fix is different: the user has to go to the group, not to their own list. Settlements cascade on delete. The `has_expenses` field on the response is derived from the same five reads the delete makes (`card_delete_blockers` in `credit_card_service.py`), so it is true exactly when a delete would be refused; the credit cards table reads it to offer Archive instead of Delete.
 
 ## Statement-period scoping (running-balance snapshots)
 

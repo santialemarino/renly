@@ -175,10 +175,25 @@ async def get_card_bucket_series(
     return compute_card_bucket_series(expense_monthly, settlement_monthly)
 
 
-# Returns {card_id: has-at-least-one-linked-expense} for the given cards in one batch query.
+# Returns {card_id: [what still names it]} — the kinds of row that block deleting each card, in the
+# order the refusal names them, one batch query per kind. The single source for both the delete guard
+# and the `has_expenses` flag, so the flag can never offer a delete the guard then refuses.
+async def card_delete_blockers(session: AsyncSession, card_ids: list[int], user_id: int) -> dict[int, list[str]]:
+    counts = (
+        ("expenses", await expense_repository.count_by_credit_card_ids(session, card_ids, user_id)),
+        ("shared expenses", await shared_expense_repository.count_by_credit_card_ids(session, card_ids)),
+        ("subscriptions", await subscription_repository.count_by_credit_card_ids(session, card_ids, user_id)),
+        ("installment plans", await installment_repository.count_by_credit_card_ids(session, card_ids, user_id)),
+        ("payment obligations", await payment_obligation_repository.count_by_credit_card_ids(session, card_ids, user_id)),
+    )
+    return {card_id: [noun for noun, by_card in counts if by_card.get(card_id, 0) > 0] for card_id in card_ids}
+
+
+# Returns {card_id: whether anything blocks deleting it} — the `has_expenses` flag a client reads to
+# offer Archive instead of Delete.
 async def cards_have_expenses(session: AsyncSession, card_ids: list[int], user_id: int) -> dict[int, bool]:
-    counts = await expense_repository.count_by_credit_card_ids(session, card_ids, user_id)
-    return {card_id: counts.get(card_id, 0) > 0 for card_id in card_ids}
+    blockers = await card_delete_blockers(session, card_ids, user_id)
+    return {card_id: bool(linked) for card_id, linked in blockers.items()}
 
 
 # Create a new credit card. A default funding account must be owned but may name ANY currency: a
@@ -239,14 +254,7 @@ async def update_card(
 # naming the blocking entity kinds so the user knows what to detach or archive first.
 async def delete_card(session: AsyncSession, card_id: int, user: User) -> None:
     card = await get_card(session, card_id, user)
-    references = (
-        ("expenses", await expense_repository.count_by_credit_card(session, card_id, user.id)),
-        ("shared expenses", await shared_expense_repository.count_by_credit_card(session, card_id)),
-        ("subscriptions", await subscription_repository.count_by_credit_card(session, card_id, user.id)),
-        ("installment plans", await installment_repository.count_by_credit_card(session, card_id, user.id)),
-        ("payment obligations", await payment_obligation_repository.count_by_credit_card(session, card_id, user.id)),
-    )
-    linked = [noun for noun, count in references if count > 0]
+    linked = (await card_delete_blockers(session, [card_id], user.id))[card_id]
     if linked:
         raise HasLinkedExpensesError(f"Cannot delete a credit card that has linked {', '.join(linked)}. Archive it instead.")
     await credit_card_repository.delete(session, card)

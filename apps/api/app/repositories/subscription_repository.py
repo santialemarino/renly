@@ -85,15 +85,19 @@ async def delete(session: AsyncSession, subscription: Subscription) -> None:
     await session.delete(subscription)
 
 
-# Count subscriptions linked to a specific credit card.
-async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_id: int) -> int:
+# Count subscriptions linked to each credit card. Returns {card_id: count}.
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int], user_id: int) -> dict[int, int]:
+    if not credit_card_ids:
+        return {}
     result = await session.execute(
-        select(func.count()).where(
-            Subscription.credit_card_id == credit_card_id,
+        select(Subscription.credit_card_id, func.count())
+        .where(
+            Subscription.credit_card_id.in_(credit_card_ids),
             Subscription.user_id == user_id,
         )
+        .group_by(Subscription.credit_card_id)
     )
-    return int(result.scalar_one())
+    return {row[0]: int(row[1]) for row in result.all()}
 
 
 # Counts the subscriptions naming this account as their default funding account. Backs the currency lock:
@@ -116,7 +120,7 @@ class SubscriptionRepository:
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
-    count_by_credit_card = staticmethod(count_by_credit_card)
+    count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     count_by_default_account = staticmethod(count_by_default_account)
 
 
