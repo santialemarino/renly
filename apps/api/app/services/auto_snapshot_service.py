@@ -74,6 +74,11 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
                 inv.ticker,
             )
             continue
+        if not price.price.is_finite():
+            # Postgres numeric accepts NaN, so a non-finite price can sit in asset_prices; written into
+            # a snapshot it would become a permanent NaN in the user's history — skip instead.
+            logger.warning("Non-finite price %s for %s — skipping auto-snapshot.", price.price, inv.ticker)
+            continue
         value = quantity * price.price
 
         snapshots.append(
