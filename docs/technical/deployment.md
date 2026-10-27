@@ -49,21 +49,22 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 
 **API:**
 
-| Variable              | Notes                                                                                                                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`        | The **restricted `renly_app` role** (NOBYPASSRLS, non-owner) — request connections are subject to RLS.                                             |
-| `DATABASE_ADMIN_URL`  | The **`renly_admin` role** (BYPASSRLS, not a superuser, a member of the owner) — migrations, the scheduler, and pre-auth lookups. Never the owner. |
-| `JWT_SECRET`          | Must equal the web app's `NEXTAUTH_SECRET`; min 32 chars.                                                                                          |
-| `ENVIRONMENT`         | `production` disables `/docs` and tracebacks. **Required** — the API refuses to start without it.                                                  |
-| `CORS_ORIGINS`        | Comma-separated allowed origins (the production web URL).                                                                                          |
-| `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                            |
-| `WEB_BASE_URL`        | The production web URL (no trailing slash). Every account-email link (verification, password reset, invites) is built from it.                     |
-| `SIGNUP_MODE`         | `invite` (default) — registering needs an admin invite — or `open`.                                                                                |
-| `EMAIL_PROVIDER`      | `resend` in production. The default, `console`, only logs each message, so nobody receives a verification link and nobody can finish signing up.   |
-| `EMAIL_API_KEY`       | The Resend API key. Required when `EMAIL_PROVIDER=resend` — the API refuses to start without it.                                                   |
-| `EMAIL_FROM`          | The sender, e.g. `Renly <noreply@yourdomain.com>` — a sender verified with Resend.                                                                 |
-| `VAPID_PRIVATE_KEY`   | Optional; enables web push (empty = this deployment sends none). `VAPID_SUBJECT` optionally names its contact.                                     |
-| `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                              |
+| Variable              | Notes                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`        | The **restricted `renly_app` role** (NOBYPASSRLS, non-owner) — request connections are subject to RLS.                                                                                     |
+| `DATABASE_ADMIN_URL`  | The **`renly_admin` role** (BYPASSRLS, not a superuser, a member of the owner) — migrations, the scheduler, and pre-auth lookups. Never the owner.                                         |
+| `JWT_SECRET`          | Must equal the web app's `NEXTAUTH_SECRET`; min 32 chars.                                                                                                                                  |
+| `ENVIRONMENT`         | `production` disables `/docs` and tracebacks. **Required** — the API refuses to start without it.                                                                                          |
+| `CORS_ORIGINS`        | Comma-separated allowed origins (the production web URL).                                                                                                                                  |
+| `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                                                                    |
+| `INTERNAL_API_SECRET` | Must equal the web app's `INTERNAL_API_SECRET`; min 32 chars. Lets the web server's own calls be rate-limited per visitor — see [Client IPs and rate limits](#client-ips-and-rate-limits). |
+| `WEB_BASE_URL`        | The production web URL (no trailing slash). Every account-email link (verification, password reset, invites) is built from it.                                                             |
+| `SIGNUP_MODE`         | `invite` (default) — registering needs an admin invite — or `open`.                                                                                                                        |
+| `EMAIL_PROVIDER`      | `resend` in production. The default, `console`, only logs each message, so nobody receives a verification link and nobody can finish signing up.                                           |
+| `EMAIL_API_KEY`       | The Resend API key. Required when `EMAIL_PROVIDER=resend` — the API refuses to start without it.                                                                                           |
+| `EMAIL_FROM`          | The sender, e.g. `Renly <noreply@yourdomain.com>` — a sender verified with Resend.                                                                                                         |
+| `VAPID_PRIVATE_KEY`   | Optional; enables web push (empty = this deployment sends none). `VAPID_SUBJECT` optionally names its contact.                                                                             |
+| `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                                                                      |
 
 With `SENTRY_DSN` set, add a Sentry alert rule at deploy on events whose message starts with `SCHEDULED JOB FAILED` (the recommended default): a failed background job is reported there and in the logs, nowhere else ([scheduler](scheduler.md#error-handling)).
 
@@ -73,9 +74,48 @@ With `SENTRY_DSN` set, add a Sentry alert rule at deploy on events whose message
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                                                                                                                                |
 | `NEXTAUTH_URL`                                        | The production web URL.                                                                                                                                                                                                           |
+| `INTERNAL_API_SECRET`                                 | Must equal the API's `INTERNAL_API_SECRET`. Runtime, server-only — never a build arg, never `NEXT_PUBLIC_`.                                                                                                                       |
+| `WEB_TRUSTED_PROXY_COUNT`                             | Hop count of proxies in front of the web server — see [Client IPs and rate limits](#client-ips-and-rate-limits).                                                                                                                  |
 | `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                                                                                                                                |
 | `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime.                                                                                                  |
 | `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Read by `next build` to upload source maps, and without the token it neither uploads nor needs them. `docker/web.Dockerfile` declares none of the three, so the image build never uploads: Sentry receives minified stack traces. |
+
+---
+
+## Client IPs and rate limits
+
+The API rate-limits by user id when a request carries a valid bearer token, and by client IP
+otherwise (login, registration, the password and email flows, and token refresh all arrive without
+one). Two paths reach it:
+
+- **Browser → API** — the signup, forgot-password, reset and verify forms call the API directly. The
+  API reads the client from `X-Forwarded-For` under its own `TRUSTED_PROXY_COUNT`.
+- **Browser → web server → API** — sign-in (Auth.js), token refresh and the signup-context read are
+  made BY the web server, so the API's peer is the web server. Without forwarding, every visitor's
+  login shares one bucket (5 a minute for the whole site). The web server reads the visitor from its
+  own `X-Forwarded-For` under `WEB_TRUSTED_PROXY_COUNT` and sends it in `X-Renly-Client-IP` with
+  `INTERNAL_API_SECRET` in `X-Renly-Internal-Secret`; the API honours that header only when the
+  secret matches.
+
+To set it up, generate one secret (`openssl rand -hex 32`, at least 32 characters), put the SAME
+value in `INTERNAL_API_SECRET` on both apps, and set each hop count to the number of proxies in front
+of THAT app. Both counts read `X-Forwarded-For` from the right, so a client can only add entries the
+count skips; a count higher than the real number of proxies lets a client choose its own key.
+
+| Topology                                                             | API `TRUSTED_PROXY_COUNT` | Web `WEB_TRUSTED_PROXY_COUNT` |
+| -------------------------------------------------------------------- | ------------------------- | ----------------------------- |
+| Both apps reached directly (local dev)                               | `0`                       | `0` — nothing is forwarded    |
+| One load balancer / platform router in front of each app             | `1`                       | `1`                           |
+| A CDN in front of the platform router, for each app                  | `2`                       | `2`                           |
+| Web behind a router, API reached directly by the browser and the web | `0`                       | `1`                           |
+
+The web server's own call to the API does not pass through the web's proxies; when it goes back out
+through the API's public router, that router adds the web server's address, which the forwarded header
+supersedes. With `WEB_TRUSTED_PROXY_COUNT=0` the web forwards nothing: Next fills `X-Forwarded-For` only
+when a request arrives without one, so a directly reached web server cannot tell its peer from a value
+the client sent. With `INTERNAL_API_SECRET` unset on either side, nothing changes: the server-side calls
+are limited by the web server's address, as before. The two forwarding headers are scrubbed from the
+API's Sentry events.
 
 ---
 
