@@ -204,7 +204,7 @@ pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front
 ## CI
 
 `ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app, on the
-versions the images run (Python from `uv.lock` with `uv sync --locked`, Node from `.nvmrc`). `ci.web.yml`
+versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
 also checks Prettier formatting over the whole tree and lints and type-checks `packages/ui`. `ci.api.yml`
 also replays the migration chain from its baseline — online, and as the script `alembic upgrade --sql`
 writes — and fails when either database's schema differs from the one `01_create_tables.sql` builds.
