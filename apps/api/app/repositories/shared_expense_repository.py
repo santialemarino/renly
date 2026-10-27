@@ -245,11 +245,18 @@ async def sum_by_credit_card_ids_monthly(session: AsyncSession, card_ids: list[i
     return [(row[0], int(row[1]), int(row[2]), row[3], row[4]) for row in result.all()]
 
 
-# Counts the shared expenses charged to one card, for the card-delete guard. No user filter: RLS
-# already limits the rows to groups the caller is in, and a card only ever carries its owner's charges.
-async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
-    result = await session.execute(select(func.count()).where(SharedExpense.credit_card_id == credit_card_id))
-    return int(result.scalar_one())
+# Counts the shared expenses charged to each card, for the card-delete guard. Returns {card_id: count}.
+# No user filter: RLS already limits the rows to groups the caller is in, and a card only ever carries
+# its owner's charges.
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
+    if not credit_card_ids:
+        return {}
+    result = await session.execute(
+        select(SharedExpense.credit_card_id, func.count())
+        .where(SharedExpense.credit_card_id.in_(credit_card_ids))
+        .group_by(SharedExpense.credit_card_id)
+    )
+    return {row[0]: int(row[1]) for row in result.all()}
 
 
 # Which of the given accounts any shared expense draws from. Feeds the currency lock, exactly as the
@@ -264,7 +271,7 @@ async def linked_account_ids(session: AsyncSession, account_ids: list[int]) -> s
 
 # Namespace to call repository functions (e.g. shared_expense_repository.list_by_group).
 class SharedExpenseRepository:
-    count_by_credit_card = staticmethod(count_by_credit_card)
+    count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
     create_splits = staticmethod(create_splits)
     delete = staticmethod(delete)

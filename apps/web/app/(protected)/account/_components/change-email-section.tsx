@@ -31,7 +31,7 @@ export function ChangeEmailSection({ currentEmail }: ChangeEmailSectionProps) {
       return;
     }
     if (result.error) {
-      toast.error(tCommon('form.errors.serverError'));
+      toast.error(result.message ?? tCommon('form.errors.serverError'));
       return;
     }
     // Uniform: a confirmation link is sent to the new address (or a notice if it's already taken).

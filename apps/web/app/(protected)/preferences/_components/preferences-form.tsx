@@ -27,7 +27,7 @@ import {
   FALLBACK_PRIMARY_CURRENCY,
   FALLBACK_SECONDARY_CURRENCY,
 } from '@/lib/constants/currency';
-import { ENV_PERIOD_PRESETS, ENV_PRESET_CODES } from '@/lib/constants/period-presets';
+import { DEFAULT_PERIOD_PRESETS, DEFAULT_PRESET_CODES } from '@/lib/constants/period-presets';
 import { localizePreset } from '@/lib/utils/period-presets';
 
 const ENV_PREFERRED = ENV_PREFERRED_CURRENCIES.join(', ');
@@ -306,7 +306,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
                       <Input
                         {...field}
                         surface
-                        placeholder={localizePreset(ENV_PRESET_CODES[i]?.code, yearSuffix)}
+                        placeholder={localizePreset(DEFAULT_PRESET_CODES[i]?.code, yearSuffix)}
                         // Four slots under one label: each is named by it plus its position.
                         aria-label={`${t('form.periodPresets.label')} ${i + 1}`}
                         aria-invalid={!!fieldState.error}
@@ -329,9 +329,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
             )}
             <InfoHint>{t('form.periodPresets.format')}</InfoHint>
             <InfoHint>
-              {ENV_PERIOD_PRESETS
-                ? t('form.periodPresets.emptyDefaultWithValues', { defaults: ENV_PERIOD_PRESETS })
-                : t('form.periodPresets.emptyDefault')}
+              {t('form.periodPresets.emptyDefaultWithValues', { defaults: DEFAULT_PERIOD_PRESETS })}
             </InfoHint>
             <InfoHint>{t('form.periodPresets.partialWarning')}</InfoHint>
           </div>

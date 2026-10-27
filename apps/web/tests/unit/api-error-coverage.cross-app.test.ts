@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { createTranslator } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 
-import { resolveApiError } from '@/lib/i18n/api-errors';
+import { HEADER_PARAMS, resolveApiError } from '@/lib/i18n/api-errors';
 import en from '../../translations/en.json';
 import es from '../../translations/es.json';
 
@@ -41,6 +41,18 @@ const PASSTHROUGH: Record<string, string> = {
   'main.py: code': 'the HTTPException handler forwards CodedHTTPException.code — source 2.',
   'http_errors.py: self.code = code':
     'CodedHTTPException stores the keyword-only `code=` its callers pass — source 2.',
+};
+
+/*
+ * Codes whose message also interpolates a param `parseApiError` reads from a response HEADER rather
+ * than the body (HEADER_PARAMS), with the API file that sends that header. The scan cannot see a
+ * header, so without this a message naming one would fail here for a param it does receive at runtime.
+ */
+const HEADER_PARAMS_BY_CODE: Record<
+  string,
+  { params: (keyof typeof HEADER_PARAMS)[]; file: string }
+> = {
+  rate_limited: { params: ['retry_after_minutes'], file: 'rate_limit.py' },
 };
 
 // Codes the scan finds that no response can carry.
@@ -157,9 +169,10 @@ describe('API error codes are localized', () => {
 
   it('derives the code list from every source', () => {
     // A guard on the guard: a moved directory or a narrowed scan would otherwise make every case
-    // below vacuous. 95 domain-error codes plus 8 emitted outside errors.py as of U23.
-    expect(codes.length).toBeGreaterThanOrEqual(103);
-    expect(codes.length - fromDomainErrors.length).toBeGreaterThanOrEqual(8);
+    // below vacuous. 95 domain-error codes plus 10 emitted outside errors.py as of U34b (the 422 and
+    // 429 handlers' codes joined then).
+    expect(codes.length).toBeGreaterThanOrEqual(105);
+    expect(codes.length - fromDomainErrors.length).toBeGreaterThanOrEqual(10);
     // And that the payload half is really being read, not defaulting to empty for everything.
     expect(
       Object.values(scanned.payloads).filter((variants) => variants.some((keys) => keys.length > 0))
@@ -174,6 +187,19 @@ describe('API error codes are localized', () => {
     expect([...scanned.passthroughsSeen].sort()).toEqual(Object.keys(PASSTHROUGH).sort());
   });
 
+  it('keeps every HEADER_PARAMS_BY_CODE entry true', () => {
+    for (const [code, { params, file }] of Object.entries(HEADER_PARAMS_BY_CODE)) {
+      // The code is emitted from the file that configures the header…
+      expect(scanned.files[code], `${code} is not emitted`).toContain(file);
+      // …which really sends `Retry-After` on it (slowapi, as whole seconds),…
+      expect(readFileSync(join(API_APP, file), 'utf8')).toMatch(
+        /headers_enabled=True[\s\S]*retry_after="delta-seconds"/,
+      );
+      // …and the param is one parseApiError actually reads.
+      for (const param of params) expect(HEADER_PARAMS).toHaveProperty(param);
+    }
+  });
+
   it('keeps every UNREACHABLE reason true', () => {
     for (const code of Object.keys(UNREACHABLE)) expect(scanned.payloads).toHaveProperty(code);
     expect(scanned.constructsBase).toEqual([]);
@@ -181,7 +207,8 @@ describe('API error codes are localized', () => {
 
   it.each(codes)('%s resolves in both locales', (code) => {
     const detail = `ENGLISH FALLBACK for ${code}`;
-    for (const payload of scanned.payloads[code] ?? []) {
+    for (const bodyPayload of scanned.payloads[code] ?? []) {
+      const payload = [...bodyPayload, ...(HEADER_PARAMS_BY_CODE[code]?.params ?? [])];
       for (const [locale, messages] of [
         ['en', en],
         ['es', es],

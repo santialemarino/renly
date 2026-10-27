@@ -99,8 +99,20 @@ class TestRateLimiting:
             client.post("/auth/login", json={"email": "a@b.com", "password": _PASSWORD})
         response = client.post("/auth/login", json={"email": "a@b.com", "password": _PASSWORD})
         assert response.status_code == 429
-        assert response.json() == {"detail": "Too many requests. Please slow down and try again later."}
-        assert response.headers.get("retry-after") is not None
+        # The stable code lets a client localize the refusal; Retry-After says how long to wait.
+        assert response.json() == {"detail": "Too many requests. Please slow down and try again later.", "code": "rate_limited"}
+        assert int(response.headers["retry-after"]) > 0
+
+    def test_a_browser_can_read_retry_after_on_a_429(self):
+        # The auth forms call the API from the browser, and CORS hides every response header outside the
+        # safelist unless it is exposed — without this the web could not say how long to wait.
+        client = _client()
+        origin = _settings().cors_origins[0]
+        for _ in range(5):
+            client.post("/auth/login", json={"email": "a@b.com", "password": _PASSWORD}, headers={"Origin": origin})
+        response = client.post("/auth/login", json={"email": "a@b.com", "password": _PASSWORD}, headers={"Origin": origin})
+        assert response.status_code == 429
+        assert "retry-after" in response.headers.get("access-control-expose-headers", "").lower()
 
     def test_health_is_exempt_from_rate_limiting(self):
         client = _client()

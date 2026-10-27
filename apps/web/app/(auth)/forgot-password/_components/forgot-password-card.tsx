@@ -31,8 +31,9 @@ import {
 } from '@/components/form';
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
-import { forgotPasswordRequest } from '@/lib/auth-api';
+import { forgotPasswordRequest, RateLimitedError } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { resolveApiError } from '@/lib/i18n/api-errors';
 
 const FADE_PROPS = {
   initial: { opacity: 0 },
@@ -44,6 +45,7 @@ const FADE_PROPS = {
 export function ForgotPasswordCard() {
   const t = useTranslations('forgotPassword');
   const tCommon = useTranslations('common');
+  const tApiErrors = useTranslations('apiErrors');
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
   const form = useForm<ForgotPasswordFormData>({
@@ -56,8 +58,14 @@ export function ForgotPasswordCard() {
       await forgotPasswordRequest(data.email);
       // Uniform: always show the "sent" state so account existence isn't revealed.
       setSubmittedEmail(data.email);
-    } catch {
-      form.setError('root', { message: tCommon('form.errors.serverError') });
+    } catch (err) {
+      const serverError = tCommon('form.errors.serverError');
+      form.setError('root', {
+        message:
+          err instanceof RateLimitedError
+            ? resolveApiError(tApiErrors, err.apiError, serverError)
+            : serverError,
+      });
     }
   };
 

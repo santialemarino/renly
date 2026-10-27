@@ -3113,7 +3113,6 @@
         "hint": "Botones de acceso rápido de periodo en el dashboard.",
         "format": "Formato: 1M, 3M, 6M, 1A, YTD. \"Todo\" se agrega siempre.",
         "invalidFormat": "Formato inválido. Usá NM (meses), NA (años) o YTD.",
-        "emptyDefault": "Dejá todos los campos vacíos para usar los presets predeterminados.",
         "emptyDefaultWithValues": "Dejá todos los campos vacíos para usar los presets predeterminados ({defaults}).",
         "partialWarning": "Completar al menos un campo reemplaza todos los predeterminados.\nUna vez completado un campo, solo se mostrarán los presets que ingreses."
       },
@@ -4243,6 +4242,8 @@
     "reconciliation_owned_entry": "Esta entrada fue creada por una conciliación, así que no se puede editar ni eliminar directamente. Volvé a ejecutar esa conciliación o eliminala.",
     "reconciliation_period_mismatch": "Este período no coincide con ninguno de los resúmenes de la tarjeta; puede que su día de cierre haya cambiado. Actualizá la página y probá de nuevo.",
     "request_too_large": "La solicitud es demasiado grande. Reducí la cantidad de datos e intentá de nuevo.",
+    "rate_limited": "Demasiados intentos. Probá de nuevo en {retry_after_minutes, plural, one {# minuto} other {# minutos}}.",
+    "validation_error": "Algunos datos que ingresaste no son válidos. Revisalos y probá de nuevo.",
     "settlement_account_amount_required": "Pagar un saldo en {bucket_currency} desde una cuenta en {account_currency} requiere registrar el monto debitado en {account_currency}, para preservar el tipo de cambio que te cobró el banco.",
     "settlement_account_amount_without_account": "Un monto debitado de una cuenta necesita la cuenta de la que salió.",
     "settlement_amounts_must_match": "Dentro de una misma moneda, un pago debe debitar exactamente lo que cancela. Registrá una comisión como un gasto aparte.",

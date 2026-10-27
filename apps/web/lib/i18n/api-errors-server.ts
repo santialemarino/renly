@@ -34,16 +34,24 @@ export async function localizedApiError(
  * thought they had and no longer does (a group admin demoted in another tab); 404 covers a link whose
  * target has been deleted in another tab, which `NotFoundError` answers with and which is otherwise
  * indistinguishable from a crash; 409 is the "conflicts with existing state" family
- * (reconciliation-owned entries, a currency lock, a group's last admin). Anything else is a genuine
- * failure and stays a throw.
+ * (reconciliation-owned entries, a currency lock, a group's last admin); 429 is a rate limit, which
+ * every route has (a global default, tighter on auth, email-sending, import and export routes) and
+ * which resolves to "too many attempts, try again in N minutes" from its `Retry-After`. Anything else
+ * is a genuine failure and stays a throw.
  *
  * 403 is safe to surface because `localizedApiError` returns null unless the body carries a `code` or
  * `detail`, so an auth-layer 403 with no domain payload still falls through to the caller's own generic
  * message rather than leaking anything.
  */
-export const REFUSAL_STATUSES = [400, 403, 404, 409];
+export const REFUSAL_STATUSES = [400, 403, 404, 409, 429];
 
 // Whether a failed response is a refusal whose reason should be surfaced rather than thrown.
 export function isRefusal(res: Response): boolean {
   return REFUSAL_STATUSES.includes(res.status);
+}
+
+// The localized "too many attempts, try again in N minutes" for a rate-limited (429) response, else
+// null. For an action whose other failures are a fixed status rather than a reason worth showing.
+export async function rateLimitedMessage(res: Response): Promise<string | null> {
+  return res.status === 429 ? localizedApiError(res) : null;
 }

@@ -81,7 +81,12 @@ class CreditCardResponse(BaseModel):
         default_factory=list,
         description="Per-currency bucket balances. Primary first, then any other currency with activity.",
     )
-    has_expenses: bool = Field(description="Whether the card has linked expenses.")
+    has_expenses: bool = Field(
+        description=(
+            "Whether anything still names the card (expenses, shared expenses, subscriptions, installment plans or "
+            "payment obligations), which blocks deleting it."
+        ),
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

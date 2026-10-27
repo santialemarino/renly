@@ -24,8 +24,12 @@ export function ExportDataButton({ variant = 'outline', className }: ExportDataB
   async function handleExport() {
     setExporting(true);
     try {
-      const json = await exportData();
-      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      const result = await exportData();
+      if (!result.ok) {
+        toast.error(result.message ?? t('form.errors.serverError'));
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([result.json], { type: 'application/json' }));
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = EXPORT_FILENAME;

@@ -60,7 +60,7 @@ The filtering condition is: `snapshot.date >= start_date AND snapshot.date <= en
 
 ## Configuring presets
 
-Period presets are configurable via environment variables. See `.env.example` for details:
+The picker offers 1M, 3M, 6M and YTD by default (`apps/web/lib/constants/period-presets.ts`); environment variables override them. See `.env.example` for details:
 
 ```
 NEXT_PUBLIC_PERIOD_PRESET_1=1M
@@ -69,7 +69,7 @@ NEXT_PUBLIC_PERIOD_PRESET_3=6M
 NEXT_PUBLIC_PERIOD_PRESET_4=YTD
 ```
 
-Format: `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. There is no in-code fallback: with none of the four set, the picker offers only "All" (until the user picks presets in settings), which is why `.env.example` sets the four values above.
+Format: `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. The four override the default as a set: with none set — every Docker-built image, since `NEXT_PUBLIC_*` values are inlined at build time and the image build has no `.env` — the picker offers the in-code 1M, 3M, 6M and YTD; with any set, exactly the ones set. A user's own presets in settings replace either.
 
 ## Whose "today"? (timezones)
 

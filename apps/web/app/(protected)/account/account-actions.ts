@@ -1,11 +1,13 @@
 'use server';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { rateLimitedMessage } from '@/lib/i18n/api-errors-server';
 
 // Result of a sensitive account mutation: an `error` code the client maps to a localized message,
-// or empty on success.
+// or empty on success. A `rate_limited` error carries its already-localized `message`.
 export interface AccountActionResult {
-  error?: 'invalid_password' | 'password_rejected' | 'server';
+  error?: 'invalid_password' | 'password_rejected' | 'rate_limited' | 'server';
+  message?: string;
 }
 
 // Changes the password (AUTH-8). 401 = wrong current password, 400 = new password rejected (breached).
@@ -34,6 +36,8 @@ export async function changeEmailAction(
     body: { current_password: currentPassword, new_email: newEmail },
   });
   if (res.status === 401) return { error: 'invalid_password' };
+  const limited = await rateLimitedMessage(res);
+  if (limited) return { error: 'rate_limited', message: limited };
   if (!res.ok) return { error: 'server' };
   return {};
 }

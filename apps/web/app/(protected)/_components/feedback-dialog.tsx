@@ -53,9 +53,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   // Submits the feedback; on success toasts and closes (the next open resets the form).
   async function onSubmit(values: FeedbackFormData) {
     try {
-      const ok = await submitFeedback(values);
-      if (!ok) {
-        toast.error(t('error'));
+      const result = await submitFeedback(values);
+      if (!result.ok) {
+        toast.error(result.message ?? t('error'));
         return;
       }
       onOpenChange(false);

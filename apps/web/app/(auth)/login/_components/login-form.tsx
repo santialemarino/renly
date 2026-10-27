@@ -12,6 +12,7 @@ import { seedLocalizationCookies } from '@/app/(auth)/login/login-actions';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
+import { decodeApiError, resolveApiError } from '@/lib/i18n/api-errors';
 
 interface LoginFormProps {
   // Where to land after a successful login. Already validated by the page against the app's own
@@ -22,6 +23,7 @@ interface LoginFormProps {
 export function LoginForm({ nextPath }: LoginFormProps) {
   const t = useTranslations('login');
   const tCommon = useTranslations('common');
+  const tApiErrors = useTranslations('apiErrors');
   // Holds the submit button in its loading state while the post-login document loads.
   const [redirecting, setRedirecting] = useState(false);
   const form = useForm<LoginFormData>({
@@ -44,8 +46,12 @@ export function LoginForm({ nextPath }: LoginFormProps) {
       });
 
       if (res?.error) {
-        const message =
-          res.error === 'CredentialsSignin'
+        // A refusal the API coded (a rate limit) arrives packed into the sign-in code; anything else
+        // from the credentials provider is a wrong email or password.
+        const apiError = decodeApiError(res.code);
+        const message = apiError
+          ? resolveApiError(tApiErrors, apiError, tCommon('form.errors.serverError'))
+          : res.error === 'CredentialsSignin'
             ? t('form.errors.invalid')
             : tCommon('form.errors.serverError');
         form.setError('password', { message });

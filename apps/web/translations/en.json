@@ -3113,7 +3113,6 @@
         "hint": "Quick-access period buttons on the dashboard.",
         "format": "Format: 1M, 3M, 6M, 1Y, YTD. \"All\" is always added.",
         "invalidFormat": "Invalid format. Use NM (months), NY (years) or YTD.",
-        "emptyDefault": "Leave all fields empty to use the default presets.",
         "emptyDefaultWithValues": "Leave all fields empty to use the defaults ({defaults}).",
         "partialWarning": "Filling in at least one field replaces all defaults.\nOnce you fill in a field, only the presets you enter will be shown."
       },
@@ -4243,6 +4242,8 @@
     "reconciliation_owned_entry": "This entry was created by a reconciliation, so it can't be edited or deleted directly. Re-run or delete that reconciliation instead.",
     "reconciliation_period_mismatch": "This period doesn't match one of the card's statements — its closing day may have changed. Refresh the page and try again.",
     "request_too_large": "That request is too large. Please reduce the amount of data and try again.",
+    "rate_limited": "Too many attempts. Try again in {retry_after_minutes, plural, one {# minute} other {# minutes}}.",
+    "validation_error": "Some of the details you entered aren't valid. Check them and try again.",
     "settlement_account_amount_required": "Paying a {bucket_currency} bucket from an account in {account_currency} must record the {account_currency} amount debited, so the rate your bank charged is preserved.",
     "settlement_account_amount_without_account": "An amount debited from an account needs the account it came from.",
     "settlement_amounts_must_match": "Within one currency a settlement must debit exactly what it clears. Record a fee as its own expense.",

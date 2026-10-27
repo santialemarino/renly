@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
-from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
+from app.schemas.base import RequestBase, reject_is_active_on_create, validate_supported_currency, validate_user_pickable_expense_category
 
 
 # Body for POST /payment-obligations.
@@ -36,6 +36,9 @@ class PaymentObligationCreate(RequestBase):
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # is_active belongs to the Update body only; sending it on create is a 422, not a silent drop.
+    _reject_is_active = model_validator(mode="before")(reject_is_active_on_create)
 
     # The Mark Paid flow copies expense_category onto the expense it creates, so a reconciliation-reserved
     # value here would author a fake true-up one step later (422). See app/schemas/base.py.
