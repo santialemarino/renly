@@ -7,7 +7,7 @@ name = "renly-api"
 version = "0.1.0"
 description = "Renly FastAPI backend"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.135.0",
     "starlette>=1.3.1",
