@@ -1,3 +1,5 @@
+import importlib
+import pkgutil
 from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock
@@ -5,10 +7,13 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
+import app.schemas
 from app.domain.currency import SUPPORTED_CURRENCIES
 from app.models.asset_price import AssetPrice
 from app.models.investment import Currency, InvestmentCategory
 from app.models.transaction import TransactionType
+from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.card_reconciliation import CardReconciliationCreate
 from app.schemas.card_settlement import CardSettlementCreate
 from app.schemas.credit_card import CreditCardCreate, CreditCardUpdate
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
@@ -33,6 +38,38 @@ class TestSupportedCurrenciesSource:
         # Single source of truth: the frozenset is derived from the Currency enum, so both agree.
         assert SUPPORTED_CURRENCIES == frozenset(c.value for c in Currency)
         assert set(SUPPORTED_CURRENCIES) == {"USD", "ARS", "BRL", "EUR", "GBP"}
+
+
+# Every request schema that takes a currency as free text, derived from app.schemas rather than listed:
+# a listed set is how CardReconciliationCreate shipped without the validator while every sibling had it.
+# A field typed as the Currency enum is restricted by its type and needs no validator.
+def _free_text_currency_fields() -> list[tuple[type, str]]:
+    fields = []
+    for module_info in pkgutil.iter_modules(app.schemas.__path__):
+        module = importlib.import_module(f"app.schemas.{module_info.name}")
+        for obj in vars(module).values():
+            if not (isinstance(obj, type) and issubclass(obj, RequestBase) and obj is not RequestBase and obj.__module__ == module.__name__):
+                continue
+            for name in ("currency", "base_currency"):
+                field = obj.model_fields.get(name)
+                if field is not None and field.annotation in (str, str | None):
+                    fields.append((obj, name))
+    return fields
+
+
+class TestEveryRequestCurrencyIsValidated:
+    def test_the_derived_population_covers_the_known_schemas(self):
+        names = {cls.__name__ for cls, _ in _free_text_currency_fields()}
+        assert {"ExpenseCreate", "CreditCardCreate", "PotCreate", "CardReconciliationCreate"} <= names
+
+    @pytest.mark.parametrize(("cls", "field"), _free_text_currency_fields(), ids=lambda v: getattr(v, "__name__", v))
+    def test_free_text_currency_fields_carry_the_supported_set_validator(self, cls, field):
+        validators = [d.func for d in cls.__pydantic_decorators__.field_validators.values() if field in d.info.fields]
+        assert validate_supported_currency in validators, f"{cls.__name__}.{field} accepts any 3-letter code"
+
+    def test_a_card_reconciliation_in_an_unsupported_currency_is_rejected(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            CardReconciliationCreate(currency="JPY", period_start=date(2026, 9, 1), period_end=date(2026, 9, 30), statement_balance=Decimal("100"))
 
 
 # base_currency on investments uses the same supported-set allowlist as finance entries.
