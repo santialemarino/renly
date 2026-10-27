@@ -7,7 +7,6 @@
     "dev": "turbo run dev --parallel",
     "dev:docker": "docker compose up -d",
     "build": "turbo run build",
-    "start": "turbo run start --parallel",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "format": "pnpm format:web && pnpm format:api",
@@ -19,10 +18,7 @@
     "check-types": "turbo run check-types",
     "check:api": "pnpm --filter api run check",
     "check:web": "pnpm --filter web run check-types",
-    "clean": "pnpm --recursive exec rm -rf node_modules .next dist",
-    "install:all": "pnpm install",
     "dev:api": "pnpm --filter api run dev",
-    "dev:ui": "pnpm --filter @repo/ui run dev",
     "dev:web": "pnpm --filter web run dev",
     "build:api": "pnpm --filter api run build",
     "build:ui": "pnpm --filter @repo/ui run build",
@@ -63,6 +59,6 @@
   },
   "packageManager": "pnpm@10.13.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }
