@@ -340,9 +340,11 @@ two together:
   short snake_case slug — with `revision` equal to the file's stem and `down_revision` equal to the
   previous file's stem (`0032_recon_follows_account` revises `0031_recon_scope_grant`). `migrate:make`
   autogenerates a random hex id and a hex-prefixed filename, so rename the file and set both ids before
-  committing. Nothing checks the name by itself, but the chain must stay linear and number-ordered:
-  `test_notification_event_surface.py` reads the migrations in filename order as the order Alembic
-  applies them, and CI stamps the baseline by its id (`0001_baseline`).
+  committing. `tests/unit/test_migration_names.py` fails on a misnamed file, a `revision` that is not
+  its stem, a `down_revision` that is not the previous file's, a gap in the numbers or a second head —
+  the chain must stay linear and number-ordered because `test_notification_event_surface.py` reads the
+  migrations in filename order as the order Alembic applies them, and CI stamps the baseline by its id
+  (`0001_baseline`).
 - **Roles and definer functions** follow `apps/api/README.md` → Migrations;
   `tests/integration/test_rls_force_role_model.py` fails until a new `SECURITY DEFINER` function is
   handed to `renly_policy_definer`.

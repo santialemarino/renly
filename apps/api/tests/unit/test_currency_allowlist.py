@@ -42,7 +42,8 @@ class TestSupportedCurrenciesSource:
 
 # Every request schema that takes a currency as free text, derived from app.schemas rather than listed:
 # a listed set is how CardReconciliationCreate shipped without the validator while every sibling had it.
-# A field typed as the Currency enum is restricted by its type and needs no validator.
+# Every field whose name ends in `currency` counts (`amount_currency` too, not only `currency` / `base_currency`);
+# a field typed as the Currency enum is restricted by its type and needs no validator.
 def _free_text_currency_fields() -> list[tuple[type, str]]:
     fields = []
     for module_info in pkgutil.iter_modules(app.schemas.__path__):
@@ -50,9 +51,8 @@ def _free_text_currency_fields() -> list[tuple[type, str]]:
         for obj in vars(module).values():
             if not (isinstance(obj, type) and issubclass(obj, RequestBase) and obj is not RequestBase and obj.__module__ == module.__name__):
                 continue
-            for name in ("currency", "base_currency"):
-                field = obj.model_fields.get(name)
-                if field is not None and field.annotation in (str, str | None):
+            for name, field in obj.model_fields.items():
+                if name.endswith("currency") and field.annotation in (str, str | None):
                     fields.append((obj, name))
     return fields
 
@@ -61,6 +61,8 @@ class TestEveryRequestCurrencyIsValidated:
     def test_the_derived_population_covers_the_known_schemas(self):
         names = {cls.__name__ for cls, _ in _free_text_currency_fields()}
         assert {"ExpenseCreate", "CreditCardCreate", "PotCreate", "CardReconciliationCreate"} <= names
+        # A field named by suffix, not just `currency` / `base_currency`, is in the population too.
+        assert ("PotMovementCreate", "amount_currency") in {(cls.__name__, field) for cls, field in _free_text_currency_fields()}
 
     @pytest.mark.parametrize(("cls", "field"), _free_text_currency_fields(), ids=lambda v: getattr(v, "__name__", v))
     def test_free_text_currency_fields_carry_the_supported_set_validator(self, cls, field):
