@@ -2,15 +2,14 @@
 // `getGroups()` / `getGroup()`; mutations are server actions in `app/(protected)/shared/group-actions.ts`.
 //
 // `getInvitePreview` is the one function here that is NOT authenticated: it reads a join link before
-// the holder is a member (or even logged in), so it goes straight to the API without a token. The link
+// the holder is a member (or even logged in), so it calls the API without a token. The link
 // itself is the credential.
 
 import 'server-only';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { GroupKind, GroupRole } from '@/lib/constants/groups';
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
+import { serverApiFetch } from '@/lib/server-api-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
@@ -143,7 +142,7 @@ export async function getGroup(groupId: number): Promise<Group | null> {
 // expired — one answer for all three, matching the API, so a token cannot be probed either.
 export async function getInvitePreview(token: string): Promise<GroupInvitePreview | null> {
   try {
-    const res = await fetch(`${apiUrl}/group-invites/${encodeURIComponent(token)}`, {
+    const res = await serverApiFetch(`/group-invites/${encodeURIComponent(token)}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;

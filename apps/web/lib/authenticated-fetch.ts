@@ -1,8 +1,7 @@
 import 'server-only';
 
 import { getAccessToken } from '@/lib/auth';
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
+import { serverApiFetch } from '@/lib/server-api-fetch';
 
 /**
  * Makes an authenticated server-side API request with the Bearer token.
@@ -37,5 +36,5 @@ export async function authenticatedFetch(
     }
   }
 
-  return fetch(`${apiUrl}${endpoint}`, requestOptions);
+  return serverApiFetch(endpoint, requestOptions);
 }
