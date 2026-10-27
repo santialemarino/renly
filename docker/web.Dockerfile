@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Base with pnpm
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 WORKDIR /app
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -40,7 +40,7 @@ RUN pnpm --filter @repo/ui run build
 RUN pnpm --filter web run build
 
 # Runtime layer
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

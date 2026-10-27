@@ -203,7 +203,12 @@ pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front
 
 ## CI
 
-`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app.
+`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app or their own
+workflow file (`ci.web.yml` also on any file Prettier formats, since it checks the whole tree), on the
+versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
+also checks Prettier formatting over the whole tree and lints and type-checks `packages/ui`. `ci.api.yml`
+also replays the migration chain from its baseline — online, and as the script `alembic upgrade --sql`
+writes — and fails when either database's schema differs from the one `01_create_tables.sql` builds.
 `ci.web-e2e.yml` runs the Playwright suite against compose's Postgres (built by `pnpm db:init`), the
 API and a production web build: on a PR that touches its floor paths or carries the `run-e2e` label,
 every night on `main`, and on demand. Its `e2e-required` job is the one to mark as a required check.
