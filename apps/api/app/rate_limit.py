@@ -2,6 +2,9 @@
 # per-IP otherwise; a global default plus tighter per-route limits on auth endpoints.
 # In-memory storage is fine for a single instance now; swap to Redis when scaling out.
 
+import hmac
+import ipaddress
+
 import jwt
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -34,12 +37,40 @@ EXPORT_LIMIT = "10/hour"
 FEEDBACK_LIMIT = "10/hour"
 
 
-# Resolves the client IP to throttle by. When trusted_proxy_count is 0 the app is reached directly,
-# so the connection peer (get_remote_address) is the client. When proxies are in front, the peer is
-# the nearest proxy and the real client sits in X-Forwarded-For; we count trusted_proxy_count hops in
-# from the proxy-appended (right) end. Counting from the right is spoof-resistant: a client can prepend
-# fake entries but can't control the ones appended by the trusted proxies after it.
+# Headers the web server sends on its own API calls: the real client's IP, and the shared secret that
+# proves the web server sent it. Both names are also scrubbed from Sentry events (app/observability.py).
+CLIENT_IP_HEADER = "X-Renly-Client-IP"
+INTERNAL_SECRET_HEADER = "X-Renly-Internal-Secret"
+
+
+# Returns the client IP the web server forwarded, or None when the request does not prove it came
+# from the web server. Honoured only when INTERNAL_API_SECRET is set and the request carries the same
+# secret, compared in constant time so the secret cannot be recovered by timing; a value that is not
+# an IP address is ignored rather than becoming a rate-limit key.
+def forwarded_client_ip(request: Request) -> str | None:
+    secret = settings.internal_api_secret
+    if not secret:
+        return None
+    presented = request.headers.get(INTERNAL_SECRET_HEADER)
+    if presented is None or not hmac.compare_digest(presented.encode(), secret.encode()):
+        return None
+    try:
+        return str(ipaddress.ip_address(request.headers.get(CLIENT_IP_HEADER, "").strip()))
+    except ValueError:
+        return None
+
+
+# Resolves the client IP to throttle by. A call from the web server that proves itself (see
+# forwarded_client_ip) is keyed by the client it names. Otherwise, when trusted_proxy_count is 0 the
+# app is reached directly, so the connection peer (get_remote_address) is the client. When proxies are
+# in front, the peer is the nearest proxy and the real client sits in X-Forwarded-For; we count
+# trusted_proxy_count hops in from the proxy-appended (right) end. Counting from the right is
+# spoof-resistant: a client can prepend fake entries but can't control the ones appended by the
+# trusted proxies after it.
 def client_ip(request: Request) -> str:
+    web_client = forwarded_client_ip(request)
+    if web_client is not None:
+        return web_client
     count = settings.trusted_proxy_count
     if count > 0:
         forwarded = request.headers.get("X-Forwarded-For", "")

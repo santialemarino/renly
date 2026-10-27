@@ -3,7 +3,8 @@ import type { JWT } from 'next-auth/jwt';
 import Credentials from 'next-auth/providers/credentials';
 
 import { AUTH_ROUTES, LOGIN_ROUTE, PROTECTED_ROUTES, PUBLIC_ROUTES } from '@/config/routes';
-import { loginRequest, meRequest, RateLimitedError, refreshRequest } from '@/lib/auth-api';
+import { RateLimitedError } from '@/lib/auth-api';
+import { loginRequest, meRequest, refreshRequest } from '@/lib/auth-api-server';
 import { encodeApiError, type ApiError } from '@/lib/i18n/api-errors';
 
 // Renew the access token slightly before it expires so a request never races a just-expired token.

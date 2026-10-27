@@ -1,3 +1,4 @@
+import hmac
 from unittest.mock import AsyncMock
 
 import bcrypt
@@ -12,7 +13,7 @@ from app.main import create_app
 from app.middleware import MAX_REQUEST_BODY_BYTES
 from app.models.user import User
 from app.models.utils import utcnow
-from app.rate_limit import EXPORT_LIMIT, client_ip, limiter
+from app.rate_limit import CLIENT_IP_HEADER, EXPORT_LIMIT, INTERNAL_SECRET_HEADER, client_ip, limiter
 
 # Perimeter-hardening coverage for the M1 bundle: rate limiting + 429 (SEC-1), docs lockdown
 # (SEC-7), catch-all 500 handler (SEC-8), env-driven CORS (SEC-9), request body-size limit
@@ -274,6 +275,91 @@ class TestClientIpResolution:
         # The client prepends fake IPs; counting one hop from the right still yields the proxy-appended IP.
         forwarded = {"X-Forwarded-For": "9.9.9.9, 8.8.8.8, 1.2.3.4"}
         assert client_ip(_request(forwarded, "10.0.0.1")) == "1.2.3.4"
+
+
+_INTERNAL_SECRET = "s" * 40
+
+
+class TestForwardedClientIp:
+    def test_header_honoured_with_the_right_secret(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        headers = {CLIENT_IP_HEADER: "203.0.113.7", INTERNAL_SECRET_HEADER: _INTERNAL_SECRET}
+        assert client_ip(_request(headers, "10.0.0.1")) == "203.0.113.7"
+
+    def test_header_wins_over_the_forwarded_chain(self, monkeypatch):
+        # Behind a proxy the web server's call carries the proxy's own X-Forwarded-For; the proven header names the client.
+        settings = _settings(internal_api_secret=_INTERNAL_SECRET, trusted_proxy_count=1)
+        monkeypatch.setattr("app.rate_limit.settings", settings)
+        headers = {CLIENT_IP_HEADER: "2001:db8::1", INTERNAL_SECRET_HEADER: _INTERNAL_SECRET, "X-Forwarded-For": "10.1.1.1"}
+        assert client_ip(_request(headers, "10.0.0.1")) == "2001:db8::1"
+
+    def test_header_ignored_with_a_wrong_secret(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        headers = {CLIENT_IP_HEADER: "203.0.113.7", INTERNAL_SECRET_HEADER: "t" * 40}
+        assert client_ip(_request(headers, "10.0.0.1")) == "10.0.0.1"
+
+    def test_header_ignored_with_a_prefix_of_the_secret(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        headers = {CLIENT_IP_HEADER: "203.0.113.7", INTERNAL_SECRET_HEADER: _INTERNAL_SECRET[:-1]}
+        assert client_ip(_request(headers, "10.0.0.1")) == "10.0.0.1"
+
+    def test_header_ignored_without_a_secret(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        assert client_ip(_request({CLIENT_IP_HEADER: "203.0.113.7"}, "10.0.0.1")) == "10.0.0.1"
+
+    def test_header_ignored_when_the_api_secret_is_unset(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=None))
+        # Whatever a caller presents, an unset secret proves nothing — not even an empty header.
+        for presented in (_INTERNAL_SECRET, ""):
+            headers = {CLIENT_IP_HEADER: "203.0.113.7", INTERNAL_SECRET_HEADER: presented}
+            assert client_ip(_request(headers, "10.0.0.1")) == "10.0.0.1"
+
+    def test_a_value_that_is_not_an_ip_is_ignored(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        headers = {CLIENT_IP_HEADER: "user:1", INTERNAL_SECRET_HEADER: _INTERNAL_SECRET}
+        assert client_ip(_request(headers, "10.0.0.1")) == "10.0.0.1"
+
+    def test_the_secret_is_compared_in_constant_time(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        compared: list[tuple[bytes, bytes]] = []
+        compare_digest = hmac.compare_digest
+
+        def _spy(a, b):
+            compared.append((a, b))
+            return compare_digest(a, b)
+
+        monkeypatch.setattr("app.rate_limit.hmac.compare_digest", _spy)
+        headers = {CLIENT_IP_HEADER: "203.0.113.7", INTERNAL_SECRET_HEADER: _INTERNAL_SECRET}
+        assert client_ip(_request(headers, "10.0.0.1")) == "203.0.113.7"
+        assert compared == [(_INTERNAL_SECRET.encode(), _INTERNAL_SECRET.encode())]
+
+    def test_two_forwarded_clients_get_separate_login_buckets(self, monkeypatch):
+        # Every web-server call shares one peer address; the proven header splits them by real client.
+        monkeypatch.setattr("app.rate_limit.settings", _settings(internal_api_secret=_INTERNAL_SECRET))
+        client = _client()
+
+        def _login(ip: str, secret: str = _INTERNAL_SECRET) -> int:
+            headers = {CLIENT_IP_HEADER: ip, INTERNAL_SECRET_HEADER: secret}
+            return client.post("/auth/login", json={"email": "a@b.com", "password": _PASSWORD}, headers=headers).status_code
+
+        assert [_login("203.0.113.7") for _ in range(6)] == [401] * 5 + [429]
+        assert _login("203.0.113.8") == 401
+        # A forged secret falls back to the shared peer bucket, which the first client did not touch.
+        assert [_login("203.0.113.9", "t" * 40) for _ in range(6)] == [401] * 5 + [429]
+        assert _login("203.0.113.8") == 401
+
+
+class TestInternalApiSecretSetting:
+    def test_unset_and_empty_mean_disabled(self, monkeypatch):
+        # Read from the environment, as a deployment sets it; a local .env must not decide the answer.
+        monkeypatch.setenv("INTERNAL_API_SECRET", "")
+        assert _settings().internal_api_secret is None
+        monkeypatch.delenv("INTERNAL_API_SECRET")
+        assert _settings(_env_file=None).internal_api_secret is None
+
+    def test_a_short_secret_refuses_to_boot(self):
+        with pytest.raises(ValueError, match="internal_api_secret"):
+            _settings(internal_api_secret="s" * 31)
 
 
 # --- AUTH-5 (completed in M2): register returns a uniform 202 and never leaks email existence ---

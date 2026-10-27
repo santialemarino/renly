@@ -11,6 +11,13 @@ import { decodeApiError } from '@/lib/i18n/api-errors';
  * this drives it with the API's real 429 shape and decodes what the form would receive.
  */
 
+// The sign-in runs on this server, so the API call goes through serverApiFetch, which reads the
+// visitor's request headers; here that request came through one proxy from 203.0.113.7.
+vi.mock('server-only', () => ({}));
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ 'x-forwarded-for': '203.0.113.7' }),
+}));
+
 type Authorize = (credentials: Record<string, unknown>) => Promise<unknown>;
 
 const provider = authConfig.providers[0] as unknown as { options: { authorize: Authorize } };
@@ -26,6 +33,7 @@ function stubLogin(response: Response) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe('login authorize', () => {
@@ -56,5 +64,16 @@ describe('login authorize', () => {
       }),
     );
     expect(await authorize(CREDENTIALS)).toBeNull();
+  });
+
+  it('sends the login as the visitor, so each visitor has their own login limit', async () => {
+    vi.stubEnv('INTERNAL_API_SECRET', 's'.repeat(40));
+    vi.stubEnv('WEB_TRUSTED_PROXY_COUNT', '1');
+    const fetchMock = vi.fn(async () => new Response(null, { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await authorize(CREDENTIALS);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url.endsWith('/auth/login')).toBe(true);
+    expect(new Headers(init.headers).get('X-Renly-Client-IP')).toBe('203.0.113.7');
   });
 });

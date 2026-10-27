@@ -64,7 +64,8 @@ issuing queries on the same session after a failed write.
 ## Rate limits
 
 `app/rate_limit.py` is the whole surface: one slowapi `Limiter` keyed by user id when a valid bearer
-token is present and by client IP otherwise (`client_ip` honours `TRUSTED_PROXY_COUNT`), a global
+token is present and by client IP otherwise (`client_ip` honours `TRUSTED_PROXY_COUNT`, and the
+`X-Renly-Client-IP` the web server sends on its own calls when `INTERNAL_API_SECRET` matches), a global
 `DEFAULT_LIMIT` that `SlowAPIMiddleware` applies to every route, and named constants for the tighter
 per-route limits (`LOGIN_LIMIT`, `REGISTER_LIMIT`, the email-sending routes, `IMPORT_LIMIT`,
 `RESTORE_LIMIT`, `EXPORT_LIMIT`, `FEEDBACK_LIMIT`, `INVITE_LIMIT`). A new limit is a constant there,

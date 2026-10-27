@@ -39,9 +39,9 @@ const NEVER_THROWS: Record<string, { file: string; proof: RegExp }> = {
     proof:
       /getSettings\(\)\.catch\(\(\) => null\),\s*getCreditCards\(\{ showArchived: true \}\)\.catch\(\(\) => \[\]\)/,
   },
-  // Delegates to the auth-api fetch, which answers any failure with the invite-only default.
+  // Delegates to the server auth-api fetch, which answers any failure with the invite-only default.
   getSignupContext: {
-    file: 'lib/auth-api.ts',
+    file: 'lib/auth-api-server.ts',
     proof:
       /export async function getSignupContext[\s\S]*?try \{[\s\S]*?\} catch \{\s*return \{ mode: 'invite', invitedEmail: null \};/,
   },
