@@ -203,7 +203,8 @@ pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front
 
 ## CI
 
-`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app, on the
+`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app or their own
+workflow file (`ci.web.yml` also on any file Prettier formats, since it checks the whole tree), on the
 versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
 also checks Prettier formatting over the whole tree and lints and type-checks `packages/ui`. `ci.api.yml`
 also replays the migration chain from its baseline — online, and as the script `alembic upgrade --sql`
