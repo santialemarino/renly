@@ -11,11 +11,13 @@ Request flow: **router → service → repository → DB**.
 
 - **routers/** — HTTP only: validate body, call service, return response or raise HTTPException. Use **schemas** for request/response.
 - **services/** — Business logic: orchestrate use cases, call repositories. Use **domain** types and **models**; no HTTP or raw SQL. Owns the transaction boundary (`session.commit()` once per use case).
-- **repositories/** — Data access: run queries, `session.add()` / `session.flush()`. Use **models** and session only. Never call `session.commit()` — the service commits.
+- **repositories/** — Data access: run queries, `session.add()` / `session.flush()`. Use **models**, the session, and the **domain** value types that shape a query or a row (`ListScope` in five repositories and `repositories/utils.py`, the `AccountMovement` row types in `account_movement_repository.py`). Never call `session.commit()` — the service commits.
 - **schemas/** — Pydantic request/response DTOs (HTTP contract). Request bodies inherit from `RequestBase` (`schemas/base.py`) which auto-strips strings and converts empty optionals to `None`. Response schemas inherit from `BaseModel`.
-- **domain/** — Types used by services only (value objects, enums, errors). Not HTTP, not DB.
+- **domain/** — Types services work with (value objects, enums, errors, specs). Not HTTP. It MAY import **models**: mostly the `StrEnum`s the tables declare (`Currency`, `ExpenseCategory`, `NotificationEvent`, …), and `restore_specs.py` binds each restore spec to its model class (`import_specs.py` imports only those enums). It never imports repositories, services, schemas or routers.
 - **models/** — SQLModel tables (DB entities).
-- **deps/** — FastAPI dependencies (e.g. SessionDep, CurrentUser). Injected by the framework.
+- **deps/** — FastAPI dependencies (`SessionDep` and its two privileged siblings, `CurrentUser`, `PageQuery`, the currency param). Injected by the framework.
+
+The two edges into **domain** above (`domain` → `models`, `repositories` → `domain`) are deliberate: an enum is declared once, on the table that stores it, and a query-shaping value object is shared by the service that builds it and the repository that applies it. Do not "fix" them by copying the enum or the value object.
 
 Do not put business logic in routers or SQL in services. Do not put HTTP types (request/response bodies) in domain or models.
 
@@ -38,6 +40,44 @@ rolls back any transaction that was never committed. So an error raised before t
 `session.commit()` persists nothing, and the connection returns to the pool clean. An explicit
 `session.rollback()` is only warranted when a service wants to recover mid-request and continue
 issuing queries on the same session after a failed write.
+
+## Which session a route takes
+
+`app/deps/db.py` declares three, and the choice is a security decision, not a pooling detail:
+
+- **`SessionDep`** — the request session: connects as `renly_app`, which is subject to Row-Level
+  Security, and `get_current_user` stashes the user id on it so every transaction runs as that user.
+  **Every user-scoped route uses this one.** The policies the database half of a rule is written in
+  (below) apply only here.
+- **`AdminSessionDep`** — `renly_admin`, which has `BYPASSRLS`: no policy applies to anything it reads
+  or writes. Only for authenticated work that must see across users — the admin surface, creating a
+  group or a pot and claiming an invite (the caller is not a member yet), reading the admin emails to
+  notify, account cleanup. Reaching for it on ordinary request work silently switches off every policy,
+  and no test fails, so take it in ADDITION to `SessionDep` and use it only for the cross-user read or
+  write that needs it (as `routers/feedback.py` does).
+- **`AuthSessionDep`** — also `renly_admin`, on its own small pool, reserved for the pre-auth paths
+  (login, register, refresh, verification, password reset, invite preview, API-key verification) so a
+  scheduler job holding the admin pool can never queue a login. `tests/unit/test_auth_pool_routing.py`
+  derives the routes from the app and fails when a pre-auth route or a user resolver reads the admin
+  pool, or an authenticated route works on the auth pool.
+
+## Rate limits
+
+`app/rate_limit.py` is the whole surface: one slowapi `Limiter` keyed by user id when a valid bearer
+token is present and by client IP otherwise (`client_ip` honours `TRUSTED_PROXY_COUNT`), a global
+`DEFAULT_LIMIT` that `SlowAPIMiddleware` applies to every route, and named constants for the tighter
+per-route limits (`LOGIN_LIMIT`, `REGISTER_LIMIT`, the email-sending routes, `IMPORT_LIMIT`,
+`RESTORE_LIMIT`, `EXPORT_LIMIT`, `FEEDBACK_LIMIT`, `INVITE_LIMIT`). A new limit is a constant there,
+applied with `@limiter.limit(<CONSTANT>)` under the route decorator; `@limiter.exempt` is for probes
+(`/health`). A 429 is the generic `rate_limit_exceeded_handler` body with `Retry-After`.
+
+**The gotcha:** every `@limiter.limit` endpoint must declare BOTH `request: Request` and
+`response: Response` parameters, even when it uses neither. slowapi finds the request by that
+parameter NAME and refuses to decorate a function without one; and with `headers_enabled` it writes
+the `X-RateLimit-*` headers into the `response` parameter on the success path, so an endpoint that
+returns a Pydantic model and declares no `response` raises at request time. The limiter's counters are
+in-process state shared by every test: a test that drives a limited route resets it first
+(`limiter.reset()`, as `tests/unit/test_perimeter_hardening.py` does).
 
 ## Error responses (codes, not localized prose)
 
@@ -180,6 +220,32 @@ pot a household holds — loops `for chunk in chunked(ids):` (`app/repositories/
 A list drawn from one request's own rows stays a single `IN`. `tests/unit/test_in_chunking.py` derives every
 repository `IN` over a caller list and fails until a new one is chunked or named bounded with a reason.
 
+### Every list endpoint is bounded — paginated, capped, or BOUNDED with a reason
+
+`tests/unit/test_list_endpoint_bounds.py` reads every mounted GET route whose response model is a list,
+carries an `items` field, or is opaque (a bare dict, `Any`, no model), and requires it in exactly one of
+three buckets — so a new list endpoint fails until you classify it there:
+
+- **`PAGINATED`** — a list that grows with time (a ledger, a history, an admin list across users). Take
+  the window from the shared `PageQuery` dependency (`app/deps/pagination.py`; never declare
+  `page` / `page_size` inline — the test checks the dependency's provenance, not just the values),
+  return a schema that inherits `PaginatedResponse` (`total`, `page`, `page_size`) and declares its own
+  `items`, and apply it with `apply_page`
+  (`app/utils/pagination.py`) on a TOTAL order (add an id tiebreak). Defaults are pinned:
+  `DEFAULT_PAGE_SIZE` 25, `MAX_PAGE_SIZE` 100, `MAX_PAGE` 1,000,000 — over either ceiling is a 422.
+- **`CAPPED`** — a list bounded by what the user chose to create (accounts, cards, collections, pots).
+  Pass `limit=MAX_LIST_ROWS` (500) from the list endpoint's call site ONLY, apply it with
+  `apply_limit`, and route the rows through `capped(rows, limit, what)`, which logs when the ceiling
+  bites. The same query unbounded (`limit=None`) is what the dashboard SUMS, so never default the cap
+  inside the repository. The test drives each capped endpoint and requires a SELECT carrying
+  `LIMIT 500`; `tests/unit/test_repository_namespaces.py` fails on a read that applies a limit without
+  `capped(`.
+- **`BOUNDED`** — neither, with the REASON written as the dict value (a computed list of constant
+  length, the export that is unbounded by contract). This is where an unbounded read would hide, so
+  the reason is the price of entry.
+
+`tests/integration/test_list_bounds_queries.py` seeds past each bound against Postgres.
+
 ### Use bulk upserts for batch writes
 
 When storing multiple rows (prices, exchange rates, ratios), prefer PostgreSQL `INSERT ... ON CONFLICT DO UPDATE` over individual SELECT + INSERT/UPDATE loops. Use `sqlalchemy.dialects.postgresql.insert` for this.
@@ -188,12 +254,22 @@ When storing multiple rows (prices, exchange rates, ratios), prefer PostgreSQL `
 
 Use `sum()`, `max()`, `min()`, list comprehensions, and generators instead of manual accumulator loops when the intent maps naturally. Use a `for` loop only when you need early `break`, `async` iteration, side effects per iteration, or it's genuinely clearer.
 
-See `docs/backend-performance-audit.md` for the full diagnostic and fix plans.
-
 ## Where to create files
 
 - **New feature (e.g. investments):** add one file per layer: `routers/investments.py`, `services/investment_service.py`, `repositories/investment_repository.py`, `schemas/investment.py`, and optionally `domain/investment.py`.
 - **New endpoint in existing feature:** add the route in the existing router; add service/repository functions in the existing service/repository files. Split into a new file only when a file gets too large or the domain is clearly separate.
+
+### A repository's namespace registry
+
+A repository file is module-level `async def` queries plus a `<Entity>Repository` class that re-exports
+each one as `name = staticmethod(name)`, and a singleton of that class (`feedback_repository =
+FeedbackRepository()`) is what services import — most are also re-exported, alphabetically, from
+`app/repositories/__init__.py` (not every one yet: `feedback_repository` is imported from its module). **A new public `async def` is not reachable until its
+`staticmethod` line is added**: the module imports fine and `pnpm check:api` passes, and the first
+service call is an `AttributeError`. `tests/unit/test_repository_namespaces.py` parses every
+`*_repository.py` and fails on a public `async def` missing from its class (and on a file without the
+class). Private `_helpers` and synchronous SQL-expression builders (`sort_columns`,
+`settlement_cash_leg`) stay off the registry; callers import those directly.
 
 ## External data providers
 
@@ -207,9 +283,9 @@ External data fetching (prices, exchange rates) uses a standardized provider pat
 ## Utils vs helpers
 
 - **utils** — General-purpose, not tied to one entity or service. Used across multiple services or the app.
-  - **Where:** `app/utils/` (e.g. `app/utils/datetime.py`, `app/utils/validation.py`). If only used by one layer, `app/<layer>/utils.py` or `app/<layer>/utils/<name>.py` (e.g. `app/services/utils.py` for service-wide utils).
+  - **Where:** `app/utils/` (e.g. `app/utils/dates.py`, `app/utils/pagination.py`, `app/utils/metrics.py`). If only used by one layer, `app/<layer>/utils.py` (`app/services/utils.py`, `app/repositories/utils.py`, `app/models/utils.py`).
 - **helpers** — Tied to a specific service or entity (e.g. auth, user, investment).
-  - **Where:** next to the code that uses it: `app/services/auth_helpers.py` (used only by auth_service), or `app/repositories/user_repository_helpers.py` if needed. Prefer a single file per feature (e.g. `auth_helpers.py`) rather than a generic "helpers" folder.
+  - **Where:** next to the code that uses it, as `app/services/<feature>_helpers.py` beside its service (none exists today; most feature helpers are private `_functions` inside the service, and a few feature-adjacent modules carry a more specific name, such as `email_templates.py` beside `email_service.py`). Prefer a single file per feature rather than a generic "helpers" folder.
 
 Rule: if it's used by one service/entity only → **helper** file next to that feature. If it's generic and reusable across features → **utils** (under `app/utils/` or under the layer if layer-scoped).
 
@@ -222,8 +298,13 @@ In every `__init__.py` or file that imports/exports multiple symbols (e.g. singl
 ```
 app/
 ├── config.py
-├── db.py
+├── db.py            # the three engines and session factories (see "Which session a route takes")
+├── http_errors.py   # CodedHTTPException
 ├── main.py
+├── middleware.py
+├── observability.py
+├── rate_limit.py    # the limiter and every limit constant
+├── scheduler.py
 ├── deps/
 ├── domain/          # domain/<feature>.py
 ├── models/
@@ -231,5 +312,37 @@ app/
 ├── routers/        # <feature>.py
 ├── schemas/        # <feature>.py
 ├── services/       # <feature>_service.py
-└── utils/          # optional; general-purpose
+└── utils/          # general-purpose
 ```
+
+## Schema ↔ migration parity
+
+A schema change lands in BOTH `apps/api/database/01_create_tables.sql` (the canonical rebuild-from-zero
+script) and a new Alembic migration, in the same change (`agent-workflow` §4 has the why). What holds the
+two together:
+
+- **CI replays the chain.** `ci.api.yml` builds the baseline schema (the SQL file as it stood when
+  Alembic was adopted, stamped `0001_baseline`), upgrades it through the whole chain — online, and again
+  as the script `alembic upgrade --sql` writes — and fails when either result's schema differs from the
+  one the current SQL file builds. So a migration must also work offline: a migration
+  that reads the database decides inside one SQL statement (a `DO` block), never through
+  `op.get_bind()`.
+- **Functions are byte-identical.** For every function the schema file defines that some migration
+  also defines, `tests/unit/test_schema_parity.py` requires the schema file's body to appear verbatim in
+  a migration; pg_dump reproduces a body exactly, so a re-indented copy is a real difference. A function
+  only the schema file defines (`set_updated_at`) is outside that test; the CI chain replay above is
+  what catches a missing migration copy. The same file pins which tables are
+  policied, FORCEd and split per command, and the global reference tables that are not.
+- **Enums have twins.** A new `StrEnum` fails `tests/unit/test_enum_parity.py` until it is paired with
+  its web list or declared server-only; a new `notification_event` label must be added by a migration in
+  the order `tests/unit/test_notification_event_surface.py` replays.
+- **Naming.** Every migration is `migrations/versions/NNNN_<slug>.py` — the next four-digit number, a
+  short snake_case slug — with `revision` equal to the file's stem and `down_revision` equal to the
+  previous file's stem (`0032_recon_follows_account` revises `0031_recon_scope_grant`). `migrate:make`
+  autogenerates a random hex id and a hex-prefixed filename, so rename the file and set both ids before
+  committing. Nothing checks the name by itself, but the chain must stay linear and number-ordered:
+  `test_notification_event_surface.py` reads the migrations in filename order as the order Alembic
+  applies them, and CI stamps the baseline by its id (`0001_baseline`).
+- **Roles and definer functions** follow `apps/api/README.md` → Migrations;
+  `tests/integration/test_rls_force_role_model.py` fails until a new `SECURITY DEFINER` function is
+  handed to `renly_policy_definer`.
