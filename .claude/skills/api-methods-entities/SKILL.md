@@ -19,7 +19,7 @@ description: API method order, comments, and entity conventions (schemas, models
 
 - **Router:** Validate body (schemas), call service, return response or raise HTTPException. No business logic, no DB.
 - **Service:** Orchestrate use case, call repository; pure functions for crypto/validation. No HTTP, no raw SQL. Raise domain errors (e.g. `app.domain.NotFoundError`); the HTTP layer (exception handler or router) maps them to status codes. Owns the transaction boundary — call `session.commit()` once at the end.
-- **Repository:** Session + model only: queries, `session.add()`, `session.flush()`. No business rules. Never call `session.commit()`.
+- **Repository:** Session + models (plus the domain value types that shape a query, such as `ListScope` — see api-layering): queries, `session.add()`, `session.flush()`. No business rules. Never call `session.commit()`. Every public `async def` is also registered on the file's namespace class (api-layering → "A repository's namespace registry").
 
 ## Repository query patterns
 

@@ -34,9 +34,12 @@ No scope is used today (history has none). If a commit is clearly isolated to on
 
 ## What NOT to stage
 
-- `.claude/projects/` — local agent memory, gitignored
-- Temporary or scratch `.md` files not explicitly requested
+The same list as `CLAUDE.md`, `AGENTS.md` and `agent-workflow` §5:
+
 - Always stage files **individually by name** — never `git add .` or `git add -A`
+- `.claude/plans/` — agent plans, gitignored
+- `docs/internal/` — internal docs, gitignored
+- Temporary or scratch `.md` files not explicitly requested
 
 ## Examples
 
@@ -45,7 +48,7 @@ feat: implement investment collections crud
 fix: use naive datetime for updated_at on session epoch bump
 enh: improve sidebar with logout button and active state
 docs: update api readme with check command
-chore: add .claude/projects/ to gitignore
+chore: run each workflow on its own file
 refactor: extract snapshot upsert logic into repository
 test: add unit tests for period return calculation
 ```
