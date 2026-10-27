@@ -327,10 +327,11 @@ two together:
   one the current SQL file builds. So a migration must also work offline: a migration
   that reads the database decides inside one SQL statement (a `DO` block), never through
   `op.get_bind()`.
-- **Functions are byte-identical.** `tests/unit/test_schema_parity.py` takes every function some
-  migration defines and requires the schema file to carry the same body verbatim (a function only the
-  schema file defines is outside it — the CI chain replay above is what catches a missing migration copy) (pg_dump reproduces
-  a body exactly, so a re-indented copy is a real difference). The same file pins which tables are
+- **Functions are byte-identical.** For every function the schema file defines that some migration
+  also defines, `tests/unit/test_schema_parity.py` requires the schema file's body to appear verbatim in
+  a migration; pg_dump reproduces a body exactly, so a re-indented copy is a real difference. A function
+  only the schema file defines (`set_updated_at`) is outside that test; the CI chain replay above is
+  what catches a missing migration copy. The same file pins which tables are
   policied, FORCEd and split per command, and the global reference tables that are not.
 - **Enums have twins.** A new `StrEnum` fails `tests/unit/test_enum_parity.py` until it is paired with
   its web list or declared server-only; a new `notification_event` label must be added by a migration in
