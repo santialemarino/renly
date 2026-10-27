@@ -260,13 +260,13 @@ User submits email + password (+ "Remember me")
 
 The login form has a **Remember me** checkbox (in the row beside "Forgot your password?"); its value is passed through `signIn` → `authorize` → `loginRequest` so the backend sizes the refresh-token window.
 
-Login can also fail with **403** when the email isn't verified yet (`loginRequest` returns null for any non-OK status, so NextAuth surfaces a generic credentials error); the login page links to **Forgot password** and signup users land on a "check your email" screen they can resend from.
+Login can also fail with **403** when the email isn't verified yet (`loginRequest` returns null for any non-OK status other than 429, so NextAuth surfaces a generic credentials error); the login page links to **Forgot password** and signup users land on a "check your email" screen they can resend from. A **429** is the exception: `loginRequest` throws `RateLimitedError`, which `authorize` rethrows as `ApiErrorSignin` (a `CredentialsSignin` carrying the encoded API error as its `code`), so the login form shows the rate-limit message instead of "wrong credentials".
 
 ### Account-lifecycle pages
 
 - `app/(auth)/forgot-password`, `app/(auth)/reset-password`, `app/(auth)/verify-email` — unauthenticated pages (in `AUTH_ROUTES`) for the reset and verification flows. `verify-email` and `reset-password` read the `?token=` query param; `verify-email` confirms on mount (and does **not** redirect logged-in users, since email-change confirmation happens while authenticated).
 - `app/(protected)/account` — the account-settings surface (in the sidebar Settings group): change email, change password, and a danger zone (export data + delete account). Sensitive mutations go through `account-actions.ts` server actions; after a password change or account deletion the client signs out and returns to login (the server bumped `session_epoch` / removed the account).
-- Unauthenticated API calls live in `lib/auth-api.ts` (register, login, forgot/reset, verification request/confirm); `registerRequest` now returns no token (uniform `202`) and the signup form shows a "check your email" screen instead of auto-logging in.
+- The calls the web server makes on a visitor's behalf — login, refresh, me, logout and the signup context — live in `lib/auth-api-server.ts` (`server-only`), each through `serverApiFetch` so the API rate-limits the visitor rather than the web server. The remaining unauthenticated calls live in `lib/auth-api.ts` (register, forgot/reset, verification request/confirm); `registerRequest` returns no token (uniform `202`) and the signup form shows a "check your email" screen instead of auto-logging in.
 
 ### JWT callback
 

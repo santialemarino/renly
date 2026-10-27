@@ -215,6 +215,9 @@ async def fetch_coingecko(
     prices = data.get("prices", [])
     results: PriceResult = []
     for timestamp_ms, price in prices:
+        # json.loads accepts the NaN and Infinity literals, and neither is a price (see fetch_yfinance).
+        if not math.isfinite(price):
+            continue
         price_date = date_type.fromtimestamp(timestamp_ms / 1000)
         results.append((price_date, Decimal(str(round(price, 6))), "USD"))
     return results
@@ -278,9 +281,10 @@ async def fetch_finnhub(
         raise PriceProviderUnavailable(f"Finnhub fetch failed for {ticker}: {_describe_http_failure(exc)}") from exc
 
     # Finnhub answers an unknown symbol with a 200 and every field zeroed, so a zero current price is
-    # "no such symbol" rather than a real quote — an empty answer, not a provider failure.
+    # "no such symbol" rather than a real quote — an empty answer, not a provider failure. A NaN passes
+    # the falsy check, so a non-finite quote is dropped the same way.
     current = payload.get("c")
-    if not current:
+    if not current or not math.isfinite(current):
         return []
     return [(date_type.today(), Decimal(str(current)), "USD")]
 
@@ -328,7 +332,7 @@ async def _load_data912_cache() -> None:
         for row in rows:
             symbol = (row.get("symbol") or "").strip().upper()
             close = row.get("c")
-            if symbol and close:
+            if symbol and close and math.isfinite(close):
                 prices[symbol] = Decimal(str(close))
     _data912_prices = prices
     logger.info("data912 cache loaded: %d symbols across %d boards.", len(prices), len(DATA912_BOARDS))
@@ -398,7 +402,11 @@ async def fetch_coinbase(
     amount = (payload.get("data") or {}).get("amount")
     if not amount:
         return []
-    return [(price_date, Decimal(str(amount)), "USD")]
+    # Coinbase sends the amount as a string, which Decimal reads as NaN or Infinity when it says so.
+    price = Decimal(str(amount))
+    if not price.is_finite():
+        return []
+    return [(price_date, price, "USD")]
 
 
 # --- CEDEAR ratio provider ---
@@ -838,7 +846,8 @@ async def _load_cafci_cache() -> None:
                 vcp = Decimal(str(vcp_cell).strip().replace(",", "."))
             except Exception:
                 continue
-            if vcp <= 0:
+            # Checked before the sign: comparing a NaN Decimal raises, which would fail the whole load.
+            if not vcp.is_finite() or vcp <= 0:
                 continue
 
             # Extract date.
@@ -922,6 +931,8 @@ async def _fetch_fci_from_argentinadatos(ticker: str) -> PriceResult:
                 try:
                     price_date = date_type.fromisoformat(fecha)
                     price_val = Decimal(str(vcp))
+                    if not price_val.is_finite():
+                        continue
                     return [(price_date, price_val, "ARS")]
                 except Exception:
                     continue

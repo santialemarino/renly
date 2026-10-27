@@ -139,8 +139,9 @@ jobs:
         with:
           python-version: '3.14'
 
+      # Pinned to the uv docker/api.Dockerfile copies in, so CI and the image read uv.lock the same way.
       - name: Install uv
-        run: pip install uv
+        run: pip install uv==0.10.8
 
       - name: Generate this run's secrets
         # The JWT secret the API signs with and NextAuth verifies with must be equal and 32+ chars;

@@ -74,7 +74,7 @@ With `SENTRY_DSN` set, add a Sentry alert rule at deploy on events whose message
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                                                                                                                                |
 | `NEXTAUTH_URL`                                        | The production web URL.                                                                                                                                                                                                           |
-| `INTERNAL_API_SECRET`                                 | Must equal the API's `INTERNAL_API_SECRET`. Runtime, server-only — never a build arg, never `NEXT_PUBLIC_`.                                                                                                                       |
+| `INTERNAL_API_SECRET`                                 | Must equal the API's `INTERNAL_API_SECRET`; min 32 chars (warned at startup). Runtime, server-only — never a build arg, never `NEXT_PUBLIC_`.                                                                                     |
 | `WEB_TRUSTED_PROXY_COUNT`                             | Hop count of proxies in front of the web server — see [Client IPs and rate limits](#client-ips-and-rate-limits).                                                                                                                  |
 | `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                                                                                                                                |
 | `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime.                                                                                                  |
@@ -100,7 +100,18 @@ one). Two paths reach it:
 To set it up, generate one secret (`openssl rand -hex 32`, at least 32 characters), put the SAME
 value in `INTERNAL_API_SECRET` on both apps, and set each hop count to the number of proxies in front
 of THAT app. Both counts read `X-Forwarded-For` from the right, so a client can only add entries the
-count skips; a count higher than the real number of proxies lets a client choose its own key.
+count skips; a count higher than the real number of proxies lets a client choose its own key. The web
+server warns at startup when its `INTERNAL_API_SECRET` is set but shorter than 32 characters: the API
+refuses to start with one that short, so the two can never match and every server-side call falls back
+to the web server's own bucket.
+
+**Close every direct route to the origin.** The counts assume every request passes through all the
+trusted proxies. A request that reaches an app another way — the hosting platform's default
+hostname, the origin's IP, a route around the CDN — arrives with a shorter
+`X-Forwarded-For` chain than the count expects, and when the chain is shorter than the hop count both
+apps fall back to its LEFTMOST entry, which the client wrote. That lets a client pick its own
+rate-limit key, on the web side (and so on the forwarded login and refresh calls) as well as the API
+side. Disable or firewall those routes so the proxies are the only way in.
 
 | Topology                                                             | API `TRUSTED_PROXY_COUNT` | Web `WEB_TRUSTED_PROXY_COUNT` |
 | -------------------------------------------------------------------- | ------------------------- | ----------------------------- |

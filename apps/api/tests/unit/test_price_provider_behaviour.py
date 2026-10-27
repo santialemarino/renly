@@ -23,7 +23,17 @@ from app.services.price_providers import PriceProviderUnavailable
 # to "401", so every assertion about what an error message leaks would pass over a message that could
 # not contain a URL in the first place. Verified by mutation — with the simpler stub, two of the three
 # key-leak tests below passed against the leaking code.
-def _fake_client(*, json_body=None, status: int = 200, error: Exception | None = None, captured: list | None = None):
+#
+# `raw_body` sends bytes as they are, for a body httpx would refuse to encode: its `json=` rejects NaN,
+# while the `json.loads` behind `response.json()` reads the NaN and Infinity literals a provider may send.
+def _fake_client(
+    *,
+    json_body=None,
+    raw_body: bytes | None = None,
+    status: int = 200,
+    error: Exception | None = None,
+    captured: list | None = None,
+):
     class _Client:
         def __init__(self, *args, **kwargs):
             pass
@@ -42,6 +52,8 @@ def _fake_client(*, json_body=None, status: int = 200, error: Exception | None =
             if error is not None:
                 raise error
             request = httpx.Request("GET", url, params=params, headers=headers)
+            if raw_body is not None:
+                return httpx.Response(status, request=request, content=raw_body)
             # `json=None` would serialise an EMPTY body, so a later `.json()` raises JSONDecodeError
             # rather than returning None the way the old stub did. Only pass a body when there is one.
             if json_body is None:
@@ -429,3 +441,86 @@ class TestRedactingTheUrlDoesNotBlindTheOperator:
 
         assert type(exc).__name__ in described
         assert expected_fragment in described, f"the diagnostic was dropped: {described!r}"
+
+
+# Every provider keeps finite prices only, the rule fetch_yfinance has (TestYahooTheDayStillTradingIsNotAPrice).
+# A NaN or Infinity stored as a price fails the price endpoints' response validation and freezes into
+# an auto-snapshot's value. Each body is the provider's own wire shape with the bad value as a literal,
+# so it reaches the provider through the same parse a real response would.
+class TestEveryProviderKeepsFinitePricesOnly:
+    @pytest.mark.asyncio
+    async def test_coingecko_drops_NaN_and_Infinity_points(self, monkeypatch):
+        body = b'{"prices": [[1761436800000, 67000.5], [1761523200000, NaN], [1761609600000, Infinity]]}'
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=body))
+
+        rows = await price_providers.fetch_coingecko("bitcoin")
+
+        assert [row[1] for row in rows] == [Decimal("67000.5")]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("literal", [b"NaN", b"Infinity"])
+    async def test_finnhub_answers_a_non_finite_quote_with_nothing(self, monkeypatch, literal):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "finnhub_api_key", "test-key")
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=b'{"c": ' + literal + b"}"))
+
+        assert await price_providers.fetch_finnhub("AAPL") == []
+
+    @pytest.mark.asyncio
+    async def test_data912_leaves_a_non_finite_close_out_of_the_board(self, monkeypatch):
+        board = b'[{"symbol": "AAPL", "c": 26600}, {"symbol": "GGAL", "c": NaN}, {"symbol": "YPFD", "c": Infinity}]'
+        monkeypatch.setattr(price_providers, "_data912_prices", None)
+        monkeypatch.setattr(price_providers, "_data912_load_failed", False)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=board))
+
+        await price_providers._load_data912_cache()
+
+        assert price_providers._data912_prices == {"AAPL": Decimal("26600")}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("amount", ["NaN", "Infinity"])
+    async def test_coinbase_answers_a_non_finite_amount_with_nothing(self, monkeypatch, amount):
+        body = {"data": {"amount": amount, "base": "BTC", "currency": "USD"}}
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(json_body=body))
+
+        assert await price_providers.fetch_coinbase("BTC") == []
+
+    @pytest.mark.asyncio
+    async def test_cafci_skips_a_non_finite_value_and_keeps_the_rest_of_the_sheet(self, monkeypatch):
+        # A NaN Decimal raises when compared to zero, so before the rule one such cell failed the whole
+        # download and marked CAFCI down for the cycle, rather than costing only its own fund.
+        import io
+
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Fondo", "Código CAFCI", "Valor (mil cuotapartes)", "Fecha", "Moneda Fondo"])
+        sheet.append([None, None, None, None, None])
+        sheet.append(["Fondo NaN", 1001, "NaN", "26/10/2026", "ARS"])
+        sheet.append(["Fondo Inf", 1002, "Infinity", "26/10/2026", "ARS"])
+        sheet.append(["Fondo Real", 1003, 1234.5, "26/10/2026", "ARS"])
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        monkeypatch.setattr(price_providers, "_cafci_prices", None)
+        monkeypatch.setattr(price_providers, "_cafci_registry", None)
+        monkeypatch.setattr(price_providers, "_cafci_load_failed", False)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=buffer.getvalue()))
+
+        await price_providers._load_cafci_cache()
+
+        assert price_providers._cafci_load_failed is False
+        assert price_providers._cafci_prices == {"1003": (date(2026, 10, 26), Decimal("1234.5"), "ARS")}
+
+    @pytest.mark.asyncio
+    async def test_argentinadatos_skips_a_non_finite_vcp_for_the_next_match(self, monkeypatch):
+        body = (
+            b'[{"fondo": "Fondo Real", "vcp": NaN, "fecha": "2026-10-25"},'
+            b' {"fondo": "Fondo Real", "vcp": Infinity, "fecha": "2026-10-25"},'
+            b' {"fondo": "Fondo Real", "vcp": 1234.5, "fecha": "2026-10-26"}]'
+        )
+        monkeypatch.setattr(price_providers, "_cafci_registry", {"1003": "Fondo Real"})
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=body))
+
+        assert await price_providers._fetch_fci_from_argentinadatos("1003") == [(date(2026, 10, 26), Decimal("1234.5"), "ARS")]
