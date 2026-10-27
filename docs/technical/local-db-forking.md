@@ -90,9 +90,10 @@ docker exec -i renly-db-local-5433 psql -v ON_ERROR_STOP=1 -U renly -d renly < a
 
 ### 3. Dump from source
 
-Replace placeholders with values from your `DATABASE_ADMIN_URL`. Ownership and grants are kept (no `--no-owner` / `--no-acl`): they are the isolation model, and the roles they name now exist in the fork.
+Replace placeholders with values from your `DATABASE_ADMIN_URL`. Ownership and grants are kept (no `--no-owner` / `--no-acl`): they are the isolation model, and the roles they name now exist in the fork. The dump holds every user's password hash, so it goes to the gitignored `backups/` directory and is deleted after the import.
 
 ```bash
+mkdir -p backups
 docker run --rm \
   -e PGPASSWORD=<PASSWORD> \
   postgres:16-alpine \
@@ -103,7 +104,7 @@ docker run --rm \
     -d <DATABASE> \
     --clean \
     --if-exists \
-  > dump.sql
+  > backups/dump.sql
 ```
 
 > If source host is `localhost`, replace it with `host.docker.internal` and add
@@ -113,7 +114,8 @@ docker run --rm \
 ### 4. Import to local
 
 ```bash
-docker exec -i renly-db-local-5433 psql -U renly -d renly < dump.sql
+docker exec -i renly-db-local-5433 psql -U renly -d renly < backups/dump.sql
+rm backups/dump.sql
 ```
 
 ---
