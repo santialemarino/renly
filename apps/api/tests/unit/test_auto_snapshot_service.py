@@ -92,8 +92,9 @@ class TestAutoSnapshotSkips:
         assert await auto_snapshot_service.generate_auto_snapshots(session) == 0
         session.add_all.assert_not_called()
 
-    # Postgres numeric stores both. Unguarded, NaN survives quantize and the snapshot keeps it for good;
-    # Infinity makes quantize raise, which fails the whole global batch — every user's month-end snapshot.
+    # NaN is the one non-finite value `asset_prices.price` (NUMERIC(18, 6)) can hold: unguarded, it survives
+    # quantize and the snapshot keeps it for good. Infinity cannot be stored there, so its case is defence in
+    # depth — should one ever arrive, quantize would raise and fail the whole global batch.
     @pytest.mark.asyncio
     @pytest.mark.parametrize("bad_price", [Decimal("NaN"), Decimal("Infinity")])
     async def test_a_non_finite_latest_price_is_skipped_not_written(self, monkeypatch, bad_price):
