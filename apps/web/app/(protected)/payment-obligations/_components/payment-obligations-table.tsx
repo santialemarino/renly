@@ -301,6 +301,7 @@ export function PaymentObligationsTable({
         }}
         obligation={editObligation ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
         onSuccess={() => router.refresh()}

@@ -12,6 +12,7 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 
 interface PaymentObligationsToolbarProps {
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   // Accounts the optional default funding account can be picked from.
   accounts?: Account[];
@@ -19,6 +20,7 @@ interface PaymentObligationsToolbarProps {
 
 export function PaymentObligationsToolbar({
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   accounts,
 }: PaymentObligationsToolbarProps) {
@@ -38,6 +40,7 @@ export function PaymentObligationsToolbar({
         open={createOpen}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
         onSuccess={() => router.refresh()}

@@ -28,6 +28,7 @@ import { useFormatters } from '@/lib/i18n/formatters';
 interface InstallmentsTableProps {
   installments: Installment[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   // Accounts the optional default funding account can be picked from.
   accounts?: Account[];
@@ -38,6 +39,7 @@ interface InstallmentsTableProps {
 export function InstallmentsTable({
   installments,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   accounts,
   activeCurrency,
@@ -260,6 +262,7 @@ export function InstallmentsTable({
         }}
         installment={editInstallment ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
         onSuccess={() => router.refresh()}

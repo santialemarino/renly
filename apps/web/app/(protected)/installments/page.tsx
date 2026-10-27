@@ -5,6 +5,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InstallmentsTable } from '@/app/(protected)/installments/_components/installments-table';
 import { InstallmentsToolbar } from '@/app/(protected)/installments/_components/installments-toolbar';
 import { getAccounts } from '@/lib/api/accounts';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getInstallments, type InstallmentSortField } from '@/lib/api/installments';
 import { getPageSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
@@ -31,8 +32,11 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, accounts] = await Promise.all([
+  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
     getPageSettings(),
+    // Entry forms restrict their currency picker to the convertible set; on a fetch error the
+    // picker degrades to the full list and the API's 422 still guards.
+    getSupportedCurrencies().catch(() => undefined),
     /*
      * Accounts for the plan's optional default funding account (empty on error → the field hides
      * itself). Archived ones are included so a stored default that has since been archived still
@@ -63,12 +67,14 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <InstallmentsToolbar
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
       />
       <InstallmentsTable
         installments={installments}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
         activeCurrency={currency}

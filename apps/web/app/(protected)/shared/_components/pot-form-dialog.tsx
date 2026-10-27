@@ -30,6 +30,7 @@ interface PotFormDialogProps {
   groupId: number;
   pot?: Pot;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -47,6 +48,7 @@ export function PotFormDialog({
   groupId,
   pot,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: PotFormDialogProps) {
   const t = useTranslations('shared');
@@ -150,6 +152,7 @@ export function PotFormDialog({
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('pots.form.baseCurrency.placeholder')}
                         searchPlaceholder={t('pots.form.baseCurrency.searchPlaceholder')}
                         noResults={t('pots.form.baseCurrency.noResults')}

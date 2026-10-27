@@ -58,6 +58,7 @@ interface ShareWizardProps {
   privateAccounts: Account[];
   privateInvestments: Investment[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   timeZone?: string;
 }
 
@@ -87,6 +88,7 @@ export function ShareWizard({
   privateAccounts,
   privateInvestments,
   preferredCurrencies,
+  supportedCurrencies,
   timeZone,
 }: ShareWizardProps) {
   const fmt = useFormatters();
@@ -450,6 +452,7 @@ export function ShareWizard({
                   value={chosenCurrency}
                   exclude={[]}
                   preferredCurrencies={preferredCurrencies}
+                  codes={supportedCurrencies}
                   placeholder={t('pots.form.baseCurrency.placeholder')}
                   searchPlaceholder={t('pots.form.baseCurrency.searchPlaceholder')}
                   noResults={t('pots.form.baseCurrency.noResults')}

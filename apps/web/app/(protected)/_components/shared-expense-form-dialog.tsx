@@ -614,6 +614,7 @@ export function SharedExpenseFormDialog({
                   setValue={form.setValue}
                   creditCards={creditCards}
                   preferredCurrencies={preferredCurrencies}
+                  supportedCurrencies={supportedCurrencies}
                 />
                 {/* A card charge raises the card's liability now and only draws cash later at
                     settlement, so it never also links an account. */}

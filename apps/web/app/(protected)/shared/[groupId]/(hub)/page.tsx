@@ -173,6 +173,7 @@ export default async function GroupHubPage({ params, searchParams }: GroupHubPag
         group={group}
         pots={pots}
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
+        supportedCurrencies={supportedCurrencies}
       />
       <GroupMembersSection group={group} />
       {/*

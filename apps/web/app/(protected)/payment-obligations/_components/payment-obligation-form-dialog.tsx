@@ -49,6 +49,7 @@ interface PaymentObligationFormDialogProps {
   onOpenChange: (open: boolean) => void;
   obligation?: PaymentObligation;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   // Accounts the optional default funding account can be picked from.
   accounts?: Account[];
@@ -60,6 +61,7 @@ export function PaymentObligationFormDialog({
   onOpenChange,
   obligation,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   accounts,
   onSuccess,
@@ -190,6 +192,7 @@ export function PaymentObligationFormDialog({
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}
@@ -298,6 +301,7 @@ export function PaymentObligationFormDialog({
               setValue={form.setValue}
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
             />
 
             {/* Obligations are not auto-emitted, so this default is honoured by Mark Paid: it pre-fills

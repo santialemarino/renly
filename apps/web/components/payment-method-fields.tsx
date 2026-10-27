@@ -26,6 +26,7 @@ interface PaymentMethodFieldsProps<T extends PaymentMethodFormValues & FieldValu
   setValue: UseFormSetValue<T>;
   creditCards?: CreditCard[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   // Locked-plan support (installments): disables both selects and, when disabledTooltip is
   // set, wraps them in the same tooltip pattern the installment dialog uses today.
   disabled?: boolean;
@@ -56,6 +57,7 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
   setValue: setValueProp,
   creditCards,
   preferredCurrencies,
+  supportedCurrencies,
   disabled = false,
   disabledTooltip,
 }: PaymentMethodFieldsProps<T>) {
@@ -210,6 +212,7 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
         open={cardDialogOpen}
         onOpenChange={setCardDialogOpen}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}
         onCreated={handleCardCreated}
       />
