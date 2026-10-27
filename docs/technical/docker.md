@@ -71,11 +71,11 @@ shares the api service's network namespace (`network_mode: service:api`), so por
 Two-stage build:
 
 1. **builder** — `python:3.14-slim`. Installs a pinned `uv` from the official image, copies `pyproject.toml` and `uv.lock`, runs `uv sync --locked --no-dev --no-editable` to create the venv from the lockfile (the build fails if `uv.lock` is out of date with `pyproject.toml`, so the image runs the versions CI tested), then copies the app code.
-2. **runner** — `python:3.14-slim`. Copies the `.venv` and `app/` from builder. Installs `ca-certificates`. Runs `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+2. **runner** — `python:3.14-slim`. Copies the `.venv` and `app/` from builder. Installs `ca-certificates`. Runs `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` (binds `$PORT`, defaulting to 8000).
 
 ### Web (`docker/web.Dockerfile`)
 
-Three-stage build:
+Four-stage build:
 
 1. **base** — `node:24-alpine`. Enables corepack (pnpm), sets `NEXT_TELEMETRY_DISABLED=1`.
 2. **deps** — Copies workspace manifests (`pnpm-workspace.yaml`, `pnpm-lock.yaml`, and all `package.json` files), runs `pnpm install --frozen-lockfile`.

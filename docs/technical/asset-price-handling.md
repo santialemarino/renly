@@ -29,6 +29,8 @@ Price providers live in `services/price_providers.py`. The category-to-provider 
 
 ### 2. Price provider implementations
 
+The two primaries most investments use are below. Every provider in the table above — the fallbacks included — has its notes in [external-providers.md](external-providers.md).
+
 **yfinance** (stocks, CEDEARs, government bonds):
 
 - Python library that wraps Yahoo Finance data.
@@ -53,7 +55,7 @@ CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.B
 
 **Fallback source:** BYMA PDF from `byma.com.ar/productos/productos-financieros/cedears`. The PDF URL is dynamic (date in filename), so the fetch first scrapes the BYMA page to discover the current link, then parses the PDF with pdfplumber. BYMA is the exchange where CEDEARs trade.
 
-**Fetching flow:** The service fetches both Comafi and BYMA in parallel (`asyncio.gather`). It picks the source with more entries — more entries means more complete and up to date (a stale source misses newly listed CEDEARs). If both return the same count, Comafi is preferred (authoritative issuer). If one fails, the other is used. The `source` column in `cedear_ratios` tracks which provider was used (`"comafi"` or `"byma"`).
+**Fetching flow:** The service fetches both Comafi and BYMA in parallel (`asyncio.gather`). When both answer, the one whose file is dated later wins; when the dates are equal or unknown, the one with more entries wins (a stale source misses newly listed CEDEARs); still tied, Comafi is preferred (authoritative issuer). If one fails or returns nothing, the other is used. The `source` column in `cedear_ratios` tracks which provider was used (`"comafi"` or `"byma"`).
 
 **Parsing:** Comafi Excel: headers located dynamically, ratio formats `"10:1"`, `"10"`, `"10.0"`. BYMA PDF: text extraction with pdfplumber, regex-based ratio parsing (`"N:N"` at end of each line), ticker identification by walking tokens backwards past exchange names.
 
@@ -61,12 +63,12 @@ CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.B
 
 ### 4. Scheduled jobs
 
-| Job            | Frequency                                          | Trigger    | What it does                                                            |
-| -------------- | -------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
-| Exchange rates | Every 6 hours + startup                            | `interval` | DolarApi + Frankfurter → `exchange_rates`                               |
-| Asset prices   | Daily at 22:00 UTC (after market close)            | `cron`     | yfinance + CoinGecko → `asset_prices` for all ticker-linked investments |
-| Auto-snapshots | Last day of month at 23:00 UTC (after price fetch) | `cron`     | Latest quantity × price → `investment_snapshots` with `source: 'auto'`  |
-| CEDEAR ratios  | Monthly (1st 00:00 UTC) + startup                  | `cron`     | Comafi Excel (primary) or BYMA PDF (fallback) → `cedear_ratios`         |
+| Job            | Frequency                                          | Trigger    | What it does                                                                      |
+| -------------- | -------------------------------------------------- | ---------- | --------------------------------------------------------------------------------- |
+| Exchange rates | Every 6 hours + startup                            | `interval` | DolarApi + Frankfurter → `exchange_rates`                                         |
+| Asset prices   | Daily at 22:00 UTC (after market close)            | `cron`     | each category's provider chain → `asset_prices` for all ticker-linked investments |
+| Auto-snapshots | Last day of month at 23:00 UTC (after price fetch) | `cron`     | Latest quantity × price → `investment_snapshots` with `source: 'auto'`            |
+| CEDEAR ratios  | Monthly (1st 00:00 UTC) + startup                  | `cron`     | Comafi Excel (primary) or BYMA PDF (fallback) → `cedear_ratios`                   |
 
 All schedule constants are defined at the top of `scheduler.py`. Both the scheduled job and the on-demand `/asset-prices/refresh` endpoint call `_refresh_prices_for_investments`, which **deduplicates to unique `(ticker, category)` pairs** before fetching — N investments holding the same ticker cost one provider fetch, not N (prices are stored per ticker in `asset_prices`, so one upsert covers every holder). Fetches run in bounded parallel behind an `asyncio.Semaphore(MAX_CONCURRENT_PRICE_FETCHES)` (= 8) so a large investment count can't trip provider rate limits. If a provider fails for one ticker, that pair is skipped (not the entire job).
 
@@ -92,14 +94,14 @@ cedear_ratios (ticker, underlying, ratio, effective_date, source)
   UNIQUE (ticker, effective_date)
 ```
 
-The `source` field values: `yfinance`, `coingecko`, `comafi`, `manual`.
+`asset_prices.source` names the provider that actually served the row: `yfinance`, `finnhub`, `data912`, `coingecko`, `coinbase`, `cafci` or `argentinadatos`. `cedear_ratios.source` is `comafi` or `byma`. Both columns default to `manual`, which no fetch writes.
 
 ## Failure handling
 
-- **yfinance unavailable:** The investment is skipped in the scheduled job. A warning is logged. The investment functions as manual-entry until the next successful fetch.
-- **CoinGecko unavailable:** Same — skip and log.
-- **Comafi Excel unavailable:** CEDEAR ratios are not updated. Existing ratios in the DB remain valid (ratios change only on stock splits, which are rare).
-- **Ticker not found:** yfinance returns an empty DataFrame; CoinGecko returns an empty response. The service stores 0 prices and moves on. No error is raised.
+- **A provider cannot answer** (HTTP error, rate limit, unparseable payload, missing credential): the next provider in the category's chain is tried. See [external-providers.md](external-providers.md).
+- **Every provider in the chain fails:** an error naming the ticker is logged, and the refresh logs one line listing every ticker left unpriced. That ticker is skipped, not the whole job; the app keeps showing its last stored price.
+- **A provider answers with no price** (a weekend, a delisting, a symbol it does not carry): nothing is stored and the chain stops there — an answer is not an outage.
+- **Both CEDEAR ratio sources fail:** ratios are not updated. Existing ratios in the DB remain valid (ratios change only on stock splits, which are rare).
 
 ### 6. Auto-snapshots
 

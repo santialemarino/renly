@@ -175,12 +175,12 @@ The total income you logged over the last **90 days**, normalised to 30 days. Fo
 
 **The four states:**
 
-| State   | When                                             | Colour    |
-| ------- | ------------------------------------------------ | --------- |
-| Healthy | Ratio is below your threshold                    | Green     |
-| Caution | Ratio is at or just above your threshold (≤10pp) | Amber     |
-| At risk | Ratio is more than 10pp above your threshold     | Red       |
-| Unknown | No income logged in the window, or ≥0 history    | Muted "—" |
+| State   | When                                                                              | Colour    |
+| ------- | --------------------------------------------------------------------------------- | --------- |
+| Healthy | Ratio is below your threshold                                                     | Green     |
+| Caution | Ratio is at or just above your threshold (≤10pp)                                  | Amber     |
+| At risk | Ratio is more than 10pp above your threshold                                      | Red       |
+| Unknown | No income ever logged, under 7 days of income history, or no income in the window | Muted "—" |
 
 **Configuring the threshold:** Set `liquidity_threshold_pct` (1–99) in [Settings → Alerts & limits](data-model.md). The default is 40% — a common rule-of-thumb for personal finance. Adjust higher if your fixed costs naturally run higher (Argentine residents with installments + utilities often land in the 50–60% band), or lower if you want a tighter safety margin.
 

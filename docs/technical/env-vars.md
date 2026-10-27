@@ -39,10 +39,10 @@ All environment variables used by the Renly backend and frontend, with defaults 
 | `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`         | No       | `mep`   | Default dollar rate preference (`oficial`, `mep`, or `blue`)                                                                                                                                     |
 | `NEXT_PUBLIC_CARD_PERCEPTION_MULTIPLIER`   | No       | `1.30`  | "Dólar tarjeta" multiplier over the **oficial** rate (2026: the 30% Ganancias perception). Only estimates the rate shown beside a cross-currency card settlement — no stored value depends on it |
 | `NEXT_PUBLIC_PREFERRED_CURRENCIES`         | No       | —       | Comma-separated currencies shown in a "Preferred" group in the currency combobox (e.g. `BRL,EUR,GBP`)                                                                                            |
-| `NEXT_PUBLIC_PERIOD_PRESET_1`              | No       | `1M`    | First dashboard period preset button                                                                                                                                                             |
-| `NEXT_PUBLIC_PERIOD_PRESET_2`              | No       | `3M`    | Second dashboard period preset button                                                                                                                                                            |
-| `NEXT_PUBLIC_PERIOD_PRESET_3`              | No       | `6M`    | Third dashboard period preset button                                                                                                                                                             |
-| `NEXT_PUBLIC_PERIOD_PRESET_4`              | No       | `YTD`   | Fourth dashboard period preset button                                                                                                                                                            |
+| `NEXT_PUBLIC_PERIOD_PRESET_1`              | No       | —       | First dashboard period preset button                                                                                                                                                             |
+| `NEXT_PUBLIC_PERIOD_PRESET_2`              | No       | —       | Second dashboard period preset button                                                                                                                                                            |
+| `NEXT_PUBLIC_PERIOD_PRESET_3`              | No       | —       | Third dashboard period preset button                                                                                                                                                             |
+| `NEXT_PUBLIC_PERIOD_PRESET_4`              | No       | —       | Fourth dashboard period preset button                                                                                                                                                            |
 | `NEXT_PUBLIC_MAX_COLLECTIONS`              | No       | `50`    | Maximum investment collections per user (soft limit)                                                                                                                                             |
 | `NEXT_PUBLIC_COLLECTION_LIMIT_WARNING_PCT` | No       | —       | Percentage of max collections at which an approaching-limit warning appears. No warning if omitted                                                                                               |
 | `NEXT_PUBLIC_LIQUIDITY_THRESHOLD_PCT`      | No       | `40`    | Liquidity threshold (integer percent, 1–99). Above this share of monthly income committed to fixed obligations the card turns amber; +10 pp further turns it red                                 |
@@ -56,9 +56,11 @@ per-deploy config, passed as Docker build args (`docker/web.Dockerfile`). Every 
 compile-time constant: the product default behind an in-app setting (currencies, dollar rate, period presets,
 limits, health thresholds), not something a deployment sets. Change one by changing the default and rebuilding.
 
+**Sentry source-map upload (build only).** `next build` also reads `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`; with the token set it uploads source maps, and without it the build neither uploads nor needs them. They are never read at runtime: `apps/web/.env.example` names them in a comment only, and `docker/web.Dockerfile` does not pass them.
+
 **Health thresholds are build-time fallbacks, not fixed rules.** Each of the four above can be overridden per user on the **Alerts & Limits** settings page; the env value is what the settings form shows as its placeholder and what applies until someone changes it. They colour the finance-dashboard footer cards and nothing else — no stored figure depends on them.
 
-**Period preset format:** `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If all four are omitted, only "All" is shown.
+**Period preset format:** `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If all four are omitted, only "All" is shown; `.env.example` sets `1M`, `3M`, `6M`, `YTD`.
 
 ## Shared constraints
 

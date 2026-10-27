@@ -6,6 +6,7 @@ import { AccountsToolbar } from '@/app/(protected)/accounts/_components/accounts
 import { ConceptHint } from '@/components/concept-hint';
 import { HELP_ANCHORS } from '@/config/routes';
 import { getAccounts, getAccountsGrouped, type AccountSortField } from '@/lib/api/accounts';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getGroups } from '@/lib/api/groups';
 import { getPageSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
@@ -31,7 +32,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const t = await getTranslations('accounts');
   const params = await searchParams;
 
-  const { settings } = await getPageSettings();
+  const [{ settings }, supportedCurrencies] = await Promise.all([
+    getPageSettings(),
+    // The account form restricts its currency picker to the convertible set; on a fetch error the
+    // picker degrades to the full list and the API's 422 still guards.
+    getSupportedCurrencies().catch(() => undefined),
+  ]);
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
   const scope = resolveListScope(params.scope);
@@ -80,12 +86,17 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       >
         {t('reconcileHint')}
       </ConceptHint>
-      <AccountsToolbar preferredCurrencies={preferredCurrencies} showScope={groups.length > 0} />
+      <AccountsToolbar
+        preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
+        showScope={groups.length > 0}
+      />
       <AccountsTable
         accounts={accounts}
         sections={sections}
         allAccounts={allAccounts}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         firstRun={firstRun}
         timeZone={settings?.timezone ?? undefined}
       />

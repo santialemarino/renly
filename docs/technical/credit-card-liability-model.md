@@ -5,8 +5,10 @@ How Renly handles credit cards as liabilities, not expenses.
 ## Core principle
 
 ```
-patrimony = assets (bank + investments + cash) - liabilities (credit card balances)
+patrimony = assets (bank + investments + cash) - liabilities (credit card balances) + your share of what you share
 ```
+
+The last term is the shared side — your share of co-owned pots plus what groups owe you, less what you owe them (see `metrics.md`). It is unaffected by the card mechanics below, except that a group's shared expense charged to your card adds to that card's balance.
 
 Credit cards are **liability accounts**. The card balance represents money you owe, not money you've spent. This distinction is what makes expense tracking and patrimony calculations accurate.
 
@@ -67,24 +69,27 @@ A settlement of $30,000 just reduces the total balance by $30,000 -- it doesn't 
 
 ## Card fields
 
-| Field         | Description                                                    |
-| ------------- | -------------------------------------------------------------- |
-| `name`        | User-chosen label (e.g., "Visa BBVA", "Amex Platinum").        |
-| `closing_day` | Day of month (1-31) when the billing period ends.              |
-| `due_day`     | Day of month (1-31) when payment is due.                       |
-| `currency`    | Card's denomination (ISO 4217). Settlements use this currency. |
-| `is_active`   | Whether the card is in use.                                    |
-
-`closing_day` and `due_day` are informational metadata in Phase 2 -- they become functional in Phase 3 (Payments Calendar) where they drive due date reminders and billing period calculations.
+| Field                | Description                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`               | User-chosen label (e.g., "Visa BBVA", "Amex Platinum").                                                                                     |
+| `closing_day`        | Day of month (1-31) when the billing period ends. Drives statement periods, reconciliation and the Payments Calendar.                       |
+| `due_day`            | Day of month (1-31) when payment is due. Dates the Payments Calendar's `card_due` events.                                                   |
+| `currency`           | The card's primary (statement) currency (ISO 4217). Always shown as a bucket; charges in other currencies open further buckets.             |
+| `is_active`          | Whether the card is in use (archive). Set on update; a new card always starts active.                                                       |
+| `monthly_payment`    | Optional typical monthly payment, for revolving-debt users; counts as a fixed commitment on the Liquidity card. Null = pay-in-full.         |
+| `default_account_id` | Optional account the card is normally paid from (_débito automático_), in any currency; pre-fills a settlement's funding account.           |
+| `balances`           | Computed: one `{currency, balance}` per bucket.                                                                                             |
+| `has_expenses`       | Computed: whether the caller's own expenses link to the card (see [Archive and delete](#archive-and-delete) for what else blocks a delete). |
 
 ## Settlement fields
 
-| Field      | Description                                                       |
-| ---------- | ----------------------------------------------------------------- |
-| `date`     | When the payment was made.                                        |
-| `amount`   | How much was paid.                                                |
-| `currency` | Always matches the card's currency (auto-set, not user-selected). |
-| `notes`    | Optional note (e.g., "March statement", "Partial payment").       |
+| Field                           | Description                                                                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `date`                          | When the payment was made.                                                                                                                                              |
+| `amount`                        | How much cleared the card, in `currency`.                                                                                                                               |
+| `currency`                      | Required: the bucket being paid, any supported currency. The form locks it to the card's currency when the card has one bucket and offers a picker when it has several. |
+| `account_id` / `account_amount` | Optional funding account, and what left it in its own currency (required when that differs from `currency`).                                                            |
+| `notes`                         | Optional note (e.g., "March statement", "Partial payment").                                                                                                             |
 
 ## What settlements are NOT
 
@@ -106,7 +111,7 @@ Cards can be **archived** (set `is_active = false`) to hide them from the expens
 
 **Archive is a UI filter, not an accounting event.** An archived card's outstanding balance stays a liability in every aggregation — net worth, the finance overview `credit_card_balance`, dashboard composition, the net-worth evolution series, and Payments Calendar `card_due` events all include archived cards. Archiving only hides the card from pickers and list pages. (The single exception is the liquidity indicator, which measures forward-looking monthly commitments from _active_ entities — an archived card's `monthly_payment` is no longer a commitment.)
 
-Cards can only be **deleted** when they have no linked expenses — a group's shared expenses included, which the refusal names separately ("shared expenses") because the fix is different: the user has to go to the group, not to their own list. Attempting to delete a card with either returns 409 Conflict (`HasLinkedExpensesError`). Settlements cascade on delete. The `has_expenses` field on the response tells the frontend whether the delete button should be available.
+Cards can only be **deleted** when nothing links to them: expenses, a group's shared expenses, subscriptions, installment plans or payment obligations. The refusal (409 Conflict, `HasLinkedExpensesError`) names every kind that blocks it — shared expenses separately, because the fix is different: the user has to go to the group, not to their own list. Settlements cascade on delete. The `has_expenses` field on the response reports only the first of the five (the caller's own expenses), so a card with `has_expenses = false` can still be refused.
 
 ## Statement-period scoping (running-balance snapshots)
 
@@ -115,12 +120,13 @@ The card's running balance (what you owe today) is what the credit-cards table s
 ```
 statement_balance(card, currency, closing_date) =
     sum(expense_entries.amount where credit_card_id = card AND currency = currency AND date <= closing_date)
+  + sum(shared_expenses.amount  where credit_card_id = card AND currency = currency AND date <= closing_date)
   − sum(card_settlements.amount where credit_card_id = card AND currency = currency AND date <= closing_date)
 ```
 
 This is a running-balance **snapshot** at `closing_date` per bucket. Carryover from earlier unpaid statements is implicit (it's already in the running total). This matches how a real bank resumen prints "Saldo total" each month — every settlement up to the closing date counts; everything else is next month's problem.
 
-Pure helper: `compute_bucket_balance_at(card_id, currency, as_of_date)` — used by both the Payments Calendar's `_card_due_items` and the reconciliation service.
+Helper: `compute_bucket_balance_at(session, card_id, currency, as_of_date)` in `card_reconciliation_service` (async; it runs the expense and settlement sums), with a batched twin `compute_bucket_balances_at` for many cards at one date — used by the Payments Calendar's `_card_due_items` and the reconciliation service.
 
 **Which statement a due date pays.** Decided by the card's configured days, not by the dates they clamp to in a short month: when `closing_day < due_day` the bill due in month M is for the statement that closed in M; otherwise — equal days included — it is the previous month's statement. Equal days are a one-month gap, not a same-day close (a statement is issued at least 5 days before it is due under Ley 25.065), so the paid window below is a full month. Comparing days keeps every statement billed exactly once: a card closing on the 29th–31st and due on the 28th bills January 31's statement in February and February 28's in March.
 
@@ -216,6 +222,6 @@ Reconcile lives only inside the credit-cards table expandable row, as a sibling 
 
 ## Where this is implemented
 
-- **Backend:** `credit_card_service.get_card_balances()` returns one `CardBucketBalance(currency, balance)` per currency with activity on each card. `expense_repository.sum_by_credit_card_ids_grouped()` + `card_settlement_repository.sum_by_card_ids_grouped()` return per-currency totals; `compute_card_balances()` (pure function) subtracts settlements from expenses inside each bucket. No cross-currency conversion at this layer. The card's primary currency always appears as a bucket even with zero activity so newly-created cards still render. `_to_response()` in the credit cards router emits `balances: list[CardBucketBalanceResponse]`. Statement-period math: `compute_bucket_balance_at(card_id, currency, as_of_date)` (pure, in `card_reconciliation_service`). Reconciliation orchestration: `card_reconciliation_service.create_or_replace(...)` is atomic — drops prior + cascades, then inserts reconciliation + adjustment, then patches the adjustment back-pointer, then commits. Stale-detection hooks in `expense_service` + `credit_card_service` (settlements) call `card_reconciliation_service.mark_stale_for_date(card_id, currency, date)`. The adjustment row itself is protected by `ensure_not_reconciliation_owned` (`app/domain/reconciliation.py`), called at the top of the four expense/income update+delete service functions.
+- **Backend:** `credit_card_service.get_card_balances()` returns one `CardBucketBalance(currency, balance)` per currency with activity on each card. `expense_repository.sum_by_credit_card_ids_grouped()` + `shared_expense_repository.sum_by_credit_card_ids_grouped()` + `card_settlement_repository.sum_by_card_ids_grouped()` return per-currency totals; `compute_card_balances()` (pure function) adds the two expense sides and subtracts settlements inside each bucket. No cross-currency conversion at this layer. The card's primary currency always appears as a bucket even with zero activity so newly-created cards still render. `_to_response()` in the credit cards router emits `balances: list[CardBucketBalanceResponse]`. Statement-period math: `compute_bucket_balance_at(session, card_id, currency, as_of_date)` (async, in `card_reconciliation_service`). Reconciliation orchestration: `card_reconciliation_service.create_or_replace(...)` is atomic — drops prior + cascades, then inserts reconciliation + adjustment, then patches the adjustment back-pointer, then commits. Stale-detection hooks in `expense_service` + `credit_card_service` (settlements) call `card_reconciliation_service.mark_stale_for_date(card_id, currency, date)`. The adjustment row itself is protected by `ensure_not_reconciliation_owned` (`app/domain/reconciliation.py`), called at the top of the four expense/income update+delete service functions.
 - **Frontend:** The credit cards table renders one balance line per currency bucket (primary first, others alphabetical). Single-currency cards show a single line — visually identical to the pre-Phase-3 behaviour. The settlement form shows a currency picker only when the card has multiple buckets; otherwise it locks to the primary. The expense form runs a soft confirmation when a credit-card expense uses a currency the card hasn't seen before (catches typos that would create phantom buckets). The expandable row now carries a Reconciliations sub-section beside Settlements: per-bucket list of recent statements with status badges, a "Last reconciled" header, and the reconcile form dialog (pre-fill + banner on replace).
 - **DB schema:** `expense_entries.credit_card_id` + `expense_entries.currency`, `card_settlements.credit_card_id` + `card_settlements.currency`. Bucket identity is `(card_id, currency)` — derived at query time, not stored. `card_reconciliations` table with `UNIQUE (card_id, currency, period_start, period_end)`. `expense_entries.reconciliation_id` + `income_entries.reconciliation_id` (BIGINT, nullable, `REFERENCES card_reconciliations(id) ON DELETE CASCADE`; both are also surfaced read-only on `ExpenseResponse` / `IncomeResponse` so clients can tell an adjustment from an authored entry). Category enum values for the adjustments: `expense_category.card_fees_and_taxes` and `expense_category.card_credits_and_refunds` (both directions are expenses — only an expense can move a bucket). `income_category.card_credits_and_refunds` remains declared but is no longer written.

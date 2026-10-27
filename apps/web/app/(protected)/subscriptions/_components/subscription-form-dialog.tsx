@@ -233,6 +233,7 @@ export function SubscriptionFormDialog({
               setValue={form.setValue}
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
             />
 
             {/* A card-paid subscription hits the card and draws cash at the settlement, so it names no

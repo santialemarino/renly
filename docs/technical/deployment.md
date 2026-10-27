@@ -57,19 +57,25 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 | `ENVIRONMENT`         | `production` disables `/docs` and tracebacks. **Required** — the API refuses to start without it.                                                  |
 | `CORS_ORIGINS`        | Comma-separated allowed origins (the production web URL).                                                                                          |
 | `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                            |
+| `WEB_BASE_URL`        | The production web URL (no trailing slash). Every account-email link (verification, password reset, invites) is built from it.                     |
+| `SIGNUP_MODE`         | `invite` (default) — registering needs an admin invite — or `open`.                                                                                |
+| `EMAIL_PROVIDER`      | `resend` in production. The default, `console`, only logs each message, so nobody receives a verification link and nobody can finish signing up.   |
+| `EMAIL_API_KEY`       | The Resend API key. Required when `EMAIL_PROVIDER=resend` — the API refuses to start without it.                                                   |
+| `EMAIL_FROM`          | The sender, e.g. `Renly <noreply@yourdomain.com>` — a sender verified with Resend.                                                                 |
+| `VAPID_PRIVATE_KEY`   | Optional; enables web push (empty = this deployment sends none). `VAPID_SUBJECT` optionally names its contact.                                     |
 | `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                              |
 
 With `SENTRY_DSN` set, add a Sentry alert rule at deploy on events whose message starts with `SCHEDULED JOB FAILED` (the recommended default): a failed background job is reported there and in the logs, nowhere else ([scheduler](scheduler.md#error-handling)).
 
 **Web:**
 
-| Variable                                              | Notes                                                                                                                            |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                               |
-| `NEXTAUTH_URL`                                        | The production web URL.                                                                                                          |
-| `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                               |
-| `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime. |
-| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Optional, build-only — set to upload source maps; without the token the build neither uploads nor needs them.                    |
+| Variable                                              | Notes                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                                                                                                                                |
+| `NEXTAUTH_URL`                                        | The production web URL.                                                                                                                                                                                                           |
+| `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                                                                                                                                |
+| `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime.                                                                                                  |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Read by `next build` to upload source maps, and without the token it neither uploads nor needs them. `docker/web.Dockerfile` declares none of the three, so the image build never uploads: Sentry receives minified stack traces. |
 
 ---
 

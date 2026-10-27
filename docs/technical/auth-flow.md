@@ -40,7 +40,7 @@ The access control between "my friends" and the public for the invited beta. `SI
 - **`invites` table** — one invite per email (`email` unique, lowercased), following the `auth_tokens` pattern: only the **SHA-256 hash** of the raw token (`secrets.token_urlsafe(32)`) is stored, single-use (`consumed_at`), time-limited (`expires_at`, 7 days). `status` is `pending` / `accepted` / `revoked`; an expired link is a pending invite past `expires_at` (derived, shown to admins as "expired", not stored). `invited_by` references the admin. Under RLS keyed on `invited_by` as defense-in-depth — every invite flow runs on the **privileged session** (admin reads span all invites; the register/signup-context lookups are pre-auth), so the real gate is `is_admin` at the endpoint.
 - **Admin endpoints** (`/admin`, all `AdminUser`-gated, privileged session):
   - `POST /admin/invites` `{email}` — creates (or re-arms an existing invite for that email), stores the token hash, emails the signup link. `409` if the email already has an account.
-  - `GET /admin/invites` — lists every invite with its effective status, sent (created) and accepted (consumed) timestamps.
+  - `GET /admin/invites` — one page (`page`, `page_size`) of every invite, newest first, with its effective status, sent (created) and accepted (consumed) timestamps.
   - `POST /admin/invites/{id}/resend` — rotates the token, restarts the window, re-sends the link. `404` unknown, `409` if already accepted.
   - `POST /admin/invites/{id}/revoke` — sets `revoked` so the link stops working. `404` unknown, `409` if already accepted.
 - **Accept flow** — the emailed link is `{WEB_BASE_URL}/signup?invite=<raw_token>`. `GET /auth/signup-context?invite=<token>` (pre-auth, privileged session) returns `{signup_mode, invited_email}`: in invite mode a valid token resolves the bound email (so the signup form locks to it), an invalid/missing token returns `invited_email: null` (the web shows an invite-only screen — **no open form**, preserving the AUTH-5 anti-enumeration property). `POST /auth/register` then re-validates the token + email match server-side and consumes it.
@@ -96,7 +96,7 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 - `POST /me/change-password` `{current_password, new_password}` — verifies the current password, rejects breached new passwords, updates the hash, and bumps `session_epoch` (logs out other sessions). The web signs the user out afterward to re-login.
 - `POST /me/change-email` `{current_password, new_email}` — verifies the password, then emails a confirmation link to the new address (or a "this email already has an account" notice if it's taken). Uniform `202`. The address only switches when the link is confirmed via `verify-email/confirm`. Runs the availability check on the **privileged session** so it can see every account (RLS would otherwise hide other users' rows).
 - `GET /me/export` — returns the user's full data set as a downloadable JSON document (`Content-Disposition: attachment`). Excludes the password hash and api-key hashes/prefixes. Unpaged by contract (it is the whole data set), so it is rate-limited per user instead (`EXPORT_LIMIT`, 10/hour — the same rate as restoring an export).
-- `DELETE /me` `{password, confirmation}` — verifies the password and a typed confirmation matching the account email, then deletes the user. FK `ON DELETE CASCADE` removes every owned row. The web signs out and returns to login.
+- `DELETE /me` `{password, confirmation}` — verifies the password and a typed confirmation matching the account email, then deletes the user. It is refused with `409 group_balance_outstanding` while the account holds an open balance in a group that will outlive it (a group where it is the last account-holder is absorbed instead: its pots' holdings become the user's own and go with them). FK `ON DELETE CASCADE` removes every owned row. The web signs out and returns to login.
 
 `auth_tokens` (and `refresh_tokens`, AUTH-7) are under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches them runs on the privileged session (`renly_admin`, `BYPASSRLS`) and bypasses RLS — the pre-auth flows have no user context (login issues a refresh token before any request-session context exists; `/auth/refresh` carries a refresh token, not an access token), and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policies are defense-in-depth (SEC-15).
 
@@ -254,7 +254,7 @@ The two helpers follow `app_is_group_member`'s shape exactly — `SECURITY DEFIN
 User submits email + password (+ "Remember me")
   → NextAuth Credentials.authorize()
   → loginRequest(email, password, rememberMe)  // POST /auth/login → {access_token, expires_in, refresh_token, refresh_expires_in}
-  → meRequest(access_token)                     // GET /auth/me → {uid, email, name, plan, email_verified}
+  → meRequest(access_token)                     // GET /auth/me → {uid, email, name, plan, email_verified, is_admin}
   → returns User object to NextAuth with accessToken + expiresIn + refreshToken + refreshExpiresIn
 ```
 
@@ -270,7 +270,7 @@ Login can also fail with **403** when the email isn't verified yet (`loginReques
 
 ### JWT callback
 
-On initial sign-in, stores `uid`, `email`, `name`, `accessToken`, `accessTokenExpires` (computed as `Date.now() + expiresIn * 1000`), `refreshToken`, and `refreshTokenExpires` in the NextAuth JWT. The refresh token stays **inside the encrypted NextAuth JWT and is never exposed to the session** (the client only ever sees the access token).
+On initial sign-in, stores `uid`, `email`, `name`, `isAdmin`, `accessToken`, `accessTokenExpires` (computed as `Date.now() + expiresIn * 1000`), `refreshToken`, and `refreshTokenExpires` in the NextAuth JWT. The refresh token stays **inside the encrypted NextAuth JWT and is never exposed to the session** (the client only ever sees the access token).
 
 On subsequent requests, if the access token is still valid (with a 60 s skew) the token is returned unchanged. Otherwise the callback **silently renews** it via `refreshRequest(refreshToken)` → `POST /auth/refresh`, storing the new access token + the rotated refresh token. The renewal runs on every navigation through the NextAuth middleware (`proxy.ts`). Only when there is no usable refresh token, or the backend rejects it (expired / revoked / reused / epoch-stale → 401), does the callback set `error: 'SessionExpired'`, which the authorized callback turns into a redirect to login.
 
@@ -283,6 +283,7 @@ session.user = {
   id,
   email,
   name,
+  isAdmin,
   accessToken,
   expiresIn,
   error,

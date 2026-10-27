@@ -69,7 +69,7 @@ NEXT_PUBLIC_PERIOD_PRESET_3=6M
 NEXT_PUBLIC_PERIOD_PRESET_4=YTD
 ```
 
-Format: `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If no env vars are set, defaults to: 1M, 3M, 6M, YTD, All.
+Format: `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. There is no in-code fallback: with none of the four set, the picker offers only "All" (until the user picks presets in settings), which is why `.env.example` sets the four values above.
 
 ## Whose "today"? (timezones)
 

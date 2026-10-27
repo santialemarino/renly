@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ShareWizard } from '@/app/(protected)/shared/[groupId]/share/_components/share-wizard';
 import { shareWizardEntry } from '@/app/(protected)/shared/pot-rules';
 import { getAccounts } from '@/lib/api/accounts';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getGroup } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
 import { getPot, getPotHoldings, getPotOwnershipEvents } from '@/lib/api/pots';
@@ -54,10 +55,13 @@ export default async function SharePage({ params, searchParams }: SharePageProps
    * in either. Active-only because an archived holding contributes nothing to the pot's value, so
    * sharing one and then dividing that value would divide a figure it is not part of.
    */
-  const [accounts, investments, settings] = await Promise.all([
+  const [accounts, investments, settings, supportedCurrencies] = await Promise.all([
     getAccounts(),
     getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
     getSettings().catch(() => null),
+    // The new pot's currency picker offers only the convertible set; on a fetch error it degrades to
+    // the full list and the API's 422 still guards.
+    getSupportedCurrencies().catch(() => undefined),
   ]);
 
   if (potId === null) {
@@ -72,6 +76,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
         privateAccounts={accounts}
         privateInvestments={investments.items}
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
+        supportedCurrencies={supportedCurrencies}
         timeZone={settings?.timezone ?? undefined}
       />
     );
@@ -96,6 +101,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
       privateAccounts={accounts}
       privateInvestments={investments.items}
       preferredCurrencies={settings?.preferredCurrencies ?? undefined}
+      supportedCurrencies={supportedCurrencies}
       timeZone={settings?.timezone ?? undefined}
     />
   );

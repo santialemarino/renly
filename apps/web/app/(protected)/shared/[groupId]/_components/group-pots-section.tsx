@@ -32,6 +32,7 @@ interface GroupPotsSectionProps {
   group: Group;
   pots: Pot[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
 }
 
 /*
@@ -49,7 +50,12 @@ interface GroupPotsSectionProps {
  * ownership history is known — from here they could only guess whether adding to it is safe, and
  * putting a holding into an already-divided pot hands its value to every owner pro-rata.
  */
-export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPotsSectionProps) {
+export function GroupPotsSection({
+  group,
+  pots,
+  preferredCurrencies,
+  supportedCurrencies,
+}: GroupPotsSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -107,6 +113,7 @@ export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPots
         onOpenChange={setCreateOpen}
         groupId={group.id}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}
       />
     </div>

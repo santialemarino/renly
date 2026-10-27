@@ -91,18 +91,22 @@ RESTORE_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' \
 
 ## Rehearsed restore
 
-A restore was rehearsed end-to-end against throwaway containers (the shared dev `renly-postgres`
-is never touched):
+A restore was rehearsed end-to-end (last on 2026-10-27, against the schema of 42 tables) on throwaway
+databases — the shared dev database is never touched:
 
-1. Spin a **source** container, apply `01_create_tables.sql`, seed a user + an investment.
-2. `BACKUP_DATABASE_URL=…source… pnpm db:backup` → `backups/renly-<ts>.sql.gz`.
-3. Spin an **empty target** container.
-4. `RESTORE_DATABASE_URL=…target… pnpm db:restore <file> --force`.
+1. Create an empty **source** database, apply `01_create_tables.sql` as the owner, seed a user and an
+   investment as `renly_admin`.
+2. `BACKUP_DATABASE_URL=…source (renly_admin)… pnpm db:backup` → `backups/renly-<ts>.sql.gz`.
+3. Create an empty **target** database.
+4. `RESTORE_DATABASE_URL=…target (owner)… pnpm db:restore <file> --force`, then the ACL extraction
+   above, as the owner.
 5. Compare the target against the source.
 
-**Verified result:** the target matched the source exactly — `users=1`, `investments=1`, all 19
-tables present, the seeded rows round-tripped, all **16 RLS policies** restored, and
-`relrowsecurity` stayed `true` on the user-scoped tables. `psql` ran clean under `ON_ERROR_STOP=1`.
+**Verified result:** the target matched the source exactly — `users=1`, `investments=1`, all 42
+tables present, the seeded rows round-tripped, all **58 RLS policies** restored, row security enabled
+and FORCEd on the same 39 tables, the four `SECURITY DEFINER` functions owned by
+`renly_policy_definer`, `renly_app`'s 164 table and 1,260 column grants identical, and
+`shared_audit_log` still refusing `UPDATE` to `renly_app`. `psql` ran clean under `ON_ERROR_STOP=1`.
 
 Re-run this rehearsal whenever the schema changes materially (new tables, new RLS policies) to
 confirm dumps still restore cleanly.

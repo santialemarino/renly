@@ -39,8 +39,9 @@ export default async function PaymentObligationsPage({
 
   const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
     getPageSettings(),
-    // The Mark-Paid expense dialog restricts its currency picker to the convertible set; on a
-    // fetch error the picker degrades to the full list and the API's 422 still guards.
+    // The obligation form and the Mark-Paid expense dialog restrict their currency picker to the
+    // convertible set; on a fetch error the picker degrades to the full list and the API's 422 still
+    // guards.
     getSupportedCurrencies().catch(() => undefined),
     /*
      * Accounts for the optional "paid from" link on a non-card Mark-Paid expense and for an
@@ -73,6 +74,7 @@ export default async function PaymentObligationsPage({
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <PaymentObligationsToolbar
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
       />

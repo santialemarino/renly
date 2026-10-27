@@ -48,6 +48,7 @@ interface InstallmentFormDialogProps {
   onOpenChange: (open: boolean) => void;
   installment?: Installment;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   // Accounts the optional default funding account can be picked from.
   accounts?: Account[];
@@ -69,6 +70,7 @@ export function InstallmentFormDialog({
   onOpenChange,
   installment,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   accounts,
   onSuccess,
@@ -288,6 +290,7 @@ export function InstallmentFormDialog({
                                       value={field.value || null}
                                       exclude={[]}
                                       preferredCurrencies={preferredCurrencies}
+                                      codes={supportedCurrencies}
                                       disabled={isLocked}
                                       placeholder={t('form.currency.placeholder')}
                                       searchPlaceholder={t('form.currency.searchPlaceholder')}
@@ -436,6 +439,7 @@ export function InstallmentFormDialog({
                                     value={field.value || null}
                                     exclude={[]}
                                     preferredCurrencies={preferredCurrencies}
+                                    codes={supportedCurrencies}
                                     disabled={isLocked}
                                     placeholder={t('form.currency.placeholder')}
                                     searchPlaceholder={t('form.currency.searchPlaceholder')}
@@ -555,6 +559,7 @@ export function InstallmentFormDialog({
               setValue={form.setValue}
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
               disabled={isLocked}
               disabledTooltip={t('form.locked')}
             />

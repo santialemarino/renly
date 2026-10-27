@@ -309,7 +309,7 @@ CREATE INDEX idx_investments_created_by ON investments(created_by);
 
 -- Investment snapshots
 -- Total value of an investment at a point in time (typically end of month).
--- UNIQUE(investment_id, date) enforces one snapshot per investment per month.
+-- UNIQUE(investment_id, date) enforces one snapshot per investment per date.
 -- user_id is denormalized from the parent investment so the row-level-security policy
 -- (SEC-15) is a direct user_id check instead of a per-row EXISTS-join to investments.
 CREATE TABLE investment_snapshots (

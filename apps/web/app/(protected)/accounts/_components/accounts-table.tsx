@@ -47,6 +47,7 @@ interface AccountsTableProps {
   // Unfiltered, for the transfer dialog's pickers — the page's `accounts` is search/archive filtered.
   allAccounts: Account[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   firstRun?: boolean;
   // The user's settings timezone, so "today" in the reconcile dialog matches the API's date guards.
   timeZone?: string;
@@ -57,6 +58,7 @@ export function AccountsTable({
   sections,
   allAccounts,
   preferredCurrencies,
+  supportedCurrencies,
   firstRun,
   timeZone,
 }: AccountsTableProps) {
@@ -362,6 +364,7 @@ export function AccountsTable({
         }}
         account={editAccount ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}
       />
 

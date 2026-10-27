@@ -14,12 +14,17 @@ import { resolveListScope } from '@/lib/list-scope';
 
 interface AccountsToolbarProps {
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
   // so a solo user (every public user at launch) sees no added control.
   showScope?: boolean;
 }
 
-export function AccountsToolbar({ preferredCurrencies, showScope }: AccountsToolbarProps) {
+export function AccountsToolbar({
+  preferredCurrencies,
+  supportedCurrencies,
+  showScope,
+}: AccountsToolbarProps) {
   const t = useTranslations('accounts');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,6 +52,7 @@ export function AccountsToolbar({ preferredCurrencies, showScope }: AccountsTool
         open={createOpen}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}
       />
     </EntityListToolbar>

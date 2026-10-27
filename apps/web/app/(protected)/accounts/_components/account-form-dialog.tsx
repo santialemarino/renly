@@ -37,6 +37,7 @@ interface AccountFormDialogProps {
   onOpenChange: (open: boolean) => void;
   account?: Account;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -45,6 +46,7 @@ export function AccountFormDialog({
   onOpenChange,
   account,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: AccountFormDialogProps) {
   const t = useTranslations('accounts');
@@ -168,6 +170,7 @@ export function AccountFormDialog({
                               value={field.value || null}
                               exclude={[]}
                               preferredCurrencies={preferredCurrencies}
+                              codes={supportedCurrencies}
                               disabled={currencyLocked}
                               placeholder={t('form.currency.placeholder')}
                               searchPlaceholder={t('form.currency.searchPlaceholder')}

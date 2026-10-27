@@ -67,5 +67,7 @@ apps/web/tests/e2e/.auth/
 # Local artifacts
 screenshots/
 
-# Database backups (pg_dump output from scripts/db-backup.mjs)
+# Database dumps — every one holds each user's bcrypt hash (pg_dump output from scripts/db-backup.mjs,
+# and the manual fork's dump in docs/technical/local-db-forking.md)
 backups/
+dump.sql

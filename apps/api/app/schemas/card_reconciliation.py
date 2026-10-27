@@ -4,9 +4,9 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 from app.schemas.pagination import PaginatedResponse
 
 
@@ -21,6 +21,8 @@ class CardReconciliationCreate(RequestBase):
         max_digits=18,
         decimal_places=2,
     )
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
 # Response for a single reconciliation. Returned by GET, POST, and the latest-per-bucket endpoint.

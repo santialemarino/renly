@@ -784,6 +784,7 @@ export function ExpenseFormDialog({
                 setValue={form.setValue}
                 creditCards={creditCards}
                 preferredCurrencies={preferredCurrencies}
+                supportedCurrencies={supportedCurrencies}
               />
 
               {/* A card expense hits the card and only draws cash later at settlement, so it never
