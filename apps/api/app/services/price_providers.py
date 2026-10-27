@@ -12,6 +12,7 @@
 
 import asyncio
 import logging
+import math
 from collections.abc import Awaitable, Callable
 from datetime import date as date_type
 from datetime import timedelta
@@ -130,7 +131,9 @@ async def fetch_yfinance(
         for idx, row in hist.iterrows():
             price_date = idx.date() if hasattr(idx, "date") else idx
             close = row.get("Close")
-            if close is not None:
+            # Yahoo serves the current, not-yet-closed day as a row with a NaN close. Stored as a price,
+            # NaN fails the price endpoints and would freeze into an auto-snapshot's value.
+            if close is not None and math.isfinite(close):
                 results.append((price_date, Decimal(str(round(close, 6))), currency))
         return results
 

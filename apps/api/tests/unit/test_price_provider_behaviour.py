@@ -81,6 +81,35 @@ class TestCoinGeckoReportsARateLimitItServesWithHTTP200:
             await price_providers.fetch_coingecko("bitcoin")
 
 
+class TestYahooTheDayStillTradingIsNotAPrice:
+    @pytest.mark.asyncio
+    async def test_a_NaN_close_is_dropped_and_the_real_closes_kept(self, monkeypatch):
+        # Reproduced live (AAPL, SPY, 2026-10-26): `history(period="5d")` ends with today's row, whose
+        # Close is NaN until the market has closed. A real DataFrame, so the row walk is yfinance's shape.
+        import sys
+        import types
+
+        import pandas as pd
+
+        frame = pd.DataFrame(
+            {"Close": [101.25, 102.5, float("nan")]},
+            index=pd.DatetimeIndex(["2026-10-22", "2026-10-23", "2026-10-26"]),
+        )
+
+        class _Ticker:
+            def __init__(self, ticker):
+                self.info = {"currency": "usd"}
+
+            def history(self, **kwargs):
+                return frame
+
+        monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=_Ticker))
+        assert await price_providers.fetch_yfinance("AAPL") == [
+            (date(2026, 10, 22), Decimal("101.25"), "USD"),
+            (date(2026, 10, 23), Decimal("102.5"), "USD"),
+        ]
+
+
 class TestTheTwoCryptoProvidersDisagreeAboutWhatATickerIs:
     # CoinGecko addresses a coin by id ("bitcoin") and 404s on a symbol; Coinbase wants the symbol
     # ("BTC"). Nothing validates the ticker on entry, so both spellings exist in real data — a holding

@@ -92,6 +92,35 @@ class TestAutoSnapshotSkips:
         assert await auto_snapshot_service.generate_auto_snapshots(session) == 0
         session.add_all.assert_not_called()
 
+    # Postgres numeric stores both. Unguarded, NaN survives quantize and the snapshot keeps it for good;
+    # Infinity makes quantize raise, which fails the whole global batch — every user's month-end snapshot.
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_price", [Decimal("NaN"), Decimal("Infinity")])
+    async def test_a_non_finite_latest_price_is_skipped_not_written(self, monkeypatch, bad_price):
+        investments = [_inv(inv_id=1, ticker="AAPL", base_currency="USD"), _inv(inv_id=3, ticker="MSFT", base_currency="USD")]
+        monkeypatch.setattr(auto_snapshot_service.investment_repository, "list_with_ticker", AsyncMock(return_value=investments))
+        monkeypatch.setattr(auto_snapshot_service.snapshot_repository, "get_ids_with_snapshot_on_date", AsyncMock(return_value=set()))
+        monkeypatch.setattr(
+            auto_snapshot_service.asset_price_repository,
+            "get_latest_by_tickers",
+            AsyncMock(
+                return_value={
+                    "AAPL": _price(ticker="AAPL", price=bad_price, currency="USD"),
+                    "MSFT": _price(ticker="MSFT", price=Decimal("300"), currency="USD"),
+                }
+            ),
+        )
+        monkeypatch.setattr(
+            auto_snapshot_service.snapshot_repository,
+            "get_latest_by_investments",
+            AsyncMock(return_value={i: _snap(inv_id=i, quantity=Decimal("10")) for i in (1, 3)}),
+        )
+        session = AsyncMock()
+        session.add_all = Mock()
+        assert await auto_snapshot_service.generate_auto_snapshots(session) == 1
+        added = session.add_all.call_args.args[0]
+        assert [(s.investment_id, s.value) for s in added] == [(3, Decimal("3000"))]
+
 
 class TestAutoSnapshotRounding:
     @pytest.mark.asyncio
