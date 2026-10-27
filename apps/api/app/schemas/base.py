@@ -45,6 +45,16 @@ def validate_supported_currency(value: str | None) -> str | None:
     return code
 
 
+# Reusable before-validator for a plan's Create body (subscription, installment, payment obligation):
+# refuses `is_active`, which only the Update body accepts. A new plan always starts active, so dropping
+# the field silently would let a client believe it had created an archived plan. Attach with
+# `model_validator(mode="before")(reject_is_active_on_create)`.
+def reject_is_active_on_create(values: Any) -> Any:
+    if isinstance(values, dict) and "is_active" in values:
+        raise ValueError("is_active cannot be set on create: a new plan always starts active. Archive it with a PUT afterwards.")
+    return values
+
+
 # Reusable field validator rejecting a reserved, system-generated expense category on a request
 # (app/domain/reconciliation.py owns the set). Only a reconciliation writes those values, and it does
 # so through the repositories, never through a request schema — so accepting one here would let a user

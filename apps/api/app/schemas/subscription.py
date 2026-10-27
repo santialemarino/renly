@@ -7,7 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
-from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.base import RequestBase, reject_is_active_on_create, validate_supported_currency
 
 
 # Body for POST /subscriptions.
@@ -26,6 +26,9 @@ class SubscriptionCreate(RequestBase):
 
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # is_active belongs to the Update body only; sending it on create is a 422, not a silent drop.
+    _reject_is_active = model_validator(mode="before")(reject_is_active_on_create)
 
     # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
     # a card-less credit_card entry is allowed (zero-card users, imports). A default funding
