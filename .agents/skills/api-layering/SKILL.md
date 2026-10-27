@@ -13,7 +13,7 @@ Request flow: **router → service → repository → DB**.
 - **services/** — Business logic: orchestrate use cases, call repositories. Use **domain** types and **models**; no HTTP or raw SQL. Owns the transaction boundary (`session.commit()` once per use case).
 - **repositories/** — Data access: run queries, `session.add()` / `session.flush()`. Use **models**, the session, and the **domain** value types that shape a query or a row (`ListScope` in five repositories and `repositories/utils.py`, the `AccountMovement` row types in `account_movement_repository.py`). Never call `session.commit()` — the service commits.
 - **schemas/** — Pydantic request/response DTOs (HTTP contract). Request bodies inherit from `RequestBase` (`schemas/base.py`) which auto-strips strings and converts empty optionals to `None`. Response schemas inherit from `BaseModel`.
-- **domain/** — Types services work with (value objects, enums, errors, specs). Not HTTP. It MAY import **models**: mostly the `StrEnum`s the tables declare (`Currency`, `ExpenseCategory`, `NotificationEvent`, …), and the restore/import specs bind each spec to its model class (`restore_specs.py`, `import_specs.py`). It never imports repositories, services, schemas or routers.
+- **domain/** — Types services work with (value objects, enums, errors, specs). Not HTTP. It MAY import **models**: mostly the `StrEnum`s the tables declare (`Currency`, `ExpenseCategory`, `NotificationEvent`, …), and `restore_specs.py` binds each restore spec to its model class (`import_specs.py` imports only those enums). It never imports repositories, services, schemas or routers.
 - **models/** — SQLModel tables (DB entities).
 - **deps/** — FastAPI dependencies (`SessionDep` and its two privileged siblings, `CurrentUser`, `PageQuery`, the currency param). Injected by the framework.
 
@@ -263,8 +263,8 @@ Use `sum()`, `max()`, `min()`, list comprehensions, and generators instead of ma
 
 A repository file is module-level `async def` queries plus a `<Entity>Repository` class that re-exports
 each one as `name = staticmethod(name)`, and a singleton of that class (`feedback_repository =
-FeedbackRepository()`) is what services import — also re-exported, alphabetically, from
-`app/repositories/__init__.py`. **A new public `async def` is not reachable until its
+FeedbackRepository()`) is what services import — most are also re-exported, alphabetically, from
+`app/repositories/__init__.py` (not every one yet: `feedback_repository` is imported from its module). **A new public `async def` is not reachable until its
 `staticmethod` line is added**: the module imports fine and `pnpm check:api` passes, and the first
 service call is an `AttributeError`. `tests/unit/test_repository_namespaces.py` parses every
 `*_repository.py` and fails on a public `async def` missing from its class (and on a file without the
@@ -327,8 +327,9 @@ two together:
   one the current SQL file builds. So a migration must also work offline: a migration
   that reads the database decides inside one SQL statement (a `DO` block), never through
   `op.get_bind()`.
-- **Functions are byte-identical.** `tests/unit/test_schema_parity.py` derives every function the
-  schema file defines and requires some migration to carry the same body verbatim (pg_dump reproduces
+- **Functions are byte-identical.** `tests/unit/test_schema_parity.py` takes every function some
+  migration defines and requires the schema file to carry the same body verbatim (a function only the
+  schema file defines is outside it — the CI chain replay above is what catches a missing migration copy) (pg_dump reproduces
   a body exactly, so a re-indented copy is a real difference). The same file pins which tables are
   policied, FORCEd and split per command, and the global reference tables that are not.
 - **Enums have twins.** A new `StrEnum` fails `tests/unit/test_enum_parity.py` until it is paired with

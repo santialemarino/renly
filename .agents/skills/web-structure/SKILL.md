@@ -29,7 +29,7 @@ description: Frontend app structure and where to create files (pages, components
 - **Server-side data fetching (reads):** `lib/api/<feature>.ts` with `import 'server-only'`. Used directly in server components (`page.tsx`). Can be imported by multiple pages.
 - **Cross-entity API contract types:** `lib/api/types.ts` (e.g. `SortOrder`) — shared by multiple `lib/api/<feature>.ts` modules; entity-specific types stay in their feature module.
 - **Server mutations:** `<feature>-actions.ts` colocated with the page (`'use server'`), e.g. `investments/investments-actions.ts`, `login/login-actions.ts`; a component's own action sits beside it in `_components/` (`feedback-actions.ts`). Called from client components. Feature-specific; do not put in `lib/`. (`notifications/actions.ts` is the one file still on the old bare name.)
-- **Form schemas:** the zod schema is `<feature>-form-schema.ts` beside the form's page (`form-schema.ts` in the single-form auth routes and `admin/`). There is no `schema.ts`.
+- **Form schemas:** the zod schema is `<feature>-form-schema.ts` beside the form's page (`form-schema.ts` in the single-form auth routes and `admin/`; `account/form-schemas.ts` holds that page's several schemas). There is no `schema.ts`.
 - **Used on multiple pages (this app only):** Put in the app's `components/` folder.
 - **Reusable across apps (design system):** Put in `packages/ui/src/components`, add to the package's `index.ts`, and import from `@repo/ui/components` in the web app.
 - **Routes:** `config/routes.ts` for `ROUTES`, `AUTH_ROUTES`, `LOGIN_ROUTE`, `PUBLIC_ROUTES`/`PROTECTED_ROUTES`, and the help-page anchors any in-app deep link must come from (`HELP_ANCHORS` + `helpAnchorPath`).

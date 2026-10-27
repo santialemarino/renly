@@ -1,20 +1,11 @@
-# Title
+# [TYPE] NO-TICKET Title
 
-<!--- Title format: [FEAT | FIX | ENH | REFACTOR | DOCS | CHORE | TEST | STYLE | X] TICKET-ID Task title -->
+<!--- TYPE: FEAT | FIX | ENH | REFACTOR | DOCS | CHORE | TEST. See the pr-format skill. -->
 
 ## Card Link
 
-<!--- Add the link to the associated card/ticket -->
+N/A
 
 ## Summary
 
-<!--- Describe your changes in detail -->
-
-## Acceptance Criteria
-
-<!--- Copy & paste from the task. Check items that pass. -->
-<!--- PR is ready for review when all items are checked -->
-
-## Screenshots & Recordings
-
-<!--- Add screenshots/videos of UI changes -->
+<!--- At most three short paragraphs, one idea each: what changed and where to look. -->
