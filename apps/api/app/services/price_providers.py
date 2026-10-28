@@ -556,18 +556,40 @@ BYMA_PDF_CDN_PREFIX = "https://cdn.prod.website-files.com/"
 BYMA_TIMEOUT = 30.0
 BYMA_RATIO_SEPARATOR = ":"
 BYMA_BYMA_SUFFIX = ".BA"
-# Every market the PDF names in its "Mercado donde Cotiza" column, upper-cased. A row reads "name, ticker,
-# market, ratio", and a market may be two words, so the ticker is the token BEFORE the market rather
-# than any token that is not a market word: walking back over market words read "New York" as ticker
-# YORK, "OTC US" as US, and Goldman Sachs' own ticker GS (a market word, from "NASDAQ GS") as part of the
-# market. Longest first, so "NYSE ARCA" is matched before "NYSE".
-BYMA_MARKETS = tuple(
-    sorted(
-        ("NYSE", "NYSE ARCA", "NYSE AMERICAN", "NASDAQ", "NASDAQ GS", "NASDAQ GM", "NEW YORK", "OTC US", "OTC", "XETRA", "FRANKFURT", "B3"),
-        key=len,
-        reverse=True,
-    )
-)
+# The PDF is a table — name, ticker, market, ratio — and the market cell may be empty or name a market of
+# one word or two ("NYSE", "New York", "OTC US", "NASDAQ CM", "CBOE", "BOVESPA", ...). Read as one line of
+# text, a row with no market and a row on a two-word market are indistinguishable ("Name ATAD 1:1" against
+# "Name ITA CBOE 1:1"), so each row is split into its CELLS by the horizontal gap between words: within a
+# cell words sit one space apart, between columns the gap is several times that. The ticker is then the
+# second cell whatever the market is, or whether there is one. In points: a space at the PDF's 6.4pt is
+# under 2pt, the narrowest column gap over 10pt.
+BYMA_CELL_GAP = 6.0
+# How far apart, vertically, words may sit and still be one row (the ratio is set a size larger than the
+# rest of its row, so its top is a fraction of a point off); rows are over 12pt apart.
+BYMA_ROW_TOLERANCE = 2.0
+
+
+# Groups a page's words into rows (by their top, within BYMA_ROW_TOLERANCE) and each row into its cells
+# (words closer than BYMA_CELL_GAP joined with a space), top to bottom and left to right.
+def _byma_rows(words: list[dict]) -> list[list[str]]:
+    rows: list[list[dict]] = []
+    for word in sorted(words, key=lambda w: w["top"]):
+        if rows and word["top"] - rows[-1][0]["top"] <= BYMA_ROW_TOLERANCE:
+            rows[-1].append(word)
+        else:
+            rows.append([word])
+    table = []
+    for row in rows:
+        cells: list[str] = []
+        previous_x1: float | None = None
+        for word in sorted(row, key=lambda w: w["x0"]):
+            if previous_x1 is not None and word["x0"] - previous_x1 < BYMA_CELL_GAP:
+                cells[-1] = f"{cells[-1]} {word['text']}"
+            else:
+                cells.append(word["text"])
+            previous_x1 = word["x1"]
+        table.append(cells)
+    return table
 
 
 # Fetches all CEDEAR ratios from the BYMA PDF.
@@ -627,33 +649,24 @@ async def fetch_byma_ratios() -> RatioFetchResult:
         import pdfplumber
 
         results: RatioResult = []
-        unknown_market_rows = 0
+        skipped: list[str] = []
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             for page in pdf.pages:
-                text = page.extract_text()
-                if not text:
-                    continue
-                for line in text.split("\n"):
-                    # Format: "Company Name  TICKER  MARKET  RATIO". The ratio is always at the end, in
-                    # "N:N" format, so the header and footer lines never match.
-                    line = line.strip()
-                    ratio_match = re.search(rf"(\d+){re.escape(BYMA_RATIO_SEPARATOR)}(\d+)\s*$", line)
+                for cells in _byma_rows(page.extract_words()):
+                    # Format: name, ticker, an optional market, and the ratio last in "N:N" format, so the
+                    # header and footer rows never match.
+                    ratio_match = re.fullmatch(rf"(\d+){re.escape(BYMA_RATIO_SEPARATOR)}(\d+)", cells[-1])
                     if not ratio_match:
                         continue
-
-                    # The ticker is the last token before the market. A row on a market not in the list
-                    # is skipped rather than guessed at: its last token would be the market's own name.
-                    before_ratio = " ".join(line[: ratio_match.start()].split()).upper()
-                    market = next((m for m in BYMA_MARKETS if before_ratio.endswith(f" {m}")), None)
-                    if market is None:
-                        unknown_market_rows += 1
+                    # Three cells (no market) or four. Anything else is a layout this parser does not
+                    # know, and is skipped by name rather than guessed at.
+                    if len(cells) not in (3, 4):
+                        skipped.append(" | ".join(cells))
                         continue
-                    parts = before_ratio[: -len(market)].split()
-                    if len(parts) < 2:
-                        continue
-                    ticker = parts[-1]
+                    ticker = cells[1].upper()
 
-                    if not any(c.isalnum() for c in ticker):
+                    if not any(c.isalnum() for c in ticker) or " " in ticker:
+                        skipped.append(" | ".join(cells))
                         continue
 
                     # Parse ratio.
@@ -671,8 +684,8 @@ async def fetch_byma_ratios() -> RatioFetchResult:
 
                     results.append((cedear_ticker, underlying, ratio_val))
 
-        if unknown_market_rows:
-            logger.warning("BYMA CEDEAR PDF: skipped %d rows on a market the parser does not know.", unknown_market_rows)
+        if skipped:
+            logger.warning("BYMA CEDEAR PDF: skipped %d rows whose cells do not read as a CEDEAR row: %s", len(skipped), skipped)
         return results
 
     try:

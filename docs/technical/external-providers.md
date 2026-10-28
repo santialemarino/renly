@@ -158,9 +158,10 @@ reached costs a round trip and reports an outage that is its own.
 | BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~401 ratios. Parsed with pdfplumber. |
 
 BYMA's edition date is read from anywhere in the PDF's filename (the live file leads with it,
-`2026-09-16-BYMA-CEDEARs.pdf`). Each row is "name, ticker, market, ratio", and the ticker is the token
-before a known market (`BYMA_MARKETS` — two-word ones such as "New York", "OTC US" and "NYSE Arca"
-included); a row on a market not in that list is skipped and counted in a warning, never read as a ticker.
+`2026-09-16-BYMA-CEDEARs.pdf`). Each row is a table row — name, ticker, an optional market, ratio — and is
+split into its cells by the horizontal gap between words (`BYMA_CELL_GAP`), so the ticker is the second
+cell whatever the market is, two words, unknown or empty. A row that is not three or four cells ending in
+a ratio is skipped and named in a warning.
 
 The service fetches both in parallel (`asyncio.gather`). Selection: newer source date wins → more entries breaks ties → Comafi preferred if still tied.
 
