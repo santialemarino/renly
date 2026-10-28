@@ -5,8 +5,9 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 /*
- * Two structural rules about components, held by reading every `.tsx` under `app/` and `components/`
- * with the TypeScript parser.
+ * Two structural rules about components, held by reading every `.tsx` and `.ts` (declaration files
+ * aside) under `app/` and `components/` with the TypeScript parser — a `'use client'` hook module is a
+ * client boundary as much as a component file is.
  *
  * NAMED PROPS. A component's props are a named `<Component>Props` type declared right above it, never
  * an object literal written into the parameter (`({ a }: { a: string })`). A component is a function
@@ -19,8 +20,9 @@ import { describe, expect, it } from 'vitest';
  * Deciding "server-safe" for certain needs types, so this check only FLAGS a file when every one of the
  * following is absent, and treats anything it cannot prove inert as a client feature:
  *
- *   * a hook call (`use…(` or `use(`, bare or namespaced as in `React.useState(`) or `createContext(`,
- *     except `useTranslations`, whose server twin is `getTranslations`
+ *   * a hook call (`use…(` or `use(`, bare or on the `React` namespace as in `React.useState(`) or
+ *     `createContext(`, except `useTranslations`, whose server twin is `getTranslations` — a method
+ *     that merely starts with `use` on any other object (`store.useSelector(`) is not React's
  *     — and only in a file no client file imports, since an async server component cannot render
  *     under a client parent;
  *   * a browser global (`window`, `document`, timers, observers, storage, …);
@@ -73,7 +75,7 @@ function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) return entry.startsWith('.') ? [] : sourceFiles(full);
-    return entry.endsWith('.tsx') ? [full] : [];
+    return /\.tsx?$/.test(entry) && !entry.endsWith('.d.ts') ? [full] : [];
   });
 }
 
@@ -102,13 +104,15 @@ function walk(node: ts.Node, visit: (node: ts.Node) => void) {
   ts.forEachChild(node, (child) => walk(child, visit));
 }
 
-// A bare or namespaced (`React.useState`) hook call, or `createContext`, which only runs on the client.
+// A bare or `React.`-namespaced hook call, or `createContext`, which only runs on the client.
 function isHookCall(node: ts.Node, allowTranslations: boolean): boolean {
   if (!ts.isCallExpression(node)) return false;
   const callee = node.expression;
   const name = ts.isIdentifier(callee)
     ? callee.text
-    : ts.isPropertyAccessExpression(callee)
+    : ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === 'React'
       ? callee.name.text
       : undefined;
   if (!name || (allowTranslations && name === 'useTranslations')) return false;
@@ -292,8 +296,12 @@ const rel = (path: string) => relative(WEB, path);
 
 describe('component boundaries', () => {
   it('scans the components', () => {
-    console.info(`component-boundaries: ${FILES.length} .tsx files scanned`);
+    const modules = FILES.filter((path) => path.endsWith('.ts'));
+    console.info(
+      `component-boundaries: ${FILES.length} files scanned, ${modules.length} of them .ts modules`,
+    );
     expect(FILES.length).toBeGreaterThan(200);
+    expect(modules.length).toBeGreaterThan(50);
   });
 
   it('declares every component props type as a named type, never inline', () => {
@@ -348,6 +356,18 @@ describe('component boundaries', () => {
     ].join('\n');
     parsed.set(probe, ts.createSourceFile(probe, source, ts.ScriptTarget.Latest, true));
     expect(clientFeatures(probe)).toEqual(['calls React.createContext', 'calls React.useState']);
+  });
+
+  it('does not count a use-prefixed method on another object as a hook', () => {
+    const probe = join(WEB, 'components', '__probe_method__.tsx');
+    const source = [
+      "'use client';",
+      'export function Probe({ store }: ProbeProps) {',
+      '  return <p>{store.useLabel()}</p>;',
+      '}',
+    ].join('\n');
+    parsed.set(probe, ts.createSourceFile(probe, source, ts.ScriptTarget.Latest, true));
+    expect(clientFeatures(probe)).toEqual([]);
   });
 
   it('lists only exceptions that still exist and are still client boundaries', () => {

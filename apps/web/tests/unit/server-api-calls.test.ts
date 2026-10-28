@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest';
  * directly and which therefore never see the secret. That exemption holds only while those calls stay
  * in the browser, so every module that imports one of them must be a client component — however it
  * imports it (named, namespace or dynamic, through the alias or a relative path) — and no module may
- * re-export one, which would hide the real caller from this check.
+ * re-export one, which would hide the real caller from this check: neither `export { a } from` nor an
+ * import handed on by a local `export { a }` / `export default a`.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -83,30 +84,58 @@ const STATEMENT =
   /\b(import|export)\s+(type\s+)?(\*(?:\s+as\s+\w+)?|\{[^}]*\}|\w+(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+))?)\s+from\s+['"]([^'"]+)['"]/g;
 const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
 
+// A local re-export, which names no module: `export { a, b as c };` or `export default a;`.
+const LOCAL_EXPORT = /\bexport\s+(?:\{([^}]*)\}(?!\s*from\b)|default\s+(\w+)\s*;)/g;
+
+// The value names in a `{ … }` clause, each as [the name before `as`, the name after it].
+function clauseNames(braces: string): [string, string][] {
+  return braces
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name && !name.startsWith('type '))
+    .map((name) => {
+      const [before, after] = name.split(/\s+as\s+/) as [string, string | undefined];
+      return [before, after ?? before];
+    });
+}
+
 // The names each module takes from the browser module, as values: an import (`kind: 'import'`) or a
-// re-export (`kind: 'export'`). A namespace import, `export *` or a dynamic import takes every name.
+// re-export (`kind: 'export'`) — `export … from`, or an imported name handed on by a local export. A
+// namespace import, `export *` or a dynamic import takes every name.
 function browserModuleImports(): { file: string; kind: 'import' | 'export'; names: string[] }[] {
   const everything = browserCalls();
   return FILES.flatMap((file) => {
     const source = read(file);
+    // The local binding each imported browser call lives under in this file.
+    const locals = new Map<string, string[]>();
     const statements = [...source.matchAll(STATEMENT)]
       .filter((match) => !match[2] && isBrowserModule(file, match[4] as string))
       .map((match) => {
+        const kind = match[1] as 'import' | 'export';
         const clause = match[3] as string;
         const braces = clause.match(/\{([^}]*)\}/);
-        const names = clause.includes('*')
-          ? everything
-          : (braces?.[1] ?? '')
-              .split(',')
-              .map((name) => name.trim())
-              .filter((name) => name && !name.startsWith('type '))
-              .map((name) => name.split(/\s+as\s+/)[0] as string);
-        return { file, kind: match[1] as 'import' | 'export', names };
+        const namespace = clause.match(/\*\s+as\s+(\w+)/);
+        const pairs = braces ? clauseNames(braces[1] as string) : [];
+        if (kind === 'import') {
+          pairs.forEach(([name, local]) => locals.set(local, [name]));
+          if (namespace) locals.set(namespace[1] as string, everything);
+        }
+        const names = clause.includes('*') ? everything : pairs.map(([name]) => name);
+        return { file, kind, names };
       });
+    const handedOn = [...source.matchAll(LOCAL_EXPORT)]
+      .map((match) =>
+        (match[1] !== undefined
+          ? clauseNames(match[1]).map(([local]) => local)
+          : [match[2] as string]
+        ).flatMap((local) => locals.get(local) ?? []),
+      )
+      .filter((names) => names.length > 0)
+      .map((names) => ({ file, kind: 'export' as const, names }));
     const dynamic = [...source.matchAll(DYNAMIC_IMPORT)]
       .filter((match) => isBrowserModule(file, match[1] as string))
       .map(() => ({ file, kind: 'import' as const, names: everything }));
-    return [...statements, ...dynamic];
+    return [...statements, ...handedOn, ...dynamic];
   });
 }
 
