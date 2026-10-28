@@ -45,6 +45,12 @@ yfinance skip that point, Finnhub and Coinbase answer `[]`, data912 and CAFCI le
 cycle's snapshot, and ArgentinaDatos moves to the next match. A NaN stored as a price fails the price
 endpoints' response validation and freezes into an auto-snapshot's value.
 
+**A quote may arrive as text.** Finnhub and data912 read their quote through `Decimal`, which takes a JSON
+number or a numeric string alike; text that is not a price (and zero, which both send for "no quote")
+counts as no price. One bad row costs only its own symbol — `math.isfinite` raised on a string, and on
+data912's board that failed the whole cache load. The CEDEAR ratio parsers follow the same rule: a NaN or
+Infinity ratio skips its row rather than the whole Comafi sheet.
+
 **Registry** (in `asset_price_service.py`) — an ordered chain per category, primary first:
 
 ```python
@@ -149,7 +155,15 @@ reached costs a round trip and reports an outage that is its own.
 | Provider | Format | Notes                                                                                             |
 | -------- | ------ | ------------------------------------------------------------------------------------------------- |
 | Comafi   | Excel  | Primary. Principal CEDEAR issuer (90%+ programs). Fixed URL. ~306 ratios.                         |
-| BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~401 ratios. Parsed with pdfplumber. |
+| BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~446 ratios. Parsed with pdfplumber. |
+
+BYMA's edition date is read from anywhere in the PDF's filename (the live file leads with it,
+`2026-09-16-BYMA-CEDEARs.pdf`). Each row is a table row — name, ticker, an optional market, ratio — split
+into cells by the horizontal gap between words (`BYMA_CELL_GAP`), and each cell is placed in its column by
+where it starts; the column boundaries are read off the full rows themselves. The ticker is the cell in
+the ticker column, so a market of two words, an unknown one, an empty one, or a name wrapped onto two
+lines around the rest of its row all read correctly. A ratio row with no single cell in the ticker column
+is skipped and named in a warning.
 
 The service fetches both in parallel (`asyncio.gather`). Selection: newer source date wins → more entries breaks ties → Comafi preferred if still tied.
 

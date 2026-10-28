@@ -173,6 +173,8 @@ The two accounts must be different (a transfer to the same account moves nothing
 
 **Paying someone else is an expense, not a transfer.** A transfer is only ever between two of your own accounts.
 
+**A transfer lives where its two accounts live.** Both accounts must belong to the same owner — both yours, or both held by the same pot — because moving money across that line takes value from one owner and gives it to another, which is a contribution or a withdrawal, not a transfer. The transfer itself then belongs to that same owner, and the database holds it there: a transfer between two of a pot's accounts is the pot's, and editing a transfer cannot move it to another owner's accounts. Moving accounts into or out of a pot moves their transfers along.
+
 ### Account Reconciliations
 
 The cash-side counterpart of a card reconciliation, and the mechanism that makes optional linking workable. Because linking every movement is never required, a derived balance drifts from the real one — cash spent without an entry, bank fees, interest, taxes, FX spread. Rather than demanding the user back-fill history, reconciliation lets them state the truth: enter the balance the account actually shows on a date, and the app records it and posts one adjustment for the gap.

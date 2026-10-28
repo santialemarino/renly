@@ -854,7 +854,7 @@ CREATE TABLE transfers (
   -- A transfer is net-worth-neutral by construction, which is only true within ONE scope: moving
   -- joint money into a personal account takes value from the other owners. Crossing a scope boundary
   -- is a contribution or a withdrawal instead. The scope columns are denormalized from the two legs,
-  -- which the service holds to the same scope, so this row can carry only one.
+  -- and a trigger below holds them to both legs' scope, so this row can carry only one.
   CONSTRAINT transfers_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 CREATE INDEX idx_transfers_user_id ON transfers(user_id);
@@ -2093,6 +2093,53 @@ CREATE POLICY transfers_scope_write ON transfers FOR ALL
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
   WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
 
+-- A transfer always sits in its accounts' scope: its (user_id, pot_id) is BOTH legs' — a private
+-- transfer names two of its owner's private accounts, a pot's names two accounts of that pot — on every
+-- insert and on every write to either scope column or either leg, for every role. It is the
+-- reconciliation rule above for a row with two parents, and it can be stated for both at once because a
+-- transfer never legitimately crosses a scope (the single-owner CHECK on this table says why). The
+-- policies cannot say it, for the same reason as there: they check the row against its CALLER, so a
+-- write re-pointing both legs of a private transfer at one pot's accounts would leave a private row with
+-- pot legs, and a move that re-pointed one leg's transfers without the other would leave a row whose legs
+-- disagree. A scope change happens only by moving the accounts, and the move re-points the transfer in a
+-- later statement of the same transaction, where this lookup already reads the accounts' new scope.
+--
+-- Unlike the reconciliation lookup, this one holds across concurrent transactions on its own when the
+-- other side LOCKS the accounts, and that rests on two facts. A transfer's foreign keys take a KEY SHARE
+-- lock on each leg, which waits for a FOR UPDATE (absorption locks every account it moves that way); and
+-- the foreign keys' own checks are AFTER ROW triggers too, which fire before this one because triggers
+-- fire in name order and theirs ("RI_ConstraintTrigger_…") sorts first — so by the time this lookup runs
+-- the wait is over, and in READ COMMITTED it reads the scope the mover committed. A rename that sorted
+-- this trigger ahead of them would judge the row against the scope from before the wait. A move that
+-- only UPDATEs the account takes no lock a foreign key waits for, and transfer_service closes that side
+-- by locking the parent first (each private leg, or the pot), the order move_holdings uses.
+--
+-- SECURITY DEFINER, owned by renly_policy_definer, AFTER the row, and naming only what the caller wrote,
+-- each for the reason the reconciliation trigger gives. An account that does not exist is left to the
+-- foreign key.
+CREATE OR REPLACE FUNCTION app_transfer_follows_accounts() RETURNS TRIGGER
+  LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public, pg_temp
+  AS $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM accounts a
+        WHERE a.id IN (NEW.from_account_id, NEW.to_account_id)
+          AND (a.user_id IS DISTINCT FROM NEW.user_id OR a.pot_id IS DISTINCT FROM NEW.pot_id)
+      ) THEN
+        RAISE EXCEPTION 'a transfer must sit in its accounts'' scope (accounts % and %)', NEW.from_account_id, NEW.to_account_id
+          USING ERRCODE = 'check_violation', CONSTRAINT = 'transfers_follow_accounts';
+      END IF;
+      RETURN NEW;
+    END
+  $$;
+
+REVOKE ALL ON FUNCTION app_transfer_follows_accounts() FROM PUBLIC;
+
+CREATE TRIGGER trg_transfers_follow_accounts
+  AFTER INSERT OR UPDATE OF user_id, pot_id, from_account_id, to_account_id ON transfers
+  FOR EACH ROW EXECUTE FUNCTION app_transfer_follows_accounts();
+
 -- The users table keys on its own id (a user may read/write only its own row).
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users FORCE ROW LEVEL SECURITY;
@@ -2256,8 +2303,8 @@ CREATE OR REPLACE FUNCTION app_is_group_member(p_group_id BIGINT) RETURNS BOOLEA
 REVOKE ALL ON FUNCTION app_is_group_member(BIGINT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
 
--- WHO the SECURITY DEFINER functions run as — the three policy helpers and the reconciliation-scope
--- trigger function. Not the owner: every policied table is FORCEd, so
+-- WHO the SECURITY DEFINER functions run as — the three policy helpers and the two scope trigger
+-- functions (reconciliations and transfers). Not the owner: every policied table is FORCEd, so
 -- the owner is subject to the policies like anyone else, and a helper running as a NOSUPERUSER owner
 -- re-enters the policy that called it — group_members' policy calls app_is_group_member(), which
 -- reads group_members, whose policy calls app_is_group_member() … until "stack depth limit exceeded"
@@ -2266,7 +2313,7 @@ GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
 --
 -- So they belong to renly_policy_definer: NOLOGIN, BYPASSRLS, not a superuser, and holding SELECT on
 -- exactly what these bodies read and nothing else — three tables for the helpers, and an account's id
--- and scope pair for the trigger function — so the bypass reaches no further than the questions they
+-- and scope pair for the trigger functions — so the bypass reaches no further than the questions they
 -- answer, and every table stays FORCEd. The role is created by 00_roles.sql.
 --
 -- Handing a function to a role requires that role to hold CREATE on the function's schema, so it is
@@ -2282,6 +2329,7 @@ ALTER FUNCTION app_can_view_pot(BIGINT) OWNER TO renly_policy_definer;
 ALTER FUNCTION app_can_write_pot(BIGINT) OWNER TO renly_policy_definer;
 ALTER FUNCTION app_is_group_member(BIGINT) OWNER TO renly_policy_definer;
 ALTER FUNCTION app_reconciliation_follows_account() OWNER TO renly_policy_definer;
+ALTER FUNCTION app_transfer_follows_accounts() OWNER TO renly_policy_definer;
 REVOKE CREATE ON SCHEMA public FROM renly_policy_definer;
 
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;

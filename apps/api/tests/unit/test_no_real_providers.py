@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
 
 from app.services import web_push
 from app.services.email_service import ConsoleEmailService, EmailMessage, ResendEmailService, get_email_service
@@ -39,4 +40,14 @@ class TestNoTestReachesARealProvider:
         async with httpx.AsyncClient() as client:
             assert await web_push.send(client, target, {"title": "t", "body": "b", "url": "u"}) == (False, False)
         assert no_real_provider.attempts == ["POST https://push.invalid/subscription/abc"]
+        no_real_provider.attempts.clear()
+
+    # yfinance's own client, the one the httpx half cannot see: its session is curl_cffi's, so a request
+    # through it — the way every Yahoo price fetch goes — is refused and recorded too.
+    def test_a_request_through_yfinances_client_is_refused_and_recorded(self, no_real_provider):
+        from yfinance.data import YfData
+
+        with pytest.raises(CurlConnectionError):
+            YfData()._session.get("https://query1.yahoo.invalid/v8/finance/chart/AAPL")
+        assert no_real_provider.attempts == ["GET https://query1.yahoo.invalid/v8/finance/chart/AAPL"]
         no_real_provider.attempts.clear()

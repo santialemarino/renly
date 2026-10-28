@@ -20,13 +20,14 @@ from app.domain import (
     TransferAmountRequiredError,
     TransferAmountsMustMatchError,
     TransferBeforeAccountOpenedError,
+    TransferCrossScopeError,
     TransferSameAccountError,
     ensure_same_scope,
 )
 from app.models.account import Account
 from app.models.transfer import Transfer
 from app.models.user import User
-from app.repositories import account_repository, transfer_repository
+from app.repositories import account_repository, pot_repository, transfer_repository
 from app.schemas.transfer import TransferListResponse, TransferResponse
 from app.services import account_service
 from app.utils.pagination import DEFAULT_PAGE_SIZE
@@ -91,6 +92,25 @@ async def _load_pair(session: AsyncSession, user: User, from_account_id: int, to
     return source, destination
 
 
+# Takes the row lock that serialises a transfer's write against a move of its accounts, in the order
+# pot_service.move_holdings takes them (the pot, then the accounts). A move that only UPDATEs an account
+# takes no lock the transfer's foreign keys would wait for, so without this a private transfer and a move
+# of one of its legs into a pot could each commit, the transfer judged against the account's scope from
+# before the move and the move's re-point matching no transfer. With it, whichever comes second waits,
+# and the scope trigger then judges its row against the scope the first committed.
+#
+# A pot's transfer is serialised on the POT, as a reconciliation of a pot's account is: a locking read is
+# governed by the UPDATE policy, and the pot's row is lockable by every seat that may write a transfer.
+# A private transfer locks both of its own accounts, in id order so two transfers between the same pair
+# cannot deadlock.
+async def _lock_scope(session: AsyncSession, source: Account, destination: Account) -> None:
+    if source.pot_id is not None:
+        await pot_repository.lock(session, source.pot_id)
+        return
+    for account_id in sorted({source.id, destination.id}):
+        await account_repository.lock_private(session, account_id)
+
+
 # List a user's transfers, newest first, optionally narrowed to one account (either leg). Accounts are
 # batch-loaded once for the whole page rather than per row.
 async def list_transfers(
@@ -143,11 +163,13 @@ async def create_transfer(
     source, destination = await _load_pair(session, user, from_account_id, to_account_id)
     _ensure_both_accounts_open(source, destination, date)
     resolved = _resolve_to_amount(source, destination, from_amount, to_amount)
+    await _lock_scope(session, source, destination)
     transfer = Transfer(
-        # Denormalized from the pair, which _load_pair has already held to one scope. A shared
-        # transfer carries the pot and no user, so its RLS policy gates it on pot write access —
-        # which is what stops a read-only member moving money out of an account they can only see.
-        user_id=user.id if source.pot_id is None else None,
+        # The pair's scope, which _load_pair has already held to one: a private account carries its
+        # owner and no pot, a pot's account the pot and no user. A shared transfer therefore carries the
+        # pot and no user, so its RLS policy gates it on pot write access — which is what stops a
+        # read-only member moving money out of an account they can only see.
+        user_id=source.user_id,
         pot_id=source.pot_id,
         from_account_id=from_account_id,
         to_account_id=to_account_id,
@@ -175,6 +197,11 @@ async def update_transfer(
     new_from_id = fields["from_account_id"] if "from_account_id" in fields else transfer.from_account_id
     new_to_id = fields["to_account_id"] if "to_account_id" in fields else transfer.to_account_id
     source, destination = await _load_pair(session, user, new_from_id, new_to_id)
+    # An edit keeps the transfer where it is. The effective pair's scope is derived only to check it:
+    # re-pointing a transfer at another scope's accounts would move it out of one owner's history into
+    # another's, and a scope changes only by moving the accounts themselves.
+    if (source.user_id, source.pot_id) != (transfer.user_id, transfer.pot_id):
+        raise TransferCrossScopeError()
     _ensure_both_accounts_open(source, destination, fields["date"] if "date" in fields else transfer.date)
 
     new_from_amount = fields["from_amount"] if "from_amount" in fields else transfer.from_amount
@@ -193,6 +220,7 @@ async def update_transfer(
         new_to_amount = transfer.to_amount
 
     resolved = _resolve_to_amount(source, destination, new_from_amount, new_to_amount)
+    await _lock_scope(session, source, destination)
 
     for key, value in fields.items():
         setattr(transfer, key, value)
