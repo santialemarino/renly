@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.feedback import Feedback, FeedbackCategory
 from app.models.user import User
-from app.repositories.feedback_repository import feedback_repository
-from app.repositories.user_repository import user_repository
+from app.repositories import feedback_repository, user_repository
 from app.schemas.feedback import FeedbackAdminResponse, FeedbackCreate, FeedbackListResponse, FeedbackResponse
 from app.services import email_templates, settings_service
 from app.services.email_service import get_email_service

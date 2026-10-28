@@ -25,9 +25,7 @@ export function HelpToc({ label, sections }: HelpTocProps) {
       <ul className="flex flex-col gap-y-1.5">
         {sections.map((section) => (
           <li key={section.id}>
-            <InlineLink href={`#${section.id}`} color="muted">
-              {section.heading}
-            </InlineLink>
+            <InlineLink href={`#${section.id}`}>{section.heading}</InlineLink>
           </li>
         ))}
       </ul>

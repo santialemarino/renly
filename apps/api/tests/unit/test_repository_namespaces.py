@@ -11,7 +11,10 @@
 # function that no longer exists cannot happen: `list_x = staticmethod(list_x)` fails at import.
 
 import ast
+import importlib
 import pathlib
+
+import app.repositories
 
 REPOSITORIES = sorted(pathlib.Path("app/repositories").glob("*_repository.py"))
 
@@ -19,8 +22,8 @@ REPOSITORIES = sorted(pathlib.Path("app/repositories").glob("*_repository.py"))
 # The module-level async functions a repository file defines, excluding private helpers.
 #
 # Async only, and that is the whole selector: a repository's callable surface is its queries, while the
-# synchronous names in these files are SQL-expression builders (`settlement_cash_leg`, `sort_columns`)
-# that callers import directly rather than reaching through the singleton.
+# synchronous names in these files are SQL-expression builders (`settlement_cash_leg`) and private
+# helpers (`_sort_columns`) that are never reached through the singleton.
 def _module_functions(tree: ast.Module) -> set[str]:
     return {node.name for node in tree.body if isinstance(node, ast.AsyncFunctionDef) and not node.name.startswith("_")}
 
@@ -53,6 +56,37 @@ class TestEveryRepositoryFunctionIsReachable:
         # an empty left side, so a selector that stopped matching (a rename, a move to sync defs) would
         # read as every repository being clean.
         assert sum(len(_module_functions(ast.parse(path.read_text()))) for path in REPOSITORIES) > 100
+
+
+class TestEveryRepositoryIsReExported:
+    # The package `__init__` is the one place a service can import any repository from, so a singleton
+    # missing from it splits the import convention: `feedback_repository` was the one exception, imported
+    # from its module, until it was re-exported. Named by file stem, the convention every singleton follows.
+
+    def test_every_singleton_is_named_after_its_file(self):
+        # Asserted first so the check below cannot pass by looking up a name no file defines.
+        unnamed = [
+            path.name
+            for path in REPOSITORIES
+            if not any(
+                isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == path.stem for target in node.targets)
+                for node in ast.parse(path.read_text()).body
+            )
+        ]
+        assert unnamed == []
+
+    def test_every_singleton_is_re_exported_from_the_package(self):
+        assert [path.stem for path in REPOSITORIES if path.stem not in app.repositories.__all__] == []
+        # The module object itself would satisfy a bare `hasattr`, since importing a submodule binds it on
+        # the package; the singleton's identity is what proves the `__init__` import.
+        assert [
+            path.stem
+            for path in REPOSITORIES
+            if getattr(app.repositories, path.stem, None) is not getattr(importlib.import_module(f"app.repositories.{path.stem}"), path.stem)
+        ] == []
+
+    def test_the_package_exports_are_alphabetical(self):
+        assert app.repositories.__all__ == sorted(app.repositories.__all__)
 
 
 class TestEveryCappedReadReportsWhenTheCeilingBites:

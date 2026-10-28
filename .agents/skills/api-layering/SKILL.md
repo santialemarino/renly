@@ -264,13 +264,13 @@ Use `sum()`, `max()`, `min()`, list comprehensions, and generators instead of ma
 
 A repository file is module-level `async def` queries plus a `<Entity>Repository` class that re-exports
 each one as `name = staticmethod(name)`, and a singleton of that class (`feedback_repository =
-FeedbackRepository()`) is what services import — most are also re-exported, alphabetically, from
-`app/repositories/__init__.py` (not every one yet: `feedback_repository` is imported from its module). **A new public `async def` is not reachable until its
+FeedbackRepository()`) is what services import — every one is also re-exported, alphabetically, from
+`app/repositories/__init__.py`. **A new public `async def` is not reachable until its
 `staticmethod` line is added**: the module imports fine and `pnpm check:api` passes, and the first
 service call is an `AttributeError`. `tests/unit/test_repository_namespaces.py` parses every
 `*_repository.py` and fails on a public `async def` missing from its class (and on a file without the
-class). Private `_helpers` and synchronous SQL-expression builders (`sort_columns`,
-`settlement_cash_leg`) stay off the registry; callers import those directly.
+class, or a singleton the package `__init__` does not re-export). Private `_helpers` (such as `_sort_columns`) and public synchronous SQL-expression builders
+(`settlement_cash_leg`) stay off the registry; callers import a builder directly from its module.
 
 ## External data providers
 

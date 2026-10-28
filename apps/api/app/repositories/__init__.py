@@ -14,6 +14,7 @@ from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.expense_repository import expense_repository
 from app.repositories.export_repository import export_repository
+from app.repositories.feedback_repository import feedback_repository
 from app.repositories.group_invite_repository import group_invite_repository
 from app.repositories.group_money_settings_repository import group_money_settings_repository
 from app.repositories.group_repository import group_repository
@@ -55,6 +56,7 @@ __all__ = [
     "exchange_rate_repository",
     "expense_repository",
     "export_repository",
+    "feedback_repository",
     "group_invite_repository",
     "group_money_settings_repository",
     "group_repository",
