@@ -10,8 +10,10 @@
 #     rebuilt around it, so a dispatch that gets as far as sending only logs;
 #   * underneath that, httpx's REAL network transports are replaced with a recorder that refuses every
 #     request. Resend and web push go through one of them; a fake client, `MockTransport` or the ASGI
-#     test transport does not, so tests that stub their HTTP keep working. Not every provider is
-#     covered: yfinance fetches through its own client (curl_cffi), outside httpx.
+#     test transport does not, so tests that stub their HTTP keep working;
+#   * and yfinance, which fetches through its own client (curl_cffi) outside httpx, has that client's
+#     request methods refused and recorded the same way, so a test that reaches Yahoo by accident fails
+#     rather than depending on the network.
 #
 # The assertion is made at TEARDOWN, like the unit suite's session guard (tests/unit/conftest.py), and
 # for the same reason: the refusal raises inside code built to swallow it, so a raise alone would pass
@@ -22,6 +24,7 @@ import os
 
 import httpx
 import pytest
+from curl_cffi import requests as curl_requests
 
 # ENVIRONMENT has no default (the app refuses to boot without it), and tests build Settings from the
 # process environment, sometimes with the .env file switched off. Set before the app is imported, so the
@@ -42,6 +45,10 @@ class OutboundRecorder:
         self.attempts.append(f"{request.method} {request.url}")
         raise httpx.ConnectError("tests must not reach a real network service", request=request)
 
+    def refuse_curl(self, method: str, url: str) -> None:
+        self.attempts.append(f"{method} {url}")
+        raise curl_requests.exceptions.ConnectionError("tests must not reach a real network service")
+
 
 @pytest.fixture(autouse=True)
 def no_real_provider(monkeypatch):
@@ -55,6 +62,15 @@ def no_real_provider(monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", refuse_async)
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", refuse_sync)
+
+    def refuse_curl(_session, method, url, *_args, **_kwargs):
+        recorder.refuse_curl(method, url)
+
+    async def refuse_curl_async(_session, method, url, *_args, **_kwargs):
+        recorder.refuse_curl(method, url)
+
+    monkeypatch.setattr(curl_requests.Session, "request", refuse_curl)
+    monkeypatch.setattr(curl_requests.AsyncSession, "request", refuse_curl_async)
     monkeypatch.setattr(settings, "email_provider", EmailProvider.console)
     monkeypatch.setattr(settings, "email_api_key", None)
     email_service.get_email_service.cache_clear()
