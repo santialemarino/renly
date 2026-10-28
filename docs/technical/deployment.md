@@ -21,9 +21,15 @@ docker build -f docker/api.Dockerfile -t renly-api .
 
 # Web (Next.js) — NEXT_PUBLIC_* values are inlined at build time, so both must be set at image
 # build (a runtime-only value has no effect). The Sentry DSN is optional (empty = Sentry off).
-docker build -f docker/web.Dockerfile \
+# The last three lines upload source maps to Sentry and are optional too: drop them and the build
+# uploads nothing. The token is read from the builder's SENTRY_AUTH_TOKEN env var as a BuildKit
+# secret, so it reaches `next build` and nothing else — no image layer, no `docker history`.
+SENTRY_AUTH_TOKEN=<sentry auth token> docker build -f docker/web.Dockerfile \
   --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
   --build-arg NEXT_PUBLIC_SENTRY_DSN=https://examplekey@o0.ingest.sentry.io/0 \
+  --build-arg SENTRY_ORG=<org slug> \
+  --build-arg SENTRY_PROJECT=<project slug> \
+  --secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
   -t renly-web .
 ```
 
@@ -49,36 +55,36 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 
 **API:**
 
-| Variable              | Notes                                                                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`        | The **restricted `renly_app` role** (NOBYPASSRLS, non-owner) — request connections are subject to RLS.                                                                                     |
-| `DATABASE_ADMIN_URL`  | The **`renly_admin` role** (BYPASSRLS, not a superuser, a member of the owner) — migrations, the scheduler, and pre-auth lookups. Never the owner.                                         |
-| `JWT_SECRET`          | Must equal the web app's `NEXTAUTH_SECRET`; min 32 chars.                                                                                                                                  |
-| `ENVIRONMENT`         | `production` disables `/docs` and tracebacks. **Required** — the API refuses to start without it.                                                                                          |
-| `CORS_ORIGINS`        | Comma-separated allowed origins (the production web URL).                                                                                                                                  |
-| `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                                                                    |
-| `INTERNAL_API_SECRET` | Must equal the web app's `INTERNAL_API_SECRET`; min 32 chars. Lets the web server's own calls be rate-limited per visitor — see [Client IPs and rate limits](#client-ips-and-rate-limits). |
-| `WEB_BASE_URL`        | The production web URL (no trailing slash). Every account-email link (verification, password reset, invites) is built from it.                                                             |
-| `SIGNUP_MODE`         | `invite` (default) — registering needs an admin invite — or `open`.                                                                                                                        |
-| `EMAIL_PROVIDER`      | `resend` in production. The default, `console`, only logs each message, so nobody receives a verification link and nobody can finish signing up.                                           |
-| `EMAIL_API_KEY`       | The Resend API key. Required when `EMAIL_PROVIDER=resend` — the API refuses to start without it.                                                                                           |
-| `EMAIL_FROM`          | The sender, e.g. `Renly <noreply@yourdomain.com>` — a sender verified with Resend.                                                                                                         |
-| `VAPID_PRIVATE_KEY`   | Optional; enables web push (empty = this deployment sends none). `VAPID_SUBJECT` optionally names its contact.                                                                             |
-| `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                                                                      |
+| Variable              | Notes                                                                                                                                                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | The **restricted `renly_app` role** (NOBYPASSRLS, non-owner) — request connections are subject to RLS. In production the API refuses to start when it, or the tables' owner, can bypass RLS — see [Roles](#roles).                                                              |
+| `DATABASE_ADMIN_URL`  | The **`renly_admin` role** (BYPASSRLS, not a superuser, a member of the owner) — migrations, the scheduler, and pre-auth lookups. Never the owner.                                                                                                                              |
+| `JWT_SECRET`          | Must equal the web app's `NEXTAUTH_SECRET`; min 32 chars.                                                                                                                                                                                                                       |
+| `ENVIRONMENT`         | `production` disables `/docs` and tracebacks. **Required** — the API refuses to start without it.                                                                                                                                                                               |
+| `CORS_ORIGINS`        | Comma-separated allowed origins (the production web URL).                                                                                                                                                                                                                       |
+| `TRUSTED_PROXY_COUNT` | Hop count of proxies in front of the app (for client-IP rate limiting).                                                                                                                                                                                                         |
+| `INTERNAL_API_SECRET` | Must equal the web app's `INTERNAL_API_SECRET`; min 32 chars. Lets the web server's own calls be rate-limited per visitor — see [Client IPs and rate limits](#client-ips-and-rate-limits).                                                                                      |
+| `WEB_BASE_URL`        | The production web URL (no trailing slash). Every account-email link (verification, password reset, invites) is built from it.                                                                                                                                                  |
+| `SIGNUP_MODE`         | `invite` (default) — registering needs an admin invite — or `open`.                                                                                                                                                                                                             |
+| `EMAIL_PROVIDER`      | `resend` in production. The default, `console`, only logs each message, so nobody receives a verification link and nobody can finish signing up.                                                                                                                                |
+| `EMAIL_API_KEY`       | The Resend API key. Required when `EMAIL_PROVIDER=resend` — the API refuses to start without it.                                                                                                                                                                                |
+| `EMAIL_FROM`          | The sender, e.g. `Renly <noreply@yourdomain.com>` — a sender verified with Resend. The default is Resend's shared `onboarding@resend.dev`, which delivers only to the Resend account owner, so with `resend` in production the API refuses to start on any `resend.dev` sender. |
+| `VAPID_PRIVATE_KEY`   | Optional; enables web push (empty = this deployment sends none). `VAPID_SUBJECT` optionally names its contact.                                                                                                                                                                  |
+| `SENTRY_DSN`          | Optional; enables API error tracking.                                                                                                                                                                                                                                           |
 
 With `SENTRY_DSN` set, add a Sentry alert rule at deploy on events whose message starts with `SCHEDULED JOB FAILED` (the recommended default): a failed background job is reported there and in the logs, nowhere else ([scheduler](scheduler.md#error-handling)).
 
 **Web:**
 
-| Variable                                              | Notes                                                                                                                                                                                                                             |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                                                                                                                                |
-| `NEXTAUTH_URL`                                        | The production web URL.                                                                                                                                                                                                           |
-| `INTERNAL_API_SECRET`                                 | Must equal the API's `INTERNAL_API_SECRET`; min 32 chars (warned at startup). Runtime, server-only — never a build arg, never `NEXT_PUBLIC_`.                                                                                     |
-| `WEB_TRUSTED_PROXY_COUNT`                             | Hop count of proxies in front of the web server — see [Client IPs and rate limits](#client-ips-and-rate-limits).                                                                                                                  |
-| `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                                                                                                                                |
-| `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime.                                                                                                  |
-| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Read by `next build` to upload source maps, and without the token it neither uploads nor needs them. `docker/web.Dockerfile` declares none of the three, so the image build never uploads: Sentry receives minified stack traces. |
+| Variable                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                                                                                                                                                                                                                                                                                                          |
+| `NEXTAUTH_URL`                                        | The production web URL.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `INTERNAL_API_SECRET`                                 | Must equal the API's `INTERNAL_API_SECRET`; min 32 chars (warned at startup). Runtime, server-only — never a build arg, never `NEXT_PUBLIC_`.                                                                                                                                                                                                                                                               |
+| `WEB_TRUSTED_PROXY_COUNT`                             | Hop count of proxies in front of the web server — see [Client IPs and rate limits](#client-ips-and-rate-limits).                                                                                                                                                                                                                                                                                            |
+| `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                                                                                                                                                                                                                                                                                                          |
+| `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime.                                                                                                                                                                                                                                                                            |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Optional, build only: read by `next build` to upload source maps, so Sentry shows readable stack traces. The token is a BuildKit **secret** (`--secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN`), org and project are **build args** — see [the build command](#the-deployable-unit--two-images). Without the token the build neither uploads nor needs them, and Sentry receives minified stack traces. |
 
 ---
 
@@ -151,6 +157,14 @@ mistake, and both local dev and this document used to make it.
 is completely inert against one — which makes this the part of the model with actual security value
 rather than a formality. Provision `renly` with `NOSUPERUSER NOBYPASSRLS` and grant it only ownership
 of the database.
+
+**Production refuses to start on a model that does not isolate.** With `ENVIRONMENT=production` the
+API reads the catalogue once at startup, through `DATABASE_URL`, and exits naming what is wrong when
+the request role is `SUPERUSER` or `BYPASSRLS`, when the owner of any policied table is (a superuser
+owner is what a host that hands over its own admin role produces), when a policied table lacks
+`FORCE ROW LEVEL SECURITY` or has RLS disabled, or when no table has RLS at all. The policied tables
+are derived from the catalogue (RLS enabled or a policy defined), not listed. Development skips the
+check, because a local owner is usually the superuser that created the cluster.
 
 **Why the helper role exists.** The policies on `groups`, `group_members`, `pots` and the pot-scoped
 tables call `SECURITY DEFINER` helpers, which run as their owner. Were that the table owner, it would
