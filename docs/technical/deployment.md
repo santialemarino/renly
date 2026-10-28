@@ -47,6 +47,11 @@ docker run -e PORT=3000 renly-web
 
 Health check (API): `GET /health` → `{"status":"ok"}` (rate-limit exempt).
 
+**In production the API needs the database at boot.** Startup reads the role model through
+`DATABASE_URL` ([Roles](#roles)), so an unreachable database makes the process exit instead of
+starting and connecting later, as development still does. Give the API container a restart policy
+that retries (or start it after the database is healthy).
+
 ---
 
 ## Env contract
@@ -160,11 +165,14 @@ of the database.
 
 **Production refuses to start on a model that does not isolate.** With `ENVIRONMENT=production` the
 API reads the catalogue once at startup, through `DATABASE_URL`, and exits naming what is wrong when
-the request role is `SUPERUSER` or `BYPASSRLS`, when the owner of any policied table is (a superuser
-owner is what a host that hands over its own admin role produces), when a policied table lacks
-`FORCE ROW LEVEL SECURITY` or has RLS disabled, or when no table has RLS at all. The policied tables
-are derived from the catalogue (RLS enabled or a policy defined), not listed. Development skips the
-check, because a local owner is usually the superuser that created the cluster.
+the request role is `SUPERUSER` or `BYPASSRLS` or a member of a role that is (it could `SET ROLE` into
+it), when it owns a policied table or is a member of its owner (it could switch the table's RLS off),
+when the owner of any policied table is `SUPERUSER` or `BYPASSRLS` (a superuser owner is what a host
+that hands over its own admin role produces), when a policied table lacks `FORCE ROW LEVEL SECURITY`
+or has RLS disabled, or when no table has RLS at all. The policied tables are derived from the
+catalogue (RLS enabled or a policy defined), not listed. `renly_app` as `00_roles.sql` provisions it
+owns nothing and is a member of no role, so it passes. Development skips the check, because a local
+owner is usually the superuser that created the cluster.
 
 **Why the helper role exists.** The policies on `groups`, `group_members`, `pots` and the pot-scoped
 tables call `SECURITY DEFINER` helpers, which run as their owner. Were that the table owner, it would
