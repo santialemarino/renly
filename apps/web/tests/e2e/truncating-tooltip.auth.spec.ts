@@ -167,17 +167,22 @@ test.describe('a truncated text is reachable from the keyboard', () => {
      * that read its surroundings once, at mount, and took any focusable for a control.
      */
     await page.addInitScript(() => {
-      const mark = (root: ParentNode) => {
-        for (const el of root.querySelectorAll('[data-slot="table-container"]')) {
-          el.setAttribute('tabindex', '0');
-          el.setAttribute('role', 'region');
-          el.setAttribute('aria-label', 'Gastos');
-        }
+      const setAttribute = Element.prototype.setAttribute;
+      const mark = (el: Element) => {
+        setAttribute.call(el, 'tabindex', '0');
+        setAttribute.call(el, 'role', 'region');
+        setAttribute.call(el, 'aria-label', 'Gastos');
       };
-      new MutationObserver(() => mark(document)).observe(document, {
-        childList: true,
-        subtree: true,
-      });
+      // A container React creates in the browser: marked in the same call that names it, so before
+      // any effect of the rows inside it can run.
+      Element.prototype.setAttribute = function (name: string, value: string) {
+        setAttribute.call(this, name, value);
+        if (name === 'data-slot' && value === 'table-container') mark(this);
+      };
+      // One the server rendered: marked as the parser inserts it, before hydration.
+      new MutationObserver(() =>
+        document.querySelectorAll('[data-slot="table-container"]').forEach(mark),
+      ).observe(document, { childList: true, subtree: true });
     });
     await openExpenses(page);
     const cut = note(page, longNote);
