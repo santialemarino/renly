@@ -1,5 +1,6 @@
 import base64
 import binascii
+from email.utils import parseaddr
 from enum import StrEnum
 from typing import Annotated
 
@@ -11,6 +12,9 @@ MIN_JWT_SECRET_LENGTH = 32
 MIN_INTERNAL_API_SECRET_LENGTH = 32
 # A P-256 private key is a 32-byte scalar. The VAPID key is that scalar, base64url-encoded.
 VAPID_PRIVATE_KEY_BYTES = 32
+# Resend's shared test domain (the `onboarding@resend.dev` sender): it delivers only to the Resend
+# account owner's own address, so production refuses it.
+RESEND_SHARED_SENDER_DOMAIN = "resend.dev"
 
 
 # Deployment environment; gates docs exposure and debug behavior (production locks both down).
@@ -163,10 +167,23 @@ class Settings(BaseSettings):
 
     # Rejects the resend email provider without an API key at startup; otherwise account emails
     # (verification, reset) would silently fail to send once the app is live.
+    #
+    # In production it also rejects a sender on Resend's shared test domain (the `onboarding@resend.dev`
+    # default). Resend delivers from that domain only to the account owner's own address, so every
+    # verification, reset and invite email to a real user would be refused while the app looks healthy.
+    # Development keeps the default, which is how a fresh checkout sends its first email.
     @model_validator(mode="after")
     def _validate_email_provider(self) -> "Settings":
-        if self.email_provider == EmailProvider.resend and not self.email_api_key:
+        if self.email_provider != EmailProvider.resend:
+            return self
+        if not self.email_api_key:
             raise ValueError("email_api_key is required when email_provider is 'resend'.")
+        sender_domain = parseaddr(self.email_from)[1].rpartition("@")[2].lower()
+        if self.is_production and sender_domain == RESEND_SHARED_SENDER_DOMAIN:
+            raise ValueError(
+                "email_from must be a sender on your own verified domain in production, "
+                f"not Resend's shared {RESEND_SHARED_SENDER_DOMAIN} test sender."
+            )
         return self
 
     # Privileged DB URL for context-less work; falls back to the request URL when not configured.
