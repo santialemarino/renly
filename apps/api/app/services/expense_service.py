@@ -356,7 +356,8 @@ async def create_expense(
 #     walk would step the cursor past the last representable date (year 9999),
 #     ExpenseCycleObligationNotRecurringError when the obligation isn't recurring with a known
 #     recurrence pattern, and ExpenseCycleObligationGoneError when a concurrent transaction deletes
-#     the obligation mid-loop — each its own code, 400 via the global DomainError handler.
+#     the obligation mid-loop — each its own code, mapped by the global DomainError handler
+#     (409 for the concurrent delete, 400 for the other two).
 # Sub/installment IDs are forbidden by the schema validator on the multi-cycle path so they're
 # not threaded through.
 async def create_expenses_for_obligation_cycles(

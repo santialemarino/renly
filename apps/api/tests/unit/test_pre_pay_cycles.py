@@ -415,7 +415,7 @@ class TestEachRefusalReachesTheClientWithItsOwnCode:
         first = AdvanceResult(plan_type="obligation", plan_id=7, plan_name="ABL", previous_cursor="2026-05-15", new_cursor="2026-06-15")
         monkeypatch.setattr(payment_obligation_service, "advance_or_archive", AsyncMock(side_effect=[first, None]))
         response = _client().post("/expenses", json=_MULTI_CYCLE_BODY)
-        assert (response.status_code, response.json()["code"]) == (400, "expense_cycle_obligation_gone")
+        assert (response.status_code, response.json()["code"]) == (409, "expense_cycle_obligation_gone")
 
     def test_a_walk_past_year_9999_answers_out_of_range_not_500(self, monkeypatch):
         # next_due_date has no upper bound, so twelve annual cycles from 9995 step the cursor to 10007,

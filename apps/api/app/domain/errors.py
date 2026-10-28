@@ -323,10 +323,10 @@ class ExchangeRateUnavailableError(DomainError):
 
 # A multi-cycle Mark Paid lost its obligation partway: a concurrent request deleted it between two
 # cycles, so the cursor could not advance. Raising rolls back every row the batch had inserted, so
-# nothing is recorded. Mapped to 400.
+# nothing is recorded. A conflict with that concurrent delete, so mapped to 409.
 class ExpenseCycleObligationGoneError(DomainError):
     code = "expense_cycle_obligation_gone"
-    status_code = 400
+    status_code = 409
 
     def __init__(self) -> None:
         self.message = "The obligation was deleted while its cycles were being paid; nothing was recorded."
