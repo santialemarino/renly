@@ -117,8 +117,13 @@ jobs:
           needs.changes.outputs.run_e2e == 'true'
         ))
       )
+    # A dispatch gets a group of its own. A group holds ONE pending job, and a job arriving while one
+    # waits cancels it: shared, a dispatch waiting behind a running nightly (or a nightly behind a
+    # dispatch) would be cancelled by the next arrival — and a cancelled nightly reads as red and
+    # opens the `e2e-red` issue. Two dispatches on one branch still queue in theirs; a PR's ref is its
+    # own (`refs/pull/<n>/merge`), so the PR grouping `e2e-required` relies on is unchanged.
     concurrency:
-      group: ci-web-e2e-suite-${{ github.ref }}
+      group: ci-web-e2e-suite-${{ github.event_name == 'workflow_dispatch' && 'dispatch-' || '' }}${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
