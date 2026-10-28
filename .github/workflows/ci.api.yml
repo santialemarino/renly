@@ -123,6 +123,38 @@ jobs:
           import difflib
           import re
 
+          # The dump's statements, split at a `;` that ends a line OUTSIDE any quoted text. A function
+          # body is one dollar-quoted string full of `;` line ends, and splitting it there would turn
+          # its lines into separate "statements" that the sort below reorders — so two statements
+          # swapped inside a body would compare equal. Here a body stays whole, in its own order.
+          DOLLAR_TAG = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
+
+          def split_statements(text):
+              out, start, i, quote = [], 0, 0, None
+              while i < len(text):
+                  if quote:
+                      if text.startswith(quote, i):
+                          i += len(quote)
+                          quote = None
+                      else:
+                          i += 1
+                      continue
+                  tag = DOLLAR_TAG.match(text, i)
+                  if tag:
+                      quote = tag.group(0)
+                      i += len(quote)
+                  elif text[i] == "'":
+                      quote = "'"
+                      i += 1
+                  elif text.startswith(";\n", i):
+                      out.append(text[start:i])
+                      i += 2
+                      start = i
+                  else:
+                      i += 1
+              out.append(text[start:])
+              return out
+
           # A dump as a sorted list of statements, with each table's columns sorted: ADD COLUMN appends,
           # so a migrated table lists its columns in a different order than the CREATE TABLE that
           # declares them, and the order means nothing. Skipped: session settings, and the owner's own
@@ -131,7 +163,7 @@ jobs:
           def statements(path):
               text = "\n".join(l for l in open(path).read().splitlines() if not l.startswith(("--", "\\")))
               out = []
-              for stmt in (s.strip() for s in re.split(r";\n", text)):
+              for stmt in (s.strip() for s in split_statements(text)):
                   if not stmt or stmt.startswith(("SET ", "SELECT pg_catalog.set_config", "ALTER DEFAULT PRIVILEGES FOR ROLE renly ")):
                       continue
                   if stmt.startswith("CREATE TABLE"):
