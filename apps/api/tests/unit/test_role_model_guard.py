@@ -21,12 +21,12 @@ def _settings(environment: Environment) -> Settings:
     return Settings(_env_file=None, database_url=_DB_URL, jwt_secret=_SECRET, environment=environment)
 
 
-def _table(name: str, *, owner: RoleFacts = _OWNER, enabled: bool = True, forced: bool = True) -> PoliciedTable:
-    return PoliciedTable(name=name, rls_enabled=enabled, rls_forced=forced, owner=owner)
+def _table(name: str, *, owner: RoleFacts = _OWNER, enabled: bool = True, forced: bool = True, acts_as_owner: bool = False) -> PoliciedTable:
+    return PoliciedTable(name=name, rls_enabled=enabled, rls_forced=forced, owner=owner, request_acts_as_owner=acts_as_owner)
 
 
 def _sound(**overrides) -> RoleModelFacts:
-    values = {"request_role": _APP, "policied_tables": [_table("public.accounts"), _table("public.pots")]}
+    values = {"request_role": _APP, "policied_tables": [_table("public.accounts"), _table("public.pots")], "privileged_memberships": []}
     values.update(overrides)
     return RoleModelFacts(**values)
 
@@ -90,6 +90,31 @@ class TestTheVerdict:
         [problem] = role_model_problems(_sound(policied_tables=tables))
         assert "(platform_admin)" in problem
 
+    # A request role that is (or belongs to) a privileged role can SET ROLE into it and skip every policy,
+    # however plain its own attributes are.
+    @pytest.mark.parametrize(
+        ("superuser", "bypass_rls", "named"),
+        [(True, False, "which is SUPERUSER,"), (False, True, "which is BYPASSRLS,"), (True, True, "which is SUPERUSER and BYPASSRLS,")],
+    )
+    def test_membership_of_a_privileged_role_is_a_problem(self, superuser, bypass_rls, named):
+        admin = RoleFacts(name="renly_admin", superuser=superuser, bypass_rls=bypass_rls)
+        [problem] = role_model_problems(_sound(privileged_memberships=[admin]))
+        assert "request role behind DATABASE_URL (renly_app) is a member of renly_admin" in problem
+        assert named in problem
+
+    def test_each_privileged_membership_is_named(self):
+        roles = [RoleFacts(name="renly_admin", superuser=False, bypass_rls=True), RoleFacts(name="postgres", superuser=True, bypass_rls=True)]
+        problems = role_model_problems(_sound(privileged_memberships=roles))
+        assert [("member of renly_admin" in p, "member of postgres" in p) for p in problems] == [(True, False), (False, True)]
+
+    # A DATABASE_URL naming the owner (or a member of it) is bound by FORCE, but may ALTER the table and
+    # switch its row-level security off, so it is refused too, naming the tables.
+    def test_a_request_role_acting_as_the_owner_is_a_problem_naming_the_tables(self):
+        tables = [_table("public.accounts", acts_as_owner=True), _table("public.pots"), _table("public.groups", acts_as_owner=True)]
+        [problem] = role_model_problems(_sound(policied_tables=tables))
+        assert "(renly_app) owns, or is a member of the owner of, policied tables" in problem
+        assert problem.endswith(": public.accounts, public.groups")
+
     def test_a_table_without_force_is_a_problem_naming_it(self):
         tables = [_table("public.accounts"), _table("public.pots", forced=False)]
         [problem] = role_model_problems(_sound(policied_tables=tables))
@@ -110,8 +135,12 @@ class TestTheVerdict:
 
     def test_every_problem_is_reported_together(self):
         owner = RoleFacts(name="postgres", superuser=True, bypass_rls=False)
-        facts = RoleModelFacts(request_role=owner, policied_tables=[_table("public.pots", owner=owner, forced=False)])
-        assert len(role_model_problems(facts)) == 3
+        facts = RoleModelFacts(
+            request_role=owner,
+            policied_tables=[_table("public.pots", owner=owner, forced=False, acts_as_owner=True)],
+            privileged_memberships=[RoleFacts(name="renly_admin", superuser=False, bypass_rls=True)],
+        )
+        assert len(role_model_problems(facts)) == 5
 
 
 class TestTheStartupRefusal:

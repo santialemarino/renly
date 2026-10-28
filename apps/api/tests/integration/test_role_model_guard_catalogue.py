@@ -77,6 +77,17 @@ class TestTheCatalogueReadAsTheRequestRole:
         owners = {table.owner for table in facts.policied_tables}
         assert bool(owner_problem) == any(owner.superuser or owner.bypass_rls for owner in owners)
 
+    # The provisioned request role belongs to no privileged role and acts as the owner of no table
+    # (00_roles.sql grants it privileges, never a membership), so on a production-shaped database — a
+    # NOSUPERUSER owner — the read finds nothing to refuse; here the only problem it may report is the
+    # owner's own attributes, which depend on how this database was provisioned.
+    @pytest.mark.asyncio
+    async def test_the_provisioned_request_role_has_no_membership_or_ownership_problem(self, app_connection):
+        facts = await read_role_model(app_connection)
+        assert facts.privileged_memberships == []
+        assert not any(table.request_acts_as_owner for table in facts.policied_tables)
+        assert all("owner of the policied tables" in problem for problem in role_model_problems(facts))
+
 
 class TestTheCatalogueReadSeesTheDefects:
     @pytest.mark.asyncio
@@ -101,3 +112,23 @@ class TestTheCatalogueReadSeesTheDefects:
         facts = await read_role_model(admin_connection)
         assert (facts.request_role.name, facts.request_role.bypass_rls) == ("renly_admin", True)
         assert any("request role behind DATABASE_URL (renly_admin) is BYPASSRLS" in problem for problem in role_model_problems(facts))
+
+    # renly_admin is a member of the owner, so a DATABASE_URL naming it may also ALTER every policied table.
+    @pytest.mark.asyncio
+    async def test_a_member_of_the_owner_is_named_for_every_policied_table(self, admin_connection):
+        facts = await read_role_model(admin_connection)
+        assert facts.policied_tables and all(table.request_acts_as_owner for table in facts.policied_tables)
+        assert any("(renly_admin) owns, or is a member of the owner of, policied tables" in problem for problem in role_model_problems(facts))
+
+    # The owner is a member of renly_policy_definer (BYPASSRLS) per 00_roles.sql, so reading as the owner
+    # (SET ROLE inside the rolled-back transaction) is a request role that can SET ROLE past every policy.
+    @pytest.mark.asyncio
+    async def test_membership_of_a_bypassrls_role_is_named(self, admin_connection):
+        owner = (
+            await admin_connection.execute(text("SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()"))
+        ).scalar_one()
+        await admin_connection.execute(text(f'SET LOCAL ROLE "{owner}"'))
+        facts = await read_role_model(admin_connection)
+        assert facts.request_role.name == owner
+        assert "renly_policy_definer" in [role.name for role in facts.privileged_memberships]
+        assert any(f"({owner}) is a member of renly_policy_definer, which is BYPASSRLS" in problem for problem in role_model_problems(facts))

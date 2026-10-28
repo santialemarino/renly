@@ -23,10 +23,20 @@ logger = logging.getLogger(__name__)
 # The role DATABASE_URL logs in as, and the attributes that would let it skip the policies.
 _REQUEST_ROLE_SQL = text("SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
 
-# Every policied table, with its RLS switches and its owner's attributes.
+# Every SUPERUSER or BYPASSRLS role the request role is a member of, directly or through another role: it
+# can `SET ROLE` into any of them and skip every policy. The role itself is excluded (its own attributes are
+# read above).
+_PRIVILEGED_MEMBERSHIPS_SQL = text(
+    "SELECT r.rolname, r.rolsuper, r.rolbypassrls FROM pg_roles r"
+    " WHERE (r.rolsuper OR r.rolbypassrls) AND r.rolname <> current_user AND pg_has_role(current_user, r.oid, 'MEMBER')"
+    " ORDER BY 1"
+)
+
+# Every policied table, with its RLS switches, its owner's attributes, and whether the request role IS that
+# owner or a member of it — either way it may ALTER the table and switch its row-level security off.
 _POLICIED_TABLES_SQL = text(
     "SELECT n.nspname || '.' || c.relname AS name, c.relrowsecurity, c.relforcerowsecurity,"
-    " o.rolname, o.rolsuper, o.rolbypassrls"
+    " o.rolname, o.rolsuper, o.rolbypassrls, pg_has_role(current_user, c.relowner, 'MEMBER') AS request_acts_as_owner"
     " FROM pg_class c"
     " JOIN pg_namespace n ON n.oid = c.relnamespace"
     " JOIN pg_roles o ON o.oid = c.relowner"
@@ -52,6 +62,7 @@ class PoliciedTable:
     rls_enabled: bool
     rls_forced: bool
     owner: RoleFacts
+    request_acts_as_owner: bool
 
 
 # What the guard reads from the catalogue, through the request role's own connection.
@@ -59,6 +70,7 @@ class PoliciedTable:
 class RoleModelFacts:
     request_role: RoleFacts
     policied_tables: list[PoliciedTable]
+    privileged_memberships: list[RoleFacts]
 
 
 # Raised at startup when the database's roles cannot enforce the policies.
@@ -70,6 +82,7 @@ class UnsafeRoleModelError(RuntimeError):
 async def read_role_model(connection: AsyncConnection) -> RoleModelFacts:
     role = (await connection.execute(_REQUEST_ROLE_SQL)).one()
     tables = (await connection.execute(_POLICIED_TABLES_SQL)).all()
+    memberships = (await connection.execute(_PRIVILEGED_MEMBERSHIPS_SQL)).all()
     return RoleModelFacts(
         request_role=RoleFacts(name=role.rolname, superuser=role.rolsuper, bypass_rls=role.rolbypassrls),
         policied_tables=[
@@ -78,9 +91,11 @@ async def read_role_model(connection: AsyncConnection) -> RoleModelFacts:
                 rls_enabled=row.relrowsecurity,
                 rls_forced=row.relforcerowsecurity,
                 owner=RoleFacts(name=row.rolname, superuser=row.rolsuper, bypass_rls=row.rolbypassrls),
+                request_acts_as_owner=row.request_acts_as_owner,
             )
             for row in tables
         ],
+        privileged_memberships=[RoleFacts(name=row.rolname, superuser=row.rolsuper, bypass_rls=row.rolbypassrls) for row in memberships],
     )
 
 
@@ -92,10 +107,17 @@ def _bypass_attributes(role: RoleFacts) -> list[str]:
 # Lists every way the facts leave the policies unenforced; empty when the model is sound.
 def role_model_problems(facts: RoleModelFacts) -> list[str]:
     problems = []
+    request = f"the request role behind DATABASE_URL ({facts.request_role.name})"
     request_attributes = _bypass_attributes(facts.request_role)
     if request_attributes:
+        problems.append(f"{request} is {' and '.join(request_attributes)}, so no policy applies to it")
+    for role in facts.privileged_memberships:
+        attributes = " and ".join(_bypass_attributes(role))
+        problems.append(f"{request} is a member of {role.name}, which is {attributes}, so it can SET ROLE past every policy")
+    owned = [table.name for table in facts.policied_tables if table.request_acts_as_owner]
+    if owned:
         problems.append(
-            f"the request role behind DATABASE_URL ({facts.request_role.name}) is {' and '.join(request_attributes)}, so no policy applies to it"
+            f"{request} owns, or is a member of the owner of, policied tables, so it can disable their row-level security: {', '.join(owned)}"
         )
     if not facts.policied_tables:
         problems.append("no table has row-level security, so nothing isolates one user's rows from another's")

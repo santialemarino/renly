@@ -160,7 +160,8 @@ pnpm test:e2e        # Playwright E2E
     production startup refusal (`app/role_model_guard.py`), whose verdict the unit tests drive with the read
     stubbed: as `renly_app` it sees itself and exactly the tables `pg_policies` names, all FORCEd, with
     their real owner; on an admin connection it names a table stripped of FORCE or of RLS (inside a
-    rolled-back transaction) and the BYPASSRLS role it runs as.
+    rolled-back transaction), the BYPASSRLS role it runs as, that role acting as the owner (it is a
+    member of it), and the owner's membership of `renly_policy_definer` (read under `SET LOCAL ROLE`).
   - `test_rls_reagreement_confirm.py` — the two `RLS_TEST_*` vars. Who may confirm a re-agreement and
     what the confirmation locks: the affected-seat expression and the lock live only in the policy, with
     a second copy in the service that must not disagree with it.
