@@ -3,11 +3,22 @@ from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi.testclient import TestClient
 
-from app.domain import AdvanceResult
+from app.config import Settings
+from app.db import get_admin_session, get_auth_session, get_session
+from app.deps.api_key_auth import get_jwt_or_api_key_user
+from app.domain import (
+    AdvanceResult,
+    ExpenseCycleObligationGoneError,
+    ExpenseCycleObligationNotRecurringError,
+    ExpenseCyclesOutOfRangeError,
+)
+from app.main import create_app
 from app.models.expense_entry import ExpenseEntry
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
+from app.rate_limit import limiter
 from app.services import card_reconciliation_service, expense_service, payment_obligation_service
 
 # Tests for the multi-cycle Mark Paid path (Phase 3, follow-up Item 2). The service
@@ -147,7 +158,7 @@ class TestCreateExpensesForObligationCycles:
         monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
         session = AsyncMock()
 
-        with pytest.raises(ValueError, match="recurring"):
+        with pytest.raises(ExpenseCycleObligationNotRecurringError) as raised:
             await expense_service.create_expenses_for_obligation_cycles(
                 session,
                 USER,
@@ -158,6 +169,7 @@ class TestCreateExpensesForObligationCycles:
                 payment_obligation_id=7,
             )
 
+        assert raised.value.code == "expense_cycle_obligation_not_recurring"
         expense_service.expense_repository.create.assert_not_called()
         advance_mock.assert_not_called()
         session.commit.assert_not_called()
@@ -175,7 +187,7 @@ class TestCreateExpensesForObligationCycles:
         monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
         session = AsyncMock()
 
-        with pytest.raises(ValueError, match="known recurrence pattern"):
+        with pytest.raises(ExpenseCycleObligationNotRecurringError) as raised:
             await expense_service.create_expenses_for_obligation_cycles(
                 session,
                 USER,
@@ -186,6 +198,7 @@ class TestCreateExpensesForObligationCycles:
                 payment_obligation_id=7,
             )
 
+        assert raised.value.code == "expense_cycle_obligation_not_recurring"
         expense_service.expense_repository.create.assert_not_called()
         advance_mock.assert_not_called()
         session.commit.assert_not_called()
@@ -204,7 +217,7 @@ class TestCreateExpensesForObligationCycles:
         monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
         session = AsyncMock()
 
-        with pytest.raises(ValueError, match="cycles must be in"):
+        with pytest.raises(ExpenseCyclesOutOfRangeError) as raised:
             await expense_service.create_expenses_for_obligation_cycles(
                 session,
                 USER,
@@ -215,6 +228,7 @@ class TestCreateExpensesForObligationCycles:
                 payment_obligation_id=7,
             )
 
+        assert (raised.value.code, raised.value.extra) == ("expense_cycles_out_of_range", {"max_cycles": 12})
         get_mock.assert_not_called()
         expense_service.expense_repository.create.assert_not_called()
         advance_mock.assert_not_called()
@@ -225,7 +239,7 @@ class TestCreateExpensesForObligationCycles:
         # If a concurrent transaction deletes the obligation between iterations, the next
         # advance_or_archive call returns None (obligation not found). Pre-fix the loop
         # silently overwrote last_advance to None and committed N dangling FK rows with no
-        # toast; now the loop raises ValueError and the framework rolls back. Mid-loop
+        # toast; now the loop raises ExpenseCycleObligationGoneError and the framework rolls back. Mid-loop
         # invariant: the session.commit() at the bottom never fires when advance returns
         # None on any iteration.
         entry = _entry()
@@ -239,7 +253,7 @@ class TestCreateExpensesForObligationCycles:
         monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
         session = AsyncMock()
 
-        with pytest.raises(ValueError, match="disappeared mid-loop"):
+        with pytest.raises(ExpenseCycleObligationGoneError) as raised:
             await expense_service.create_expenses_for_obligation_cycles(
                 session,
                 USER,
@@ -250,6 +264,7 @@ class TestCreateExpensesForObligationCycles:
                 payment_obligation_id=7,
             )
 
+        assert raised.value.code == "expense_cycle_obligation_gone"
         assert advance_mock.await_count == 2
         assert expense_service.expense_repository.create.await_count == 2
         session.commit.assert_not_called()
@@ -354,3 +369,50 @@ class TestCreateExpensesForObligationCycles:
         assert advance.plan_type == "obligation"
         assert advance.plan_id == 7
         assert advance.plan_name == "ABL"
+
+
+# The three refusals above used to leave the router as one `expense_cycle_invalid`, so the user read
+# the same "check the dates" message for each. Driven through POST /expenses so the code a client
+# receives is the one pinned, with persistence mocked as above.
+def _client() -> TestClient:
+    app = create_app(Settings(database_url="postgresql+asyncpg://u:p@localhost:5432/renly", jwt_secret="x" * 32))
+
+    async def _fake_session():
+        yield AsyncMock()
+
+    app.dependency_overrides[get_session] = _fake_session
+    app.dependency_overrides[get_admin_session] = _fake_session
+    app.dependency_overrides[get_auth_session] = _fake_session
+    app.dependency_overrides[get_jwt_or_api_key_user] = lambda: USER
+    return TestClient(app, raise_server_exceptions=False)
+
+
+_MULTI_CYCLE_BODY = {
+    "date": "2026-05-28",
+    "amount": "12500",
+    "currency": "ARS",
+    "payment_obligation_id": 7,
+    "cycles_to_advance": 3,
+}
+
+
+class TestEachRefusalReachesTheClientWithItsOwnCode:
+    @pytest.fixture(autouse=True)
+    def _reset_limiter(self):
+        limiter.reset()
+        yield
+        limiter.reset()
+
+    def test_a_one_off_obligation_answers_not_recurring(self, monkeypatch):
+        _mock_insert(monkeypatch, _entry())
+        _mock_get_obligation(monkeypatch, _obligation(recurrence=None))
+        response = _client().post("/expenses", json=_MULTI_CYCLE_BODY)
+        assert (response.status_code, response.json()["code"]) == (400, "expense_cycle_obligation_not_recurring")
+
+    def test_an_obligation_deleted_mid_walk_answers_gone(self, monkeypatch):
+        _mock_insert(monkeypatch, _entry())
+        _mock_get_obligation(monkeypatch, _obligation())
+        first = AdvanceResult(plan_type="obligation", plan_id=7, plan_name="ABL", previous_cursor="2026-05-15", new_cursor="2026-06-15")
+        monkeypatch.setattr(payment_obligation_service, "advance_or_archive", AsyncMock(side_effect=[first, None]))
+        response = _client().post("/expenses", json=_MULTI_CYCLE_BODY)
+        assert (response.status_code, response.json()["code"]) == (400, "expense_cycle_obligation_gone")

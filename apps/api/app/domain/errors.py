@@ -321,6 +321,45 @@ class ExchangeRateUnavailableError(DomainError):
         return {"currency": self.currency}
 
 
+# A multi-cycle Mark Paid lost its obligation partway: a concurrent request deleted it between two
+# cycles, so the cursor could not advance. Raising rolls back every row the batch had inserted, so
+# nothing is recorded. Mapped to 400.
+class ExpenseCycleObligationGoneError(DomainError):
+    code = "expense_cycle_obligation_gone"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "The obligation was deleted while its cycles were being paid; nothing was recorded."
+        super().__init__(self.message)
+
+
+# A multi-cycle Mark Paid named an obligation without a known recurrence (one-off, or a value the
+# cursor cannot step), so there is no next cycle to pay ahead. Mapped to 400.
+class ExpenseCycleObligationNotRecurringError(DomainError):
+    code = "expense_cycle_obligation_not_recurring"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Multi-cycle Mark Paid requires a recurring obligation with a known recurrence pattern."
+        super().__init__(self.message)
+
+
+# A multi-cycle Mark Paid asked for a cycle count outside [1, max_cycles]. The request schema bounds it
+# on the HTTP path; this is the service's own bound for internal callers. Mapped to 400.
+class ExpenseCyclesOutOfRangeError(DomainError):
+    code = "expense_cycles_out_of_range"
+    status_code = 400
+
+    def __init__(self, max_cycles: int) -> None:
+        self.max_cycles = max_cycles
+        self.message = f"cycles must be in [1, {max_cycles}]."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"max_cycles": self.max_cycles}
+
+
 # A group operation that only an admin may perform was attempted by a plain member. Group
 # administration is management, not access — this gates WRITES to membership, settings and invites, and
 # never widens what anyone can read. Mapped to 403 by the API.

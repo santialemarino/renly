@@ -8,6 +8,9 @@ from app.domain import (
     AccountCardExclusivityError,
     AdvanceResult,
     CycleAdvanceDecision,
+    ExpenseCycleObligationGoneError,
+    ExpenseCycleObligationNotRecurringError,
+    ExpenseCyclesOutOfRangeError,
     NotFoundError,
     PaymentMethod,
     PaymentPairingError,
@@ -349,9 +352,10 @@ async def create_expense(
 # mutation. The reconciliation stale mark fires ONCE after the loop (idempotent regardless of
 # how many rows landed). Raises:
 #   - NotFoundError when the obligation can't be found / isn't owned (router → 404 via global handler)
-#   - ValueError when the obligation isn't recurring with a known recurrence pattern, when cycles
-#     is outside [1, MAX_CYCLES_PER_MARK_PAID], or when a concurrent transaction deletes the
-#     obligation mid-loop (router → 400 via its try/except).
+#   - ExpenseCyclesOutOfRangeError when cycles is outside [1, MAX_CYCLES_PER_MARK_PAID],
+#     ExpenseCycleObligationNotRecurringError when the obligation isn't recurring with a known
+#     recurrence pattern, and ExpenseCycleObligationGoneError when a concurrent transaction deletes
+#     the obligation mid-loop — each its own code, 400 via the global DomainError handler.
 # Sub/installment IDs are forbidden by the schema validator on the multi-cycle path so they're
 # not threaded through.
 async def create_expenses_for_obligation_cycles(
@@ -372,7 +376,7 @@ async def create_expenses_for_obligation_cycles(
     # Defensive cycles bound. The schema enforces 1..MAX_CYCLES_PER_MARK_PAID on the HTTP
     # path; this guard catches internal callers and survives `python -O` (`assert` would not).
     if cycles < 1 or cycles > MAX_CYCLES_PER_MARK_PAID:
-        raise ValueError(f"cycles must be in [1, {MAX_CYCLES_PER_MARK_PAID}].")
+        raise ExpenseCyclesOutOfRangeError(MAX_CYCLES_PER_MARK_PAID)
 
     # SEC-4: get_obligation below validates the obligation FK, but the card FK has no other
     # owner check before its post-loop stale-mark, so validate it here.
@@ -383,7 +387,7 @@ async def create_expenses_for_obligation_cycles(
     # rows with a frozen cursor (compute_obligation_advance returns the date unchanged
     # for unrecognised recurrence values).
     if obligation.recurrence is None or obligation.recurrence not in OBLIGATION_MONTH_STEP:
-        raise ValueError("Multi-cycle Mark Paid requires a recurring obligation with a known recurrence pattern.")
+        raise ExpenseCycleObligationNotRecurringError()
 
     first_previous_cursor: str | None = None
     last_entry: ExpenseEntry | None = None
@@ -408,7 +412,7 @@ async def create_expenses_for_obligation_cycles(
         # explicitly rather than silently dropping the cursor change from the response
         # toast (which would also leave dangling FK rows in the partial batch).
         if advance is None:
-            raise ValueError("Linked obligation disappeared mid-loop.")
+            raise ExpenseCycleObligationGoneError()
         last_advance = advance
         if first_previous_cursor is None:
             first_previous_cursor = advance.previous_cursor
