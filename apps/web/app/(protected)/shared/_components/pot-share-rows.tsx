@@ -11,6 +11,7 @@ import {
 } from '@/app/(protected)/shared/pot-form-schema';
 import { FormControl, FormField, FormItem, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { GroupMember } from '@/lib/api/groups';
 import { POT_PERCENTAGE_TOTAL } from '@/lib/constants/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -106,14 +107,16 @@ function ShareRow({ seat, index, form }: ShareRowProps) {
         <FormItem>
           <div className="flex min-w-0 items-center gap-x-3">
             {/*
-             * truncate, and the input shrink-0: without both, a long display name wrapped and rendered
-             * behind the field. `min-w-0` alone is not enough — a flex item's text still forces its
-             * intrinsic width until something clips it.
+             * The name truncates on its own, with the whole name in a tooltip, and "(you)" stays whole
+             * beside it: truncating the pair cut the tag first and gave no way to read either. The
+             * input is shrink-0 and this row `min-w-0`, or a long name wraps and renders behind it.
              */}
-            <span className="flex-1 min-w-0 truncate text-paragraph-sm text-foreground">
-              {seat.displayName}
+            <span className="flex flex-1 min-w-0 items-baseline gap-x-1 text-paragraph-sm text-foreground">
+              <TruncatingTooltip text={seat.displayName} className="min-w-0" />
               {seat.isSelf && (
-                <span className="text-paragraph-xs text-muted-foreground"> {t('members.you')}</span>
+                <span className="shrink-0 text-paragraph-xs text-muted-foreground">
+                  {t('members.you')}
+                </span>
               )}
             </span>
             <FormControl>

@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
 import { FormCombobox, type FormComboboxOption } from '@/components/form-combobox';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -102,7 +103,7 @@ function ObligationRowContent({
       {!disabled && (
         <CircleDot className={cn('size-3 shrink-0 transition-colors', dotColor)} aria-hidden />
       )}
-      <span className="truncate">{obligation.name}</span>
+      <TruncatingTooltip text={obligation.name} className="min-w-0" />
       <span className="text-paragraph-xs text-muted-foreground">
         {nextCycleHint({ date: fmt.date(obligation.nextDueDate) })}
       </span>

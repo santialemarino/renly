@@ -17,6 +17,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { ImportPreview } from '@/lib/api/imports';
 
 interface ColumnMapStepProps {
@@ -75,9 +76,10 @@ function FieldMapCombobox({ value, columns, ignoreLabel, onChange }: FieldMapCom
           role="combobox"
           className="h-9 w-full justify-between px-3 gap-x-2 border-border bg-background shadow-xs text-paragraph-sm font-normal hover:border-border-3 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
         >
-          <span className={cn('truncate', !value && 'text-muted-foreground')}>
-            {value ?? ignoreLabel}
-          </span>
+          <TruncatingTooltip
+            text={value ?? ignoreLabel}
+            className={cn(!value && 'text-muted-foreground')}
+          />
           <ComboboxChevron open={open} />
         </Button>
       </PopoverTrigger>

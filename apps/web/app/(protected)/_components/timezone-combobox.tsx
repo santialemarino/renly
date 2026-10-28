@@ -16,6 +16,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { formatIanaTimezone, IANA_TIMEZONES } from '@/lib/constants/timezones';
 
 interface TimezoneComboboxProps {
@@ -85,12 +86,13 @@ export function TimezoneCombobox({
         >
           {value ? (
             <span className="inline-flex min-w-0 items-center overflow-hidden text-foreground">
-              <span className="text-paragraph-sm truncate">{formatIanaTimezone(value)}</span>
+              <TruncatingTooltip text={formatIanaTimezone(value)} className="text-paragraph-sm" />
             </span>
           ) : (
-            <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
-              {placeholder}
-            </span>
+            <TruncatingTooltip
+              text={placeholder}
+              className="min-w-0 text-muted-foreground animate-in fade-in duration-100"
+            />
           )}
           <ComboboxChevron open={open} className="ml-auto" />
         </Button>
@@ -123,7 +125,7 @@ export function TimezoneCombobox({
                   setOpen(false);
                 }}
               >
-                <span className="truncate text-paragraph-sm">{formatIanaTimezone(tz)}</span>
+                <TruncatingTooltip text={formatIanaTimezone(tz)} className="text-paragraph-sm" />
               </CommandItem>
             ))}
           </CommandList>

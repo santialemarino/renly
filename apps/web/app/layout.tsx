@@ -73,7 +73,11 @@ export default async function RootLayout({ children }: Readonly<RootLayoutProps>
   };
 
   return (
-    <html className={plusJakartaSans.className} dir={getLocaleDirection(locale)} lang={locale}>
+    <html
+      className={cn(plusJakartaSans.className, plusJakartaSans.variable)}
+      dir={getLocaleDirection(locale)}
+      lang={locale}
+    >
       <body
         className={cn(
           'min-h-safe-bottom md:min-h-screen w-full bg-muted/30 antialiased overflow-x-hidden',

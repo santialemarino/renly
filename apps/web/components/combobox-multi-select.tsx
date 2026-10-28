@@ -18,6 +18,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 
 export interface ComboboxItem {
@@ -107,9 +108,11 @@ export function ComboboxMultiSelect({
               surface ? 'bg-background' : 'bg-input',
             )}
           >
-            <span className="flex items-center gap-x-2 truncate">
+            {/* The label truncates in its own block (`truncate` on the flex row draws no ellipsis), and
+                the tooltip gives the whole label back, only when cut. */}
+            <span className="flex min-w-0 items-center gap-x-2">
               {icon}
-              {placeholder}
+              <TruncatingTooltip text={placeholder} className="block" />
             </span>
             <ComboboxChevron open={open} />
           </Button>

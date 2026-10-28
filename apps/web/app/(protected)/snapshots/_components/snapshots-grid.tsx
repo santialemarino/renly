@@ -43,6 +43,9 @@ interface CellContentProps {
  * A period return is measured in the holding's OWN currency, not the display currency its value is
  * converted to: a peso holding can return +25% while its dollar value is flat. So the return names
  * its currency whenever the figure beside it is in another one, and its tooltip always says which.
+ *
+ * Each tooltip trigger is a tab stop, so what it explains reaches a keyboard user too: Radix opens the
+ * tooltip on focus. The cell itself is not a control, so these are never nested stops.
  */
 function CellContent({ cell, baseCurrency, displayCurrency }: CellContentProps) {
   const fmt = useFormatters();
@@ -53,7 +56,10 @@ function CellContent({ cell, baseCurrency, displayCurrency }: CellContentProps) 
       {cell.quantity !== null ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="text-paragraph-sm tabular-nums cursor-default">
+            <span
+              tabIndex={0}
+              className="text-paragraph-sm tabular-nums cursor-default rounded-xs outline-none focus-visible:ring-3 focus-visible:ring-ring"
+            >
               <MoneyFigure>{fmt.value(cell.value)}</MoneyFigure>
             </span>
           </TooltipTrigger>
@@ -67,7 +73,8 @@ function CellContent({ cell, baseCurrency, displayCurrency }: CellContentProps) 
         <Tooltip>
           <TooltipTrigger asChild>
             <span
-              className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums cursor-default ${
+              tabIndex={0}
+              className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums cursor-default rounded-xs outline-none focus-visible:ring-3 focus-visible:ring-ring ${
                 cell.periodReturnPct > 0
                   ? 'text-emerald-600'
                   : cell.periodReturnPct < 0
@@ -82,10 +89,17 @@ function CellContent({ cell, baseCurrency, displayCurrency }: CellContentProps) 
               ) : (
                 <Minus className="size-3" />
               )}
-              {fmt.signedPct(cell.periodReturnPct)}
-              {returnInOtherCurrency && (
-                <span className="text-muted-foreground">{baseCurrency}</span>
-              )}
+              {/* One inline run, so the space before the code is real text: as two flex items the
+                  gap is only visual, and a screen reader reads "+25.00%ARS". */}
+              <span>
+                {fmt.signedPct(cell.periodReturnPct)}
+                {returnInOtherCurrency && (
+                  <>
+                    {' '}
+                    <span className="text-muted-foreground">{baseCurrency}</span>
+                  </>
+                )}
+              </span>
             </span>
           </TooltipTrigger>
           <TooltipContent>{t('grid.returnIn', { currency: baseCurrency })}</TooltipContent>
@@ -95,7 +109,10 @@ function CellContent({ cell, baseCurrency, displayCurrency }: CellContentProps) 
       {cell.hasTransaction && cell.transaction && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex items-center gap-x-0.5 text-paragraph-xs text-blue-500 shrink-0">
+            <span
+              tabIndex={0}
+              className="flex items-center gap-x-0.5 text-paragraph-xs text-blue-500 shrink-0 rounded-xs outline-none focus-visible:ring-3 focus-visible:ring-ring"
+            >
               <CircleDollarSign className="size-3.5" />
               <MoneyFigure>
                 {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)

@@ -156,24 +156,39 @@ test.describe('a truncated text is reachable from the keyboard', () => {
   test('a focusable scroll region around the table does not take the note’s stop', async ({
     page,
   }) => {
-    await openExpenses(page);
-    const cut = note(page, longNote);
     /*
      * What `Table` does while it is wider than its column: its scroll container becomes a focusable,
      * named region. It is not a control, so the cut note inside it stays a stop of its own, and the
-     * region's own focus opens no tooltip. The note is narrowed a little so it measures again.
+     * region's own focus opens no tooltip.
+     *
+     * The region is made focusable as the document is parsed, before anything hydrates, so it already
+     * is one when the note mounts and first asks what surrounds it — the case a row arriving in an
+     * already-overflowing table meets. Made focusable only after load, the case passed on a component
+     * that read its surroundings once, at mount, and took any focusable for a control.
      */
-    const region = page.locator('[data-slot="table-container"]').filter({ has: cut });
-    await region.evaluate((el) => {
-      el.setAttribute('tabindex', '0');
-      el.setAttribute('role', 'region');
-      el.setAttribute('aria-label', 'Gastos');
+    await page.addInitScript(() => {
+      const setAttribute = Element.prototype.setAttribute;
+      const mark = (el: Element) => {
+        setAttribute.call(el, 'tabindex', '0');
+        setAttribute.call(el, 'role', 'region');
+        setAttribute.call(el, 'aria-label', 'Gastos');
+      };
+      // A container React creates in the browser: marked in the same call that names it, so before
+      // any effect of the rows inside it can run.
+      Element.prototype.setAttribute = function (name: string, value: string) {
+        setAttribute.call(this, name, value);
+        if (name === 'data-slot' && value === 'table-container') mark(this);
+      };
+      // One the server rendered: marked as the parser inserts it, before hydration.
+      new MutationObserver(() =>
+        document.querySelectorAll('[data-slot="table-container"]').forEach(mark),
+      ).observe(document, { childList: true, subtree: true });
     });
-    await cut.evaluate((el) => ((el as HTMLElement).style.maxWidth = '10rem'));
-    await expect
-      .poll(() => cut.evaluate((el) => el.getBoundingClientRect().width))
-      .toBeLessThanOrEqual(160);
-    await expect.poll(() => cut.evaluate((el) => el.tabIndex)).toBe(0);
+    await openExpenses(page);
+    const cut = note(page, longNote);
+    const region = page.locator('[data-slot="table-container"]').filter({ has: cut });
+    await expect(region).toHaveAttribute('tabindex', '0');
+    await expect(region).toHaveAttribute('role', 'region');
 
     await page.keyboard.press('Shift');
     await region.focus();

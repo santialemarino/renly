@@ -19,6 +19,7 @@ import {
 import { FormControl, FormField, FormItem } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { MoneyFigure } from '@/components/money-figure';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { GroupMember } from '@/lib/api/groups';
 import {
   SPLIT_FIGURE_DECIMALS,
@@ -211,25 +212,26 @@ function SplitRow({ seat, index, control, currency, figureKind }: SplitRowProps)
       />
 
       {/*
-       * truncate, and the field shrink-0: without both, a long display name wraps and renders behind
-       * the input. `min-w-0` alone is not enough — a flex item's text forces its intrinsic width
-       * until something clips it.
+       * The name truncates on its own, with the whole name in a tooltip, and the tags stay whole
+       * beside it: truncating the run cut the tags first and gave no way to read any of it. The field
+       * is shrink-0 and this row `min-w-0`, or a long name wraps and renders behind the input.
        */}
       <span
         className={cn(
-          'flex-1 min-w-0 truncate text-paragraph-sm',
+          'flex flex-1 min-w-0 items-baseline gap-x-1 text-paragraph-sm',
           included ? 'text-foreground' : 'text-muted-foreground',
         )}
       >
-        {seat.displayName}
+        <TruncatingTooltip text={seat.displayName} className="min-w-0" />
         {seat.isSelf && (
-          <span className="text-paragraph-xs text-muted-foreground"> {t('members.you')}</span>
+          <span className="shrink-0 text-paragraph-xs text-muted-foreground">
+            {t('members.you')}
+          </span>
         )}
         {/* A former seat appears only on a row that already named them, and saying so is the point:
             the API refuses to re-record one, and the form says which person that is about. */}
         {!seat.isActive && (
-          <span className="text-paragraph-xs text-muted-foreground">
-            {' '}
+          <span className="shrink-0 text-paragraph-xs text-muted-foreground">
             {t('split.formerMember')}
           </span>
         )}

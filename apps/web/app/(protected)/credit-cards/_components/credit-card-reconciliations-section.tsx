@@ -25,7 +25,7 @@ import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-acti
 import { MoneyFigure } from '@/components/money-figure';
 import { RowActionButton } from '@/components/row-action-button';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
-import { ANIMATION_FAST } from '@/lib/constants/animations';
+import { ANIMATION_FAST, LOADING_DISPLAY_FLOOR_MS } from '@/lib/constants/animations';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface CreditCardReconciliationsSectionProps {
@@ -60,6 +60,7 @@ export function CreditCardReconciliationsSection({
       loadingFlags[c] = true;
     });
     setLoading(loadingFlags);
+    const start = Date.now();
 
     await Promise.all(
       bucketCurrencies.map(async (currency) => {
@@ -70,6 +71,12 @@ export function CreditCardReconciliationsSection({
         }
       }),
     );
+    // The display floor, on the first load and on the reload after a dialog saves alike: without it a
+    // fast answer swaps table → loading line → table too quickly to read.
+    const elapsed = Date.now() - start;
+    if (elapsed < LOADING_DISPLAY_FLOOR_MS) {
+      await new Promise((r) => setTimeout(r, LOADING_DISPLAY_FLOOR_MS - elapsed));
+    }
 
     setStatementsByCurrency(next);
     setLoading({});

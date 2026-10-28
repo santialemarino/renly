@@ -17,6 +17,7 @@ import {
 } from '@repo/ui/components';
 import { deleteTransfer, fetchAccountTransfers } from '@/app/(protected)/accounts/account-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { PagedListLoadError } from '@/components/paged-list-load-error';
 import { RowActionButton } from '@/components/row-action-button';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TablePagination } from '@/components/table-pagination';
@@ -55,6 +56,8 @@ export function AccountTransfersSection({
     page,
     setPage,
     loading,
+    failed,
+    invalidate,
   } = useExpandablePagedList({
     expanded,
     reloadToken,
@@ -120,6 +123,8 @@ export function AccountTransfersSection({
                     >
                       {t('loading')}
                     </motion.p>
+                  ) : failed ? (
+                    <PagedListLoadError key="error" onRetry={invalidate} className="mt-3" />
                   ) : total === 0 ? (
                     <motion.p
                       key="empty"

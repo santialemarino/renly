@@ -324,6 +324,14 @@ test.describe('the skip link (signed in)', () => {
       await page.goto(EXPENSES);
       const skip = page.getByTestId('skip-link');
       await waitForHydration(skip);
+      /*
+       * The page's own content, not its loading skeleton: `main` holds no control until the list has
+       * streamed in, and a Tab out of a still-empty `main` goes on to the next stop in the document —
+       * the cookie notice after it — which is a correct order, not the one this test is about.
+       */
+      const firstControl = page.locator('main [data-slot="input"]').first();
+      await expect(firstControl).toBeVisible({ timeout: 20_000 });
+      await waitForHydration(firstControl);
 
       await page.keyboard.press('Tab');
       await expect(skip).toBeFocused();
@@ -335,9 +343,11 @@ test.describe('the skip link (signed in)', () => {
 
       // One more Tab reaches the page's own first control — the whole sidebar was skipped.
       await page.keyboard.press('Tab');
-      expect(
-        await page.evaluate(() => document.querySelector('main')?.contains(document.activeElement)),
-      ).toBe(true);
+      const landed = await page.evaluate(() => ({
+        inMain: document.querySelector('main')?.contains(document.activeElement) ?? false,
+        element: document.activeElement?.outerHTML.slice(0, 160) ?? '',
+      }));
+      expect(landed.inMain, `Tab after the skip link landed on ${landed.element}`).toBe(true);
     });
   }
 });

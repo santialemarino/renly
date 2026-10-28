@@ -10,6 +10,10 @@ export const ANIMATION_DEFAULT = 0.25;
 // Page-level entrances: full-page fade-ins, not-found page.
 export const ANIMATION_SLOW = 0.5;
 
+// Minimum time (ms) a loading line stays up before the content replaces it, so a fast load crossfades
+// once instead of flashing loading → content. Shared by the expandable rows' history panels.
+export const LOADING_DISPLAY_FLOOR_MS = 500;
+
 // Input debounce: delay before triggering search after keystrokes.
 export const DEBOUNCE_MS = 300;
 

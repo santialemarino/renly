@@ -18,8 +18,9 @@ import { detectBrowserTimezone } from '@/lib/constants/timezones';
  *
  * 'manual' pins the account's value: it is never overwritten from the browser, and a cookie that is
  * absent (fresh browser, or logout dropped it) or names something else is re-seeded from the pin, so
- * the cookie the root error boundary reads agrees with the render. 'auto' keeps following the browser
- * exactly as before and never seeds.
+ * the cookie the root error boundary reads agrees with the render. 'auto' keeps following the browser;
+ * language never seeds (the request falls back to Accept-Language), but a zone that already matches the
+ * account is seeded into a cookie that lacks it, since the server has no other source for the zone.
  */
 
 vi.mock('@/app/(protected)/_components/language-auto-sync-actions', () => ({
@@ -87,11 +88,32 @@ describe('TimezoneAutoSync', () => {
     expect(syncBrowserTimezone).not.toHaveBeenCalled();
   });
 
-  it('follows the browser in auto and never seeds', () => {
+  it('syncs the browser zone in auto when the account names another one', () => {
     const browserTz = detectBrowserTimezone();
     const stored = browserTz === pinned ? other : pinned;
     render(<TimezoneAutoSync storedTimezone={stored} storedMode="auto" timezoneCookie={null} />);
     expect(syncBrowserTimezone).toHaveBeenCalledWith(browserTz);
     expect(seedTimezoneCookie).not.toHaveBeenCalled();
+  });
+
+  it('seeds the cookie in auto when the account already matches the browser but the cookie does not', () => {
+    const browserTz = detectBrowserTimezone();
+    for (const cookie of [null, browserTz === pinned ? other : pinned]) {
+      vi.clearAllMocks();
+      render(
+        <TimezoneAutoSync storedTimezone={browserTz} storedMode="auto" timezoneCookie={cookie} />,
+      );
+      expect(seedTimezoneCookie).toHaveBeenCalledWith(browserTz);
+      expect(syncBrowserTimezone).not.toHaveBeenCalled();
+    }
+  });
+
+  it('leaves the cookie alone in auto when it already names the browser zone', () => {
+    const browserTz = detectBrowserTimezone();
+    render(
+      <TimezoneAutoSync storedTimezone={browserTz} storedMode="auto" timezoneCookie={browserTz} />,
+    );
+    expect(seedTimezoneCookie).not.toHaveBeenCalled();
+    expect(syncBrowserTimezone).not.toHaveBeenCalled();
   });
 });

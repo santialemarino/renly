@@ -52,7 +52,11 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useReportBoundaryError(error);
 
   return (
-    <html className={plusJakartaSans.className} dir={getLocaleDirection(locale)} lang={locale}>
+    <html
+      className={`${plusJakartaSans.className} ${plusJakartaSans.variable}`}
+      dir={getLocaleDirection(locale)}
+      lang={locale}
+    >
       <body className="min-h-screen w-full bg-muted/30 antialiased">
         <GlobalErrorContent locale={locale} reset={reset} />
       </body>

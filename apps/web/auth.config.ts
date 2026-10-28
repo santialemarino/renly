@@ -54,12 +54,13 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
 /*
  * A sign-in the API refused for a reason the form must show as itself (a rate limit), not as wrong
  * credentials. Auth.js only forwards a `CredentialsSignin`'s `code` to the browser, so the parsed API
- * error travels packed into it; the login form unpacks it with `decodeApiError`.
+ * error travels packed into it; the login form unpacks it with `decodeApiError`. The English `detail`
+ * stays behind: the form shows the localized copy for the code, or its own fallback.
  */
 class ApiErrorSignin extends CredentialsSignin {
   constructor(apiError: ApiError) {
     super();
-    this.code = encodeApiError(apiError);
+    this.code = encodeApiError({ code: apiError.code, params: apiError.params });
   }
 }
 

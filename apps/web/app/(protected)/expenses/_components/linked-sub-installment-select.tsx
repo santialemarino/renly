@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
 import { FormCombobox, type FormComboboxOption } from '@/components/form-combobox';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import type { Installment } from '@/lib/api/installments';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -217,7 +218,7 @@ export function LinkedSubInstallmentSelect({
           className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
           aria-hidden
         />
-        <span className="truncate">{sub.name}</span>
+        <TruncatingTooltip text={sub.name} className="min-w-0" />
         <span className="text-paragraph-xs text-muted-foreground">
           {tCommon('nextCycleHint', { date: fmt.date(sub.nextBillingDate) })}
         </span>
@@ -232,7 +233,7 @@ export function LinkedSubInstallmentSelect({
           className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
           aria-hidden
         />
-        <span className="truncate">{installmentLabel(inst)}</span>
+        <TruncatingTooltip text={installmentLabel(inst)} className="min-w-0" />
         <span className="text-paragraph-xs text-muted-foreground">
           {tCommon('nextCycleHint', { date: fmt.date(nextChargeDate) })}
         </span>

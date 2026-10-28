@@ -62,8 +62,11 @@
   --color-schemes-error: var(--schemes-error);
 
   /* Fonts (project-specific) */
+  /* The app's next/font face, through the variable its root layout sets on <html>; the family name is
+     the fallback where that variable is not set. */
   --font-sans:
-    'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+    var(--font-plus-jakarta-sans, 'Plus Jakarta Sans'), 'Helvetica Neue', Helvetica, Arial,
+    ui-sans-serif, system-ui, sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
