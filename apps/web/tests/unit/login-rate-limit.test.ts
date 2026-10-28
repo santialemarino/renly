@@ -55,6 +55,9 @@ describe('login authorize', () => {
     const decoded = decodeApiError((error as CredentialsSignin).code);
     expect(decoded?.code).toBe('rate_limited');
     expect(decoded?.params).toEqual({ retry_after_minutes: 1 });
+    // The English detail stays on the server: the form only needs the code.
+    expect(decoded?.detail).toBeUndefined();
+    expect((error as CredentialsSignin).code).not.toContain('detail');
   });
 
   it('still answers wrong credentials (401) with null, which the form reads as invalid', async () => {

@@ -65,7 +65,8 @@ export async function parseApiError(res: Response): Promise<ApiError> {
  * An ApiError folded into one string and back. Auth.js carries a refused sign-in to the browser only
  * as the `code` of a `CredentialsSignin` (a URL query parameter), so the login path packs the parsed
  * error into it on the server and the form unpacks it to resolve the localized message. Numeric
- * params come back as numbers so a plural message still selects its form.
+ * params come back as numbers so a plural message still selects its form. The login path leaves the
+ * `detail` out; decoding still reads one, so a code packed before that resolves the same way.
  */
 export function encodeApiError(error: ApiError): string {
   const fields: Record<string, string> = {};
