@@ -177,7 +177,8 @@ class TestJobFailuresAreReported:
     # U20: a job's notification dispatch raises into the job only when the job passes its own session —
     # without one, dispatch opens its own and swallows, and the failure never reaches the listener above.
     # Derived from the scheduler's call graph (tests/unit/test_in_chunking.py's walk): every dispatch a
-    # job can reach, outside the notification layer itself, passes `session=`.
+    # job can reach, outside the notification layer itself, passes `session=` — and passes a session:
+    # `session=None` is the keyword with the swallowing path behind it, so it counts as not passing one.
     def test_every_dispatch_a_job_reaches_passes_the_jobs_session(self):
         calls = [
             (name, node)
@@ -191,7 +192,12 @@ class TestJobFailuresAreReported:
         ]
         print(f"\nscheduled dispatch call sites: {sorted(name for name, _ in calls)}")
         assert len(calls) >= 3
-        assert [name for name, node in calls if not any(kw.arg == "session" for kw in node.keywords)] == []
+        no_session = [
+            name
+            for name, node in calls
+            if not any(kw.arg == "session" and not (isinstance(kw.value, ast.Constant) and kw.value.value is None) for kw in node.keywords)
+        ]
+        assert no_session == []
 
 
 # Stands in for AdminSessionLocal when a job's body is driven with its service faked.

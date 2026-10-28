@@ -524,3 +524,61 @@ class TestEveryProviderKeepsFinitePricesOnly:
         monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=body))
 
         assert await price_providers._fetch_fci_from_argentinadatos("1003") == [(date(2026, 10, 26), Decimal("1234.5"), "ARS")]
+
+
+# A provider may send a quote as JSON text as readily as a number. `math.isfinite` raises TypeError on
+# a string, which for data912 sat inside the board loop and failed the whole cache load — every symbol
+# then read as "data912 is down". Text that is a price is kept; text that is not costs only its own row.
+class TestAQuoteSentAsTextIsReadOrSkippedAlone:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("quote", "expected"), [('"187.25"', [Decimal("187.25")]), ('"n/a"', []), ('"0"', []), ('"NaN"', [])])
+    async def test_finnhub_reads_a_text_quote_and_answers_nothing_for_a_bad_one(self, monkeypatch, quote, expected):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "finnhub_api_key", "test-key")
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=b'{"c": ' + quote.encode() + b"}"))
+
+        assert [row[1] for row in await price_providers.fetch_finnhub("AAPL")] == expected
+
+    @pytest.mark.asyncio
+    async def test_data912_keeps_text_closes_and_drops_only_the_bad_rows(self, monkeypatch):
+        board = (
+            b'[{"symbol": "AAPL", "c": 26600}, {"symbol": "GGAL", "c": "5120.5"},'
+            b' {"symbol": "YPFD", "c": "sin cotizar"}, {"symbol": "PAMP", "c": true}, {"symbol": "TXAR", "c": "0"}]'
+        )
+        monkeypatch.setattr(price_providers, "_data912_prices", None)
+        monkeypatch.setattr(price_providers, "_data912_load_failed", False)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=board))
+
+        await price_providers._load_data912_cache()
+
+        assert price_providers._data912_load_failed is False
+        assert price_providers._data912_prices == {"AAPL": Decimal("26600"), "GGAL": Decimal("5120.5")}
+
+
+class TestComafiSkipsANonFiniteRatioAlone:
+    @pytest.mark.asyncio
+    async def test_a_NaN_or_Infinity_ratio_costs_its_own_row_and_not_the_sheet(self, monkeypatch):
+        # A NaN Decimal raises when compared to zero, and that comparison sat outside the per-row try, so
+        # one such cell dropped every Comafi ratio for the cycle (the CAFCI case #274 fixed).
+        import io
+
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["LISTA TOTAL DE CEDEARS AL 13.03.2025"])
+        sheet.append(["Programa", "Identificación Mercado", "Ratio Cedear / Acción ó ADR"])
+        sheet.append(["Apple Inc.", "AAPL", "20:1"])
+        sheet.append(["Broken Co", "NANR", "NaN"])
+        sheet.append(["Broken Co", "NANS", "nan:1"])
+        sheet.append(["Broken Co", "INFR", "Infinity"])
+        sheet.append(["Ambev S.A.", "ABEV", "1:3"])
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(raw_body=buffer.getvalue()))
+
+        result = await price_providers.fetch_comafi_ratios()
+
+        assert result.ratios == [("AAPL.BA", "AAPL", Decimal(20)), ("ABEV.BA", "ABEV", Decimal(1) / Decimal(3))]
+        assert result.source_date == date(2025, 3, 13)

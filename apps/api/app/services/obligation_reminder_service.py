@@ -71,7 +71,11 @@ def _scan_cutoff(now_utc: datetime) -> date_type:
 # whole lead period, so the offer is made every day and the dedupe index refuses all but the first.
 # Counting the offer would make the scheduler's log claim a daily reminder nobody received.
 # Each dispatch runs on this job's own session, so a dispatch failure raises to the job and reaches the
-# scheduler's error listener instead of being swallowed.
+# scheduler's error listener instead of being swallowed — but only once every other bill has had its
+# turn. Bills go out in a fixed order every tick, so a failure that lasts (one obligation whose dispatch
+# always fails) would otherwise stop every bill after it on every tick, for as long as it lasted. Each
+# failure is logged with its obligation and rolled back, the rest are sent, and the first failure is then
+# re-raised so the job still ends failed and the listener still reports it at CRITICAL.
 # `now_utc` is injectable for tests, mirroring auto_expense_service and pot_reminder_service.
 async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = None) -> int:
     now_utc = now_utc or datetime.now(UTC)
@@ -86,7 +90,10 @@ async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = N
     for obligation in obligations:
         by_user[obligation.user_id].append(obligation)
 
-    dispatched = 0
+    # Every bill to announce, read off the loaded rows BEFORE anything is sent: a failed dispatch is
+    # rolled back below, and a rollback expires every loaded row, which an async session cannot then
+    # re-read lazily.
+    due: list[tuple[int, int, dict, str]] = []
     for user_id, owned in by_user.items():
         timezone = timezones.get(user_id)
         if local_hour_for_user(now_utc, timezone) != OBLIGATION_REMINDER_HOUR_LOCAL:
@@ -98,21 +105,32 @@ async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = N
         for obligation in owned:
             if obligation.next_due_date > horizon:
                 continue
+            payload = {
+                "obligation_id": obligation.id,
+                "name": obligation.name,
+                "amount": str(obligation.amount),
+                "currency": obligation.currency,
+                # The key the copy reads its date from is literally `date` on both sides — the API spells
+                # it out in the email and the web formats it for the feed.
+                "date": obligation.next_due_date.isoformat(),
+            }
+            due.append((obligation.id, user_id, payload, f"obligation:{obligation.id}:{obligation.next_due_date.isoformat()}"))
+
+    dispatched = 0
+    failures: list[Exception] = []
+    for obligation_id, user_id, payload, dedupe_key in due:
+        try:
             dispatched += await notification_service.dispatch(
-                NotificationEvent.obligation_due,
-                [user_id],
-                {
-                    "obligation_id": obligation.id,
-                    "name": obligation.name,
-                    "amount": str(obligation.amount),
-                    "currency": obligation.currency,
-                    # The key the copy reads its date from is literally `date` on both sides — the API
-                    # spells it out in the email and the web formats it for the feed.
-                    "date": obligation.next_due_date.isoformat(),
-                },
-                dedupe_key=f"obligation:{obligation.id}:{obligation.next_due_date.isoformat()}",
-                session=session,
+                NotificationEvent.obligation_due, [user_id], payload, dedupe_key=dedupe_key, session=session
             )
+        except Exception as exc:
+            logger.exception("Obligation reminder for obligation %s failed; sending the rest.", obligation_id)
+            # A failed statement leaves the session's transaction aborted, and every later bill would fail
+            # on it too. Each dispatch commits its own rows, so this discards only this bill's.
+            await session.rollback()
+            failures.append(exc)
     if dispatched:
         logger.info("Obligation reminders: told %d people about upcoming bills at %s UTC.", dispatched, now_utc.isoformat())
+    if failures:
+        raise failures[0]
     return dispatched

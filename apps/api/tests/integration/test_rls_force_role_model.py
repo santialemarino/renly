@@ -235,10 +235,10 @@ class TestRowSecurityOffIsTheLoudGuard:
 
 
 _DEFINER = "renly_policy_definer"
-# The three policy helpers and the reconciliation-scope trigger function.
-_HELPERS = {"app_can_view_pot", "app_can_write_pot", "app_is_group_member", "app_reconciliation_follows_account"}
+# The three policy helpers and the two scope trigger functions (reconciliations and transfers).
+_HELPERS = {"app_can_view_pot", "app_can_write_pot", "app_is_group_member", "app_reconciliation_follows_account", "app_transfer_follows_accounts"}
 _HELPER_READS = {"pots", "group_members", "pot_member_permissions"}
-# Read per column rather than per table: the trigger function needs an account's id and scope pair, and
+# Read per column rather than per table: the trigger functions need an account's id and scope pair, and
 # a table grant would hand the bypass every figure on every account.
 _HELPER_COLUMN_READS = {("accounts", column) for column in ("id", "user_id", "pot_id")}
 

@@ -146,6 +146,9 @@ pnpm test:e2e        # Playwright E2E
     and at the pool for 1, 10 and 100 due pots — and the batched dispatch tells everybody exactly what one
     dispatch per pot did (rows, emails, pushes, stamped browsers), over a fixture reaching every
     recipient branch: channels off, feed off, email off, the daily digest, a deduped repeat.
+  - `test_obligation_reminder_isolation.py` — `LEDGER_TEST_DATABASE_URL`. One bill whose dispatch fails
+    with a real database error on the job's own session does not stop the bills after it: each failure
+    is rolled back and logged, the rest are sent, and the job still raises the first failure.
   - `test_rls_force_role_model.py` — the two `RLS_TEST_*` vars. The role model itself: every policied
     table and every table with a `user_id` / `group_id` / `pot_id` column is ENABLEd and FORCEd
     (derived from the catalogue) and the tables WITHOUT RLS are exactly the pinned global reference
@@ -178,6 +181,13 @@ pnpm test:e2e        # Playwright E2E
     alone and both, so a trigger comparing one column is caught; an update naming each column alone
     pins which columns it fires on; and a refusal is proven identical whatever an unseen account holds,
     because the trigger runs after the policies. A view-only member still reconciles.
+  - `test_rls_transfer_scope.py` — the two `RLS_TEST_*` vars. The trigger holding every transfer to BOTH
+    legs' scope: misplaced rows differing from their legs in the user, the pot, both, or one leg only
+    (each direction), an update naming each of its four columns alone, one row the request role's policy
+    admits on accounts it cannot see; an edit re-pointing a transfer at another scope's accounts refused
+    with 400 and the row unchanged; and two two-connection races — a pot transfer created during an absorption (which
+    waits on the absorption's FOR UPDATE through its foreign keys) and a private one created during a
+    move into a pot (which waits on the service's own lock) — each refused, with no transfer drifted.
   - `test_update_column_privileges.py` — the two `RLS_TEST_*` vars. Every UPDATE the application can
     issue, DERIVED from `app/` (Core `update()`, upserts, ORM attribute writes on typed rows, raw SQL),
     held to what `renly_app` may update in the catalogue — a table granted per column refuses a statement
@@ -188,6 +198,9 @@ pnpm test:e2e        # Playwright E2E
     balance (every earlier assertion ran with a zero card, where `- card` and `+ card` agree), and the
     payments calendar bills the statement a due date pays when the closing and due days coincide (last
     month's, turning Paid on a settlement inside the month between them).
+  - `test_card_list_query_count.py` — `LEDGER_TEST_DATABASE_URL`. The card list, and the delete-blocker
+    read behind its `has_expenses` flag, cost the same number of statements at 1, 5 and 20 cards (the
+    blocker read exactly one per kind of row that can name a card), with every flag right.
   - `test_auth_lifecycle.py` — the two `RLS_TEST_*` vars. The real app with only its sessions swapped and
     `get_current_user` NOT overridden (every unit endpoint test overrides it): logout ends every session
     through the session-epoch check, the RLS user is set before the user row is read, an unverified address
@@ -300,9 +313,9 @@ which is also what lets a test assert WHAT was announced.
 `apps/api/tests/conftest.py` holds ONE autouse guard for the whole suite, unit AND integration: no test
 can reach a real email or push provider. A developer's `.env` (and a worktree's copy of it) sets
 `EMAIL_PROVIDER=resend` with a live key, and a test once sent real email through it. The guard forces the
-console email adapter for every test and replaces httpx's REAL network transports with a recorder that
-refuses every request and fails the test at teardown (again because the refusal lands inside code that
-swallows it). Fake clients, `MockTransport` and the ASGI test transport are untouched, so a test that
+console email adapter for every test and replaces httpx's REAL network transports — and the request
+methods of curl_cffi, the client yfinance fetches through — with a recorder that refuses every request
+and fails the test at teardown (again because the refusal lands inside code that swallows it). Fake clients, `MockTransport` and the ASGI test transport are untouched, so a test that
 stubs its HTTP keeps working; a test that means to show a refusal takes the `no_real_provider` fixture
 and empties its record (`tests/unit/test_no_real_providers.py`). Still set `EMAIL_PROVIDER=console` in
 the shell for any script or server run outside the suite.

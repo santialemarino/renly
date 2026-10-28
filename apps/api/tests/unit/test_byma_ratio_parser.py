@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 import httpx
@@ -15,9 +16,20 @@ from app.services import price_providers
 # with the name, ticker, market and "N:N" ratio in four columns, a header drawn four times with a small
 # offset (the fake bold that makes pdfplumber read "RRRRaaaattttiiiioooo"), and a two-line footer on every
 # page. The rows are real ones chosen for the cases the parser handles: a fractional ratio, a two-word
-# market, a dotted ticker, a ticker ending in a digit and a zero-padded ratio.
-
-_PAGE_URL_HTML = '<a href="https://cdn.prod.website-files.com/x/y_BYMA-CEDEARs-2026-09-16.pdf">PDF</a>'
+# market, a dotted ticker, a ticker ending in a digit and a zero-padded ratio. More carry the tickers and
+# markets of live rows an earlier parser got wrong (their names and ratios are stand-ins): the "New York"
+# and "OTC US" markets (read as tickers YORK and US), a ticker that is itself a market word (GS), the
+# CBOE, NASDAQ CM and BOVESPA markets, the six live rows whose market cell is EMPTY — which as one line of
+# text look exactly like a row on a one-word market — and Sabesp, whose name wraps onto two lines with
+# its ticker, market and ratio on a line of their own between them (read once as ticker "NYSE"). A row
+# with nothing in the ticker column is a layout the parser does not know, and is skipped by name.
+#
+# The PDF's filename carries the edition's date, which the live file puts FIRST; an older edition put it
+# last. Both must yield it.
+_PDF_FILENAMES = {
+    "the live shape, date first": ("y_2026-09-16-BYMA-CEDEARs.pdf", date(2026, 9, 16)),
+    "the older shape, date last": ("y_BYMA-CEDEARs-2026-02-03.pdf", date(2026, 2, 3)),
+}
 
 _PAGES = [
     [
@@ -35,6 +47,27 @@ _PAGES = [
         ("State Street SPDR S&P Metals & Mining ETF", "XME", "NYSE ARCA", "30:1"),
         ("XP Inc", "XP", "NASDAQ", "04:01"),
         ("Amazon.Com, Inc.", "AMZN", "NYSE", "144:1"),
+        ("Banco Santander S.A.", "SAN", "New York", "1:4"),
+        ("Grupo Supervielle S.A.", "SUPV", "OTC US", "1:2"),
+        ("The Goldman Sachs Group, Inc.", "GS", "NYSE", "13:1"),
+        ("Toyota Motor Corporation", "TM", "Tokyo", "5:1"),
+    ],
+    [
+        ("Stand-in BBAX", "BBAX", "CBOE", "10:1"),
+        ("Stand-in BBCA", "BBCA", "CBOE", "10:1"),
+        ("Stand-in ITA", "ITA", "CBOE", "20:1"),
+        ("Stand-in VXX", "VXX", "CBOE", "5:1"),
+        ("Stand-in ONDS", "ONDS", "NASDAQ CM", "1:1"),
+        ("Stand-in RGTI", "RGTI", "NASDAQ CM", "2:1"),
+        ("Stand-in RCTB4", "RCTB4", "BOVESPA", "1:1"),
+        ("Stand-in ATAD", "ATAD", "", "1:1"),
+        ("Stand-in HHPD", "HHPD", "", "1:1"),
+        ("Stand-in LKOD", "LKOD", "", "1:1"),
+        ("Stand-in NLM", "NLM", "", "1:1"),
+        ("Stand-in OGZD", "OGZD", "", "1:1"),
+        ("Stand-in SMSN", "SMSN", "", "1:1"),
+        ("Odd Layout Co", "", "NYSE", "1:1"),
+        (("Companhia de Saneamento Basico", "do Estado de Sao Paulo"), "SBS", "NYSE", "1:2"),
     ],
 ]
 
@@ -51,6 +84,24 @@ _EXPECTED = [
     ("XME.BA", "XME", Decimal(30)),
     ("XP.BA", "XP", Decimal(4)),
     ("AMZN.BA", "AMZN", Decimal(144)),
+    ("SAN.BA", "SAN", Decimal(1) / Decimal(4)),
+    ("SUPV.BA", "SUPV", Decimal(1) / Decimal(2)),
+    ("GS.BA", "GS", Decimal(13)),
+    ("TM.BA", "TM", Decimal(5)),
+    ("BBAX.BA", "BBAX", Decimal(10)),
+    ("BBCA.BA", "BBCA", Decimal(10)),
+    ("ITA.BA", "ITA", Decimal(20)),
+    ("VXX.BA", "VXX", Decimal(5)),
+    ("ONDS.BA", "ONDS", Decimal(1)),
+    ("RGTI.BA", "RGTI", Decimal(2)),
+    ("RCTB4.BA", "RCTB4", Decimal(1)),
+    ("ATAD.BA", "ATAD", Decimal(1)),
+    ("HHPD.BA", "HHPD", Decimal(1)),
+    ("LKOD.BA", "LKOD", Decimal(1)),
+    ("NLM.BA", "NLM", Decimal(1)),
+    ("OGZD.BA", "OGZD", Decimal(1)),
+    ("SMSN.BA", "SMSN", Decimal(1)),
+    ("SBS.BA", "SBS", Decimal(1) / Decimal(2)),
 ]
 
 
@@ -66,7 +117,7 @@ def _bold(x: float, top: float, size: float, text: str) -> list[str]:
 
 
 # One page's content stream: header, rows, footer.
-def _page_stream(rows: list[tuple[str, str, str, str]], number: int) -> bytes:
+def _page_stream(rows: list[tuple], number: int) -> bytes:
     ops = [
         *_bold(57, 72, 8.5, "CEDEARs Negociables en BYMA"),
         *_bold(281, 92, 5.6, "Código Mercado donde"),
@@ -76,10 +127,12 @@ def _page_stream(rows: list[tuple[str, str, str, str]], number: int) -> bytes:
     ]
     for index, (name, ticker, market, ratio) in enumerate(rows):
         top = 170 + index * 12.7
+        # A wrapped name sits a line above and a line below the rest of its row, as the live file sets it.
+        names = [(top - 6.7, name[0]), (top + 6.3, name[1])] if isinstance(name, tuple) else [(top, name)]
         ops += [
-            _text(57, top, 6.4, name),
-            _text(283, top, 6.4, ticker),
-            _text(349, top, 6.4, market),
+            *[_text(57, line_top, 6.4, line) for line_top, line in names],
+            *([_text(283, top, 6.4, ticker)] if ticker else []),
+            *([_text(349, top, 6.4, market)] if market else []),
             _text(412, top - 0.4, 7.1, ratio),
         ]
     ops += [
@@ -120,8 +173,11 @@ def _build_pdf() -> bytes:
     return bytes(out)
 
 
-# A fake httpx.AsyncClient serving the BYMA page (with the PDF link) and then the PDF itself.
-def _fake_client(pdf: bytes):
+# A fake httpx.AsyncClient serving the BYMA page (with a link to the PDF under `filename`) and then the
+# PDF itself.
+def _fake_client(pdf: bytes, filename: str):
+    page_html = f'<a href="https://cdn.prod.website-files.com/x/{filename}">PDF</a>'
+
     class _Client:
         def __init__(self, *args, **kwargs):
             pass
@@ -135,7 +191,7 @@ def _fake_client(pdf: bytes):
         async def get(self, url, **kwargs):
             request = httpx.Request("GET", url)
             if url == price_providers.BYMA_CEDEARS_PAGE_URL:
-                return httpx.Response(200, request=request, text=_PAGE_URL_HTML)
+                return httpx.Response(200, request=request, text=page_html)
             return httpx.Response(200, request=request, content=pdf)
 
     return _Client
@@ -143,9 +199,23 @@ def _fake_client(pdf: bytes):
 
 class TestTheBYMAPdfParses:
     @pytest.mark.asyncio
-    async def test_every_row_yields_its_ticker_and_ratio_and_nothing_else_does(self, monkeypatch):
-        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(_build_pdf()))
+    async def test_every_row_yields_its_ticker_and_ratio_and_nothing_else_does(self, monkeypatch, caplog):
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(_build_pdf(), _PDF_FILENAMES["the live shape, date first"][0]))
 
         result = await price_providers.fetch_byma_ratios()
 
         assert result.ratios == _EXPECTED
+        # The one row it could not read is named, so a layout change reads as a list of rows, not a count.
+        assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
+            "BYMA CEDEAR PDF: skipped 1 rows whose cells do not read as a CEDEAR row: ['Odd Layout Co | NYSE | 1:1']"
+        ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", sorted(_PDF_FILENAMES))
+    async def test_the_editions_date_is_read_from_its_filename(self, monkeypatch, shape):
+        filename, expected = _PDF_FILENAMES[shape]
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(_build_pdf(), filename))
+
+        result = await price_providers.fetch_byma_ratios()
+
+        assert result.source_date == expected
