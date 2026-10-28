@@ -242,7 +242,7 @@ class TestBodySizeLimit:
     def test_oversized_chunked_body_rejected_with_413(self):
         client = _client()
 
-        # A generator body makes httpx use Transfer-Encoding: chunked (no Content-Length), so the
+        # A generator body makes the test client (httpx2) use Transfer-Encoding: chunked (no Content-Length), so the
         # declared-length fast path is skipped and the streaming byte counter must catch it.
         def _stream():
             yield b"x" * (MAX_REQUEST_BODY_BYTES + 1)
