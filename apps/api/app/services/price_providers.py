@@ -16,7 +16,7 @@ import math
 from collections.abc import Awaitable, Callable
 from datetime import date as date_type
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import NamedTuple
 
 import httpx
@@ -71,6 +71,23 @@ def _describe_http_failure(exc: Exception) -> str:
         status = exc.response.status_code if exc.response is not None else None
         return f"{type(exc).__name__} (HTTP {status})" if status is not None else type(exc).__name__
     return f"{type(exc).__name__}: {exc}"
+
+
+# Reads a quote a JSON provider sent as a price, or None when it is not one. A provider may send the
+# number as JSON text ("26600.5") as readily as a number, and `math.isfinite` raises TypeError on a
+# string — inside a board loop that discarded the whole download. Read through Decimal instead, which
+# takes either, and refuse what is not a price: missing, a boolean, unparseable text, NaN or Infinity,
+# and zero, which both Finnhub (an unknown symbol) and data912 (no trade yet) send for "no quote".
+def _quoted_price(value: object) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        price = Decimal(str(value).strip())
+    except InvalidOperation:
+        return None
+    if not price.is_finite() or price == 0:
+        return None
+    return price
 
 
 # Describes a price provider: its source name, fetch function, and capabilities.
@@ -281,12 +298,12 @@ async def fetch_finnhub(
         raise PriceProviderUnavailable(f"Finnhub fetch failed for {ticker}: {_describe_http_failure(exc)}") from exc
 
     # Finnhub answers an unknown symbol with a 200 and every field zeroed, so a zero current price is
-    # "no such symbol" rather than a real quote — an empty answer, not a provider failure. A NaN passes
-    # the falsy check, so a non-finite quote is dropped the same way.
-    current = payload.get("c")
-    if not current or not math.isfinite(current):
+    # "no such symbol" rather than a real quote — an empty answer, not a provider failure. A non-finite
+    # or non-numeric quote is dropped the same way.
+    current = _quoted_price(payload.get("c"))
+    if current is None:
         return []
-    return [(date_type.today(), Decimal(str(current)), "USD")]
+    return [(date_type.today(), current, "USD")]
 
 
 # One cached snapshot of every data912 board, keyed by symbol. Cleared per refresh cycle like CAFCI's.
@@ -331,9 +348,10 @@ async def _load_data912_cache() -> None:
     for rows in boards:
         for row in rows:
             symbol = (row.get("symbol") or "").strip().upper()
-            close = row.get("c")
-            if symbol and close and math.isfinite(close):
-                prices[symbol] = Decimal(str(close))
+            # One bad close costs its own symbol, never the board.
+            close = _quoted_price(row.get("c"))
+            if symbol and close is not None:
+                prices[symbol] = close
     _data912_prices = prices
     logger.info("data912 cache loaded: %d symbols across %d boards.", len(prices), len(DATA912_BOARDS))
 
@@ -509,7 +527,9 @@ async def fetch_comafi_ratios() -> RatioFetchResult:
                 except Exception:
                     continue
 
-            if ratio_val <= 0:
+            # Finiteness first: comparing a NaN Decimal raises, and outside the parse's own try that
+            # discarded the whole sheet rather than this one row (the rule #274 gave CAFCI).
+            if not ratio_val.is_finite() or ratio_val <= 0:
                 continue
 
             # Build BYMA ticker (add .BA suffix if not present).
@@ -536,6 +556,18 @@ BYMA_PDF_CDN_PREFIX = "https://cdn.prod.website-files.com/"
 BYMA_TIMEOUT = 30.0
 BYMA_RATIO_SEPARATOR = ":"
 BYMA_BYMA_SUFFIX = ".BA"
+# Every market the PDF names in its "Mercado donde Cotiza" column, upper-cased. A row reads "name, ticker,
+# market, ratio", and a market may be two words, so the ticker is the token BEFORE the market rather
+# than any token that is not a market word: walking back over market words read "New York" as ticker
+# YORK, "OTC US" as US, and Goldman Sachs' own ticker GS (a market word, from "NASDAQ GS") as part of the
+# market. Longest first, so "NYSE ARCA" is matched before "NYSE".
+BYMA_MARKETS = tuple(
+    sorted(
+        ("NYSE", "NYSE ARCA", "NYSE AMERICAN", "NASDAQ", "NASDAQ GS", "NASDAQ GM", "NEW YORK", "OTC US", "OTC", "XETRA", "FRANKFURT", "B3"),
+        key=len,
+        reverse=True,
+    )
+)
 
 
 # Fetches all CEDEAR ratios from the BYMA PDF.
@@ -568,9 +600,10 @@ async def fetch_byma_ratios() -> RatioFetchResult:
 
     pdf_url = pdf_match.group(1)
 
-    # Parse date from the PDF filename (e.g., "BYMA-CEDEARs-2026-02-03.pdf").
+    # Parse the date from the PDF's filename, wherever in it the date sits: the live file leads with it
+    # ("2026-09-16-BYMA-CEDEARs.pdf"), an older one ended with it ("BYMA-CEDEARs-2026-02-03.pdf").
     source_date: date_type | None = None
-    date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})\.pdf$", pdf_url)
+    date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", pdf_url.rsplit("/", 1)[-1])
     if date_match:
         try:
             source_date = date_type(int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3)))
@@ -594,53 +627,33 @@ async def fetch_byma_ratios() -> RatioFetchResult:
         import pdfplumber
 
         results: RatioResult = []
+        unknown_market_rows = 0
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             for page in pdf.pages:
                 text = page.extract_text()
                 if not text:
                     continue
                 for line in text.split("\n"):
+                    # Format: "Company Name  TICKER  MARKET  RATIO". The ratio is always at the end, in
+                    # "N:N" format, so the header and footer lines never match.
                     line = line.strip()
-                    if not line or "Ratio" in line or "Nombre" in line or "Bolsas y Mercados" in line:
-                        continue
-
-                    # Format: "Company Name  TICKER  EXCHANGE  RATIO:1"
-                    # The ratio is always at the end, in "N:N" format.
                     ratio_match = re.search(rf"(\d+){re.escape(BYMA_RATIO_SEPARATOR)}(\d+)\s*$", line)
                     if not ratio_match:
                         continue
 
-                    # Extract ticker — it's the uppercase word before the exchange name.
-                    # Split line into parts and find the ticker.
-                    before_ratio = line[: ratio_match.start()].strip()
-                    parts = before_ratio.split()
+                    # The ticker is the last token before the market. A row on a market not in the list
+                    # is skipped rather than guessed at: its last token would be the market's own name.
+                    before_ratio = " ".join(line[: ratio_match.start()].split()).upper()
+                    market = next((m for m in BYMA_MARKETS if before_ratio.endswith(f" {m}")), None)
+                    if market is None:
+                        unknown_market_rows += 1
+                        continue
+                    parts = before_ratio[: -len(market)].split()
                     if len(parts) < 2:
                         continue
+                    ticker = parts[-1]
 
-                    # Ticker is typically the second-to-last or third-to-last token before ratio.
-                    # The exchange (NYSE, NASDAQ, etc.) is right before the ratio.
-                    # Walk backwards: last part = exchange, second-to-last = ticker.
-                    ticker = None
-                    for i in range(len(parts) - 1, -1, -1):
-                        token = parts[i].strip()
-                        # Skip exchange names and partial exchange names.
-                        if token.upper() in {
-                            "NYSE",
-                            "NASDAQ",
-                            "XETRA",
-                            "FRANKFURT",
-                            "B3",
-                            "ARCA",
-                            "GS",
-                            "GM",
-                            "AMERICAN",
-                        }:
-                            continue
-                        # Found the ticker.
-                        ticker = token.upper()
-                        break
-
-                    if not ticker or not any(c.isalnum() for c in ticker):
+                    if not any(c.isalnum() for c in ticker):
                         continue
 
                     # Parse ratio.
@@ -658,6 +671,8 @@ async def fetch_byma_ratios() -> RatioFetchResult:
 
                     results.append((cedear_ticker, underlying, ratio_val))
 
+        if unknown_market_rows:
+            logger.warning("BYMA CEDEAR PDF: skipped %d rows on a market the parser does not know.", unknown_market_rows)
         return results
 
     try:

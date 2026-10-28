@@ -45,6 +45,12 @@ yfinance skip that point, Finnhub and Coinbase answer `[]`, data912 and CAFCI le
 cycle's snapshot, and ArgentinaDatos moves to the next match. A NaN stored as a price fails the price
 endpoints' response validation and freezes into an auto-snapshot's value.
 
+**A quote may arrive as text.** Finnhub and data912 read their quote through `Decimal`, which takes a JSON
+number or a numeric string alike; text that is not a price (and zero, which both send for "no quote")
+counts as no price. One bad row costs only its own symbol — `math.isfinite` raised on a string, and on
+data912's board that failed the whole cache load. The CEDEAR ratio parsers follow the same rule: a NaN or
+Infinity ratio skips its row rather than the whole Comafi sheet.
+
 **Registry** (in `asset_price_service.py`) — an ordered chain per category, primary first:
 
 ```python
@@ -150,6 +156,11 @@ reached costs a round trip and reports an outage that is its own.
 | -------- | ------ | ------------------------------------------------------------------------------------------------- |
 | Comafi   | Excel  | Primary. Principal CEDEAR issuer (90%+ programs). Fixed URL. ~306 ratios.                         |
 | BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~401 ratios. Parsed with pdfplumber. |
+
+BYMA's edition date is read from anywhere in the PDF's filename (the live file leads with it,
+`2026-09-16-BYMA-CEDEARs.pdf`). Each row is "name, ticker, market, ratio", and the ticker is the token
+before a known market (`BYMA_MARKETS` — two-word ones such as "New York", "OTC US" and "NYSE Arca"
+included); a row on a market not in that list is skipped and counted in a warning, never read as a ticker.
 
 The service fetches both in parallel (`asyncio.gather`). Selection: newer source date wins → more entries breaks ties → Comafi preferred if still tied.
 

@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 import httpx
@@ -15,9 +16,17 @@ from app.services import price_providers
 # with the name, ticker, market and "N:N" ratio in four columns, a header drawn four times with a small
 # offset (the fake bold that makes pdfplumber read "RRRRaaaattttiiiioooo"), and a two-line footer on every
 # page. The rows are real ones chosen for the cases the parser handles: a fractional ratio, a two-word
-# market, a dotted ticker, a ticker ending in a digit and a zero-padded ratio.
-
-_PAGE_URL_HTML = '<a href="https://cdn.prod.website-files.com/x/y_BYMA-CEDEARs-2026-09-16.pdf">PDF</a>'
+# market, a dotted ticker, a ticker ending in a digit and a zero-padded ratio. Four more are shaped like
+# them for the cases it used to get wrong: the "New York" and "OTC US" markets (read as tickers YORK and
+# US), a ticker that is itself a market word (GS, read as part of "NASDAQ GS"), and a market the parser
+# does not know, which is skipped rather than read as a ticker named after the market.
+#
+# The PDF's filename carries the edition's date, which the live file puts FIRST; an older edition put it
+# last. Both must yield it.
+_PDF_FILENAMES = {
+    "the live shape, date first": ("y_2026-09-16-BYMA-CEDEARs.pdf", date(2026, 9, 16)),
+    "the older shape, date last": ("y_BYMA-CEDEARs-2026-02-03.pdf", date(2026, 2, 3)),
+}
 
 _PAGES = [
     [
@@ -35,6 +44,10 @@ _PAGES = [
         ("State Street SPDR S&P Metals & Mining ETF", "XME", "NYSE ARCA", "30:1"),
         ("XP Inc", "XP", "NASDAQ", "04:01"),
         ("Amazon.Com, Inc.", "AMZN", "NYSE", "144:1"),
+        ("Banco Santander S.A.", "SAN", "New York", "1:4"),
+        ("Grupo Supervielle S.A.", "SUPV", "OTC US", "1:2"),
+        ("The Goldman Sachs Group, Inc.", "GS", "NYSE", "13:1"),
+        ("Toyota Motor Corporation", "TM", "Tokyo", "5:1"),
     ],
 ]
 
@@ -51,6 +64,9 @@ _EXPECTED = [
     ("XME.BA", "XME", Decimal(30)),
     ("XP.BA", "XP", Decimal(4)),
     ("AMZN.BA", "AMZN", Decimal(144)),
+    ("SAN.BA", "SAN", Decimal(1) / Decimal(4)),
+    ("SUPV.BA", "SUPV", Decimal(1) / Decimal(2)),
+    ("GS.BA", "GS", Decimal(13)),
 ]
 
 
@@ -120,8 +136,11 @@ def _build_pdf() -> bytes:
     return bytes(out)
 
 
-# A fake httpx.AsyncClient serving the BYMA page (with the PDF link) and then the PDF itself.
-def _fake_client(pdf: bytes):
+# A fake httpx.AsyncClient serving the BYMA page (with a link to the PDF under `filename`) and then the
+# PDF itself.
+def _fake_client(pdf: bytes, filename: str):
+    page_html = f'<a href="https://cdn.prod.website-files.com/x/{filename}">PDF</a>'
+
     class _Client:
         def __init__(self, *args, **kwargs):
             pass
@@ -135,7 +154,7 @@ def _fake_client(pdf: bytes):
         async def get(self, url, **kwargs):
             request = httpx.Request("GET", url)
             if url == price_providers.BYMA_CEDEARS_PAGE_URL:
-                return httpx.Response(200, request=request, text=_PAGE_URL_HTML)
+                return httpx.Response(200, request=request, text=page_html)
             return httpx.Response(200, request=request, content=pdf)
 
     return _Client
@@ -144,8 +163,18 @@ def _fake_client(pdf: bytes):
 class TestTheBYMAPdfParses:
     @pytest.mark.asyncio
     async def test_every_row_yields_its_ticker_and_ratio_and_nothing_else_does(self, monkeypatch):
-        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(_build_pdf()))
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(_build_pdf(), _PDF_FILENAMES["the live shape, date first"][0]))
 
         result = await price_providers.fetch_byma_ratios()
 
         assert result.ratios == _EXPECTED
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", sorted(_PDF_FILENAMES))
+    async def test_the_editions_date_is_read_from_its_filename(self, monkeypatch, shape):
+        filename, expected = _PDF_FILENAMES[shape]
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(_build_pdf(), filename))
+
+        result = await price_providers.fetch_byma_ratios()
+
+        assert result.source_date == expected
