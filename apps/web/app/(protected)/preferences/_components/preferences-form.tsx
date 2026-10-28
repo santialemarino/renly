@@ -137,7 +137,11 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full gap-y-6 lg:gap-y-10">
+    <form
+      noValidate
+      onSubmit={handleSubmit(onSubmit)}
+      className="flex flex-col w-full gap-y-6 lg:gap-y-10"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-8">
         {/* Left column — Currencies */}
         <div className="flex flex-col max-w-md gap-y-3">
