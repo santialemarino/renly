@@ -33,7 +33,7 @@ SOURCE_SHARED = "shared"
 # order, which differs between a database built from 01_create_tables.sql and one built by migrations —
 # the same rows would come back in a different order per environment. The values are alphabetical
 # anyway, so the cast costs nothing.
-def sort_columns(rows) -> dict:
+def _sort_columns(rows) -> dict:
     return {
         "date": rows.c.date,
         "amount": rows.c.amount,
@@ -223,7 +223,7 @@ async def list_by_user_filtered(
         select(rows).order_by(rows.c.group_id.nulls_first()),
         sort_by,
         sort_order,
-        sort_columns=sort_columns(rows),
+        sort_columns=_sort_columns(rows),
         default_order=(rows.c.date.desc(), rows.c.id.desc(), rows.c.scope),
         tie_break=(rows.c.id.desc(), rows.c.scope),
     )
