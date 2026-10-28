@@ -242,6 +242,10 @@
       "previous": "Previous",
       "next": "Next"
     },
+    "pagedList": {
+      "loadError": "Couldn't load this list.",
+      "retry": "Retry"
+    },
     "entryType": {
       "label": "What are you recording?",
       "expense": "Expense",

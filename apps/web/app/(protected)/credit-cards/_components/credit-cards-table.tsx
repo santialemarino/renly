@@ -36,6 +36,7 @@ import {
   unarchiveCreditCard,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
 import { MoneyFigure } from '@/components/money-figure';
+import { PagedListLoadError } from '@/components/paged-list-load-error';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -80,6 +81,7 @@ function SettlementsSection({
     page,
     setPage,
     loading,
+    failed,
     invalidate,
   } = useExpandablePagedList({
     expanded,
@@ -121,6 +123,8 @@ function SettlementsSection({
                     >
                       {t('settlements.loading')}
                     </motion.p>
+                  ) : failed ? (
+                    <PagedListLoadError key="error" onRetry={invalidate} />
                   ) : total === 0 ? (
                     <motion.p
                       key="empty"

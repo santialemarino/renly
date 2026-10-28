@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Page } from '@/lib/api/types';
+import { LOADING_DISPLAY_FLOOR_MS } from '@/lib/constants/animations';
 import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
-
-// Minimum time (ms) from fetch start before the first result shows, so an instant resolve doesn't flash.
-const DISPLAY_DELAY_MS = 500;
 
 interface UseExpandablePagedListOptions<R> {
   // Whether the panel is open. Nothing is fetched while it is closed.
@@ -24,13 +22,16 @@ interface UseExpandablePagedListOptions<R> {
  * pager clicks put two fetches in flight, and without it the slower one repaints over the newer, leaving
  * the pager and the rows describing different pages.
  *
- * The display floor applies to the FIRST load only. It stops a sub-perceptual flash when the panel opens
- * with nothing on screen; on a page change the rows are already there, so padding the swap would replace
- * a real table with one line of text for half a second. `hasLoadedRef` answers "has anything landed",
- * not the cache key, because the effect records the key BEFORE it calls `load()`.
+ * The display floor pads every load except a page change. It stops a sub-perceptual flash: on the first
+ * load, and on a reload of the same page (a bumped `reloadToken`, `invalidate()`, a retry), the panel
+ * would otherwise swap its table for the loading line and back again too fast to read. A page change is
+ * the user's own click, answered as fast as it lands; padding it would hold one line of text over the
+ * table for half a second. `lastPageRef` answers "which page was last asked for", not the cache key,
+ * because a failed load forgets the key.
  *
- * A failed load forgets its cache key, so closing and reopening the panel asks again instead of serving
- * the empty result of the failure for good.
+ * A failed load sets `failed` (the panel shows a retry rather than its empty line, which would claim the
+ * list is empty) and forgets its cache key, so `invalidate()` or closing and reopening the panel asks
+ * again instead of serving the failure for good.
  */
 export function useExpandablePagedList<R extends Page<unknown>>({
   expanded,
@@ -42,41 +43,39 @@ export function useExpandablePagedList<R extends Page<unknown>>({
   // Loading until the first fetch lands, so the panel's first frame is the loading line rather than an
   // empty state the list may not be in.
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [localToken, setLocalToken] = useState(0);
   // The `reloadToken:localToken:page` whose data is loaded (or loading); null until the first fetch.
   const loadedKeyRef = useRef<string | null>(null);
   // Monotonic ticket per fetch; only the newest one may commit its result.
   const requestRef = useRef(0);
-  const hasLoadedRef = useRef(false);
+  // The page the last load asked for; null until the first fetch.
+  const lastPageRef = useRef<number | null>(null);
   const fetchPageRef = useRef(fetchPage);
 
   useEffect(() => {
     fetchPageRef.current = fetchPage;
   }, [fetchPage]);
 
-  const load = useCallback(async (requestedPage: number) => {
+  const load = useCallback(async (requestedPage: number, floored: boolean) => {
     const ticket = ++requestRef.current;
-    const isFirstLoad = !hasLoadedRef.current;
     setLoading(true);
     const start = Date.now();
+    let result: R | null = null;
     try {
-      const result = await fetchPageRef.current(requestedPage);
-      const elapsed = Date.now() - start;
-      if (isFirstLoad && elapsed < DISPLAY_DELAY_MS) {
-        await new Promise((r) => setTimeout(r, DISPLAY_DELAY_MS - elapsed));
-      }
-      if (ticket !== requestRef.current) return;
-      setData(result);
+      result = await fetchPageRef.current(requestedPage);
     } catch {
-      if (ticket !== requestRef.current) return;
-      loadedKeyRef.current = null;
-      setData(null);
-    } finally {
-      if (ticket === requestRef.current) {
-        hasLoadedRef.current = true;
-        setLoading(false);
-      }
+      result = null;
     }
+    const elapsed = Date.now() - start;
+    if (floored && elapsed < LOADING_DISPLAY_FLOOR_MS) {
+      await new Promise((r) => setTimeout(r, LOADING_DISPLAY_FLOOR_MS - elapsed));
+    }
+    if (ticket !== requestRef.current) return;
+    if (result === null) loadedKeyRef.current = null;
+    setData(result);
+    setFailed(result === null);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -84,10 +83,13 @@ export function useExpandablePagedList<R extends Page<unknown>>({
     const key = `${reloadToken}:${localToken}:${page}`;
     if (loadedKeyRef.current === key) return;
     loadedKeyRef.current = key;
-    load(page);
+    const pageChange = lastPageRef.current !== null && lastPageRef.current !== page;
+    lastPageRef.current = page;
+    load(page, !pageChange);
   }, [expanded, reloadToken, localToken, page, load]);
 
-  // Drops the cache so the open panel re-reads the current page — for a write made inside the panel.
+  // Drops the cache so the open panel re-reads the current page — for a write made inside the panel, or
+  // the retry after a failed load.
   const invalidate = useCallback(() => setLocalToken((token) => token + 1), []);
 
   return {
@@ -98,6 +100,7 @@ export function useExpandablePagedList<R extends Page<unknown>>({
     page,
     setPage,
     loading,
+    failed,
     invalidate,
   };
 }

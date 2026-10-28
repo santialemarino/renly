@@ -242,6 +242,10 @@
       "previous": "Anterior",
       "next": "Siguiente"
     },
+    "pagedList": {
+      "loadError": "No se pudo cargar la lista.",
+      "retry": "Reintentar"
+    },
     "entryType": {
       "label": "¿Qué estás registrando?",
       "expense": "Gasto",

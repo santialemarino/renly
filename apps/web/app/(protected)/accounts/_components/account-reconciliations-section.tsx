@@ -17,6 +17,7 @@ import {
 import { AccountReconciliationDeleteDialog } from '@/app/(protected)/accounts/_components/account-reconciliation-delete-dialog';
 import { fetchAccountReconciliations } from '@/app/(protected)/accounts/account-actions';
 import { MoneyFigure } from '@/components/money-figure';
+import { PagedListLoadError } from '@/components/paged-list-load-error';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { TablePagination } from '@/components/table-pagination';
@@ -55,6 +56,7 @@ export function AccountReconciliationsSection({
     page,
     setPage,
     loading,
+    failed,
     invalidate,
   } = useExpandablePagedList({
     expanded,
@@ -129,6 +131,8 @@ export function AccountReconciliationsSection({
                     >
                       {t('loading')}
                     </motion.p>
+                  ) : failed ? (
+                    <PagedListLoadError key="error" onRetry={invalidate} className="mt-3" />
                   ) : total === 0 ? (
                     <motion.p
                       key="empty"

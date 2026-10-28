@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +22,9 @@ import messages from '../../translations/en.json';
  *   * the 500ms display floor meant to hold the loading line never applied: the open effect records
  *     the page it is loading before it calls `load()`, and the floor asked that same record whether
  *     anything had loaded yet.
+ *
+ * A failed load shows a "couldn't load" line with a Retry rather than the empty line, which would claim
+ * the history is empty, and Retry asks for the same page again.
  *
  * Motion is replaced with plain elements, so what is asserted is the panel's own state — which line it
  * asks for, and when — not the animation library's timing.
@@ -104,6 +107,7 @@ const RECONCILIATION = {
 
 const COPY = messages.accounts.reconciliations;
 const TRANSFERS = messages.accounts.transfers;
+const PAGED = messages.common.pagedList;
 
 function wrap(node: ReactNode) {
   return (
@@ -218,6 +222,39 @@ describe('opening the transfer history', () => {
     expect(screen.getByText(TRANSFERS.loading)).toBeTruthy();
     await elapse(100);
     expect(screen.queryByText(TRANSFERS.loading)).toBeNull();
+    expect(screen.getByText(TRANSFERS.empty)).toBeTruthy();
+  });
+});
+
+describe('a history that fails to load', () => {
+  it('offers a retry instead of the empty line, and the retry loads the history', async () => {
+    actions.fetchAccountReconciliations.mockRejectedValueOnce(new Error('offline'));
+    const view = render(reconciliations(false));
+    view.rerender(reconciliations(true));
+    await elapse(600);
+    expect(screen.getByRole('alert').textContent).toBe(PAGED.loadError);
+    expect(screen.queryByText(COPY.empty)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: PAGED.retry }));
+    await elapse(600);
+    expect(actions.fetchAccountReconciliations).toHaveBeenCalledTimes(2);
+    expect(actions.fetchAccountReconciliations).toHaveBeenLastCalledWith(ACCOUNT.id, 1);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getAllByTestId('reconciliation-delete')).toHaveLength(1);
+  });
+
+  it('does the same in the transfer history', async () => {
+    actions.fetchAccountTransfers.mockRejectedValueOnce(new Error('offline'));
+    const view = render(transfers(false));
+    view.rerender(transfers(true));
+    await elapse(600);
+    expect(screen.getByRole('alert').textContent).toBe(PAGED.loadError);
+    expect(screen.queryByText(TRANSFERS.empty)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: PAGED.retry }));
+    await elapse(600);
+    expect(actions.fetchAccountTransfers).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText(TRANSFERS.empty)).toBeTruthy();
   });
 });
