@@ -37,7 +37,14 @@ COPY apps/web ./apps/web
 COPY package.json pnpm-workspace.yaml turbo.json ./
 
 RUN pnpm --filter @repo/ui run build
-RUN pnpm --filter web run build
+
+# Sentry source-map upload, read by `next build` only and inert until set. Org and project are plain
+# build args (the RUN below sees them as env vars, and this stage never reaches the runtime image). The
+# auth token is a BuildKit secret mounted for that one step, so it lands in no image layer and in no
+# `docker history`. Without it next.config.js disables the upload and the build is unchanged.
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN pnpm --filter web run build
 
 # Runtime layer
 FROM node:24-alpine AS runner
