@@ -17,6 +17,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 
 // How long a typed prefix is remembered before the blind type-ahead buffer resets (native <select> feel).
 const TYPEAHEAD_RESET_MS = 600;
@@ -157,9 +158,14 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
             )}
             {...triggerProps}
           >
-            <span className="flex min-w-0 items-center gap-x-2 truncate">
+            {/* The label truncates in its own block (`truncate` on the flex row draws no ellipsis), and
+                the tooltip gives the whole label back, only when cut. */}
+            <span className="flex min-w-0 items-center gap-x-2">
               {SelectedIcon && <SelectedIcon className="size-4 shrink-0" />}
-              <span className="truncate">{selected ? selected.label : placeholder}</span>
+              <TruncatingTooltip
+                text={selected ? selected.label : (placeholder ?? '')}
+                className="block"
+              />
             </span>
             <ComboboxChevron open={open} />
           </Button>

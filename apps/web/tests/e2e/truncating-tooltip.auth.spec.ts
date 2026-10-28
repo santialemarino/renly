@@ -156,24 +156,34 @@ test.describe('a truncated text is reachable from the keyboard', () => {
   test('a focusable scroll region around the table does not take the note’s stop', async ({
     page,
   }) => {
-    await openExpenses(page);
-    const cut = note(page, longNote);
     /*
      * What `Table` does while it is wider than its column: its scroll container becomes a focusable,
      * named region. It is not a control, so the cut note inside it stays a stop of its own, and the
-     * region's own focus opens no tooltip. The note is narrowed a little so it measures again.
+     * region's own focus opens no tooltip.
+     *
+     * The region is made focusable as the document is parsed, before anything hydrates, so it already
+     * is one when the note mounts and first asks what surrounds it — the case a row arriving in an
+     * already-overflowing table meets. Made focusable only after load, the case passed on a component
+     * that read its surroundings once, at mount, and took any focusable for a control.
      */
-    const region = page.locator('[data-slot="table-container"]').filter({ has: cut });
-    await region.evaluate((el) => {
-      el.setAttribute('tabindex', '0');
-      el.setAttribute('role', 'region');
-      el.setAttribute('aria-label', 'Gastos');
+    await page.addInitScript(() => {
+      const mark = (root: ParentNode) => {
+        for (const el of root.querySelectorAll('[data-slot="table-container"]')) {
+          el.setAttribute('tabindex', '0');
+          el.setAttribute('role', 'region');
+          el.setAttribute('aria-label', 'Gastos');
+        }
+      };
+      new MutationObserver(() => mark(document)).observe(document, {
+        childList: true,
+        subtree: true,
+      });
     });
-    await cut.evaluate((el) => ((el as HTMLElement).style.maxWidth = '10rem'));
-    await expect
-      .poll(() => cut.evaluate((el) => el.getBoundingClientRect().width))
-      .toBeLessThanOrEqual(160);
-    await expect.poll(() => cut.evaluate((el) => el.tabIndex)).toBe(0);
+    await openExpenses(page);
+    const cut = note(page, longNote);
+    const region = page.locator('[data-slot="table-container"]').filter({ has: cut });
+    await expect(region).toHaveAttribute('tabindex', '0');
+    await expect(region).toHaveAttribute('role', 'region');
 
     await page.keyboard.press('Shift');
     await region.focus();

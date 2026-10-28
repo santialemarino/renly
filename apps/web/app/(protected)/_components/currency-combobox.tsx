@@ -21,6 +21,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import {
   ENV_PREFERRED_CURRENCIES,
   FALLBACK_PRIMARY_CURRENCY,
@@ -201,7 +202,7 @@ export function CurrencyCombobox({
         }}
       >
         <span className="shrink-0 text-paragraph-xs font-mono">{currency.code}</span>
-        {!compact && <span className="truncate text-paragraph-sm">{currency.name}</span>}
+        {!compact && <TruncatingTooltip text={currency.name} className="text-paragraph-sm" />}
         {getCurrencyFlag(currency.code) && (
           <span className="ml-auto shrink-0 pr-1">{getCurrencyFlag(currency.code)}</span>
         )}
@@ -265,16 +266,17 @@ export function CurrencyCombobox({
               >
                 <span className="shrink-0 text-paragraph-xs font-mono">{value}</span>
                 {!compact && (
-                  <span className="text-paragraph-sm truncate">{getCurrencyName(value)}</span>
+                  <TruncatingTooltip text={getCurrencyName(value)} className="text-paragraph-sm" />
                 )}
                 {getCurrencyFlag(value) && (
                   <span className="shrink-0">{getCurrencyFlag(value)}</span>
                 )}
               </span>
             ) : (
-              <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
-                {placeholder}
-              </span>
+              <TruncatingTooltip
+                text={placeholder}
+                className="min-w-0 text-muted-foreground animate-in fade-in duration-100"
+              />
             )}
             <span className="inline-flex shrink-0 items-center gap-x-1 ml-auto">
               {/* Room for the clear button, which sits over this spot rather than inside the trigger. */}
