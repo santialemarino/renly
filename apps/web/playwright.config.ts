@@ -46,6 +46,19 @@ export default defineConfig({
   globalSetup: './tests/e2e/global-setup.ts',
   use: {
     baseURL,
+    /*
+     * The browser's clock and language, pinned rather than inherited from the machine. Every date the
+     * suite writes is a UTC date — the specs build theirs with `toISOString()`, the CI seed with
+     * `date -u` — and the harness account has no stored timezone, so the API reads its "today" in
+     * UTC too. A browser in the runner's own zone (a laptop in Buenos Aires, say) disagreed with all
+     * three for three hours every evening: the protected layout auto-syncs the account to the
+     * browser's zone, and the app's "today" (date-picker defaults, the reconcile dialog, the current
+     * statement) became a different day from the one a spec had just seeded. The language is the one
+     * the harness account registers with; specs that need Spanish set the locale cookie themselves.
+     * `global-setup.ts` signs in with the same two, so the saved session never carries another zone.
+     */
+    timezoneId: 'UTC',
+    locale: 'en-US',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

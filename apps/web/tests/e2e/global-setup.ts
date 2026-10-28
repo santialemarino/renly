@@ -90,7 +90,8 @@ async function preflight(baseURL: string) {
  * `ADMIN_AUTH_STATE_PATH`); unset, only the admin scans skip.
  */
 async function globalSetup(config: FullConfig) {
-  const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3000';
+  const use = config.projects[0]?.use;
+  const baseURL = use?.baseURL ?? 'http://localhost:3000';
   await preflight(baseURL);
 
   const credentials = e2eCredentials();
@@ -102,14 +103,17 @@ async function globalSetup(config: FullConfig) {
   if (!credentials) return;
   mkdirSync(dirname(AUTH_STATE_PATH), { recursive: true });
 
+  // The same clock and language as every spec's context: the sign-in lands on a protected page, whose
+  // auto-sync would otherwise store THIS browser's zone on the account and in the saved session.
+  const contextOptions = { baseURL, locale: use?.locale, timezoneId: use?.timezoneId };
   const browser = await chromium.launch();
   try {
-    await signIn(browser, baseURL, credentials, AUTH_STATE_PATH, 'E2E_EMAIL / E2E_PASSWORD');
+    await signIn(browser, contextOptions, credentials, AUTH_STATE_PATH, 'E2E_EMAIL / E2E_PASSWORD');
     const admin = e2eAdminCredentials();
     if (admin) {
       await signIn(
         browser,
-        baseURL,
+        contextOptions,
         admin,
         ADMIN_AUTH_STATE_PATH,
         'E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD',
@@ -128,13 +132,14 @@ async function globalSetup(config: FullConfig) {
 // admin route, and each admin scan would fail on that instead of on this one stated cause.
 async function signIn(
   browser: Browser,
-  baseURL: string,
+  contextOptions: { baseURL: string; locale?: string; timezoneId?: string },
   credentials: E2ECredentials,
   statePath: string,
   envNames: string,
   { mustBeAdmin = false }: { mustBeAdmin?: boolean } = {},
 ) {
-  const context = await browser.newContext({ baseURL });
+  const { baseURL } = contextOptions;
+  const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
 
   try {

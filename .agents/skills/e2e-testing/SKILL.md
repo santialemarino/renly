@@ -173,6 +173,17 @@ nothing, and the spec then fails on a state that never came (seen 2026-10-25 in
 `focus-system.auth.spec.ts`, failing every retry on one CI run and passing on the next). So the first
 key or click a spec sends to a freshly loaded page waits for that target's hydration too.
 
+### The browser's clock and language
+
+`playwright.config.ts` pins every context to `timezoneId: 'UTC'` and `locale: 'en-US'`, and
+`globalSetup` signs in with the same two. Every date the suite writes is a UTC date — specs build theirs
+with `toISOString()`, the CI seed with `date -u` — and an account with no stored zone has its "today"
+read in UTC by the API. The protected layout auto-syncs the account's zone to the BROWSER's, so a browser
+left in the machine's own zone (UTC-3 in Buenos Aires) moved the app's "today" a day away from the
+spec's for three hours every evening. A spec that needs Spanish sets the `NEXT_LOCALE` cookie itself; a
+spec that needs another zone sets `timezoneId` with `test.use`. Locally the run therefore syncs the e2e
+account's zone to UTC, if it is in auto mode.
+
 ### Auth and storage state — how the harness actually works
 
 Two projects over one `testDir`, split by FILE NAME:
