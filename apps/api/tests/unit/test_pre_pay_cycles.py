@@ -416,3 +416,30 @@ class TestEachRefusalReachesTheClientWithItsOwnCode:
         monkeypatch.setattr(payment_obligation_service, "advance_or_archive", AsyncMock(side_effect=[first, None]))
         response = _client().post("/expenses", json=_MULTI_CYCLE_BODY)
         assert (response.status_code, response.json()["code"]) == (400, "expense_cycle_obligation_gone")
+
+    def test_a_walk_past_year_9999_answers_out_of_range_not_500(self, monkeypatch):
+        # next_due_date has no upper bound, so twelve annual cycles from 9995 step the cursor to 10007,
+        # which the date math cannot build. The REAL advance_or_archive runs here (only its repository
+        # is mocked), so without the service's up-front check this is a ValueError mid-loop: a 500.
+        _mock_insert(monkeypatch, _entry())
+        obligation = _obligation(recurrence="annual")
+        obligation.next_due_date = date(9995, 1, 1)
+        _mock_get_obligation(monkeypatch, obligation)
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "get_by_id", AsyncMock(return_value=obligation))
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "save", AsyncMock())
+        response = _client().post("/expenses", json={**_MULTI_CYCLE_BODY, "cycles_to_advance": 12})
+        assert (response.status_code, response.json()["code"]) == (400, "expense_cycles_out_of_range")
+        expense_service.expense_repository.create.assert_not_called()
+
+    def test_a_walk_ending_in_year_9999_is_still_allowed(self, monkeypatch):
+        # The boundary of the check above: two annual cycles from 9997 land in 9999, the last
+        # representable year, and must go through.
+        _mock_insert(monkeypatch, _entry())
+        obligation = _obligation(recurrence="annual")
+        obligation.next_due_date = date(9997, 1, 15)
+        _mock_get_obligation(monkeypatch, obligation)
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "get_by_id", AsyncMock(return_value=obligation))
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "save", AsyncMock())
+        response = _client().post("/expenses", json={**_MULTI_CYCLE_BODY, "cycles_to_advance": 2})
+        assert response.status_code == 201, response.json()
+        assert obligation.next_due_date == date(9999, 1, 15)

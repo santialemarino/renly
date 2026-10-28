@@ -352,7 +352,8 @@ async def create_expense(
 # mutation. The reconciliation stale mark fires ONCE after the loop (idempotent regardless of
 # how many rows landed). Raises:
 #   - NotFoundError when the obligation can't be found / isn't owned (router → 404 via global handler)
-#   - ExpenseCyclesOutOfRangeError when cycles is outside [1, MAX_CYCLES_PER_MARK_PAID],
+#   - ExpenseCyclesOutOfRangeError when cycles is outside [1, MAX_CYCLES_PER_MARK_PAID] or the
+#     walk would step the cursor past the last representable date (year 9999),
 #     ExpenseCycleObligationNotRecurringError when the obligation isn't recurring with a known
 #     recurrence pattern, and ExpenseCycleObligationGoneError when a concurrent transaction deletes
 #     the obligation mid-loop — each its own code, 400 via the global DomainError handler.
@@ -388,6 +389,13 @@ async def create_expenses_for_obligation_cycles(
     # for unrecognised recurrence values).
     if obligation.recurrence is None or obligation.recurrence not in OBLIGATION_MONTH_STEP:
         raise ExpenseCycleObligationNotRecurringError()
+    # The walk's last cursor must still be a date. next_due_date has no upper bound, and a step past
+    # year 9999 raises from the date math mid-loop — a 500. Refused up front, before any row is
+    # inserted, by counting months rather than catching the overflow.
+    due = obligation.next_due_date
+    last_month = due.year * 12 + due.month - 1 + cycles * OBLIGATION_MONTH_STEP[obligation.recurrence]
+    if last_month // 12 > date_type.max.year:
+        raise ExpenseCyclesOutOfRangeError(MAX_CYCLES_PER_MARK_PAID)
 
     first_previous_cursor: str | None = None
     last_entry: ExpenseEntry | None = None
