@@ -3,7 +3,7 @@ import base64
 import pytest
 from pydantic import ValidationError
 
-from app.config import MIN_JWT_SECRET_LENGTH, VAPID_PRIVATE_KEY_BYTES, Environment, Settings
+from app.config import MIN_JWT_SECRET_LENGTH, VAPID_PRIVATE_KEY_BYTES, EmailProvider, Environment, Settings
 
 _DB_URL = "postgresql+asyncpg://user:pass@localhost:5432/renly"
 
@@ -102,3 +102,53 @@ class TestVapidPrivateKeyValidation:
     def test_anything_that_is_not_a_p256_scalar_is_rejected(self, value):
         with pytest.raises(ValidationError):
             Settings(database_url=_DB_URL, jwt_secret="x" * MIN_JWT_SECRET_LENGTH, vapid_private_key=value)
+
+
+# --- email provider validation ---
+
+
+def _email_settings(environment: Environment, **overrides) -> Settings:
+    return Settings(_env_file=None, database_url=_DB_URL, jwt_secret="x" * MIN_JWT_SECRET_LENGTH, environment=environment, **overrides)
+
+
+class TestEmailProviderValidation:
+    @pytest.mark.parametrize("environment", list(Environment))
+    def test_resend_without_an_api_key_refuses_to_boot(self, environment):
+        with pytest.raises(ValidationError, match="email_api_key is required"):
+            _email_settings(environment, email_provider=EmailProvider.resend, email_api_key=None, email_from="Renly <noreply@renly.app>")
+
+    # Resend's shared test sender delivers only to the Resend account owner, so in production every
+    # account email to a real user would be refused while the app looks healthy. Every spelling of it is
+    # refused: the shipped default, the bare address, and a different case.
+    @pytest.mark.parametrize("sender", ["Renly <onboarding@resend.dev>", "onboarding@resend.dev", "Renly <Onboarding@Resend.DEV>"])
+    def test_production_resend_refuses_the_shared_sender(self, sender):
+        with pytest.raises(ValidationError, match="not Resend's shared resend.dev test sender"):
+            _email_settings(Environment.production, email_provider=EmailProvider.resend, email_api_key="re_key", email_from=sender)
+
+    # The default EMAIL_FROM IS the shared sender, so a production deployment that forgets to set it is
+    # refused too.
+    def test_production_resend_refuses_the_default_sender(self):
+        assert "@resend.dev" in Settings.model_fields["email_from"].default
+        with pytest.raises(ValidationError, match="not Resend's shared resend.dev test sender"):
+            _email_settings(Environment.production, email_provider=EmailProvider.resend, email_api_key="re_key")
+
+    def test_production_resend_accepts_an_own_domain_sender(self):
+        sender = "Renly <noreply@renly.app>"
+        settings = _email_settings(Environment.production, email_provider=EmailProvider.resend, email_api_key="re_key", email_from=sender)
+        assert settings.email_from == sender
+
+    # A domain that merely ends in resend.dev, or names it before the @, is not the shared domain.
+    @pytest.mark.parametrize("sender", ["Renly <noreply@notresend.dev>", "Renly <resend.dev@renly.app>"])
+    def test_production_resend_does_not_confuse_lookalikes(self, sender):
+        settings = _email_settings(Environment.production, email_provider=EmailProvider.resend, email_api_key="re_key", email_from=sender)
+        assert settings.email_from == sender
+
+    # Development keeps the shared sender: it is how a fresh checkout sends its first email.
+    def test_development_resend_keeps_the_shared_sender(self):
+        settings = _email_settings(Environment.development, email_provider=EmailProvider.resend, email_api_key="re_key")
+        assert "@resend.dev" in settings.email_from
+
+    # The console provider sends nothing, so its sender is never checked, in production either.
+    def test_production_console_ignores_the_sender(self):
+        settings = _email_settings(Environment.production, email_provider=EmailProvider.console)
+        assert "@resend.dev" in settings.email_from

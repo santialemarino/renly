@@ -7,7 +7,7 @@ description: Where tests live, how to run them, and what to test in the Renly re
 
 ## Current state
 
-- **API tests:** `apps/api/tests/unit/` — pytest, ~3,300 tests across ~120 files covering metrics/date/liquidity helpers, service flows (mocked sessions/repos), schema validation, in-process endpoint behavior, and the structural guards that derive a population from the source and fail on an unclassified member. `apps/api/tests/integration/` adds ~490 more across 28 suites that need a real Postgres (listed below); CI runs them all.
+- **API tests:** `apps/api/tests/unit/` — pytest, ~3,300 tests across ~120 files covering metrics/date/liquidity helpers, service flows (mocked sessions/repos), schema validation, in-process endpoint behavior, and the structural guards that derive a population from the source and fail on an unclassified member. `apps/api/tests/integration/` adds ~495 more across 29 suites that need a real Postgres (listed below); CI runs them all.
 - **Web unit tests:** `apps/web/tests/unit/` — Vitest, split into two projects by file extension (`apps/web/vitest.config.ts`): a **`node`** project for `*.test.ts` (pure functions — the locale/formatting layer under `lib/i18n/`, the `numeric-input` rule kit, EN/ES keyset parity) and a **`jsdom`** project for `*.test.tsx` (React components/hooks driven with React Testing Library + `@testing-library/user-event`, e.g. `LocaleAmountInput`). `vite-tsconfig-paths` wires the `@/*` alias; the jsdom project loads `tests/setup-jsdom.ts` (jest-dom matchers + RTL cleanup). Run both with `pnpm test:web`.
 - **Web E2E tests:** `apps/web/tests/e2e/` — Playwright. Run in CI by `ci.web-e2e.yml` (floor paths or the `run-e2e` label on a PR, nightly on `main`). See the `e2e-testing` skill for full conventions, configuration, the CI job, and the playwright-cli workflow.
 - **Pre-commit:** `scripts/pre-commit.sh` (called from `.husky/pre-commit`) runs lint-staged, then scopes the suites to the staged paths: `check:api` + `test:api` when `apps/api/**` (or `docs/public/api-reference.md`, which the API suite reads) is staged; `check:web` + `test:web` when `apps/web/**`, `packages/**` or the root `pnpm-lock.yaml` / `pnpm-workspace.yaml` / `turbo.json` / `tsconfig*` is; nothing more for docs, skills, `.github/` and `*.md`; everything for any other path (the root `package.json`, which holds both apps' scripts and the lint-staged config; root config, scripts, `.husky/`). Whenever code is staged, the **cross-app** tests of the side not fully run still run (`pnpm --filter <app> run test:cross-app`, a few seconds each). `PRE_COMMIT_DRY_RUN=1 bash scripts/pre-commit.sh` prints the plan for the current staged set and then fails, so it can never let a commit through. In CI, `ci.api.yml` and `ci.web.yml` each trigger on BOTH apps' paths, so the cross-app tests run whichever app a PR touches.
@@ -159,6 +159,12 @@ pnpm test:e2e        # Playwright E2E
     guard. It also reads a group and a pot as `renly_app` under a NOSUPERUSER owner — directly when the
     database's owner is one, and otherwise by re-owning the owner's objects to a throwaway role inside a
     rolled-back transaction, because a superuser owner hides the defect it pins.
+  - `test_role_model_guard_catalogue.py` — the two `RLS_TEST_*` vars. The catalogue read behind the
+    production startup refusal (`app/role_model_guard.py`), whose verdict the unit tests drive with the read
+    stubbed: as `renly_app` it sees itself and exactly the tables `pg_policies` names, all FORCEd, with
+    their real owner; on an admin connection it names a table stripped of FORCE or of RLS (inside a
+    rolled-back transaction), the BYPASSRLS role it runs as, that role acting as the owner (it is a
+    member of it), and the owner's membership of `renly_policy_definer` (read under `SET LOCAL ROLE`).
   - `test_rls_reagreement_confirm.py` — the two `RLS_TEST_*` vars. Who may confirm a re-agreement and
     what the confirmation locks: the affected-seat expression and the lock live only in the policy, with
     a second copy in the service that must not disagree with it.

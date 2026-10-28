@@ -13,10 +13,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import Settings
 from app.config import settings as default_settings
+from app.db import engine
 from app.domain import DomainError
 from app.middleware import BodySizeLimitMiddleware
 from app.observability import init_sentry
 from app.rate_limit import limiter, rate_limit_exceeded_handler
+from app.role_model_guard import verify_role_model
 from app.routers import (
     accounts,
     admin,
@@ -57,9 +59,11 @@ from app.scheduler import start_scheduler, stop_scheduler
 logger = logging.getLogger(__name__)
 
 
-# Starts the background scheduler on app startup and shuts it down on exit.
+# Verifies the database role model (production only), then starts the background scheduler on app
+# startup and shuts it down on exit.
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
+    await verify_role_model(app.state.settings, engine)
     start_scheduler()
     yield
     stop_scheduler()
@@ -211,6 +215,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.limiter = limiter
+    app.state.settings = app_settings
 
     for exc_type, handler in _EXCEPTION_HANDLERS.items():
         app.add_exception_handler(exc_type, handler)
