@@ -52,8 +52,9 @@ CREATE OR REPLACE FUNCTION app_transfer_follows_accounts() RETURNS TRIGGER
 # A transfer always sits in its accounts' scope: its (user_id, pot_id) is both legs', for every role and
 # every write. 0032's rule for reconciliations, for a row with two parents.
 #
-# The row policies check a transfer against its CALLER and never against its accounts, so an edit that
-# re-pointed both legs of a private transfer at one pot's accounts left a private row with pot legs. An
+# The row policies check a transfer against its CALLER and never against its accounts, so a write
+# re-pointing both legs of a private transfer at one pot's accounts would leave a private row with pot
+# legs. An
 # AFTER INSERT / UPDATE OF user_id, pot_id, from_account_id, to_account_id trigger refuses any row whose
 # scope is not both legs', so a scope change happens only by moving the accounts — and the move
 # re-points the transfer after them, in the same transaction, where the lookup already reads the new

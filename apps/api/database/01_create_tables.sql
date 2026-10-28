@@ -2098,9 +2098,9 @@ CREATE POLICY transfers_scope_write ON transfers FOR ALL
 -- insert and on every write to either scope column or either leg, for every role. It is the
 -- reconciliation rule above for a row with two parents, and it can be stated for both at once because a
 -- transfer never legitimately crosses a scope (the single-owner CHECK on this table says why). The
--- policies cannot say it, for the same reason as there: they check the row against its CALLER, so an
--- edit re-pointing both legs of a private transfer at one pot's accounts left a private row with pot
--- legs, and a move that re-pointed one leg's transfers without the other would leave a row whose legs
+-- policies cannot say it, for the same reason as there: they check the row against its CALLER, so a
+-- write re-pointing both legs of a private transfer at one pot's accounts would leave a private row with
+-- pot legs, and a move that re-pointed one leg's transfers without the other would leave a row whose legs
 -- disagree. A scope change happens only by moving the accounts, and the move re-points the transfer in a
 -- later statement of the same transaction, where this lookup already reads the accounts' new scope.
 --

@@ -20,6 +20,7 @@ from app.domain import (
     TransferAmountRequiredError,
     TransferAmountsMustMatchError,
     TransferBeforeAccountOpenedError,
+    TransferCrossScopeError,
     TransferSameAccountError,
     ensure_same_scope,
 )
@@ -196,6 +197,11 @@ async def update_transfer(
     new_from_id = fields["from_account_id"] if "from_account_id" in fields else transfer.from_account_id
     new_to_id = fields["to_account_id"] if "to_account_id" in fields else transfer.to_account_id
     source, destination = await _load_pair(session, user, new_from_id, new_to_id)
+    # An edit keeps the transfer where it is. The effective pair's scope is derived only to check it:
+    # re-pointing a transfer at another scope's accounts would move it out of one owner's history into
+    # another's, and a scope changes only by moving the accounts themselves.
+    if (source.user_id, source.pot_id) != (transfer.user_id, transfer.pot_id):
+        raise TransferCrossScopeError()
     _ensure_both_accounts_open(source, destination, fields["date"] if "date" in fields else transfer.date)
 
     new_from_amount = fields["from_amount"] if "from_amount" in fields else transfer.from_amount
@@ -219,12 +225,6 @@ async def update_transfer(
     for key, value in fields.items():
         setattr(transfer, key, value)
     transfer.to_amount = resolved
-    # Re-derived from the EFFECTIVE pair, as create derives it: re-pointing both legs at another scope's
-    # accounts moves the transfer with them. Kept from the stored row, a private transfer re-pointed at
-    # two of a pot's accounts would stay private with pot legs — readable by its author alone, and
-    # invisible to the members whose balances it moves.
-    transfer.user_id = source.user_id
-    transfer.pot_id = source.pot_id
     await transfer_repository.save(session, transfer)
     await session.commit()
     await session.refresh(transfer)

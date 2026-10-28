@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db import set_session_user
+from app.domain import NotFoundError, TransferCrossScopeError
 from app.models.user import User
 from app.repositories import account_repository, pot_repository
 from app.services import pot_service, transfer_service
@@ -19,9 +20,11 @@ from app.services import pot_service, transfer_service
 # the request role and the admin role against a real Postgres, and the two concurrent writes it has to
 # hold against.
 #
-# ▸ THE SERVICE. Editing a transfer re-derives its scope from the legs it ends up with, so re-pointing a
-# private transfer at two of a pot's accounts moves it into the pot. Before, the row kept its stored
-# scope, and the trigger below now refuses that row — so the edit is red if the re-derive goes missing.
+# ▸ THE SERVICE. An edit keeps a transfer in its scope: re-pointing it at another scope's accounts is
+# refused with transfer_cross_scope before anything is written — also for a caller who may only VIEW the
+# pot named, who would otherwise reach the trigger's refusal as a 409 — and the row is left as it was.
+# The service edits only its caller's private transfers (the lookup is by owner), so a pot's transfer
+# answers 404 there.
 #
 # ▸ THE TRIGGER. app_transfer_follows_accounts() refuses every row whose scope is not both legs'. Each
 # misplaced row below differs from its legs in the user alone, the pot alone, both, or in one leg only
@@ -68,6 +71,8 @@ _ACCOUNTS = {
     "p2": (None, "P"),
     "q1": (None, "Q"),
     "q2": (None, "Q"),
+    "v1": (None, "V"),
+    "v2": (None, "V"),
 }
 
 
@@ -103,7 +108,8 @@ async def seeded():
             )
         ).scalar_one()
         pots = {}
-        for key, is_default in (("P", True), ("Q", False)):
+        # V is one the owner may only view.
+        for key, is_default, can_write in (("P", True, True), ("Q", False, True), ("V", False, False)):
             pots[key] = (
                 await s.execute(
                     text("INSERT INTO pots (group_id, name, base_currency, is_default) VALUES (:g, :n, 'ARS', :d) RETURNING id"),
@@ -111,8 +117,8 @@ async def seeded():
                 )
             ).scalar_one()
             await s.execute(
-                text("INSERT INTO pot_member_permissions (pot_id, member_id, can_view, can_write) VALUES (:p, :m, TRUE, TRUE)"),
-                {"p": pots[key], "m": seat},
+                text("INSERT INTO pot_member_permissions (pot_id, member_id, can_view, can_write) VALUES (:p, :m, TRUE, :w)"),
+                {"p": pots[key], "m": seat, "w": can_write},
             )
         accounts = {}
         for key, (holder, pot) in _ACCOUNTS.items():
@@ -251,25 +257,28 @@ def _pair(seeded, scope: tuple[str, str]) -> tuple[int | None, int | None]:
     return (seeded["users"][key], None) if kind == "user" else (None, seeded["pots"][key])
 
 
-class TestEditingATransferMovesItWithItsLegs:
+class TestAnEditKeepsATransferInItsScope:
     @pytest.mark.asyncio
-    async def test_re_pointing_a_private_transfer_at_a_pots_accounts_moves_it_into_the_pot(self, seeded):
-        # The service edits only its caller's private transfers (the lookup is by owner), so this is the
-        # one direction an edit can take a transfer across a scope — and the one the bug was in.
-        accounts, pot = seeded["accounts"], seeded["pots"]["P"]
-        transfer = seeded["transfers"]["private"]
+    @pytest.mark.parametrize("pot", ["P", "V"])
+    async def test_re_pointing_a_private_transfer_at_a_pots_accounts_is_refused(self, seeded, pot):
+        # P the owner may write, V only view: either way the refusal is the clean 400, not the trigger's.
+        accounts, owner, transfer = seeded["accounts"], seeded["users"]["owner"], seeded["transfers"]["private"]
+        legs = (f"{pot.lower()}1", f"{pot.lower()}2")
         async with _as(seeded, "owner") as s:
-            moved = await transfer_service.update_transfer(
-                s, transfer, _user(seeded, "owner"), from_account_id=accounts["p1"], to_account_id=accounts["p2"]
-            )
-        assert (moved.from_account_id, moved.to_account_id) == (accounts["p1"], accounts["p2"])
-        assert await _scope(seeded, transfer) == (None, pot)
-        assert await _drift(seeded) == (0, 2)
+            with pytest.raises(TransferCrossScopeError):
+                await transfer_service.update_transfer(
+                    s, transfer, _user(seeded, "owner"), from_account_id=accounts[legs[0]], to_account_id=accounts[legs[1]]
+                )
+        async with seeded["admin_sessionmaker"]() as admin:
+            row = (
+                await admin.execute(text("SELECT user_id, pot_id, from_account_id, to_account_id FROM transfers WHERE id = :t"), {"t": transfer})
+            ).one()
+        assert tuple(row) == (owner, None, accounts["a1"], accounts["a2"])
 
     @pytest.mark.asyncio
-    async def test_an_edit_that_keeps_the_scope_keeps_it(self, seeded):
-        # The positive control: re-deriving is a no-op for the edits every transfer gets, including one
-        # re-pointing a leg at another of the owner's own accounts.
+    async def test_an_edit_inside_the_scope_is_admitted(self, seeded):
+        # The positive control: the edits every transfer gets, including re-pointing a leg at another of
+        # the owner's own accounts.
         accounts, owner, transfer = seeded["accounts"], seeded["users"]["owner"], seeded["transfers"]["private"]
         async with _as(seeded, "owner") as s:
             edited = await transfer_service.update_transfer(
@@ -277,6 +286,17 @@ class TestEditingATransferMovesItWithItsLegs:
             )
         assert (edited.to_account_id, edited.from_amount) == (accounts["a3"], Decimal("25"))
         assert await _scope(seeded, transfer) == (owner, None)
+
+    @pytest.mark.asyncio
+    async def test_a_pots_transfer_is_not_edited_through_the_private_lookup(self, seeded):
+        # The existing path, pinned so a widened lookup is a decision rather than an accident: a pot's
+        # transfer is not its caller's own, so the edit answers 404 and nothing moves.
+        pot, transfer = seeded["pots"]["P"], seeded["transfers"]["pot"]
+        async with _as(seeded, "owner") as s:
+            with pytest.raises(NotFoundError):
+                await transfer_service.update_transfer(s, transfer, _user(seeded, "owner"), from_amount=Decimal("25"))
+        assert await _scope(seeded, transfer) == (None, pot)
+        assert await _drift(seeded) == (0, 2)
 
 
 class TestATransferSitsInItsAccountsScope:
@@ -343,7 +363,7 @@ class TestATransferCannotRaceAMoveOfItsAccounts:
         # they were still the pot's, waits on that lock through its foreign keys and is judged after it.
         accounts, owner = seeded["accounts"], seeded["users"]["owner"]
         async with seeded["admin_sessionmaker"]() as absorbing:
-            assert await pot_service.absorb_group_pots(absorbing, [seeded["group"]], owner) == 4
+            assert await pot_service.absorb_group_pots(absorbing, [seeded["group"]], owner) == 6
 
             async def create() -> None:
                 async with _as(seeded, "owner") as s:

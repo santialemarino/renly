@@ -104,11 +104,6 @@ def _enclosing_function(relative: str, line: int) -> str | None:
 
 CHILDREN = _children()
 MOVES = _moves(set(CHILDREN))
-# Writes that set a child's scope FROM its parents rather than leaving it behind one: a transfer edit
-# re-derives the transfer's scope from the two accounts it ends up naming. Its parents are those legs,
-# and a trigger refuses any transfer whose scope is not both legs', so this write cannot leave a copy
-# that disagrees with a parent — which is what the one-path rule below exists to prevent.
-DERIVES_FROM_ITS_PARENTS = {("app/services/transfer_service.py", "update_transfer")}
 
 
 class TestTheChildrenAreDerived:
@@ -162,8 +157,7 @@ class TestThereIsOneRePointPath:
         for write in derive_writes():
             if write.tables & covered and write.columns is not None and "pot_id" in write.columns:
                 relative, line = write.site.rsplit(":", 1)
-                function = _enclosing_function(relative, int(line))
-                if function != "move_to_scope" and (relative, function) not in DERIVES_FROM_ITS_PARENTS:
+                if _enclosing_function(relative, int(line)) != "move_to_scope":
                     elsewhere.append(f"{write.site} ({sorted(write.tables)})")
         assert elsewhere == []
 

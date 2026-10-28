@@ -60,8 +60,7 @@ pnpm test:e2e        # Playwright E2E
     and a surviving group's pot is untouched — run with 0032's scope trigger live, which refuses a child
     moved before its parent. Its structural half, `tests/unit/test_scope_children_follow.py`, DERIVES the
     children from the models and fails when a `move_to_scope` misses one, moves one before its parent,
-    or a second function writes a parent's or child's `pot_id` (a transfer edit re-deriving its scope from
-    its own legs, which a trigger holds it to, is the one named exception).
+    or a second function writes a parent's or child's `pot_id`.
   - `test_rls_pot_scope.py` — the same two `RLS_TEST_*` vars as `test_rls_isolation.py`, so the two
     run together. Covers the dual-scope policies, whose service layer holds a second copy of the
     same rules — the failure that matters is the two disagreeing, which only a real policy shows.
@@ -179,8 +178,8 @@ pnpm test:e2e        # Playwright E2E
   - `test_rls_transfer_scope.py` — the two `RLS_TEST_*` vars. The trigger holding every transfer to BOTH
     legs' scope: misplaced rows differing from their legs in the user, the pot, both, or one leg only
     (each direction), an update naming each of its four columns alone, one row the request role's policy
-    admits on accounts it cannot see; an edit re-pointing a private transfer at a pot's accounts moving
-    it into the pot; and two two-connection races — a pot transfer created during an absorption (which
+    admits on accounts it cannot see; an edit re-pointing a transfer at another scope's accounts refused
+    with 400 and the row unchanged; and two two-connection races — a pot transfer created during an absorption (which
     waits on the absorption's FOR UPDATE through its foreign keys) and a private one created during a
     move into a pot (which waits on the service's own lock) — each refused, with no transfer drifted.
   - `test_update_column_privileges.py` — the two `RLS_TEST_*` vars. Every UPDATE the application can
