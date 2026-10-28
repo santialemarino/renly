@@ -559,10 +559,11 @@ BYMA_BYMA_SUFFIX = ".BA"
 # The PDF is a table — name, ticker, market, ratio — and the market cell may be empty or name a market of
 # one word or two ("NYSE", "New York", "OTC US", "NASDAQ CM", "CBOE", "BOVESPA", ...). Read as one line of
 # text, a row with no market and a row on a two-word market are indistinguishable ("Name ATAD 1:1" against
-# "Name ITA CBOE 1:1"), so each row is split into its CELLS by the horizontal gap between words: within a
-# cell words sit one space apart, between columns the gap is several times that. The ticker is then the
-# second cell whatever the market is, or whether there is one. In points: a space at the PDF's 6.4pt is
-# under 2pt, the narrowest column gap over 10pt.
+# "Name ITA CBOE 1:1"), and a name that wraps onto two lines leaves its row's other cells on a line of
+# their own between them ("SBS NYSE 1:2"). So each row is split into CELLS by the horizontal gap between
+# words (within a cell words sit one space apart, between columns several times that: a space at the
+# PDF's 6.4pt is under 2pt, the narrowest column gap over 10pt), and each cell is placed in its COLUMN by
+# where it starts. The ticker is the cell in the ticker column, whatever else the row holds.
 BYMA_CELL_GAP = 6.0
 # How far apart, vertically, words may sit and still be one row (the ratio is set a size larger than the
 # rest of its row, so its top is a fraction of a point off); rows are over 12pt apart.
@@ -570,8 +571,9 @@ BYMA_ROW_TOLERANCE = 2.0
 
 
 # Groups a page's words into rows (by their top, within BYMA_ROW_TOLERANCE) and each row into its cells
-# (words closer than BYMA_CELL_GAP joined with a space), top to bottom and left to right.
-def _byma_rows(words: list[dict]) -> list[list[str]]:
+# (words closer than BYMA_CELL_GAP joined with a space), each as (x0, text), top to bottom and left to
+# right.
+def _byma_rows(words: list[dict]) -> list[list[tuple[float, str]]]:
     rows: list[list[dict]] = []
     for word in sorted(words, key=lambda w: w["top"]):
         if rows and word["top"] - rows[-1][0]["top"] <= BYMA_ROW_TOLERANCE:
@@ -580,16 +582,31 @@ def _byma_rows(words: list[dict]) -> list[list[str]]:
             rows.append([word])
     table = []
     for row in rows:
-        cells: list[str] = []
+        cells: list[tuple[float, str]] = []
         previous_x1: float | None = None
         for word in sorted(row, key=lambda w: w["x0"]):
             if previous_x1 is not None and word["x0"] - previous_x1 < BYMA_CELL_GAP:
-                cells[-1] = f"{cells[-1]} {word['text']}"
+                cells[-1] = (cells[-1][0], f"{cells[-1][1]} {word['text']}")
             else:
-                cells.append(word["text"])
+                cells.append((word["x0"], word["text"]))
             previous_x1 = word["x1"]
         table.append(cells)
     return table
+
+
+# Where the ticker column starts and where the market column starts, read off the rows themselves: in
+# every full row (name, ticker, market, ratio) the ticker starts right of every name and left of every
+# market, so each boundary is the midpoint of the gap between the two columns' starts. Read from the data
+# rather than the header, whose words are drawn four times over (a fake bold) and extract as
+# "CCCCóóóóddddiiiiggggoooo". None when the rows do not show two clean gaps, so nothing is guessed.
+def _byma_columns(rows: list[list[tuple[float, str]]]) -> tuple[float, float] | None:
+    full = [row for row in rows if len(row) == 4]
+    if not full:
+        return None
+    names, tickers, markets = ([row[i][0] for row in full] for i in range(3))
+    if max(names) >= min(tickers) or max(tickers) >= min(markets):
+        return None
+    return (max(names) + min(tickers)) / 2, (max(tickers) + min(markets)) / 2
 
 
 # Fetches all CEDEAR ratios from the BYMA PDF.
@@ -651,38 +668,42 @@ async def fetch_byma_ratios() -> RatioFetchResult:
         results: RatioResult = []
         skipped: list[str] = []
         with pdfplumber.open(io.BytesIO(data)) as pdf:
+            # Rows ending in an "N:N" ratio, so the header and footer rows and a wrapped name's own lines
+            # never count.
+            rows = []
             for page in pdf.pages:
                 for cells in _byma_rows(page.extract_words()):
-                    # Format: name, ticker, an optional market, and the ratio last in "N:N" format, so the
-                    # header and footer rows never match.
-                    ratio_match = re.fullmatch(rf"(\d+){re.escape(BYMA_RATIO_SEPARATOR)}(\d+)", cells[-1])
-                    if not ratio_match:
-                        continue
-                    # Three cells (no market) or four. Anything else is a layout this parser does not
-                    # know, and is skipped by name rather than guessed at.
-                    if len(cells) not in (3, 4):
-                        skipped.append(" | ".join(cells))
-                        continue
-                    ticker = cells[1].upper()
+                    ratio_match = re.fullmatch(rf"(\d+){re.escape(BYMA_RATIO_SEPARATOR)}(\d+)", cells[-1][1])
+                    if ratio_match:
+                        rows.append((cells, ratio_match))
+        columns = _byma_columns([cells for cells, _ in rows])
+        if columns is None:
+            logger.warning("BYMA CEDEAR PDF: could not place its columns; no ratios read from %d rows.", len(rows))
+            return results
+        ticker_starts, market_starts = columns
+        for cells, ratio_match in rows:
+            # Exactly one cell in the ticker column. A row with none, or two, is a layout this parser does
+            # not know, and is skipped by name rather than guessed at.
+            in_ticker_column = [text for x0, text in cells[:-1] if ticker_starts <= x0 < market_starts]
+            if len(in_ticker_column) != 1 or " " in in_ticker_column[0] or not any(c.isalnum() for c in in_ticker_column[0]):
+                skipped.append(" | ".join(text for _, text in cells))
+                continue
+            ticker = in_ticker_column[0].upper()
 
-                    if not any(c.isalnum() for c in ticker) or " " in ticker:
-                        skipped.append(" | ".join(cells))
-                        continue
+            # Parse ratio.
+            numerator = int(ratio_match.group(1))
+            denominator = int(ratio_match.group(2))
+            if denominator == 0:
+                continue
+            ratio_val = Decimal(numerator) / Decimal(denominator)
 
-                    # Parse ratio.
-                    numerator = int(ratio_match.group(1))
-                    denominator = int(ratio_match.group(2))
-                    if denominator == 0:
-                        continue
-                    ratio_val = Decimal(numerator) / Decimal(denominator)
+            if ratio_val <= 0:
+                continue
 
-                    if ratio_val <= 0:
-                        continue
+            cedear_ticker = ticker if ticker.endswith(BYMA_BYMA_SUFFIX) else f"{ticker}{BYMA_BYMA_SUFFIX}"
+            underlying = ticker.replace(BYMA_BYMA_SUFFIX, "")
 
-                    cedear_ticker = ticker if ticker.endswith(BYMA_BYMA_SUFFIX) else f"{ticker}{BYMA_BYMA_SUFFIX}"
-                    underlying = ticker.replace(BYMA_BYMA_SUFFIX, "")
-
-                    results.append((cedear_ticker, underlying, ratio_val))
+            results.append((cedear_ticker, underlying, ratio_val))
 
         if skipped:
             logger.warning("BYMA CEDEAR PDF: skipped %d rows whose cells do not read as a CEDEAR row: %s", len(skipped), skipped)

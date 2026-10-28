@@ -19,9 +19,10 @@ from app.services import price_providers
 # market, a dotted ticker, a ticker ending in a digit and a zero-padded ratio. More carry the tickers and
 # markets of live rows an earlier parser got wrong (their names and ratios are stand-ins): the "New York"
 # and "OTC US" markets (read as tickers YORK and US), a ticker that is itself a market word (GS), the
-# CBOE, NASDAQ CM and BOVESPA markets, and the six live rows whose market cell is EMPTY — which as one line
-# of text look exactly like a row on a one-word market, so only the column gap tells them apart. A row
-# with a fifth cell is a layout the parser does not know, and is skipped by name.
+# CBOE, NASDAQ CM and BOVESPA markets, the six live rows whose market cell is EMPTY — which as one line of
+# text look exactly like a row on a one-word market — and Sabesp, whose name wraps onto two lines with
+# its ticker, market and ratio on a line of their own between them (read once as ticker "NYSE"). A row
+# with nothing in the ticker column is a layout the parser does not know, and is skipped by name.
 #
 # The PDF's filename carries the edition's date, which the live file puts FIRST; an older edition put it
 # last. Both must yield it.
@@ -65,7 +66,8 @@ _PAGES = [
         ("Stand-in NLM", "NLM", "", "1:1"),
         ("Stand-in OGZD", "OGZD", "", "1:1"),
         ("Stand-in SMSN", "SMSN", "", "1:1"),
-        ("Odd Layout Co", "ODD", "NYSE", "note", "1:1"),
+        ("Odd Layout Co", "", "NYSE", "1:1"),
+        (("Companhia de Saneamento Basico", "do Estado de Sao Paulo"), "SBS", "NYSE", "1:2"),
     ],
 ]
 
@@ -99,6 +101,7 @@ _EXPECTED = [
     ("NLM.BA", "NLM", Decimal(1)),
     ("OGZD.BA", "OGZD", Decimal(1)),
     ("SMSN.BA", "SMSN", Decimal(1)),
+    ("SBS.BA", "SBS", Decimal(1) / Decimal(2)),
 ]
 
 
@@ -114,7 +117,7 @@ def _bold(x: float, top: float, size: float, text: str) -> list[str]:
 
 
 # One page's content stream: header, rows, footer.
-def _page_stream(rows: list[tuple[str, ...]], number: int) -> bytes:
+def _page_stream(rows: list[tuple], number: int) -> bytes:
     ops = [
         *_bold(57, 72, 8.5, "CEDEARs Negociables en BYMA"),
         *_bold(281, 92, 5.6, "Código Mercado donde"),
@@ -122,14 +125,15 @@ def _page_stream(rows: list[tuple[str, ...]], number: int) -> bytes:
         *_bold(406, 99, 5.6, "Ratio (*)"),
         *_bold(281, 106, 5.6, "BYMA Cotiza"),
     ]
-    for index, (name, ticker, market, ratio, *extra) in enumerate(rows):
+    for index, (name, ticker, market, ratio) in enumerate(rows):
         top = 170 + index * 12.7
+        # A wrapped name sits a line above and a line below the rest of its row, as the live file sets it.
+        names = [(top - 6.7, name[0]), (top + 6.3, name[1])] if isinstance(name, tuple) else [(top, name)]
         ops += [
-            _text(57, top, 6.4, name),
-            _text(283, top, 6.4, ticker),
+            *[_text(57, line_top, 6.4, line) for line_top, line in names],
+            *([_text(283, top, 6.4, ticker)] if ticker else []),
             *([_text(349, top, 6.4, market)] if market else []),
             _text(412, top - 0.4, 7.1, ratio),
-            *[_text(470, top, 6.4, cell) for cell in extra],
         ]
     ops += [
         _text(57, 740, 5.6, "Bolsas y Mercados Argentinos S.A. Actualizado 16/09/2026"),
@@ -203,7 +207,7 @@ class TestTheBYMAPdfParses:
         assert result.ratios == _EXPECTED
         # The one row it could not read is named, so a layout change reads as a list of rows, not a count.
         assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
-            "BYMA CEDEAR PDF: skipped 1 rows whose cells do not read as a CEDEAR row: ['Odd Layout Co | ODD | NYSE | note | 1:1']"
+            "BYMA CEDEAR PDF: skipped 1 rows whose cells do not read as a CEDEAR row: ['Odd Layout Co | NYSE | 1:1']"
         ]
 
     @pytest.mark.asyncio

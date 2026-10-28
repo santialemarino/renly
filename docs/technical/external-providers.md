@@ -155,13 +155,15 @@ reached costs a round trip and reports an outage that is its own.
 | Provider | Format | Notes                                                                                             |
 | -------- | ------ | ------------------------------------------------------------------------------------------------- |
 | Comafi   | Excel  | Primary. Principal CEDEAR issuer (90%+ programs). Fixed URL. ~306 ratios.                         |
-| BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~401 ratios. Parsed with pdfplumber. |
+| BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~446 ratios. Parsed with pdfplumber. |
 
 BYMA's edition date is read from anywhere in the PDF's filename (the live file leads with it,
-`2026-09-16-BYMA-CEDEARs.pdf`). Each row is a table row — name, ticker, an optional market, ratio — and is
-split into its cells by the horizontal gap between words (`BYMA_CELL_GAP`), so the ticker is the second
-cell whatever the market is, two words, unknown or empty. A row that is not three or four cells ending in
-a ratio is skipped and named in a warning.
+`2026-09-16-BYMA-CEDEARs.pdf`). Each row is a table row — name, ticker, an optional market, ratio — split
+into cells by the horizontal gap between words (`BYMA_CELL_GAP`), and each cell is placed in its column by
+where it starts; the column boundaries are read off the full rows themselves. The ticker is the cell in
+the ticker column, so a market of two words, an unknown one, an empty one, or a name wrapped onto two
+lines around the rest of its row all read correctly. A ratio row with no single cell in the ticker column
+is skipped and named in a warning.
 
 The service fetches both in parallel (`asyncio.gather`). Selection: newer source date wins → more entries breaks ties → Comafi preferred if still tied.
 
