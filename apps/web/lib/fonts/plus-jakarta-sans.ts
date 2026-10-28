@@ -10,11 +10,14 @@ import localFont from 'next/font/local';
  * OFL 1.1 — the licence sits next to the file and travels with it.
  *
  * The root layout and the global error page both import THIS one definition, so the page and its
- * last-resort fallback can never render in two different faces.
+ * last-resort fallback can never render in two different faces. Both set its `variable` too, which the
+ * `font-sans` theme token names, so a `font-sans` element renders this face rather than a family name
+ * next/font never registers.
  */
 export const plusJakartaSans = localFont({
   src: './plus-jakarta-sans-variable.woff2',
   weight: '400 700',
   style: 'normal',
   display: 'swap',
+  variable: '--font-plus-jakarta-sans',
 });

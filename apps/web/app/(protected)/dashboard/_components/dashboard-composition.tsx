@@ -17,6 +17,7 @@ import {
   DONUT_INNER_RADIUS,
   DONUT_OUTER_RADIUS,
   DONUT_PADDING_ANGLE,
+  DONUT_STROKE_WIDTH,
   TOOLTIP_ANIMATION_DURATION,
   TOOLTIP_BG,
   TOOLTIP_BORDER,
@@ -107,6 +108,7 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
                       innerRadius={DONUT_INNER_RADIUS}
                       outerRadius={DONUT_OUTER_RADIUS}
                       paddingAngle={DONUT_PADDING_ANGLE}
+                      strokeWidth={DONUT_STROKE_WIDTH}
                       animationDuration={CHART_ANIMATION_DURATION}
                       animationEasing={CHART_ANIMATION_EASING}
                     >

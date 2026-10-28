@@ -53,8 +53,23 @@ describe('self-hosted font', () => {
     expect(roots.length).toBeGreaterThan(0);
     for (const [path, source] of roots) {
       expect(source, path).toMatch(/from '@\/lib\/fonts\/plus-jakarta-sans'/);
-      expect(source, path).toMatch(/<html className=\{plusJakartaSans\.className\}/);
+      // The face itself, and the variable the `font-sans` theme token reads.
+      const html = source.match(/^\s*<html\b[^>]*>/m)?.[0] ?? '';
+      expect(html, path).toMatch(/plusJakartaSans\.className\b/);
+      expect(html, path).toMatch(/plusJakartaSans\.variable\b/);
     }
+  });
+
+  it('the font-sans theme token names the variable that module sets', () => {
+    const source = readFileSync(join(WEB_ROOT, FONT_MODULE), 'utf8');
+    const variable = source.match(/variable:\s*'(--[\w-]+)'/)?.[1];
+    expect(variable).toBeDefined();
+    const theme = readFileSync(
+      join(WEB_ROOT, '..', '..', 'packages/ui/src/styles/theme.css'),
+      'utf8',
+    );
+    const fontSans = theme.match(/--font-sans:\s*([^;]+);/)?.[1] ?? '';
+    expect(fontSans.trimStart().startsWith(`var(${variable}`)).toBe(true);
   });
 
   it('the font file it loads is committed, with its licence beside it', () => {
