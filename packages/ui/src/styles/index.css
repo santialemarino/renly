@@ -76,6 +76,12 @@
   --stone-700: oklch(0.327 0.005 55.45);
   --schemes-error-container: oklch(0.9221 0.0301 22.78);
   --schemes-error: oklch(0.5013 0.1783 28.7);
+
+  /* `text-heading-1` steps down on phones, where 48px wraps a short headline onto five lines. */
+  --heading-1-size: 2.25rem; /* 36px */
+  @variant sm {
+    --heading-1-size: 3rem; /* 48px */
+  }
 }
 
 @layer base {

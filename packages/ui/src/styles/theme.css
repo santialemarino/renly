@@ -87,7 +87,7 @@
   /* Typography */
   /* Important: all custom font-sizes below should be added to the customTwMerge config in the utils.ts file */
   /* Headings */
-  --text-heading-1: 3rem; /* 48px */
+  --text-heading-1: var(--heading-1-size); /* 36px on phones, 48px from sm (set in index.css) */
   --text-heading-1--line-height: 1;
   --text-heading-1--font-weight: 600;
 

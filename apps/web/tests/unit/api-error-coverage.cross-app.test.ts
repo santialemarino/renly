@@ -169,10 +169,10 @@ describe('API error codes are localized', () => {
 
   it('derives the code list from every source', () => {
     // A guard on the guard: a moved directory or a narrowed scan would otherwise make every case
-    // below vacuous. 95 domain-error codes plus 10 emitted outside errors.py as of U34b (the 422 and
-    // 429 handlers' codes joined then).
-    expect(codes.length).toBeGreaterThanOrEqual(105);
-    expect(codes.length - fromDomainErrors.length).toBeGreaterThanOrEqual(10);
+    // below vacuous. 98 domain-error codes plus 9 emitted outside errors.py as of U36 (the 422 and
+    // 429 handlers' codes joined in U34b; the router's one multi-cycle code became three domain errors).
+    expect(codes.length).toBeGreaterThanOrEqual(107);
+    expect(codes.length - fromDomainErrors.length).toBeGreaterThanOrEqual(9);
     // And that the payload half is really being read, not defaulting to empty for everything.
     expect(
       Object.values(scanned.payloads).filter((variants) => variants.some((keys) => keys.length > 0))

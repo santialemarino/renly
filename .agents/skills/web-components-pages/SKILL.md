@@ -160,7 +160,7 @@ Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-x
 | `text-paragraph-mini-semibold` | 10px | 600 |
 
 **Heading scale** (all weight 600, line-height included):
-`text-heading-1` (48px) → `text-heading-2` (32px) → `text-heading-3` (24px) → `text-heading-4` (20px) → `text-heading-5` (18px)
+`text-heading-1` (36px below `sm`, 48px from `sm`) → `text-heading-2` (32px) → `text-heading-3` (24px) → `text-heading-4` (20px) → `text-heading-5` (18px)
 
 **Rules:**
 

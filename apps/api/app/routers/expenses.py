@@ -178,23 +178,20 @@ async def create_expense(
     session: SessionDep,
 ) -> ExpenseResponse:
     if body.cycles_to_advance > 1:
-        try:
-            entry, advance_result = await expense_service.create_expenses_for_obligation_cycles(
-                session,
-                current_user,
-                cycles=body.cycles_to_advance,
-                date=body.date,
-                amount=body.amount,
-                currency=body.currency,
-                category=body.category,
-                notes=body.notes,
-                payment_method=body.payment_method,
-                credit_card_id=body.credit_card_id,
-                source=body.source,
-                payment_obligation_id=body.payment_obligation_id,  # type: ignore[arg-type]
-            )
-        except ValueError as exc:
-            raise CodedHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc), code="expense_cycle_invalid") from exc
+        entry, advance_result = await expense_service.create_expenses_for_obligation_cycles(
+            session,
+            current_user,
+            cycles=body.cycles_to_advance,
+            date=body.date,
+            amount=body.amount,
+            currency=body.currency,
+            category=body.category,
+            notes=body.notes,
+            payment_method=body.payment_method,
+            credit_card_id=body.credit_card_id,
+            source=body.source,
+            payment_obligation_id=body.payment_obligation_id,  # type: ignore[arg-type]
+        )
     else:
         entry, advance_result = await expense_service.create_expense(
             session,

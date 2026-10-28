@@ -3,8 +3,8 @@ from sqlmodel import select
 
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
-from app.repositories.expense_repository import sort_columns as expense_sort_columns
-from app.repositories.income_repository import sort_columns as income_sort_columns
+from app.repositories.expense_repository import _sort_columns as expense_sort_columns
+from app.repositories.income_repository import _sort_columns as income_sort_columns
 from app.repositories.utils import apply_entry_sort
 
 # GET /expenses and GET /income advertised sortable columns in the UI but discarded sort_by, so a
