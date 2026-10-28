@@ -165,13 +165,14 @@ async def delete(session: AsyncSession, account: Account) -> None:
 # its own history has become invisible to, and a pot whose children still name it can never be deleted
 # (every pot_id foreign key is ON DELETE RESTRICT). They are updated by PARENT id rather than by their
 # own old scope, so a child that had somehow drifted is corrected rather than left behind. The account
-# goes FIRST: a trigger holds every reconciliation to its account's current scope, so the children can
-# only follow it.
+# goes FIRST: triggers hold every reconciliation to its account's current scope and every transfer to
+# both of its legs', so the children can only follow it.
 #
 # A transfer follows its legs, matched on EITHER one. That is consistent only because both legs always
 # land in one scope: a caller moves either a whole pot's accounts (absorption on account deletion) or
 # accounts carrying no transfer at all (move_holdings and contributing a holding refuse them), so on
-# those paths the statement matches no row.
+# those paths the statement matches no row. A caller that moved one leg of a transfer without the other
+# would have this statement refused by the transfer trigger, rather than leave the legs disagreeing.
 async def move_to_scope(session: AsyncSession, ids: list[int], *, pot_id: int | None, user_id: int | None) -> int:
     if not ids:
         return 0
