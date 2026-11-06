@@ -41,8 +41,9 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- NOLOGIN: nothing ever connects as it. It exists so the SECURITY DEFINER functions (the three policy
--- helpers and the reconciliation-scope trigger function) run as a role that bypasses RLS WITHOUT
+-- NOLOGIN: nothing ever connects as it. It exists so the five SECURITY DEFINER functions (the three
+-- policy helpers and the two scope-trigger functions, app_reconciliation_follows_account and
+-- app_transfer_follows_accounts) run as a role that bypasses RLS WITHOUT
 -- being the table owner — under FORCE the owner is subject to the policies,
 -- and a helper running as the owner re-enters the very policy that called it (group_members'
 -- policy calls app_is_group_member, which reads group_members) until the stack runs out.

@@ -1,3 +1,8 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# vite arrives only as a peer of vitest and vite-tsconfig-paths. Held to 6.x so a `pnpm update` cannot
+# drift it to a new major, at the lowest version clear of its advisories.
+overrides:
+  vite: ^6.4.5

@@ -6,6 +6,7 @@ import pytest
 
 from app.domain import AdvanceResult, ReverseResult
 from app.models.expense_entry import ExpenseEntry
+from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
 from app.services import (
     card_reconciliation_service,
@@ -58,8 +59,21 @@ def _silence_card_stale(monkeypatch):
     monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", AsyncMock())
     # The SEC-4 ownership guard runs before the transition logic. These tests operate on
     # owned FKs, so stub every ownership lookup as "owned" to keep the focus on orchestration.
-    for repo in ("credit_card_repository", "payment_obligation_repository", "subscription_repository", "installment_repository"):
+    for repo in ("credit_card_repository", "subscription_repository", "installment_repository"):
         monkeypatch.setattr(getattr(expense_service, repo), "get_by_id", AsyncMock(return_value=object()))
+    # A linked obligation is a real row: the edit reads its cursor before advancing it.
+    obligation = PaymentObligation(
+        id=1,
+        user_id=1,
+        name="Owned",
+        amount=Decimal("100"),
+        currency="ARS",
+        next_due_date=date(2026, 5, 15),
+        anchor_day=15,
+        recurrence="monthly",
+        is_active=True,
+    )
+    monkeypatch.setattr(expense_service.payment_obligation_repository, "get_by_id", AsyncMock(return_value=obligation))
 
 
 def _mock_repos(monkeypatch, entry: ExpenseEntry):
