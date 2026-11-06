@@ -19,6 +19,7 @@ from app.domain import (
 )
 from app.domain.list_scope import ListScope, build_sections
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
+from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
 from app.repositories import (
     credit_card_repository,
@@ -256,7 +257,9 @@ async def _insert_expense_row(
 
 # Validates that every provided FK belongs to the user, raising NotFoundError (router -> 404) for
 # any that don't. Stops an expense from being attached to — or stale-marking — another user's
-# credit card / payment obligation / subscription / installment (SEC-4).
+# credit card / payment obligation / subscription / installment (SEC-4). Returns the payment obligation
+# it loaded (None when no payment_obligation_id was given), so a caller can check its cursor without a
+# second read.
 async def _validate_owned_fks(
     session: AsyncSession,
     user: User,
@@ -265,15 +268,33 @@ async def _validate_owned_fks(
     payment_obligation_id: int | None = None,
     subscription_id: int | None = None,
     installment_id: int | None = None,
-) -> None:
+) -> PaymentObligation | None:
     if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
         raise NotFoundError("Credit card not found")
-    if payment_obligation_id is not None and await payment_obligation_repository.get_by_id(session, payment_obligation_id, user.id) is None:
-        raise NotFoundError("Payment obligation not found")
+    obligation: PaymentObligation | None = None
+    if payment_obligation_id is not None:
+        obligation = await payment_obligation_repository.get_by_id(session, payment_obligation_id, user.id)
+        if obligation is None:
+            raise NotFoundError("Payment obligation not found")
     if subscription_id is not None and await subscription_repository.get_by_id(session, subscription_id, user.id) is None:
         raise NotFoundError("Subscription not found")
     if installment_id is not None and await installment_repository.get_by_id(session, installment_id, user.id) is None:
         raise NotFoundError("Installment not found")
+    return obligation
+
+
+# Refuses advancing a recurring obligation `cycles` times when the last step would move its cursor past
+# the last representable date (year 9999). next_due_date has no upper bound, and the date math raises on
+# such a step — a 500 — after the expense row is already written. Counted in months, before any write.
+# One-off and unknown recurrences never move the date, so they pass. Raises ExpenseCyclesOutOfRangeError.
+def _ensure_cursor_stays_a_date(obligation: PaymentObligation, cycles: int) -> None:
+    step = OBLIGATION_MONTH_STEP.get(obligation.recurrence) if obligation.recurrence is not None else None
+    if step is None:
+        return
+    due = obligation.next_due_date
+    last_month = due.year * 12 + due.month - 1 + cycles * step
+    if last_month // 12 > date_type.max.year:
+        raise ExpenseCyclesOutOfRangeError(MAX_CYCLES_PER_MARK_PAID)
 
 
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
@@ -284,7 +305,8 @@ async def _validate_owned_fks(
 # Returns (entry, advance_result) — advance_result is None unless one of the three plan branches
 # actually moved the cursor (Phase 3, follow-up Item 7); the router includes it in the response
 # so the frontend toast can announce the schedule change. Mutual exclusivity at the schema layer
-# means at most one branch fires per save.
+# means at most one branch fires per save. A recurring obligation whose next step would pass year 9999
+# is refused with ExpenseCyclesOutOfRangeError (400) before the row is written, as the multi-cycle walk is.
 async def create_expense(
     session: AsyncSession,
     user: User,
@@ -302,7 +324,7 @@ async def create_expense(
     subscription_id: int | None = None,
     installment_id: int | None = None,
 ) -> tuple[ExpenseEntry, AdvanceResult | None]:
-    await _validate_owned_fks(
+    obligation = await _validate_owned_fks(
         session,
         user,
         credit_card_id=credit_card_id,
@@ -310,6 +332,8 @@ async def create_expense(
         subscription_id=subscription_id,
         installment_id=installment_id,
     )
+    if obligation is not None:
+        _ensure_cursor_stays_a_date(obligation, 1)
     await account_service.validate_account_link(session, user, account_id, currency)
     entry = await _insert_expense_row(
         session,
@@ -390,13 +414,7 @@ async def create_expenses_for_obligation_cycles(
     # for unrecognised recurrence values).
     if obligation.recurrence is None or obligation.recurrence not in OBLIGATION_MONTH_STEP:
         raise ExpenseCycleObligationNotRecurringError()
-    # The walk's last cursor must still be a date. next_due_date has no upper bound, and a step past
-    # year 9999 raises from the date math mid-loop — a 500. Refused up front, before any row is
-    # inserted, by counting months rather than catching the overflow.
-    due = obligation.next_due_date
-    last_month = due.year * 12 + due.month - 1 + cycles * OBLIGATION_MONTH_STEP[obligation.recurrence]
-    if last_month // 12 > date_type.max.year:
-        raise ExpenseCyclesOutOfRangeError(MAX_CYCLES_PER_MARK_PAID)
+    _ensure_cursor_stays_a_date(obligation, cycles)
 
     first_previous_cursor: str | None = None
     last_entry: ExpenseEntry | None = None
