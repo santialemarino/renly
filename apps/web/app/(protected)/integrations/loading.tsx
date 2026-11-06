@@ -1,14 +1,20 @@
 import { PageSkeleton } from '@/app/(protected)/_components/page-skeleton';
 import { IntegrationsSections } from '@/app/(protected)/integrations/_components/integrations-sections';
-import { UNSET_SETTINGS } from '@/lib/api/settings';
+import { getApiKeys } from '@/lib/api/api-keys';
+import { getSettings } from '@/lib/api/settings';
 
-// The page as an account without API keys sees it: a key list is data this state cannot know.
-export default function IntegrationsLoading() {
+// The page's own reads (request-cached, shared with the page), so the key list has the page's rows.
+export default async function IntegrationsLoading() {
+  const [apiKeys, settings] = await Promise.all([
+    getApiKeys().catch(() => []),
+    getSettings().catch(() => null),
+  ]);
+
   return (
     <PageSkeleton
       namespace="integrations"
       body="page"
-      content={<IntegrationsSections apiKeys={[]} settings={UNSET_SETTINGS} />}
+      content={<IntegrationsSections apiKeys={apiKeys} settings={settings} />}
     />
   );
 }

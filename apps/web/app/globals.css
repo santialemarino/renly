@@ -208,9 +208,11 @@
 }
 
 /*
- * The protected pages' entrance (`app/(protected)/template.tsx` sets the two variables from
- * `lib/constants/animations.ts`). Raw selectors rather than utilities because the entrance hangs on a
- * `:has()` over the route's loading state, which Next renders inside the template.
+ * The protected pages' entrance (`PageEntrance`, rendered by the protected template, sets the two
+ * variables from `lib/constants/animations.ts` and adds what CSS cannot do: a minimum display time
+ * once the loading state has shown, and a fade between pages of one section). Raw selectors rather
+ * than utilities because the entrance hangs on a `:has()` over the route's loading state, which Next
+ * renders inside the template.
  *
  * - The page fades in once, opacity only, whenever it is mounted without a loading state in front of
  *   it — straight away on a navigation whose content is ready, or the moment the loading state gives
@@ -219,7 +221,7 @@
  * - The loading state stays invisible for `--page-skeleton-delay`, then fades in. A load that finishes
  *   inside the delay therefore paints nothing in between: the whole page appears with the one fade.
  *
- * Plain CSS, so it runs on the server-rendered HTML before hydration and never holds content back.
+ * Plain CSS, so it runs on the server-rendered HTML before hydration.
  */
 @keyframes page-entrance {
   from {

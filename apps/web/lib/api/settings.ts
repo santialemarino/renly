@@ -51,8 +51,8 @@ export interface SettingsData {
 
 /*
  * Settings with nothing stored — what a new account has, every field falling back to its default. A
- * settings page's loading state renders the page's own form with these (see `PageSkeleton`'s
- * `body="page"`), since the account's real settings are what it is waiting for.
+ * settings page's loading state renders the page's own form (see `PageSkeleton`'s `body="page"`)
+ * with the user's settings, and with these when that read fails.
  */
 export const UNSET_SETTINGS: SettingsData = {
   primaryCurrency: null,
