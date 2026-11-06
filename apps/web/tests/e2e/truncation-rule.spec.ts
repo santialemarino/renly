@@ -47,9 +47,9 @@ async function render(page: Page, body: string): Promise<void> {
         };
         trigger.addEventListener('mouseenter', show);
         trigger.addEventListener('mouseleave', hide);
-        // Opt-in focus wiring, on the trigger or on the button around it, like TruncatingTooltip's.
+        // Opt-in focus wiring, on the trigger or on the control around it, like TruncatingTooltip's.
         if (!('tooltipOnFocus' in trigger.dataset)) return;
-        const host = trigger.closest('button') ?? trigger;
+        const host = trigger.closest('button, [role="gridcell"]') ?? trigger;
         host.addEventListener('focus', show);
         host.addEventListener('blur', hide);
         host.addEventListener('keydown', (event) => {
@@ -221,6 +221,35 @@ test.describe('a tooltip cue has to be reachable from the keyboard too', () => {
   test('a focusable scroll region around a trigger is not a way to reach it', async ({ page }) => {
     // The region is a stop the keyboard scrolls with (a wide table's container), not a control.
     await render(page, inRegion(trigger('data-tooltip-on-focus')));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
+  });
+
+  // A one-row roving grid: the cell beside the trigger's holds the grid's one stop.
+  const inGrid = (inner: string, cellTabIndex: string, otherTabIndex: string) =>
+    `<table role="grid" aria-label="Grilla" style="table-layout: fixed; width: 120px"><tbody><tr>` +
+    `<td role="gridcell" tabindex="${otherTabIndex}">1</td>` +
+    `<td role="gridcell" ${cellTabIndex}>${inner}</td></tr></tbody></table>`;
+
+  test('a trigger in a roving grid cell passes: the grid holds the stop, arrows reach the cell', async ({
+    page,
+  }) => {
+    await render(page, inGrid(trigger('data-tooltip-on-focus'), 'tabindex="-1"', '0'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toBeNull();
+  });
+
+  test('a grid cell is not reached when its grid holds no stop, or it cannot take focus', async ({
+    page,
+  }) => {
+    await render(page, inGrid(trigger('data-tooltip-on-focus'), 'tabindex="-1"', '-1'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
+    await render(page, inGrid(trigger('data-tooltip-on-focus'), '', '0'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
+  });
+
+  test('a control in a grid cell that is not the cell’s stop is not reached', async ({ page }) => {
+    // The cell hands its stop to its FIRST focusable; a second one inside it is never focused.
+    const second = `<button tabindex="-1">1</button><button tabindex="-1" style="display: block; width: 60px; padding: 0">${trigger('data-tooltip-on-focus')}</button>`;
+    await render(page, inGrid(second, '', '0'));
     expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
   });
 

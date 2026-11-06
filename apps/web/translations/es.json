@@ -149,7 +149,8 @@
       "unsupportedSwitch": "La conversión a {currency} no está disponible aún. Los montos individuales se siguen mostrando en la moneda en que se registraron, pero los totales y los gráficos los dejan afuera, así que van a marcar cero. Soporte disponible pronto.",
       "pinnedGroupLabel": "Comunes",
       "preferredGroupLabel": "Preferidas",
-      "otherGroupLabel": "Otras monedas"
+      "otherGroupLabel": "Otras monedas",
+      "searchShort": "Buscar..."
     },
     "typeToConfirm": {
       "label": "Escribí \"{name}\" para confirmar",
@@ -1885,7 +1886,8 @@
       "lockedAdd": "Solo un integrante con permiso de escritura puede valuar este fondo. Pediselo a un admin del grupo.",
       "skippedInvestments": "Quedaron afuera porque no se puede convertir su moneda: {names}.",
       "lockedAddLabel": "Gestionado por el fondo",
-      "returnIn": "Variación desde el snapshot anterior, medida en {currency}, la moneda propia de la inversión."
+      "returnIn": "Variación desde el snapshot anterior, medida en {currency}, la moneda propia de la inversión.",
+      "shares": "{count, plural, one {{quantity} acción} other {{quantity} acciones}}"
     },
     "form": {
       "titleCreate": "Agregar snapshot",

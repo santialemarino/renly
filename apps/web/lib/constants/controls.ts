@@ -11,6 +11,9 @@
  * Two edges, decided against that definition:
  *   * an editable region (`contenteditable`) IS one: the keyboard stops on it to type, and text inside
  *     it is content being edited, never a stop of its own;
+ *   * a grid's CELL (`role="gridcell"`, the snapshots grid) IS one: it is the grid's roving stop, the one
+ *     the arrows move between, so text cut inside it opens its tooltip when the cell gets keyboard focus
+ *     rather than becoming a second stop in a widget that is meant to be one;
  *   * a DISABLED button or field still counts. It is not a stop, but a focusable inside a `<button>` is
  *     invalid wherever the button is disabled or not, and once it is enabled the text would be the nested
  *     stop this rule exists to prevent. A cut label in it waits for the control to be enabled.
@@ -42,4 +45,5 @@ export const CONTROL_SELECTOR = [
   '[role="textbox"]',
   '[role="searchbox"]',
   '[role="treeitem"]',
+  '[role="gridcell"]',
 ].join(', ');

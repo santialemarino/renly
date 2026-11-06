@@ -30,6 +30,8 @@ interface RowActionButtonBaseProps {
    * table needs this — the one a spec drives.
    */
   testId?: string;
+  // A composite widget's roving tab stop (the snapshots grid): -1 while another cell holds the stop.
+  tabIndex?: number;
 }
 
 // Either an action (onClick) or pure navigation (href). A row action that only navigates must render
@@ -51,6 +53,7 @@ export function RowActionButton(props: RowActionButtonProps) {
     className,
     iconClassName,
     testId,
+    tabIndex,
   } = props;
   const buttonClassName = cn(
     'size-8',
@@ -70,6 +73,7 @@ export function RowActionButton(props: RowActionButtonProps) {
             className={buttonClassName}
             aria-label={tooltip}
             data-testid={testId}
+            tabIndex={tabIndex}
             asChild
           >
             <Link href={props.href}>{icon}</Link>
@@ -83,6 +87,7 @@ export function RowActionButton(props: RowActionButtonProps) {
             disabled={disabled}
             aria-label={tooltip}
             data-testid={testId}
+            tabIndex={tabIndex}
           >
             {icon}
           </Button>

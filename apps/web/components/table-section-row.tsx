@@ -16,6 +16,12 @@ interface TableSectionRowProps {
   colSpan: number;
   // The already-translated row count, because the noun differs per list ("4 holdings", "12 expenses").
   countLabel: string;
+  /*
+   * The header's stop in a composite widget's roving tab order (the snapshots grid): it goes on the link
+   * to the pot where there is one, and on the cell otherwise, so the header is still a cell the arrows
+   * reach. Unset, the header is plain table content.
+   */
+  tabIndex?: number;
 }
 
 /*
@@ -32,7 +38,7 @@ interface TableSectionRowProps {
  * A section whose rows carry no money column (an investment has no value here) shows its count alone —
  * a header figure the visible rows cannot add up to is exactly what X2's grouping exists to avoid.
  */
-export function TableSectionRow({ section, colSpan, countLabel }: TableSectionRowProps) {
+export function TableSectionRow({ section, colSpan, countLabel, tabIndex }: TableSectionRowProps) {
   const fmt = useFormatters();
   const tCommon = useTranslations('common');
 
@@ -54,10 +60,15 @@ export function TableSectionRow({ section, colSpan, countLabel }: TableSectionRo
     potName !== null && section.groupName !== null
       ? tCommon('scope.potInGroup', { pot: potName, group: section.groupName })
       : (potName ?? section.groupName ?? tCommon('scope.shared'));
+  const linked = isShared && potId !== null;
 
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="bg-muted/40 py-2">
+      <TableCell
+        colSpan={colSpan}
+        tabIndex={linked ? undefined : tabIndex}
+        className="bg-muted/40 py-2 outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring"
+      >
         {/*
          * STICKY to the left, and the whole content left-grouped rather than the figures pushed to
          * the far edge.
@@ -77,6 +88,7 @@ export function TableSectionRow({ section, colSpan, countLabel }: TableSectionRo
               href={sharedPotPath(potId)}
               color="brand"
               className="text-paragraph-sm-semibold"
+              tabIndex={tabIndex}
             >
               {label}
             </InlineLink>

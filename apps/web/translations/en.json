@@ -149,7 +149,8 @@
       "unsupportedSwitch": "Conversion to {currency} is not available yet. Individual amounts stay in the currency they were recorded in, but totals and charts leave them out, so they will read as zero. Support coming soon.",
       "pinnedGroupLabel": "Common",
       "preferredGroupLabel": "Preferred",
-      "otherGroupLabel": "Other currencies"
+      "otherGroupLabel": "Other currencies",
+      "searchShort": "Search..."
     },
     "typeToConfirm": {
       "label": "Type \"{name}\" to confirm",
@@ -1885,7 +1886,8 @@
       "lockedAdd": "Only a member with write access can value this pot. Ask a group admin for it.",
       "skippedInvestments": "Left out because their currency can't be converted: {names}.",
       "lockedAddLabel": "Managed by the pot",
-      "returnIn": "Change since the previous snapshot, measured in {currency}, the investment's own currency."
+      "returnIn": "Change since the previous snapshot, measured in {currency}, the investment's own currency.",
+      "shares": "{count, plural, one {{quantity} share} other {{quantity} shares}}"
     },
     "form": {
       "titleCreate": "Add snapshot",

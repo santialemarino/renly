@@ -46,6 +46,8 @@ export function TimezoneCombobox({
   const hasError = ariaInvalid === true || ariaInvalid === 'true';
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // The option cmdk highlights (by pointer or arrow key): the only one that carries a truncation tooltip.
+  const [highlighted, setHighlighted] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const q = search.toLowerCase();
 
@@ -102,7 +104,12 @@ export function TimezoneCombobox({
         align="start"
         sideOffset={8}
       >
-        <Command shouldFilter={false} className="gap-y-2">
+        <Command
+          shouldFilter={false}
+          value={highlighted}
+          onValueChange={setHighlighted}
+          className="gap-y-2"
+        >
           <CommandInput
             autoFocus
             value={search}
@@ -125,7 +132,17 @@ export function TimezoneCombobox({
                   setOpen(false);
                 }}
               >
-                <TruncatingTooltip text={formatIanaTimezone(tz)} className="text-paragraph-sm" />
+                {/*
+                 * A cut label's full text is a tooltip, but only on the highlighted option: a pointer
+                 * highlights what it is over, so that is the one a reader can hover. Mounting one per
+                 * option put ~420 tooltips and ResizeObservers on every open, which measured more than
+                 * half the time the list took to open.
+                 */}
+                {tz === highlighted ? (
+                  <TruncatingTooltip text={formatIanaTimezone(tz)} className="text-paragraph-sm" />
+                ) : (
+                  <span className="truncate text-paragraph-sm">{formatIanaTimezone(tz)}</span>
+                )}
               </CommandItem>
             ))}
           </CommandList>

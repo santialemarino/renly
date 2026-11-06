@@ -41,6 +41,8 @@ interface InlineLinkBaseProps {
   // Optional leading icon (rotates on hover, like the nav items); the underline stays under the text only.
   icon?: LucideIcon;
   className?: string;
+  // A composite widget's roving tab stop (a section header in the snapshots grid).
+  tabIndex?: number;
   children: React.ReactNode;
 }
 
@@ -62,7 +64,7 @@ type InlineLinkProps = InlineLinkBaseProps &
  * internal routes), otherwise a `<button>` for the action — the styling is identical.
  */
 export function InlineLink(props: InlineLinkProps) {
-  const { color = 'blue', size = 'sm', icon: Icon, className, children } = props;
+  const { color = 'blue', size = 'sm', icon: Icon, className, tabIndex, children } = props;
   const root = cn(
     'group/inline-link outline-none transition-colors duration-200 ease-out focus-visible:animate-focus-bump-subtle',
     // With an icon the root is a flex row (underline lives on the text span); without, the root is
@@ -86,7 +88,13 @@ export function InlineLink(props: InlineLinkProps) {
 
   if ('href' in props && props.href !== undefined && props.external) {
     return (
-      <a href={props.href} target="_blank" rel="noopener noreferrer" className={root}>
+      <a
+        href={props.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={root}
+        tabIndex={tabIndex}
+      >
         {content}
       </a>
     );
@@ -97,7 +105,7 @@ export function InlineLink(props: InlineLinkProps) {
   // delegation; without one the link still works, degrading to a native jump.
   if ('href' in props && props.href !== undefined && props.href.startsWith('#')) {
     return (
-      <a href={props.href} className={root}>
+      <a href={props.href} className={root} tabIndex={tabIndex}>
         {content}
       </a>
     );
@@ -110,6 +118,7 @@ export function InlineLink(props: InlineLinkProps) {
         download={props.download}
         prefetch={props.download ? false : undefined}
         className={root}
+        tabIndex={tabIndex}
       >
         {content}
       </Link>
@@ -117,7 +126,7 @@ export function InlineLink(props: InlineLinkProps) {
   }
 
   return (
-    <button type="button" onClick={props.onClick} className={root}>
+    <button type="button" onClick={props.onClick} className={root} tabIndex={tabIndex}>
       {content}
     </button>
   );

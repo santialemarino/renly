@@ -146,17 +146,20 @@ function grid(baseCurrency: string): SnapshotGridResponse {
 describe('snapshot period return currency', () => {
   const tooltip = (currency: string) =>
     messages.snapshots.grid.returnIn.replace('{currency}', currency);
+  // The return's own tooltip for a pointer, and the cell's hint for the keyboard, which say the same.
+  const expectTooltips = (text: string) =>
+    expect(screen.getAllByTestId('tooltip').map((el) => el.textContent)).toEqual([text, text]);
 
   it('names the base currency beside a value converted to another one', () => {
     render(wrap(<SnapshotsGrid grid={grid('ARS')} currency="USD" />));
     // The row's own currency line, plus the suffix on the return.
     expect(screen.getAllByText('ARS')).toHaveLength(2);
-    expect(screen.getByTestId('tooltip').textContent).toBe(tooltip('ARS'));
+    expectTooltips(tooltip('ARS'));
   });
 
   it('adds no suffix when the value is already in the base currency, but still says it', () => {
     render(wrap(<SnapshotsGrid grid={grid('USD')} currency="USD" />));
-    expect(screen.getByTestId('tooltip').textContent).toBe(tooltip('USD'));
+    expectTooltips(tooltip('USD'));
     // The row's own currency line is the only other "USD" on the grid.
     expect(screen.getAllByText('USD')).toHaveLength(1);
   });

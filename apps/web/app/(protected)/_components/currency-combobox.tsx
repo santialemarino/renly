@@ -310,7 +310,7 @@ export function CurrencyCombobox({
               autoFocus
               value={search}
               onValueChange={handleSearch}
-              placeholder={compact ? 'Search...' : searchPlaceholder}
+              placeholder={compact ? t('searchShort') : searchPlaceholder}
             />
             <Separator />
             <CommandList
