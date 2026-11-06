@@ -193,9 +193,9 @@ function CellContent({ cell, baseCurrency, displayCurrency, hint }: CellContentP
             <span
               className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums cursor-default ${
                 cell.periodReturnPct > 0
-                  ? 'text-emerald-600'
+                  ? 'text-emerald-700'
                   : cell.periodReturnPct < 0
-                    ? 'text-red-500'
+                    ? 'text-red-600'
                     : 'text-muted-foreground'
               }`}
             >
@@ -226,7 +226,7 @@ function CellContent({ cell, baseCurrency, displayCurrency, hint }: CellContentP
       {cell.hasTransaction && cell.transaction && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex items-center gap-x-0.5 text-paragraph-xs text-blue-500 shrink-0 cursor-default">
+            <span className="flex items-center gap-x-0.5 text-paragraph-xs text-blue-700 shrink-0 cursor-default">
               <CircleDollarSign className="size-3.5" />
               <MoneyFigure>
                 {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)
@@ -552,7 +552,7 @@ export function SnapshotsGrid({ grid, currency, firstRun }: SnapshotsGridProps) 
                       {overdueHint !== null && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="w-fit text-paragraph-mini-medium text-amber-600 cursor-default">
+                            <span className="w-fit text-paragraph-mini-medium text-amber-700 cursor-default">
                               {t('grid.overdue')}
                             </span>
                           </TooltipTrigger>
