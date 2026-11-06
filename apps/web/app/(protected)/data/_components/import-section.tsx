@@ -119,9 +119,8 @@ export function ImportSection({ initialType }: ImportSectionProps) {
             className={cn(
               'flex items-center px-3 py-1 rounded-full outline-none transition-all duration-200 cursor-pointer',
               'active:scale-95 focus-visible:ring-3 disabled:opacity-50 disabled:pointer-events-none text-paragraph-xs-medium',
-              // Focus ring tint matches the button variants: blue (active) ring like a blue button,
-              // neutral ring for the muted (inactive) tabs — so the active tab's keyboard focus reads
-              // distinct from the others.
+              // Focus ring tint matches the button variants: the active tab takes the blue button's ring,
+              // the muted (inactive) tabs the default ring.
               entity === key
                 ? 'bg-blue-800 text-white focus-visible:ring-blue-800/50'
                 : 'bg-muted text-foreground hover:bg-muted/70 focus-visible:ring-ring',

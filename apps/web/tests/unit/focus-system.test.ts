@@ -57,7 +57,7 @@ const APP = [
 ];
 const STYLED = [...APP, ...readSources(UI, ['.tsx', '.ts', '.css'])];
 
-describe('the neutral focus ring is solid', () => {
+describe('the focus ring is solid', () => {
   it('finds sources to check', () => {
     // A guard on the guard: an empty walk would pass every assertion below.
     expect(STYLED.length).toBeGreaterThan(150);
