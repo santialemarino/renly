@@ -22,7 +22,8 @@ from app.services import price_providers
 # CBOE, NASDAQ CM and BOVESPA markets, the six live rows whose market cell is EMPTY — which as one line of
 # text look exactly like a row on a one-word market — and Sabesp, whose name wraps onto two lines with
 # its ticker, market and ratio on a line of their own between them (read once as ticker "NYSE"). A row
-# with nothing in the ticker column is a layout the parser does not know, and is skipped by name.
+# with nothing in the ticker column, or with two cells in it, is a layout the parser does not know, and is
+# skipped by name.
 #
 # The PDF's filename carries the edition's date, which the live file puts FIRST; an older edition put it
 # last. Both must yield it.
@@ -67,6 +68,7 @@ _PAGES = [
         ("Stand-in OGZD", "OGZD", "", "1:1"),
         ("Stand-in SMSN", "SMSN", "", "1:1"),
         ("Odd Layout Co", "", "NYSE", "1:1"),
+        ("Two Ticker Co", ("TTA", "TTB"), "NYSE", "1:1"),
         (("Companhia de Saneamento Basico", "do Estado de Sao Paulo"), "SBS", "NYSE", "1:2"),
     ],
 ]
@@ -131,7 +133,9 @@ def _page_stream(rows: list[tuple], number: int) -> bytes:
         names = [(top - 6.7, name[0]), (top + 6.3, name[1])] if isinstance(name, tuple) else [(top, name)]
         ops += [
             *[_text(57, line_top, 6.4, line) for line_top, line in names],
-            *([_text(283, top, 6.4, ticker)] if ticker else []),
+            # Two tickers are two cells in the ticker column, the second well clear of the first.
+            *([_text(283, top, 6.4, ticker[0]), _text(304, top, 6.4, ticker[1])] if isinstance(ticker, tuple) else []),
+            *([_text(283, top, 6.4, ticker)] if isinstance(ticker, str) and ticker else []),
             *([_text(349, top, 6.4, market)] if market else []),
             _text(412, top - 0.4, 7.1, ratio),
         ]
@@ -207,7 +211,8 @@ class TestTheBYMAPdfParses:
         assert result.ratios == _EXPECTED
         # The one row it could not read is named, so a layout change reads as a list of rows, not a count.
         assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
-            "BYMA CEDEAR PDF: skipped 1 rows whose cells do not read as a CEDEAR row: ['Odd Layout Co | NYSE | 1:1']"
+            "BYMA CEDEAR PDF: skipped 2 rows whose cells do not read as a CEDEAR row: "
+            "['Odd Layout Co | NYSE | 1:1', 'Two Ticker Co | TTA | TTB | NYSE | 1:1']"
         ]
 
     @pytest.mark.asyncio

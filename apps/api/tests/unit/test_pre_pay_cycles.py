@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.db import get_admin_session, get_auth_session, get_session
 from app.deps.api_key_auth import get_jwt_or_api_key_user
+from app.deps.auth import get_current_user
 from app.domain import (
     AdvanceResult,
     ExpenseCycleObligationGoneError,
@@ -384,6 +385,7 @@ def _client() -> TestClient:
     app.dependency_overrides[get_admin_session] = _fake_session
     app.dependency_overrides[get_auth_session] = _fake_session
     app.dependency_overrides[get_jwt_or_api_key_user] = lambda: USER
+    app.dependency_overrides[get_current_user] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -443,3 +445,57 @@ class TestEachRefusalReachesTheClientWithItsOwnCode:
         response = _client().post("/expenses", json={**_MULTI_CYCLE_BODY, "cycles_to_advance": 2})
         assert response.status_code == 201, response.json()
         assert obligation.next_due_date == date(9999, 1, 15)
+
+    def test_a_single_cycle_past_year_9999_answers_out_of_range_not_500(self, monkeypatch):
+        # The single-cycle Mark Paid path (no cycles_to_advance) advances through create_expense, not the
+        # walk. One monthly step from December 9999 has no date to land on; the REAL advance_or_archive
+        # runs (only its repository is mocked), so without the up-front check the row is inserted and
+        # the date math then raises: a 500.
+        _mock_insert(monkeypatch, _entry())
+        obligation = _obligation()
+        obligation.next_due_date = date(9999, 12, 15)
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "get_by_id", AsyncMock(return_value=obligation))
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "save", AsyncMock())
+        body = {key: value for key, value in _MULTI_CYCLE_BODY.items() if key != "cycles_to_advance"}
+        response = _client().post("/expenses", json=body)
+        assert (response.status_code, response.json()["code"]) == (400, "expense_cycles_out_of_range")
+        expense_service.expense_repository.create.assert_not_called()
+
+    def test_a_single_cycle_ending_in_year_9999_is_still_allowed(self, monkeypatch):
+        # The boundary of the check above: one monthly step from November 9999 lands in December 9999.
+        _mock_insert(monkeypatch, _entry())
+        obligation = _obligation()
+        obligation.next_due_date = date(9999, 11, 15)
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "get_by_id", AsyncMock(return_value=obligation))
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "save", AsyncMock())
+        monkeypatch.setattr(expense_service.settings_service, "retire_sample", AsyncMock())
+        body = {key: value for key, value in _MULTI_CYCLE_BODY.items() if key != "cycles_to_advance"}
+        response = _client().post("/expenses", json=body)
+        assert response.status_code == 201, response.json()
+        assert obligation.next_due_date == date(9999, 12, 15)
+
+    def _mock_edit_linking_obligation(self, monkeypatch, next_due_date: date) -> PaymentObligation:
+        entry = _entry()
+        entry.payment_obligation_id = None
+        monkeypatch.setattr(expense_service.expense_repository, "get_by_id", AsyncMock(return_value=entry))
+        monkeypatch.setattr(expense_service.expense_repository, "save", AsyncMock())
+        obligation = _obligation()
+        obligation.next_due_date = next_due_date
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "get_by_id", AsyncMock(return_value=obligation))
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "save", AsyncMock())
+        return obligation
+
+    def test_an_edit_linking_an_obligation_past_year_9999_answers_out_of_range_not_500(self, monkeypatch):
+        # PUT linking an unlinked expense to an obligation advances it once, through the REAL
+        # advance_or_archive. From December 9999 that step has no date, so without the up-front check
+        # the row is saved and the date math then raises: a 500.
+        self._mock_edit_linking_obligation(monkeypatch, date(9999, 12, 15))
+        response = _client().put("/expenses/99", json={"payment_obligation_id": 7})
+        assert (response.status_code, response.json()["code"]) == (400, "expense_cycles_out_of_range")
+        expense_service.expense_repository.save.assert_not_called()
+
+    def test_an_edit_linking_an_obligation_ending_in_year_9999_is_still_allowed(self, monkeypatch):
+        obligation = self._mock_edit_linking_obligation(monkeypatch, date(9999, 11, 15))
+        response = _client().put("/expenses/99", json={"payment_obligation_id": 7})
+        assert response.status_code == 200, response.json()
+        assert obligation.next_due_date == date(9999, 12, 15)
