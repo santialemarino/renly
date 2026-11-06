@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -36,9 +38,10 @@ function mapApiKey(raw: ApiKeyRaw): ApiKey {
 
 // --- API functions ---
 
-export async function getApiKeys(): Promise<ApiKey[]> {
+// Request-memoized, so the integrations page and its loading state share one /api-keys call.
+export const getApiKeys = cache(async (): Promise<ApiKey[]> => {
   const res = await authenticatedFetch('/api-keys', { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch API keys');
   const raw: ApiKeyRaw[] = await res.json();
   return raw.map(mapApiKey);
-}
+});

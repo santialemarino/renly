@@ -22,7 +22,7 @@ const TABLE_ROWS = 8;
 const DASHBOARD_TILES = 4;
 const FORM_FIELDS = 4;
 
-export type PageSkeletonBody = 'table' | 'dashboard' | 'form' | 'sections';
+export type PageSkeletonBody = 'table' | 'dashboard' | 'form' | 'sections' | 'page';
 
 export type PeriodPickerPlacement = 'header' | 'toolbar';
 
@@ -53,15 +53,25 @@ export interface ToolbarShape<Text = string> {
   actions?: ToolbarControl<Text>[];
 }
 
-interface PageSkeletonLayoutProps {
+/*
+ * What stands under the header: a generic placeholder of one of the page kinds, or — `body="page"` —
+ * the page's OWN sections as `content`, rendered with stand-in data and drawn as placeholders by
+ * `PageGhost`. The second is exact by construction (every label, field, rule and line of text sits
+ * where the page puts it, in either language, at any width), so a page whose content does not depend
+ * on how much data the account has uses it.
+ */
+type PageSkeletonBodyProps =
+  | { body: Exclude<PageSkeletonBody, 'page'>; content?: never }
+  | { body: 'page'; content: React.ReactNode };
+
+type PageSkeletonLayoutProps = PageSkeletonBodyProps & {
   // The muted "back to …" link a detail page opens with.
   backLink?: boolean;
   // The detail and wizard pages space their blocks `gap-y-6` rather than the list pages' `gap-y-4`.
   loose?: boolean;
-  body: PageSkeletonBody;
-}
+};
 
-interface PageSkeletonProps extends PageSkeletonLayoutProps {
+type PageSkeletonProps = PageSkeletonLayoutProps & {
   // The page's translation namespace, whose `title` and `subtitle` ARE its header. Omit it when the
   // page's title is DATA (an account's or a group's name), which a loading state cannot know.
   namespace?: string;
@@ -88,7 +98,7 @@ interface PageSkeletonProps extends PageSkeletonLayoutProps {
    * width, and it is never visible.
    */
   currencyFallback?: string;
-}
+};
 
 // What each route's `loading.tsx` renders: resolves the copy, then draws the view below.
 export async function PageSkeleton({
@@ -152,7 +162,7 @@ export async function PageSkeleton({
   );
 }
 
-interface PageSkeletonViewProps extends PageSkeletonLayoutProps {
+type PageSkeletonViewProps = PageSkeletonLayoutProps & {
   // The loading page's screen-reader status.
   status: string;
   // The page's real header. Omitted when the page's title is DATA (an account's or a group's name),
@@ -165,7 +175,7 @@ interface PageSkeletonViewProps extends PageSkeletonLayoutProps {
   notice?: React.ReactNode;
   // The period picker's labels, already translated, and where the page renders it.
   period?: { presets: string[]; custom: string; placement: PeriodPickerPlacement };
-}
+};
 
 /*
  * The one loading state every protected route renders, through `PageSkeleton` in its `loading.tsx`.
@@ -175,9 +185,10 @@ interface PageSkeletonViewProps extends PageSkeletonLayoutProps {
  * as the controls that replace them — so the swap to the loaded page moves nothing. The header is the
  * one part rendered for real: it is the part a user reads to know the navigation worked.
  *
- * The placeholder block fades in after a short delay rather than appearing at once, so a page that
- * loads quickly swaps straight from its header to its content instead of flashing grey bars. The fade
- * is opacity only, which the reduced-motion rule allows; the Skeleton's own pulse is gated in the base.
+ * The whole state, header included, stays invisible for `PAGE_SKELETON_DELAY_MS` and then fades in
+ * (`data-page-skeleton`, styled in `globals.css` and timed by the protected template). A page that
+ * loads within the delay never shows it: the page fades in once, whole. Under reduced motion it
+ * appears at once after the same delay; the Skeleton's own pulse is gated in the base.
  *
  * `aria-busy` marks the region that is still coming; the status line is what a screen reader
  * announces, since the placeholders themselves say nothing.
@@ -192,6 +203,7 @@ export function PageSkeletonView({
   period,
   notice,
   body,
+  content,
 }: PageSkeletonViewProps) {
   const header =
     title !== undefined && subtitle !== undefined ? (
@@ -213,7 +225,13 @@ export function PageSkeletonView({
 
   return (
     <div
-      className={cn('flex flex-col flex-1 p-8', loose ? 'gap-y-6' : 'gap-y-4')}
+      className={cn(
+        'flex flex-col flex-1 p-8',
+        loose ? 'gap-y-6' : 'gap-y-4',
+        // The settings pages' column, whose sections size to their own content.
+        body === 'page' && 'items-start',
+      )}
+      data-page-skeleton
       data-testid="page-skeleton"
       /*
        * Which skeleton this is, from its own props, so a test can tell two skeletons apart when their
@@ -243,32 +261,57 @@ export function PageSkeletonView({
       ) : (
         header
       )}
-      <div
-        aria-busy="true"
-        className="flex flex-col gap-y-4 animate-in fade-in fill-mode-backwards delay-150 duration-300"
-      >
-        {notice !== undefined && period?.placement === 'header' && (
-          <NoticePlaceholder>{notice}</NoticePlaceholder>
-        )}
-        {period?.placement === 'toolbar' && (
-          // The investor dashboard's row (`InvestorDashboardAnimatedToolbar`): the search grows, and the
-          // picker takes its own row until `xl`.
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-            <div className="min-w-0 flex-1">
-              <Skeleton className="h-9 rounded-lg" />
+      {body === 'page' ? (
+        <PageGhost>{content}</PageGhost>
+      ) : (
+        <div aria-busy="true" className="flex flex-col gap-y-4">
+          {notice !== undefined && period?.placement === 'header' && (
+            <NoticePlaceholder>{notice}</NoticePlaceholder>
+          )}
+          {period?.placement === 'toolbar' && (
+            // The investor dashboard's row (`InvestorDashboardAnimatedToolbar`): the search grows,
+            // and the picker takes its own row until `xl`.
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-9 rounded-lg" />
+              </div>
+              <div className="basis-full xl:basis-auto">
+                <PeriodPickerSkeleton presets={period.presets} custom={period.custom} />
+              </div>
             </div>
-            <div className="basis-full xl:basis-auto">
-              <PeriodPickerSkeleton presets={period.presets} custom={period.custom} />
-            </div>
-          </div>
-        )}
-        {toolbar === 'add-only' && <AddOnlyToolbarSkeleton />}
-        {toolbar && toolbar !== 'add-only' && <ToolbarSkeleton {...toolbar} />}
-        {body === 'table' && <TableSkeleton />}
-        {body === 'dashboard' && <DashboardSkeleton />}
-        {body === 'form' && <FormSkeleton />}
-        {body === 'sections' && <SectionsSkeleton />}
-      </div>
+          )}
+          {toolbar === 'add-only' && <AddOnlyToolbarSkeleton />}
+          {toolbar && toolbar !== 'add-only' && <ToolbarSkeleton {...toolbar} />}
+          {body === 'table' && <TableSkeleton />}
+          {body === 'dashboard' && <DashboardSkeleton />}
+          {body === 'form' && <FormSkeleton />}
+          {body === 'sections' && <SectionsSkeleton />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PageGhostProps {
+  children: React.ReactNode;
+}
+
+/*
+ * The page's own sections standing in for themselves: inert and hidden from assistive tech, and drawn
+ * by the `.page-ghost` rules in `globals.css` — text, icons and chrome transparent, each label,
+ * heading, paragraph, field, button and rule a placeholder block in its own box. `display: contents`
+ * leaves the sections laid out exactly as the page lays them out.
+ */
+function PageGhost({ children }: PageGhostProps) {
+  return (
+    <div
+      aria-busy="true"
+      aria-hidden="true"
+      className="page-ghost contents"
+      data-testid="page-skeleton-ghost"
+      inert
+    >
+      {children}
     </div>
   );
 }

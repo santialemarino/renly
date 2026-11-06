@@ -101,17 +101,20 @@ function isPrefetchRequest(req: Request, route: string): boolean {
 }
 
 /*
- * From `START`, navigates to `route` with its content held back and runs `whileHeld` while only the
- * prefetched loading state can be on screen; then releases the content and runs `afterRelease` once
- * that loading state is gone. Returns null when this server never prefetched the route (a dev server).
+ * From `from` (`START` unless given — a spec measuring `START` itself starts elsewhere), navigates to
+ * `route` with its content held back and runs `whileHeld` while only the prefetched loading state can
+ * be on screen; then releases the content and runs `afterRelease` once that loading state is gone.
+ * Returns null when this server never prefetched the route (a dev server).
  */
 export async function holdNavigation<Held, Released>(
   page: Page,
   route: string,
   whileHeld: () => Promise<Held>,
   afterRelease: () => Promise<Released>,
+  from: string = START,
 ): Promise<{ held: Held; released: Released } | null> {
-  await page.goto(START);
+  expect(from, 'a navigation must start on another page than the one it holds').not.toBe(route);
+  await page.goto(from);
   await expect(page.locator('main h1').first()).toBeVisible({ timeout: NAV_TIMEOUT });
 
   let release = () => {};

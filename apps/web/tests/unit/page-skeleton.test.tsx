@@ -61,4 +61,31 @@ describe('PageSkeletonView', () => {
     rerender(<PageSkeletonView status="Loading" title="Dashboard" body="dashboard" />);
     expect(screen.queryByText('Showing values in ARS.')).not.toBeInTheDocument();
   });
+
+  it("draws a page's own sections as an inert placeholder nothing can reach", () => {
+    render(
+      <PageSkeletonView
+        status="Loading"
+        title="Preferences"
+        subtitle="Your defaults"
+        body="page"
+        content={
+          <form>
+            <label htmlFor="currency">Primary currency</label>
+            <input id="currency" />
+            <button type="submit">Save</button>
+          </form>
+        }
+      />,
+    );
+
+    // The status line stays announceable; the stand-in sections are hidden from everyone.
+    expect(screen.getByRole('status')).toHaveTextContent('Loading');
+    const ghost = screen.getByTestId('page-skeleton-ghost');
+    expect(ghost).toHaveAttribute('inert');
+    expect(ghost).toHaveAttribute('aria-hidden', 'true');
+    expect(ghost).toHaveAttribute('aria-busy', 'true');
+    expect(ghost).toContainElement(screen.getByText('Save'));
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
 });
