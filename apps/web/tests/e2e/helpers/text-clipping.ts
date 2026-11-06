@@ -178,6 +178,11 @@ const KEYBOARD_STOP_ATTRIBUTE = 'data-text-keyboard-stop';
  * scroll it — is not where the text is reached: focusing it opens nothing, and it is not a substitute
  * for the text's own stop.
  *
+ * One kind of control is out of the tab order by design: a cell of a roving grid (`role="grid"`, the
+ * snapshots grid), where the grid is ONE stop and the arrows move it between cells. Such a cell counts
+ * as reached when it is focusable and its grid holds the stop; that the arrows really do reach every
+ * cell is the grid's own spec (`snapshots-grid-keyboard.auth.spec.ts`), not this sweep's.
+ *
  * Focus is moved by script right after a key press, which the browser treats as keyboard focus
  * (`:focus-visible`) — the focus a Tab gives, without walking the page's whole tab order. That the
  * element really is IN the tab order is read from `tabIndex`, the browser's own answer.
@@ -193,7 +198,13 @@ export async function tooltipOpensFromKeyboard(
     (element, { attribute, controlSelector }) => {
       const control = element.parentElement?.closest<HTMLElement>(controlSelector);
       const stop = (element as HTMLElement).tabIndex >= 0 ? element : control;
-      if (!stop || (stop as HTMLElement).tabIndex < 0) return false;
+      if (!stop) return false;
+      const grid = stop.closest('[role="grid"]');
+      const roving =
+        stop.hasAttribute('tabindex') &&
+        grid !== null &&
+        [...grid.querySelectorAll<HTMLElement>('[tabindex]')].some((el) => el.tabIndex >= 0);
+      if ((stop as HTMLElement).tabIndex < 0 && !roving) return false;
       stop.setAttribute(attribute, '');
       return true;
     },
