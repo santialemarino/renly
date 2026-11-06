@@ -180,7 +180,8 @@ const KEYBOARD_STOP_ATTRIBUTE = 'data-text-keyboard-stop';
  *
  * One kind of control is out of the tab order by design: a cell of a roving grid (`role="grid"`, the
  * snapshots grid), where the grid is ONE stop and the arrows move it between cells. Such a cell counts
- * as reached when it is focusable and its grid holds the stop; that the arrows really do reach every
+ * as reached when it is the cell's own stop (the cell, or the first focusable inside it, which is where
+ * the grid sends focus) and its grid holds the stop; that the arrows really do reach every
  * cell is the grid's own spec (`snapshots-grid-keyboard.auth.spec.ts`), not this sweep's.
  *
  * Focus is moved by script right after a key press, which the browser treats as keyboard focus
@@ -199,9 +200,18 @@ export async function tooltipOpensFromKeyboard(
       const control = element.parentElement?.closest<HTMLElement>(controlSelector);
       const stop = (element as HTMLElement).tabIndex >= 0 ? element : control;
       if (!stop) return false;
-      const grid = stop.closest('[role="grid"]');
+      // A roving grid's stop is the cell itself, or the one control the cell hands its stop to — its
+      // first focusable — and only while the grid holds the stop somewhere.
+      const cell = stop.closest<HTMLElement>('[role="gridcell"]');
+      const grid = cell?.closest('[role="grid"]') ?? null;
+      const cellStop =
+        cell === null
+          ? null
+          : cell.hasAttribute('tabindex')
+            ? cell
+            : cell.querySelector<HTMLElement>('[tabindex]');
       const roving =
-        stop.hasAttribute('tabindex') &&
+        stop === cellStop &&
         grid !== null &&
         [...grid.querySelectorAll<HTMLElement>('[tabindex]')].some((el) => el.tabIndex >= 0);
       if ((stop as HTMLElement).tabIndex < 0 && !roving) return false;

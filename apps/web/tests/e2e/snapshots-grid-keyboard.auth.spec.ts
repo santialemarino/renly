@@ -105,13 +105,29 @@ for (const locale of ['en', 'es'] as const) {
     await context.addCookies([
       { name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' },
     ]);
-    await page.setViewportSize(VIEWPORTS[locale]);
+    // The pointer check runs on a desktop, where the value is not under the sticky columns.
+    await page.setViewportSize(VIEWPORTS.en);
     await page.goto(SNAPSHOTS);
     const grid = page.getByRole('grid');
     const row = grid.getByRole('row').filter({ hasText: HOLDING });
     await expect(row).toBeVisible({ timeout: 20_000 });
     const sort = grid.getByRole('columnheader').first().getByRole('button');
     await waitForHydration(sort);
+
+    // A pointer over a filled cell's value gets that value's own tooltip, never the cell's combined
+    // hint, which is the keyboard's (it carries the change as well as the shares).
+    const value = row.getByRole('gridcell').nth(-2).locator('span').first();
+    await waitForHydration(value);
+    await value.hover();
+    await expect(openTooltip(page, COPY[locale].shares)).toHaveCount(1);
+    await expect(
+      openTooltip(page, COPY[locale].shares).filter({ hasText: COPY[locale].change }),
+    ).toHaveCount(0);
+    // Two moves away: Radix decides the pointer left on the move after the one that left.
+    await page.mouse.move(0, 0);
+    await page.mouse.move(1, 1);
+    await expect(openTooltip(page, COPY[locale].shares)).toHaveCount(0);
+    await page.setViewportSize(VIEWPORTS[locale]);
 
     // Tab lands on the grid's first cell, and the next Tab leaves the grid: it is one stop.
     await tabTo(page, sort, MAX_TAB_STOPS);

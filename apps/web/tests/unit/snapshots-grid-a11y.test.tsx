@@ -118,7 +118,16 @@ const GRID: SnapshotGridResponse = {
   interval: 'monthly',
   sections: [
     { ...SECTION, scope: 'private', potId: null, potName: null },
-    { ...SECTION, scope: 'shared', potId: 7, potName: 'Casa', groupId: 3, groupName: 'Familia' },
+    // Read-only for the caller, so Fondo's row action is the locked indicator rather than a button.
+    {
+      ...SECTION,
+      scope: 'shared',
+      potId: 7,
+      potName: 'Casa',
+      groupId: 3,
+      groupName: 'Familia',
+      canWrite: false,
+    },
   ],
   skippedInvestments: [],
 };
@@ -254,6 +263,17 @@ describe('the snapshots grid', () => {
     expect(document.activeElement).toBe(stopAt(container, 2, 0));
     press('ArrowLeft');
     expect(document.activeElement).toBe(stopAt(container, 2, 0));
+  });
+
+  it("takes a read-only row's locked indicator into the roving stop", () => {
+    const { container } = renderGrid();
+    const locked = stopAt(container, 4, 3);
+    expect(locked.getAttribute('role')).toBe('img');
+    expect(locked.tabIndex).toBe(-1);
+    focusAt(container, 4, 0);
+    press('End');
+    expect(document.activeElement).toBe(locked);
+    expect(locked.tabIndex).toBe(0);
   });
 
   it('moves the stop to a cell that takes focus some other way', () => {

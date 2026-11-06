@@ -246,6 +246,13 @@ test.describe('a tooltip cue has to be reachable from the keyboard too', () => {
     expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
   });
 
+  test('a control in a grid cell that is not the cell’s stop is not reached', async ({ page }) => {
+    // The cell hands its stop to its FIRST focusable; a second one inside it is never focused.
+    const second = `<button tabindex="-1">1</button><button tabindex="-1" style="display: block; width: 60px; padding: 0">${trigger('data-tooltip-on-focus')}</button>`;
+    await render(page, inGrid(second, '', '0'));
+    expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(/tab order/);
+  });
+
   test('a tooltip Escape cannot dismiss fails', async ({ page }) => {
     await render(page, trigger('tabindex="0" data-tooltip-on-focus data-tooltip-keeps-on-escape'));
     expect(await tooltipOpensFromKeyboard(page, (await onlyClipping(page))!)).toMatch(
