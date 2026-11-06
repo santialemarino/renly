@@ -1,6 +1,12 @@
 import { PageSkeleton } from '@/app/(protected)/_components/page-skeleton';
 import { NotificationsSections } from '@/app/(protected)/notifications/_components/notifications-sections';
-import { getNotificationPreferences, getNotifications } from '@/lib/api/notifications';
+import {
+  getNotificationPreferences,
+  getNotifications,
+  type NotificationFeed,
+  type NotificationPreferences,
+} from '@/lib/api/notifications';
+import { readForLoadingState } from '@/lib/utils/loading-state-read';
 
 /*
  * The page's own sections with its own reads (request-cached, shared with the page), so the feed has
@@ -9,8 +15,8 @@ import { getNotificationPreferences, getNotifications } from '@/lib/api/notifica
  */
 export default async function NotificationsLoading() {
   const [feed, preferences] = await Promise.all([
-    getNotifications(1).catch(() => null),
-    getNotificationPreferences().catch(() => null),
+    readForLoadingState<NotificationFeed | null>(getNotifications(1), null),
+    readForLoadingState<NotificationPreferences | null>(getNotificationPreferences(), null),
   ]);
 
   return (

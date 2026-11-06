@@ -47,7 +47,8 @@ function entranceStart(skeleton: HTMLElement): number {
  *   past the delay would flash it. When a loading state goes after being visible for less than
  *   `PAGE_SKELETON_MIN_VISIBLE_MS`, an inert copy of it stays over the page for the rest of that time
  *   and then crossfades into it; the page underneath is rendered and hydrated, only transparent. A
- *   loading state that never became visible holds nothing back.
+ *   loading state that never became visible holds nothing back. While the copy stands, the page under
+ *   it is inert, so a click on a placeholder cannot reach the transparent control beneath.
  * - **A fade between pages of one section.** Next keeps the template when only a deeper segment
  *   changes (`/accounts` → `/accounts/12`), so a page served from the router cache would swap in
  *   with no fade; a pathname change with no loading state on screen fades the page in.
@@ -68,6 +69,19 @@ export function PageEntrance({ children }: PageEntranceProps) {
 
     let skeleton: HTMLElement | null = null;
     let startedAt = 0;
+    // The hold in progress: a newer one supersedes it, and only the current one may clean up.
+    let currentHold: object | null = null;
+    let fadingOut: Animation | null = null;
+    let unblock: ReturnType<typeof setTimeout> | undefined;
+
+    // While the copy stands over it, the transparent page takes no clicks and no focus.
+    const block = (until: number) => {
+      clearTimeout(unblock);
+      content.inert = true;
+      unblock = setTimeout(() => {
+        content.inert = false;
+      }, until);
+    };
 
     const release = (gone: HTMLElement, visibleFor: number) => {
       if (visibleFor <= 0 || visibleFor >= PAGE_SKELETON_MIN_VISIBLE_MS) return;
@@ -83,6 +97,11 @@ export function PageEntrance({ children }: PageEntranceProps) {
       }
       copy.setAttribute('data-testid', 'page-skeleton-hold');
       hold.replaceChildren(copy);
+      const token = {};
+      currentHold = token;
+      // An older hold still fading out would otherwise fade this one's copy with it.
+      fadingOut?.cancel();
+      block(remaining);
 
       // Carries on the loading state's own fade-in from where it was.
       if (duration > 0 && visibleFor < FADE_MS) {
@@ -97,6 +116,7 @@ export function PageEntrance({ children }: PageEntranceProps) {
         duration,
         fill: 'forwards',
       });
+      fadingOut = out;
       content.animate([{ opacity: 0 }, { opacity: 1 }], {
         delay: remaining,
         duration,
@@ -105,7 +125,10 @@ export function PageEntrance({ children }: PageEntranceProps) {
       });
       out.finished
         .then(() => {
-          hold.replaceChildren();
+          if (currentHold === token) {
+            hold.replaceChildren();
+            currentHold = null;
+          }
           out.cancel();
         })
         .catch(() => undefined);
@@ -129,7 +152,11 @@ export function PageEntrance({ children }: PageEntranceProps) {
     const observer = new MutationObserver(track);
     observer.observe(content, { childList: true, subtree: true });
     track();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      clearTimeout(unblock);
+      content.inert = false;
+    };
   }, []);
 
   useLayoutEffect(() => {

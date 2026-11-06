@@ -30,6 +30,15 @@ export const PAGE_SKELETON_DELAY_MS = 350;
  */
 export const PAGE_SKELETON_MIN_VISIBLE_MS = 400;
 
+/*
+ * How long (ms) a settings-type loading state waits on the page's own reads before drawing with the
+ * defaults instead. Those reads are request-cached and usually already done (the layout made them) or
+ * take tens of ms; the cap is what a hanging API costs, and keeping it under `PAGE_SKELETON_DELAY_MS`
+ * means it never adds more than the delay itself before the loading state can show. Read by
+ * `readForLoadingState`.
+ */
+export const LOADING_STATE_READ_TIMEOUT_MS = 300;
+
 // Minimum time (ms) a loading line stays up before the content replaces it, so a fast load crossfades
 // once instead of flashing loading → content. Shared by the expandable rows' history panels.
 export const LOADING_DISPLAY_FLOOR_MS = 500;
