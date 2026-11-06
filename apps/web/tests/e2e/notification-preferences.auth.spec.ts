@@ -40,6 +40,8 @@ function expectRealCopy(text: string | null, key: string) {
 
 async function openPreferences(page: Page) {
   await page.goto(ROUTES.notifications);
+  // The loading state draws the page's own sections (test ids included) until the page replaces it.
+  await expect(page.getByTestId('page-skeleton')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByTestId('notification-digest-switch')).toBeVisible();
 }
 

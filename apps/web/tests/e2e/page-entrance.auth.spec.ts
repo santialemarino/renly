@@ -539,6 +539,53 @@ test.describe('the page entrance (signed in)', () => {
     expect(after.filter((frame) => frame.hold !== null)).toEqual([]);
   });
 
+  test('during the hold, a click on a placeholder reaches nothing on the page beneath', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const measured = await holdNavigation(
+      page,
+      ROUTE,
+      async () => {
+        await page.waitForFunction(() => {
+          const skeleton = document.querySelector('[data-testid="page-skeleton"]');
+          return skeleton !== null && Number(getComputedStyle(skeleton).opacity) > 0;
+        });
+        // A placeholder that stands where a real control will: the first currency field.
+        return page
+          .locator('[data-testid="page-skeleton-ghost"] [role="combobox"]')
+          .first()
+          .boundingBox();
+      },
+      async () => {
+        const hold = page.getByTestId('page-skeleton-hold');
+        await expect(hold, 'no hold started, so this is not the case under test').toHaveCount(1);
+        return page;
+      },
+    );
+    test.skip(measured === null, NO_PREFETCH_REASON);
+
+    const target = measured!.held;
+    expect(target, 'the loading state drew no combobox placeholder').not.toBeNull();
+    await page.mouse.click(target!.x + target!.width / 2, target!.y + target!.height / 2);
+    expect(
+      await page.getByTestId('page-skeleton-hold').count(),
+      'the hold was over before the click landed, so the click proved nothing',
+    ).toBe(1);
+
+    await page.waitForTimeout(SETTLE_MS);
+    await expect(
+      page.locator('[data-radix-popper-content-wrapper]'),
+      'a click on the held placeholder opened the real control beneath it',
+    ).toHaveCount(0);
+    const focused = await page.evaluate(() =>
+      document.activeElement?.closest('.page-entrance [role="combobox"], .page-entrance input')
+        ? document.activeElement.outerHTML.slice(0, 120)
+        : null,
+    );
+    expect(focused, 'a control of the transparent page took focus').toBeNull();
+  });
+
   test('a page of the same section served from the router cache still fades in', async ({
     page,
   }) => {
