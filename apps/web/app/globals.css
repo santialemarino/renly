@@ -206,3 +206,115 @@
     animation: none;
   }
 }
+
+/*
+ * The protected pages' entrance (`app/(protected)/template.tsx` sets the two variables from
+ * `lib/constants/animations.ts`). Raw selectors rather than utilities because the entrance hangs on a
+ * `:has()` over the route's loading state, which Next renders inside the template.
+ *
+ * - The page fades in once, opacity only, whenever it is mounted without a loading state in front of
+ *   it — straight away on a navigation whose content is ready, or the moment the loading state gives
+ *   way to the content (the animation is off while the loading state is there, and turning it back on
+ *   starts it again).
+ * - The loading state stays invisible for `--page-skeleton-delay`, then fades in. A load that finishes
+ *   inside the delay therefore paints nothing in between: the whole page appears with the one fade.
+ *
+ * Plain CSS, so it runs on the server-rendered HTML before hydration and never holds content back.
+ */
+@keyframes page-entrance {
+  from {
+    opacity: 0;
+  }
+}
+
+.page-entrance {
+  animation: page-entrance var(--page-entrance-duration) ease-out;
+}
+
+.page-entrance:has([data-page-skeleton]) {
+  animation: none;
+}
+
+[data-page-skeleton] {
+  animation: page-entrance var(--page-entrance-duration) ease-out var(--page-skeleton-delay)
+    backwards;
+}
+
+/*
+ * A loading state drawn from the page's own content (`PageGhost`): the real sections, inert and
+ * hidden from assistive tech, with their text, icons and chrome made transparent and each label,
+ * heading, paragraph, field, button and rule painted as a placeholder block in its own box — so the
+ * placeholder is the page's exact size, wrapping and spacing in every locale and at every width.
+ */
+@keyframes page-ghost-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.page-ghost * {
+  color: transparent;
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+  text-decoration-color: transparent;
+  caret-color: transparent;
+}
+
+.page-ghost ::placeholder {
+  color: transparent;
+}
+
+.page-ghost :is(svg, img) {
+  visibility: hidden;
+}
+
+.page-ghost
+  :is(
+    h2,
+    h3,
+    h4,
+    label,
+    p,
+    input,
+    textarea,
+    button,
+    [role='combobox'],
+    [role='switch'],
+    [data-slot='separator']
+  ) {
+  background-color: var(--accent);
+  border-radius: var(--radius-md);
+}
+
+/* The blocks pulse as the base `Skeleton` does, and like it hold still under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .page-ghost
+    :is(
+      h2,
+      h3,
+      h4,
+      label,
+      p,
+      input,
+      textarea,
+      button,
+      [role='combobox'],
+      [role='switch'],
+      [data-slot='separator']
+    ) {
+    animation: page-ghost-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No fade: the page appears at once, and a slow load's placeholder appears at once after its delay. */
+  .page-entrance {
+    animation: none;
+  }
+
+  [data-page-skeleton] {
+    animation-duration: 1ms;
+  }
+}

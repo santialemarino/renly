@@ -10,6 +10,13 @@ export const ANIMATION_DEFAULT = 0.25;
 // Page-level entrances: full-page fade-ins, not-found page.
 export const ANIMATION_SLOW = 0.5;
 
+/*
+ * How long (ms) a route's loading state stays invisible before it fades in. A navigation whose page is
+ * ready within it shows no placeholder at all — the page just fades in, whole — and one that takes
+ * longer shows the skeleton rather than a screen that looks frozen. Read by the protected template.
+ */
+export const PAGE_SKELETON_DELAY_MS = 250;
+
 // Minimum time (ms) a loading line stays up before the content replaces it, so a fast load crossfades
 // once instead of flashing loading → content. Shared by the expandable rows' history panels.
 export const LOADING_DISPLAY_FLOOR_MS = 500;

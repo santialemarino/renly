@@ -49,6 +49,31 @@ export interface SettingsData {
   onboardingCompleted: boolean | null;
 }
 
+/*
+ * Settings with nothing stored — what a new account has, every field falling back to its default. A
+ * settings page's loading state renders the page's own form with these (see `PageSkeleton`'s
+ * `body="page"`), since the account's real settings are what it is waiting for.
+ */
+export const UNSET_SETTINGS: SettingsData = {
+  primaryCurrency: null,
+  secondaryCurrency: null,
+  preferredCurrencies: null,
+  periodPresets: null,
+  maxCollections: null,
+  collectionWarningPct: null,
+  dollarRatePreference: null,
+  shortcutCurrencies: null,
+  timezone: null,
+  timezoneMode: null,
+  language: null,
+  languageMode: null,
+  liquidityThresholdPct: null,
+  savingsRateHealthyPct: null,
+  savingsRateModeratePct: null,
+  incomeExpenseRatioHealthy: null,
+  onboardingCompleted: null,
+};
+
 // --- Mappers ---
 
 export function mapSettings(raw: SettingsRaw): SettingsData {
