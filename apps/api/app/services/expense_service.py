@@ -556,7 +556,7 @@ async def update_expense(
 
     # SEC-4: validate any newly-set or changed FK belongs to the user before mutating the row or
     # stale-marking a card. Unchanged FKs were already validated when first attached.
-    await _validate_owned_fks(
+    new_obligation = await _validate_owned_fks(
         session,
         user,
         credit_card_id=new_card_id if new_card_id != old_card_id else None,
@@ -564,6 +564,10 @@ async def update_expense(
         subscription_id=new_subscription_id if new_subscription_id != old_subscription_id else None,
         installment_id=new_installment_id if new_installment_id != old_installment_id else None,
     )
+    # A newly linked obligation is advanced below; refuse the edit up front, as create does, when that
+    # advance would move its cursor past year 9999.
+    if new_obligation is not None:
+        _ensure_cursor_stays_a_date(new_obligation, 1)
 
     # Effective account link (request field over stored) must be owned + currency-matched, and a
     # credit-card expense never draws an account directly. The schema validator only sees same-request
