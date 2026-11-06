@@ -24,6 +24,7 @@ describe('CONTROL_SELECTOR', () => {
     ['an editable region', '<div contenteditable="true">x</div>'],
     ['a bare contenteditable', '<div contenteditable>x</div>'],
     ['an option', '<div role="option">x</div>'],
+    ['a grid cell', '<div role="gridcell">x</div>'],
   ])('takes %s for a control', (_name, html) => {
     expect(el(html).matches(CONTROL_SELECTOR)).toBe(true);
   });

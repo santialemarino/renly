@@ -18,6 +18,8 @@ interface RowLockedIndicatorProps {
   // Box size, defaulting to RowActionButton's. Override to match a denser sub-table's own buttons.
   className?: string;
   iconClassName?: string;
+  // A composite widget's roving tab stop (the snapshots grid): -1 while another cell holds the stop.
+  tabIndex?: number;
 }
 
 /*
@@ -42,13 +44,14 @@ export function RowLockedIndicator({
   label,
   className,
   iconClassName,
+  tabIndex = 0,
 }: RowLockedIndicatorProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           role="img"
-          tabIndex={0}
+          tabIndex={tabIndex}
           aria-label={label}
           className={cn(
             'group/locked inline-flex size-8 items-center justify-center text-muted-foreground outline-none',
