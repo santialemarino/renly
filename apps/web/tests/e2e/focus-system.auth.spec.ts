@@ -353,11 +353,11 @@ test.describe('the skip link (signed in)', () => {
 });
 
 /*
- * The neutral ring as the app's own controls draw it: the search field (the Input wrapper's
+ * The default ring as the app's own controls draw it: the search field (the Input wrapper's
  * `focus-within` ring), a toolbar filter (a hand-styled outline trigger) and a dialog's Cancel (the
  * base Button, on the dialog surface). Each measured against its real backdrop and every token surface.
  */
-test('the neutral ring clears 3:1 on the app’s controls (signed in)', async ({ page }) => {
+test('the default ring clears 3:1 on the app’s controls (signed in)', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await page.goto(EXPENSES);
 

@@ -12,7 +12,7 @@ const LANDING = '/';
 const LOGIN = '/login';
 
 /*
- * The focus system on the signed-OUT surfaces: the public layout's skip link, the neutral ring as the
+ * The focus system on the signed-OUT surfaces: the public layout's skip link, the default ring as the
  * auth form and the public header draw it, and the password toggle's keyboard cue. The signed-in half
  * (the protected layout, every overlay's focus return) is `focus-system.auth.spec.ts`.
  */
@@ -43,7 +43,7 @@ test.describe('focus system (signed out)', () => {
     ).toBe(true);
   });
 
-  test('the neutral ring clears 3:1 where the auth form and the public header draw it', async ({
+  test('the default ring clears 3:1 where the auth form and the public header draw it', async ({
     page,
   }) => {
     await page.goto(LOGIN);
