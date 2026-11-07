@@ -26,6 +26,7 @@ interface Call {
 function setup() {
   const calls: Call[] = [];
   const onError = vi.fn();
+  const onSettled = vi.fn();
   const hook = renderHook(() => {
     const [server, setServer] = useState<Record<string, boolean>>({ a: false, b: false });
     const toggles = useAutosaveToggles<boolean>({
@@ -35,10 +36,11 @@ function setup() {
         setServer((current) => ({ ...current, [key]: value }));
       },
       onError,
+      onSettled,
     });
     return { toggles, server };
   });
-  return { calls, onError, hook };
+  return { calls, onError, onSettled, hook };
 }
 
 // Lets the coalescing wait run out.
@@ -156,6 +158,29 @@ describe('useAutosaveToggles', () => {
     await answer(calls[1]!, new Error('network'));
     expect(onError).toHaveBeenCalledOnce();
     expect(hook.result.current.toggles.value('a')).toBe(true);
+  });
+
+  it('still sends the newest value when the control unmounts mid-write with a click waiting', async () => {
+    const { calls, hook } = setup();
+    act(() => hook.result.current.toggles.set('a', true));
+    await settleBurst();
+    act(() => hook.result.current.toggles.set('a', false));
+    hook.unmount();
+    await answer(calls[0]!);
+    expect(calls.map(({ value }) => value)).toEqual([true, false]);
+  });
+
+  it('tells the caller it has settled after a no-op burst and after a failure', async () => {
+    const { calls, onSettled, hook } = setup();
+    act(() => hook.result.current.toggles.set('a', true));
+    act(() => hook.result.current.toggles.set('a', false));
+    await settleBurst();
+    expect(onSettled).toHaveBeenCalledTimes(1);
+
+    act(() => hook.result.current.toggles.set('b', true));
+    await settleBurst();
+    await answer(calls[0]!, new Error('network'));
+    expect(onSettled).toHaveBeenCalledTimes(2);
   });
 
   it('writes a pending burst at once when the control unmounts, rather than losing it', () => {

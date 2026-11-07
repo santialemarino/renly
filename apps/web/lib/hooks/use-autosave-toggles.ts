@@ -23,7 +23,8 @@ interface AutosaveTogglesOptions<V> {
   write: (key: string, value: V) => Promise<void>;
   // Called once per failed save, after the control is back on its confirmed value.
   onError: (key: string, error: unknown) => void;
-  // Called when a save lands and no control has a write waiting or in flight.
+  // Called when a save ends — written, a no-op, or failed — and no control has a write waiting or in
+  // flight.
   onSettled?: () => void;
   equals?: (a: V, b: V) => boolean;
   coalesceMs?: number;
@@ -76,6 +77,11 @@ export function useAutosaveToggles<V>(options: AutosaveTogglesOptions<V>) {
     });
   }, []);
 
+  // Tells the caller when nothing is left waiting or in flight, whichever way the last save ended.
+  const settleIfIdle = useCallback(() => {
+    if (entries.current.size === 0) latest.current.onSettled?.();
+  }, []);
+
   const flush = useCallback(
     (key: string) => {
       const entry = entries.current.get(key);
@@ -85,6 +91,7 @@ export function useAutosaveToggles<V>(options: AutosaveTogglesOptions<V>) {
       if (equals(value, entry.confirmed)) {
         entries.current.delete(key);
         setOverride(key, undefined);
+        settleIfIdle();
         return;
       }
       entry.inFlight = true;
@@ -100,17 +107,18 @@ export function useAutosaveToggles<V>(options: AutosaveTogglesOptions<V>) {
           }
           // Settled. The override stays until the caller's confirmed state shows the value.
           entries.current.delete(key);
-          if (entries.current.size === 0) latest.current.onSettled?.();
+          settleIfIdle();
         },
         (error: unknown) => {
           if (entry.timer !== null) clearTimeout(entry.timer);
           entries.current.delete(key);
           setOverride(key, undefined);
           latest.current.onError(key, error);
+          settleIfIdle();
         },
       );
     },
-    [equals, setOverride],
+    [equals, setOverride, settleIfIdle],
   );
 
   const set = useCallback(
@@ -159,6 +167,8 @@ export function useAutosaveToggles<V>(options: AutosaveTogglesOptions<V>) {
       pending.forEach((entry, key) => {
         if (entry.timer === null) return;
         clearTimeout(entry.timer);
+        // An in-flight write's own answer sends the newest value next, once nothing is waiting.
+        entry.timer = null;
         if (!entry.inFlight && !equals(entry.intended, entry.confirmed)) {
           void latest.current.write(key, entry.intended).catch(() => undefined);
         }
