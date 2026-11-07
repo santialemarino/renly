@@ -75,8 +75,10 @@ const SheetContent = React.forwardRef<
         onCloseAutoFocus={returnFocus.onCloseAutoFocus}
       >
         {children}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="size-4" />
+        {/* The dialog's ✕, treated the same way: an icon button, so focus bumps the icon rather than
+            drawing a ring around it. */}
+        <SheetPrimitive.Close className="group/sheet-close absolute top-4 right-4 flex p-0.5 rounded-md text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none">
+          <X className="size-4 group-focus-visible/sheet-close:animate-focus-bump" />
           <span className="sr-only">{labels.close}</span>
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>

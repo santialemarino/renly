@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BellRing } from 'lucide-react';
+import { BellRing, Settings } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -13,7 +14,6 @@ import {
 } from '@/app/(protected)/notifications/actions';
 import { EmptyState } from '@/components/empty-state';
 import { NotificationRow } from '@/components/notification-row';
-import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
 import { ROUTES } from '@/config/routes';
 import type { NotificationFeed } from '@/lib/api/notifications';
@@ -25,9 +25,9 @@ interface NotificationFeedSectionProps {
 }
 
 /*
- * The full history, newest first, paged through the URL like every other list in the app —
- * `useSearchParamsNavigation` + `TablePagination`, which is a count plus page links and carries no
- * table markup of its own.
+ * The inbox's body: the full history, newest first, paged through the URL like every other list in
+ * the app — `useSearchParamsNavigation` + `TablePagination`, which is a count plus page links and
+ * carries no table markup of its own.
  *
  * The rows are held in state ONLY so the two local interactions can be optimistic: marking one read (a
  * dot goes out) and marking all read (every dot goes out). Both are confirmed afterwards by
@@ -91,9 +91,10 @@ export function NotificationFeedSection({ feed, page }: NotificationFeedSectionP
   }
 
   return (
-    <section className="flex flex-col gap-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <SectionHeader title={t('feed.title')} description={t('feed.description')} />
+    <section className="flex flex-col w-full max-w-3xl gap-y-4">
+      {/* The inbox's actions: marking everything read while anything is unread, and the way to the
+          settings that decide what arrives here — always there, so the row never comes and goes. */}
+      <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-2">
         {unread > 0 && (
           <Button
             variant="outline"
@@ -104,6 +105,12 @@ export function NotificationFeedSection({ feed, page }: NotificationFeedSectionP
             {t('feed.markAll')}
           </Button>
         )}
+        <Button variant="outline" size="sm" asChild>
+          <Link href={ROUTES.notificationSettings} data-testid="notification-settings-link">
+            <Settings />
+            {t('feed.settings')}
+          </Link>
+        </Button>
       </div>
 
       {/*
