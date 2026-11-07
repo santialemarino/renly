@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { ROUTES } from '@/config/routes';
-import { NOTIFICATION_EVENTS } from '@/lib/constants/notifications';
+import { NOTIFICATION_CHANNELS, NOTIFICATION_EVENTS } from '@/lib/constants/notifications';
 
 /*
  * The preferences surface, which is where both halves of this unit become visible to a person.
@@ -39,17 +39,30 @@ function expectRealCopy(text: string | null, key: string) {
 }
 
 /*
- * A switch's save is a Server Action: a POST carrying the `next-action` header. The switches save a
- * moment after the last click (a burst of clicks is one write), so a spec that reloads to check what
- * was stored waits for that answer first — a reload sent before it would drop the write.
+ * A switch's save is a Server Action: a POST carrying the `next-action` header, whose body is the
+ * action's arguments. The switches save a moment after the last click (a burst of clicks is one write),
+ * so a spec that reloads to check what was stored waits for that answer first — a reload sent before it
+ * would drop the write.
+ *
+ * Matched by its ARGUMENTS, not by the header alone: the shell fires Server Actions of its own as a
+ * page loads (the timezone and language auto-sync seed their cookies through one), and a wait for "any
+ * action" resolved on those before the switch was ever clicked — the reload then ran with no save sent.
  */
-function isSave(request: Request) {
-  return request.method() === 'POST' && request.headers()['next-action'] !== undefined;
+function isSave(request: Request, args: readonly string[]) {
+  if (request.method() !== 'POST' || request.headers()['next-action'] === undefined) return false;
+  const body = request.postData() ?? '';
+  return args.every((arg) => body.includes(JSON.stringify(arg)));
 }
 
-function waitForSave(page: Page) {
-  return page.waitForResponse((response) => isSave(response.request()));
+function waitForSave(page: Page, args: readonly string[]) {
+  return page.waitForResponse((response) => isSave(response.request(), args));
 }
+
+// One cell's save carries its event and channel; the cadence's, the cadence it sets.
+const CELL_EVENT = NOTIFICATION_EVENTS[0];
+const CELL_CHANNEL = NOTIFICATION_CHANNELS[1];
+const CELL_SAVE = [CELL_EVENT, CELL_CHANNEL] as const;
+const CADENCES = ['daily', 'immediate'] as const;
 
 async function openPreferences(page: Page) {
   await page.goto(ROUTES.notificationSettings);
@@ -85,19 +98,20 @@ test.describe('notification preferences', () => {
     // A cell rather than the cadence, so the two tests never touch the same answer. Read first and
     // restored in a `finally`, like the cadence below: the account is real.
     await openPreferences(page);
+    // The row's switches follow `NOTIFICATION_CHANNELS`, so the second is `CELL_CHANNEL`'s.
     const cell = () =>
-      page.getByTestId(`notification-event-${NOTIFICATION_EVENTS[0]}`).getByRole('switch').nth(1);
+      page.getByTestId(`notification-event-${CELL_EVENT}`).getByRole('switch').nth(1);
     const original = await cell().getAttribute('data-state');
     const flipped = original === 'checked' ? 'unchecked' : 'checked';
     const writes: string[] = [];
     page.on('request', (request) => {
-      if (isSave(request)) writes.push(request.url());
+      if (isSave(request, CELL_SAVE)) writes.push(request.url());
     });
 
     try {
       // Three clicks in a burst. Each lands — the switch is never disabled while it saves — and the
       // burst ends on the opposite of where it began.
-      const saved = waitForSave(page);
+      const saved = waitForSave(page, CELL_SAVE);
       await cell().click();
       await expect(cell()).toHaveAttribute('data-state', flipped);
       await expect(cell()).toBeEnabled();
@@ -112,7 +126,7 @@ test.describe('notification preferences', () => {
       await expect(cell()).toHaveAttribute('data-state', flipped);
     } finally {
       if ((await cell().getAttribute('data-state')) !== original) {
-        const restored = waitForSave(page);
+        const restored = waitForSave(page, CELL_SAVE);
         await cell().click();
         await expect(cell()).toHaveAttribute('data-state', original!);
         await restored;
@@ -132,9 +146,10 @@ test.describe('notification preferences', () => {
     const original = await digest.getAttribute('data-state');
 
     try {
-      const saved = waitForSave(page);
-      await digest.click();
       const flipped = original === 'checked' ? 'unchecked' : 'checked';
+      // Checked is a daily digest, unchecked every email at once.
+      const saved = waitForSave(page, [flipped === 'checked' ? CADENCES[0] : CADENCES[1]]);
+      await digest.click();
       await expect(digest).toHaveAttribute('data-state', flipped);
       await saved;
 
@@ -148,7 +163,7 @@ test.describe('notification preferences', () => {
     } finally {
       const control = page.getByTestId('notification-digest-switch');
       if ((await control.getAttribute('data-state')) !== original) {
-        const restored = waitForSave(page);
+        const restored = waitForSave(page, [original === 'checked' ? CADENCES[0] : CADENCES[1]]);
         await control.click();
         await expect(control).toHaveAttribute('data-state', original!);
         await restored;
