@@ -2,43 +2,90 @@ name: CI Web
 
 run-name: 'CI Web by @${{ github.actor }}'
 
+# Runs on EVERY PR to main, with no `on.paths` filter: `ci-web` is a check to mark required, and a
+# required check has to report on every PR — a workflow a paths filter skipped would leave it pending
+# forever. What it RUNS is decided by the `changes` job instead, from the PR's changed files, with the
+# same rules as the pre-commit hook (`scripts/pre-commit.sh`):
+#   * full — anything the web side builds from changed (`apps/web/**`, `packages/**`, the lockfile and
+#     workspace files, `tsconfig*`), this workflow, or a root file both sides read (root
+#     `package.json`, scripts, docker, …); and on every push to main and every dispatch, whatever they
+#     touched.
+#   * cross-app — only the API side changed (`apps/api/**`, `docs/public/api-reference.md`): the
+#     format check plus the web suite's cross-app tests (`*.cross-app.test.ts`), the ones that read the
+#     API app's source. An untagged one fails the suite's own tag guard, so the split stays honest.
+#   * format — nothing but docs, skills, workflows and markdown: the Prettier check, which formats
+#     those files too.
 on:
-  # Every merge to main runs the whole suite, whatever it touched.
   push:
     branches:
       - main
   pull_request:
     branches:
       - main
-    paths:
-      - 'apps/web/**'
-      - 'packages/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'turbo.json'
-      - 'pnpm-workspace.yaml'
-      - '.nvmrc'
-      - '.github/workflows/ci.web.yml'
-      # The format check runs Prettier over the whole tree, so every file it formats has to trigger it:
-      # docs, skills, workflow YAML, root markdown and the root scripts included, plus its own config.
-      - 'prettier.config.mjs'
-      - '.prettierignore'
-      - '**.md'
-      - '**.mjs'
-      - '**.json'
-      - '**.yml'
-      - '**.yaml'
-      # Cross-app parity tests (`*.cross-app.test.ts`) read the API app's source, so an API-only change
-      # can break this suite. Widening the filter costs ~2 min of parallel runner time, no wall-clock.
-      - 'apps/api/**'
   workflow_dispatch:
 
 jobs:
-  ci-web:
+  changes:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      # The PR's changed files from the API (a renamed file counts under both names, as the hook sees
+      # it), so no checkout is needed.
+      - name: List the changed files
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' > /tmp/changed-files.txt
+          cat /tmp/changed-files.txt
+
+      - id: mode
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          api=0
+          web=0
+          while IFS= read -r path; do
+            case "$path" in
+              apps/api/* | docs/public/api-reference.md) api=1 ;;
+              apps/web/* | packages/* | pnpm-lock.yaml | pnpm-workspace.yaml | turbo.json | tsconfig*) web=1 ;;
+              .github/workflows/ci.web.yml) web=1 ;;
+              docs/* | .claude/* | .agents/* | .github/* | *.md | LICENSE) ;;
+              *) api=1 web=1 ;;
+            esac
+          done < /tmp/changed-files.txt
+          if [ "$web" = 1 ]; then mode=full; elif [ "$api" = 1 ]; then mode=cross-app; else mode=format; fi
+          echo "web=$web api=$api -> $mode"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+  ci-web:
+    needs: changes
+    # `always()` and the empty-mode fallback below: if `changes` itself fails, this runs the full
+    # suite rather than being skipped — a skipped required check reads as passed.
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    env:
+      MODE: ${{ needs.changes.outputs.mode || 'full' }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Next's build cache (Turbopack's included), restored from the newest build with the same lockfile.
+      # Keyed before the install, so the source hash never walks node_modules; Next re-validates what it
+      # restores, so a stale entry costs a slower build, never a wrong one.
+      - name: Cache the Next build
+        if: env.MODE == 'full'
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**', '!**/.next/**', '!apps/web/tests/**') }}
+          restore-keys: next-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - uses: pnpm/action-setup@v4
         with:
@@ -58,22 +105,33 @@ jobs:
         run: pnpm format:check:web
 
       - name: Lint
+        if: env.MODE == 'full'
         run: pnpm --filter web run lint
 
       - name: Lint UI package
+        if: env.MODE == 'full'
         run: pnpm --filter @repo/ui run lint
 
       - name: Type check
+        if: env.MODE == 'full'
         run: pnpm --filter web run check-types
 
       - name: Type check UI package
+        if: env.MODE == 'full'
         run: pnpm --filter @repo/ui run check-types
 
       - name: Unit tests
+        if: env.MODE == 'full'
         run: pnpm --filter web run test:run
 
+      - name: Cross-app tests
+        if: env.MODE == 'cross-app'
+        run: pnpm --filter web run test:cross-app
+
       - name: Build UI package
+        if: env.MODE == 'full'
         run: pnpm build:ui
 
       - name: Build web
+        if: env.MODE == 'full'
         run: pnpm build:web

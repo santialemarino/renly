@@ -61,6 +61,8 @@ docs/internal/
 # Playwright
 apps/web/test-results/
 apps/web/playwright-report/
+apps/web/blob-report/
+apps/web/all-blob-reports/
 apps/web/tests/e2e/.auth/
 .playwright-cli/
 
