@@ -93,9 +93,9 @@ incident:
   `DATABASE_ADMIN_URL` to the throwaway clone — `migrations/env.py` and parts of the API connect with the admin
   URL, and a worktree's copied `apps/api/.env` points it at the dev DB. Integration suites need all four
   `*_TEST_DATABASE_URL` vars with the roles the `testing` skill names, or they skip silently.
-- **e2e pages:** list pages with nested routes live in route groups (`accounts/(list)/`, `shared/(groups)/`, …) —
-  derive routes with `(group)` segments dropped; protected pages stream behind a `loading.tsx` skeleton — measure
-  only after the real content replaced it; refuse the not-found and error-boundary screens; seed through
+- **e2e pages:** derive routes from the route tree with any `(group)` segments dropped; a page arrives whole
+  (there are no route loading states); a navigation guard makes its slowness itself (hold the request in the
+  browser) rather than hoping for a slow machine; refuse the not-found and error-boundary screens; seed through
   `apiToken()` in `tests/e2e/helpers/api.ts` (the saved session — never a per-worker `/auth/login`, which hits the
   login rate limit and turns real failures into 429s); a flow that 404s without data (pot buy-out/contribute/
   take-out need a priced, divided pot) needs that data seeded or the scan checks the 404.
