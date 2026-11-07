@@ -254,6 +254,7 @@ test.describe('a loading state is the page it stands for (signed in)', () => {
         ROUTES.alerts,
         ROUTES.localization,
         ROUTES.notifications,
+        ROUTES.notificationSettings,
         ROUTES.preferences,
       ]),
     );

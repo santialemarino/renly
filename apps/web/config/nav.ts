@@ -67,13 +67,14 @@ export const SHARED_GROUP = [{ key: 'groups', href: ROUTES.shared, icon: Users }
 
 /*
  * Bell belongs to Notifications, and Alerts & Limits takes Gauge — it configures dashboard health
- * INDICATORS and account caps, so a bell there was promising something it never did.
+ * INDICATORS and account caps, so a bell there was promising something it never did. The item opens
+ * the notification SETTINGS: the inbox itself is reached from the bell, so it has no item here.
  */
 export const SETTINGS_GROUP = [
   { key: 'account', href: ROUTES.account, icon: UserCog },
   { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
   { key: 'alerts', href: ROUTES.alerts, icon: Gauge },
-  { key: 'notifications', href: ROUTES.notifications, icon: Bell },
+  { key: 'notifications', href: ROUTES.notificationSettings, icon: Bell },
   { key: 'localization', href: ROUTES.localization, icon: Globe },
   { key: 'data', href: ROUTES.data, icon: ArrowDownUp },
   { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },

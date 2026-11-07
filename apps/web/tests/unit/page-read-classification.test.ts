@@ -80,6 +80,11 @@ const PRIMARY: Record<string, Record<string, string>> = {
     getPortfolioEvolution: FIGURES,
     getPortfolioMetrics: FIGURES,
   },
+  'notifications/(inbox)': { getNotifications: LIST },
+  'notifications/settings': {
+    getNotificationPreferences:
+      'the page IS these switches: every one "off" after a failed read states a choice nobody made',
+  },
   'payment-obligations': { getPaymentObligations: LIST },
   'payments-calendar': { getPaymentsCalendar: LIST },
   'shared/(groups)': { getGroups: LIST },

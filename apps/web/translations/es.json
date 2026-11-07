@@ -3200,10 +3200,18 @@
   "notifications": {
     "metadata": {
       "title": "Notificaciones",
-      "description": "Qué te avisa Renly y por dónde te llega."
+      "description": "Todo lo que te avisó Renly, de lo más nuevo a lo más viejo."
     },
     "title": "Notificaciones",
-    "subtitle": "Qué te avisa Renly y por dónde te llega.",
+    "subtitle": "Todo lo que te avisó Renly, de lo más nuevo a lo más viejo.",
+    "settings": {
+      "metadata": {
+        "title": "Configuración de notificaciones",
+        "description": "Qué te avisa Renly y por dónde te llega."
+      },
+      "title": "Configuración de notificaciones",
+      "subtitle": "Qué te avisa Renly y por dónde te llega."
+    },
     "bell": {
       "unread": "{count, plural, one {# notificación sin leer} other {# notificaciones sin leer}}",
       "none": "Sin notificaciones",
@@ -3213,13 +3221,12 @@
       "emptyDescription": "Acá aparece lo que pasa en tus grupos."
     },
     "feed": {
-      "title": "Notificaciones recientes",
-      "description": "Todo lo que te avisó Renly, de lo más nuevo a lo más viejo.",
       "empty": "Todavía no hay nada",
       "emptyDescription": "Acá aparece lo que pasa en tus grupos: una invitación, un gasto compartido, un pago.",
       "markAll": "Marcar todo como leído",
       "markAllDone": "Listo, no queda nada sin leer.",
       "markAllError": "No se pudieron marcar como leídas. Probá de nuevo.",
+      "settings": "Configuración de notificaciones",
       "unreadDot": "Sin leer",
       "count": "{count, plural, one {# notificación} other {# notificaciones}}"
     },

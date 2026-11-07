@@ -164,13 +164,16 @@ class TestWhatIsInIt:
         assert "Netflix" in message.text
 
     @pytest.mark.asyncio
-    async def test_it_points_at_the_notifications_page(self, monkeypatch):
-        # Both links in a digest go there, and deliberately: it is where the full history lives AND
-        # where the cadence is changed, so "see them all" and "turn this off" are one destination.
+    async def test_it_points_at_the_inbox_and_its_footer_at_the_settings(self, monkeypatch):
+        # Two destinations: "see them all" opens the inbox, where the full history lives, and the
+        # footer's "change what you get" opens the settings page, where the cadence is changed. Read
+        # line by line because one URL is a prefix of the other.
         monkeypatch.setattr(svc.settings, "web_base_url", "https://renly.test")
         mocks = _arrange(monkeypatch)
         await svc.send_due_digests(AsyncMock(), EVENING_UTC)
-        assert "https://renly.test/notifications" in mocks["sent"].await_args.args[0].text
+        lines = [line.strip() for line in mocks["sent"].await_args.args[0].text.splitlines()]
+        assert "https://renly.test/notifications" in lines
+        assert "https://renly.test/notifications/settings" in lines
 
 
 class TestTheQueue:

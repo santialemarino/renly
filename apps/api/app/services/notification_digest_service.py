@@ -55,9 +55,11 @@ DIGEST_HOUR_LOCAL = 20
 # feed the email links to, so nothing is lost by capping.
 DIGEST_MAX_ITEMS = 40
 
-# The notifications page: both where the whole history lives and where the cadence is changed, so the
-# digest's own "see them all" link and the standard footer point at the same place.
+# The inbox, where the whole history lives (the digest's own "see them all" link), and the settings
+# page, where the cadence is changed (the standard footer). Both transcribe the web's ROUTES, which
+# test_notification_event_surface holds them to.
 _NOTIFICATIONS_PATH = "/notifications"
+_SETTINGS_PATH = "/notifications/settings"
 
 
 # Sends each person who asked for a daily summary the one email they are owed.
@@ -82,6 +84,7 @@ async def send_due_digests(session: AsyncSession, now_utc: datetime | None = Non
     languages = await settings_service.get_languages_by_user_ids(session, due_user_ids)
 
     link = f"{settings.web_base_url}{_NOTIFICATIONS_PATH}"
+    settings_link = f"{settings.web_base_url}{_SETTINGS_PATH}"
     sent = 0
     cleared: list[int] = []
     messages: list[EmailMessage] = []
@@ -95,7 +98,7 @@ async def send_due_digests(session: AsyncSession, now_utc: datetime | None = Non
             continue
         # None when not one of the person's pending rows could be rendered into a line. Their rows are
         # still cleared above — they are in the feed, which is what the email would have pointed at.
-        message = _digest_for(user.email, rows, languages[user_id], link)
+        message = _digest_for(user.email, rows, languages[user_id], link, settings_link)
         if message is None:
             continue
         messages.append(message)
@@ -114,13 +117,13 @@ async def send_due_digests(session: AsyncSession, now_utc: datetime | None = Non
 
 # Builds one person's digest from their pending rows, capping what it spells out and naming the rest.
 # None when nothing in them could be rendered — see digest_email.
-def _digest_for(email: str, rows: list[Notification], locale: str, link: str) -> EmailMessage | None:
+def _digest_for(email: str, rows: list[Notification], locale: str, link: str, settings_link: str) -> EmailMessage | None:
     shown = rows[:DIGEST_MAX_ITEMS]
     return notification_templates.digest_email(
         email,
         [(row.event, row.payload) for row in shown],
         link=link,
-        settings_link=link,
+        settings_link=settings_link,
         overflow=len(rows) - len(shown),
         locale=locale,
     )
