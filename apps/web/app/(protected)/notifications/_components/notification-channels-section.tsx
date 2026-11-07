@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -19,9 +19,14 @@ import {
   type NotificationChannel,
   type NotificationEvent,
 } from '@/lib/constants/notifications';
+import {
+  autosaveErrorMessage,
+  AutosaveRefusal,
+  useAutosaveToggles,
+} from '@/lib/hooks/use-autosave-toggles';
 
-// The cadence switch's key in the same in-flight-save slot the grid's cells use. A literal rather than
-// an `event.channel` pair because it is neither: it is one answer for the whole email column.
+// The cadence switch's key beside the grid's `event.channel` cells. A literal rather than a pair
+// because it is neither: it is one answer for the whole email column.
 const CADENCE_CELL = 'email.cadence';
 
 // Ties the switch to its own label, which is the only thing that makes the label clickable and the
@@ -33,22 +38,27 @@ interface NotificationChannelsSectionProps {
   initialPreferences: NotificationPreferences;
 }
 
+// One cell's state in the server's answer: off when the answer leaves the pair out.
+function cellEnabled(preferences: NotificationPreferences, cell: string): boolean {
+  return preferences.preferences.some((p) => `${p.event}.${p.channel}` === cell && p.enabled);
+}
+
 /*
  * The events x channels grid: every event on every row, every channel a column, every cell a switch.
  *
  * The grid is BUILT from the two enums rather than from the response's row order, so a cell exists for
- * every combination the app knows about even if the API ever answers a partial set — and the response
- * is looked up into a map, which is also what makes a missing pair fall back to "off" rather than to
- * an undefined that renders as an uncontrolled switch.
+ * every combination the app knows about even if the API ever answers a partial set — and a missing pair
+ * reads as "off" rather than as an undefined that renders an uncontrolled switch.
  *
- * A save writes ONE cell and gets the WHOLE grid back, which the state is then replaced with — each
- * answer is the complete truth rather than a patch. That alone is not enough for two switches flipped
- * in quick succession, though: two saves in flight can ANSWER out of order, and the older answer would
- * then erase the newer one's cell. So only the latest save's answer is applied.
+ * Every switch here saves on its own, through `useAutosaveToggles`: it flips the instant it is clicked
+ * and stays live, a burst of clicks writes once, and a failed write puts that switch back and toasts.
+ * A save writes ONE cell and gets the whole grid back, but only that cell is taken from the answer: two
+ * cells' writes can answer in either order, and taking the whole grid from an older answer would put
+ * the other cell back where it was.
  *
- * The email CADENCE switch under the grid shares that ticket, which is the point of it living here
- * rather than in a section of its own: it writes to a different endpoint but gets the same grid back,
- * so a cadence save and a cell save racing each other is exactly the out-of-order case above.
+ * The email CADENCE switch under the grid saves the same way through its own endpoint; it is a
+ * per-person answer where the cells are per (event, channel), and it lives here because it shares the
+ * grid's confirmed state.
  */
 export function NotificationChannelsSection({
   initialPreferences,
@@ -56,57 +66,44 @@ export function NotificationChannelsSection({
   const t = useTranslations('notifications');
 
   const [preferences, setPreferences] = useState(initialPreferences);
-  const [saving, setSaving] = useState<string | null>(null);
-  // Which save is the newest. A ref rather than state because nothing renders from it and a re-render
-  // between taking a ticket and comparing it would defeat the point.
-  const latestSave = useRef(0);
-
-  // Typed as plain strings on purpose: inferred, the key would be the literal union of every
-  // event.channel pair, and looking one up with a composed string would then be a type error rather
-  // than a lookup.
-  const byCell = new Map<string, boolean>(
-    preferences.preferences.map((p) => [`${p.event}.${p.channel}`, p.enabled]),
-  );
-
-  async function handleToggle(
-    event: NotificationEvent,
-    channel: NotificationChannel,
-    enabled: boolean,
-  ) {
-    await save(`${event}.${channel}`, () => saveNotificationPreference(event, channel, enabled));
-  }
-
-  async function handleCadenceToggle(daily: boolean) {
-    await save(CADENCE_CELL, () => saveNotificationEmailCadence(daily ? 'daily' : 'immediate'));
-  }
+  const toggles = useAutosaveToggles<boolean>({
+    confirmed: (cell) =>
+      cell === CADENCE_CELL ? preferences.emailCadence === 'daily' : cellEnabled(preferences, cell),
+    write: (cell, enabled) =>
+      cell === CADENCE_CELL
+        ? save(cell, () => saveNotificationEmailCadence(enabled ? 'daily' : 'immediate'))
+        : save(cell, () => {
+            const [event, channel] = cell.split('.') as [NotificationEvent, NotificationChannel];
+            return saveNotificationPreference(event, channel, enabled);
+          }),
+    onError: (_, error) =>
+      toast.error(autosaveErrorMessage(error, t('channels.error')), {
+        id: 'notification-preference',
+      }),
+  });
 
   /*
-   * One write, whatever switch made it. Extracted because the cadence control writes to a different
-   * endpoint and returns the same grid, so it needs the identical staleness rule — and two copies of
-   * that rule is two places the "drop a superseded answer" branch can be got wrong.
+   * One write, whatever switch made it, and only its own part of the answer is kept: the cell's state,
+   * or the cadence. A refusal is thrown so the hook rolls the switch back.
    */
   async function save(
     cell: string,
     write: () => Promise<SharedDataResult<NotificationPreferences>>,
   ) {
-    const ticket = (latestSave.current += 1);
-    setSaving(cell);
-    try {
-      const result = await write();
-      if (!result.ok) {
-        toast.error(result.conflictDetail, { id: 'notification-preference' });
-        return;
-      }
-      // A superseded answer is dropped rather than applied: the save that overtook it will bring back
-      // a grid that already includes this cell's change, so nothing is lost by ignoring this one.
-      if (ticket === latestSave.current) setPreferences(result.data);
-    } catch {
-      toast.error(t('channels.error'), { id: 'notification-preference' });
-    } finally {
-      // Only the newest save owns the disabled state, or an older one finishing would re-enable the
-      // switch the newer save is still writing.
-      if (ticket === latestSave.current) setSaving(null);
-    }
+    const result = await write();
+    if (!result.ok) throw new AutosaveRefusal(result.conflictDetail);
+    const answer = result.data;
+    setPreferences((current) =>
+      cell === CADENCE_CELL
+        ? { ...current, emailCadence: answer.emailCadence }
+        : {
+            ...current,
+            preferences: [
+              ...current.preferences.filter((p) => `${p.event}.${p.channel}` !== cell),
+              ...answer.preferences.filter((p) => `${p.event}.${p.channel}` === cell),
+            ],
+          },
+    );
   }
 
   return (
@@ -146,15 +143,13 @@ export function NotificationChannelsSection({
                 </th>
                 {NOTIFICATION_CHANNELS.map((channel) => {
                   const cell = `${event}.${channel}`;
-                  const enabled = byCell.get(cell) ?? false;
                   return (
                     <td key={channel} className="py-3 text-center">
                       <Switch
                         blue
                         surface
-                        checked={enabled}
-                        disabled={saving === cell}
-                        onCheckedChange={(next) => handleToggle(event, channel, next)}
+                        checked={toggles.value(cell)}
+                        onCheckedChange={(next) => toggles.set(cell, next)}
                         aria-label={`${t(`events.${event}.label`)} — ${t(`channels.${channel}`)}`}
                       />
                     </td>
@@ -184,9 +179,8 @@ export function NotificationChannelsSection({
           surface
           id={DIGEST_SWITCH_ID}
           data-testid="notification-digest-switch"
-          checked={preferences.emailCadence === 'daily'}
-          disabled={saving === CADENCE_CELL}
-          onCheckedChange={handleCadenceToggle}
+          checked={toggles.value(CADENCE_CELL)}
+          onCheckedChange={(next) => toggles.set(CADENCE_CELL, next)}
         />
       </div>
 
