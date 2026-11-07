@@ -176,8 +176,9 @@ describe('every dialog primitive returns focus to its opener', () => {
 
 /*
  * Every layout that puts navigation ahead of its `<main>` opens with the skip link, and its `<main>` is
- * a place focus can land. Derived from the route tree: any `layout.tsx` rendering a `<main` is in the
- * population, and leaving one out takes a written reason below.
+ * a place focus can land. Derived from the route tree: any `layout.tsx` rendering a `<main` — or a
+ * component that renders the main for it (`MAIN_COMPONENTS`) — is in the population, and leaving one out
+ * takes a written reason below.
  */
 describe('every layout with a main offers a way to skip to it', () => {
   // Layouts whose `<main>` is the first thing on the page, so there is nothing to skip.
@@ -186,11 +187,35 @@ describe('every layout with a main offers a way to skip to it', () => {
       'the auth card IS the main; no navigation precedes it',
   };
 
+  // Components that render a layout's `<main>` for it, and the file whose `<main>` they render.
+  const MAIN_COMPONENTS: Record<string, string> = {
+    // The protected shell's main, which also shows a navigation in flight.
+    PendingMain: join(WEB, 'app', '(protected)', '_components', 'navigation-pending.tsx'),
+  };
+
   // The element itself, not a mention of it in a comment (those are written in backticks).
   const MAIN_ELEMENT = /(?<!`)<main[\s>]/g;
-  const layouts = readSources(join(WEB, 'app'), ['layout.tsx']).filter(
-    ([, source]) => source.search(MAIN_ELEMENT) !== -1,
+  const MAIN_COMPONENT = new RegExp(
+    `(?<!\`)<(${Object.keys(MAIN_COMPONENTS).join('|')})[\\s>]`,
+    'g',
   );
+  const mainOf = (source: string) =>
+    source.search(MAIN_ELEMENT) !== -1
+      ? source.search(MAIN_ELEMENT)
+      : source.search(MAIN_COMPONENT);
+  const layouts = readSources(join(WEB, 'app'), ['layout.tsx']).filter(
+    ([, source]) => mainOf(source) !== -1,
+  );
+
+  // The `<main …>` opening tag a layout renders: its own, or the one its main component renders.
+  function mainTag(source: string): string {
+    const own = openingTags(source, MAIN_ELEMENT)[0];
+    if (own) return own;
+    const component = [...source.matchAll(MAIN_COMPONENT)][0]?.[1] ?? '';
+    return (
+      openingTags(readFileSync(MAIN_COMPONENTS[component] ?? '', 'utf8'), MAIN_ELEMENT)[0] ?? ''
+    );
+  }
 
   it('finds the layouts', () => {
     expect(layouts.length).toBeGreaterThanOrEqual(3);
@@ -200,11 +225,11 @@ describe('every layout with a main offers a way to skip to it', () => {
     const offenders = layouts
       .filter(([path]) => !(path in NOTHING_BEFORE_MAIN))
       .flatMap(([path, source]) => {
-        const main = openingTags(source, MAIN_ELEMENT)[0] ?? '';
+        const main = mainTag(source);
         const problems: string[] = [];
         // On a line of its own: a JSX child, not inside a `{cond && …}` expression.
         if (!/^\s*<SkipLink\s*\/>\s*$/m.test(source)) problems.push(`${path}: no <SkipLink />`);
-        else if (source.indexOf('<SkipLink') > source.search(MAIN_ELEMENT))
+        else if (source.indexOf('<SkipLink') > mainOf(source))
           problems.push(`${path}: the skip link comes after the main`);
         if (!main.includes('id={MAIN_CONTENT_ID}')) problems.push(`${path}: main has no target id`);
         if (!main.includes('tabIndex={-1}')) problems.push(`${path}: main cannot take focus`);

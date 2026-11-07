@@ -32,6 +32,7 @@ import { FormCombobox } from '@/components/form-combobox';
 import { sharedBuyOutPath, sharedPotPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { potLabel } from '@/lib/pots';
 import { todayInTimezone } from '@/lib/utils/dates';
@@ -82,7 +83,11 @@ export function BuyOutWizard({ pot, group, asOfDate, timeZone }: BuyOutWizardPro
    * the honest behaviour on its own: mid-re-read, `pot` still holds the figures for the OTHER date,
    * and mid-refresh it still holds the split from BEFORE the write.
    */
-  const [isNavigating, startNavigation] = useTransition();
+  // The refresh after a write is this transition; a move to another URL goes through the shell's
+  // router, so the shell shows it too.
+  const [isRefreshing, startNavigation] = useTransition();
+  const pendingRouter = usePendingRouter();
+  const isNavigating = isRefreshing || pendingRouter.isPending;
   // Kept from before the write: afterwards the seller holds no share to read a name from, and the
   // closing panel is about what happened rather than about what is on screen now.
   const [outcome, setOutcome] = useState<{ seller: string; buyer: string } | null>(null);
@@ -147,10 +152,8 @@ export function BuyOutWizard({ pot, group, asOfDate, timeZone }: BuyOutWizardPro
    */
   function onDateChange(value: string) {
     form.setValue('date', value);
-    startNavigation(() =>
-      router.replace(
-        value === today ? sharedBuyOutPath(pot.id) : `${sharedBuyOutPath(pot.id)}?date=${value}`,
-      ),
+    pendingRouter.replace(
+      value === today ? sharedBuyOutPath(pot.id) : `${sharedBuyOutPath(pot.id)}?date=${value}`,
     );
   }
 

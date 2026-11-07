@@ -117,14 +117,12 @@ export async function countTextInMain(page: Page): Promise<number> {
 }
 
 /*
- * Waits until the page's own content is on screen: its loading skeleton gone and text of its own
- * inside `<main>`. `goto` resolves on the document's load, and behind a loading screen the content
- * streams in AFTER that — measured then, a page is its skeleton, or an empty main between the two,
- * and every check passes on it. Returns false when the content never came, so the caller reports it.
+ * Waits until the page's own content is on screen: text of its own inside `<main>`. Measured before
+ * that, `<main>` holds nothing of the page and every check passes on it. Returns false when the content
+ * never came, so the caller reports it.
  */
 export async function waitForPageContent(page: Page, timeout = 15_000): Promise<boolean> {
   try {
-    await expect(page.getByTestId('page-skeleton')).toHaveCount(0, { timeout });
     await expect.poll(() => countTextInMain(page), { timeout }).toBeGreaterThan(0);
     return true;
   } catch {

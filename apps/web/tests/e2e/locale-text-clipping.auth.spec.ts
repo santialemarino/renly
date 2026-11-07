@@ -102,9 +102,8 @@ for (const locale of ['es', 'en'] as const) {
         const report = await findClippedText(page);
         /*
          * The app's not-found page and its error boundary have text of their own, so a page that
-         * failed would pass every check here. The status cannot say so — behind a loading screen the
-         * response is already a streaming 200 when the page calls notFound(), and the not-found page
-         * replaces the skeleton after load — so it is read off the settled screen instead.
+         * failed would pass every check here, so it is read off the settled screen rather than
+         * assumed from a status.
          */
         const failed = page.getByTestId('not-found').or(page.getByTestId('error-boundary'));
         if ((await failed.count()) > 0) {

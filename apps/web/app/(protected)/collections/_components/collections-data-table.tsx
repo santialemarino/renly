@@ -15,6 +15,7 @@ import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SortOrder } from '@/lib/api/types';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 type SortField = 'id' | 'name';
@@ -36,6 +37,7 @@ export function CollectionsDataTable({
 }: CollectionsDataTableProps) {
   const t = useTranslations('collections');
   const router = useRouter();
+  const { push } = usePendingRouter();
   const searchParams = useSearchParams();
 
   const investmentMap = new Map(investments.map((inv) => [inv.id, inv.name]));
@@ -57,7 +59,7 @@ export function CollectionsDataTable({
       qs.set('sort_by', column);
       qs.set('sort_order', 'asc');
     }
-    router.push(`${ROUTES.collections}?${qs.toString()}`, { scroll: false });
+    push(`${ROUTES.collections}?${qs.toString()}`, { scroll: false });
   }
 
   return (

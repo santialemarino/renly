@@ -36,6 +36,7 @@ import { sharedPotPath, sharedTakeOutPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings } from '@/lib/api/pots';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { potLabel } from '@/lib/pots';
 import { todayInTimezone } from '@/lib/utils/dates';
@@ -97,7 +98,11 @@ export function TakeOutWizard({
    * the honest behaviour on its own: mid-re-read, `pot` still holds the figures for the OTHER date,
    * and mid-refresh it still holds the split from BEFORE the write.
    */
-  const [isNavigating, startNavigation] = useTransition();
+  // The refresh after a write is this transition; a move to another URL goes through the shell's
+  // router, so the shell shows it too.
+  const [isRefreshing, startNavigation] = useTransition();
+  const pendingRouter = usePendingRouter();
+  const isNavigating = isRefreshing || pendingRouter.isPending;
   // Kept from before the write, because afterwards the seat holds no share to read a name from.
   const [outcome, setOutcome] = useState<{
     name: string;
@@ -212,10 +217,8 @@ export function TakeOutWizard({
    */
   function onDateChange(value: string) {
     form.setValue('date', value);
-    startNavigation(() =>
-      router.replace(
-        value === today ? sharedTakeOutPath(pot.id) : `${sharedTakeOutPath(pot.id)}?date=${value}`,
-      ),
+    pendingRouter.replace(
+      value === today ? sharedTakeOutPath(pot.id) : `${sharedTakeOutPath(pot.id)}?date=${value}`,
     );
   }
 

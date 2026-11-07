@@ -325,9 +325,8 @@ test.describe('the skip link (signed in)', () => {
       const skip = page.getByTestId('skip-link');
       await waitForHydration(skip);
       /*
-       * The page's own content, not its loading skeleton: `main` holds no control until the list has
-       * streamed in, and a Tab out of a still-empty `main` goes on to the next stop in the document —
-       * the cookie notice after it — which is a correct order, not the one this test is about.
+       * The page's own control, hydrated: Enter on the skip link moves focus into `main`, and the next
+       * Tab must land on that control rather than on whatever follows in the document.
        */
       const firstControl = page.locator('main [data-slot="input"]').first();
       await expect(firstControl).toBeVisible({ timeout: 20_000 });

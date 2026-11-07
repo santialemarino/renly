@@ -1,7 +1,9 @@
 'use client';
 
-import { useRef, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 
 export type NavigateOverrides = Record<string, string | string[] | null>;
 
@@ -13,19 +15,18 @@ export interface UseSearchParamsNavigationOptions {
 /*
  * URL-search-param navigation for list pages: merges overrides into the current query
  * string (null / '' / empty array delete the key; arrays append one entry per value)
- * and pushes the result inside a transition so tables can dim on `isPending` while
- * the server component refetches.
+ * and pushes the result through `usePendingRouter` — so the shell's progress bar shows a
+ * slow one, and tables can dim on `isPending` while the server component refetches.
  */
 export function useSearchParamsNavigation(
   route: string,
   options: UseSearchParamsNavigationOptions = {},
 ) {
-  const router = useRouter();
+  const router = usePendingRouter();
   const searchParams = useSearchParams();
   // Ref keeps searchParams current inside debounced callbacks without adding it to effect dependency arrays.
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
-  const [isPending, startTransition] = useTransition();
 
   function navigate(overrides: NavigateOverrides) {
     const params = new URLSearchParams(searchParamsRef.current.toString());
@@ -40,8 +41,8 @@ export function useSearchParamsNavigation(
         params.set(key, val);
       }
     });
-    startTransition(() => router.push(`${route}?${params.toString()}`));
+    router.push(`${route}?${params.toString()}`);
   }
 
-  return { navigate, isPending };
+  return { navigate, isPending: router.isPending };
 }

@@ -10,7 +10,7 @@ import { WarningHint } from '@/components/styled-hint';
 import { HELP_ANCHORS } from '@/config/routes';
 import { getCollections } from '@/lib/api/collections';
 import { getGroups } from '@/lib/api/groups';
-import { getSettings } from '@/lib/api/settings';
+import { getSettings, type SettingsData } from '@/lib/api/settings';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
@@ -35,6 +35,23 @@ interface SnapshotsPageProps {
   }>;
 }
 
+// The grid's display currency: the saved choice when it is still one of the user's (a stale cookie
+// falls back to the primary); none for "original".
+function gridCurrency(
+  settings: SettingsData | null,
+  saved: string | undefined,
+): string | undefined {
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+  const secondary = settings?.secondaryCurrency ?? null;
+  const displayCurrencies = secondary
+    ? [primary, secondary, ORIGINAL_CURRENCY]
+    : [primary, ORIGINAL_CURRENCY];
+  const savedCurrency = saved ?? ORIGINAL_CURRENCY;
+  const activeCurrency =
+    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
+  return activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+}
+
 export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps) {
   const fmt = await getFormatters();
   const t = await getTranslations('snapshots');
@@ -48,35 +65,31 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
         .filter(Boolean)
     : undefined;
 
-  const settings = await getSettings().catch(() => null);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
-  const secondary = settings?.secondaryCurrency ?? null;
-  const displayCurrencies = secondary
-    ? [primary, secondary, ORIGINAL_CURRENCY]
-    : [primary, ORIGINAL_CURRENCY];
-
-  // Validate saved cookie against current settings — fall back to primary if stale.
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
-  const activeCurrency =
-    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
-  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
-
   const scope = resolveListScope(params.scope);
   // Weekly is a TOGGLE, not derived: this grid mixes private holdings (no cadence at all) with the
   // holdings of several pots that may each declare a different one, so nothing can derive it honestly.
   const interval = resolveGridInterval(params.interval);
 
-  const [grid, collections, groups] = await Promise.all([
-    getSnapshotGrid({
-      scope,
-      interval,
-      search: params.search,
-      collectionIds,
-      category: params.category,
-      currency,
-      sortBy: params.sort_by,
-      sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
-    }),
+  /*
+   * All at once, bar one: the grid waits only for the settings its display currency is resolved
+   * from (request-memoized, shared with the layout on a full load); the filters' options start at
+   * once.
+   */
+  const settingsRead = getSettings().catch(() => null);
+  const [settings, grid, collections, groups] = await Promise.all([
+    settingsRead,
+    settingsRead.then((pageSettings) =>
+      getSnapshotGrid({
+        scope,
+        interval,
+        search: params.search,
+        collectionIds,
+        category: params.category,
+        currency: gridCurrency(pageSettings, cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value),
+        sortBy: params.sort_by,
+        sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
+      }),
+    ),
     // The collection filter's options only: empty on error, the grid still renders.
     getCollections().catch(() => []),
     /*
@@ -87,6 +100,7 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
      */
     getGroups().catch(() => []),
   ]);
+  const currency = gridCurrency(settings, cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value);
 
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.

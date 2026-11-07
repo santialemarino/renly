@@ -7,6 +7,7 @@ import { getPot } from '@/lib/api/pots';
 import { getSettings } from '@/lib/api/settings';
 import { isIsoDate } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 export async function generateMetadata() {
   return await generatePageMetadata('shared.pots.buyOut');
@@ -40,14 +41,21 @@ export default async function BuyOutPage({ params, searchParams }: BuyOutPagePro
 
   const asOfDate = date !== undefined && isIsoDate(date) ? date : undefined;
 
-  const pot = await getPot(potId, asOfDate);
+  // The settings start with the pot, and the group as soon as the pot names it. The pot is awaited
+  // first, so a pot that does not exist (or is read-only to you) is the 404 whatever the others say.
+  const potRead = getPot(potId, asOfDate);
+  const reads = startRead(
+    Promise.all([
+      potRead.then((found) => (found ? getGroup(found.groupId) : null)),
+      getSettings().catch(() => null),
+    ]),
+  );
+
+  const pot = await potRead;
   if (!pot) notFound();
   if (!pot.canWrite) notFound();
 
-  const [group, settings] = await Promise.all([
-    getGroup(pot.groupId),
-    getSettings().catch(() => null),
-  ]);
+  const [group, settings] = await reads;
   if (!group) notFound();
 
   // Buying out needs a holder to buy from AND a second active seat to buy for, which is exactly what

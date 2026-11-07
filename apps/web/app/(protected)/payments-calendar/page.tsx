@@ -10,7 +10,7 @@ import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getInstallments } from '@/lib/api/installments';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getPaymentsCalendar } from '@/lib/api/payments-calendar';
-import { getPageSettings } from '@/lib/api/settings';
+import { getPageSettings, getSettings, type SettingsData } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
@@ -35,7 +35,30 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
+  // The month shown: the URL's, else the current one in the user's settings timezone.
+  const calendarMonth = (pageSettings: SettingsData | null) => {
+    const now = currentYearMonth(pageSettings?.timezone ?? undefined);
+    return {
+      year: parseYearMonth(params.year) ?? now.year,
+      month: parseYearMonth(params.month) ?? now.month,
+    };
+  };
+
+  /*
+   * All at once, bar one: the calendar waits only for the settings its currency and month are
+   * resolved from (request-memoized, shared with the layout on a full load); every other read
+   * starts at once.
+   */
+  const settingsRead = getSettings().catch(() => null);
+  const [
+    { settings, creditCards },
+    supportedCurrencies,
+    accounts,
+    calendar,
+    allObligations,
+    allSubscriptions,
+    allInstallments,
+  ] = await Promise.all([
     getPageSettings(),
     // The linked-expense edit dialog restricts its currency picker to the convertible set; on a
     // fetch error the picker degrades to the full list and the API's 422 still guards.
@@ -46,27 +69,26 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
      * blank picker; the picker only ever OFFERS active accounts.
      */
     getAccounts({ showArchived: true }).catch(() => []),
-  ]);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
-  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-
-  const currency = resolveActiveCurrency(cookieStore, primary);
-
-  // Default to the current month — resolved in the user's settings timezone — when the URL
-  // doesn't carry year/month.
-  const timeZone = settings?.timezone ?? undefined;
-  const { year: nowYear, month: nowMonth } = currentYearMonth(timeZone);
-  const year = parseYearMonth(params.year) ?? nowYear;
-  const month = parseYearMonth(params.month) ?? nowMonth;
-
-  // Round 2: the calendar plus the full plan lists (filtered below), one parallel round instead of
-  // the previous calendar → plan-lists waterfall.
-  const [calendar, allObligations, allSubscriptions, allInstallments] = await Promise.all([
-    getPaymentsCalendar({ year, month, currency }),
+    settingsRead.then((pageSettings) => {
+      const { year, month } = calendarMonth(pageSettings);
+      return getPaymentsCalendar({
+        year,
+        month,
+        currency: resolveActiveCurrency(
+          cookieStore,
+          pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
+        ),
+      });
+    }),
     getPaymentObligations({ showArchived: true }).catch(() => []),
     getSubscriptions({ showArchived: true }).catch(() => []),
     getInstallments({ showArchived: true }).catch(() => []),
   ]);
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
+  const timeZone = settings?.timezone ?? undefined;
+  const { year, month } = calendarMonth(settings);
 
   // Collect linked-plan source ids from paid calendar items so the inline-edit dialog can render
   // plan names for since-archived links. Only paid items are clickable → only their linked plans

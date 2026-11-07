@@ -14,7 +14,7 @@ import { getGroups } from '@/lib/api/groups';
 import { getInstallments } from '@/lib/api/installments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
-import { getPageSettings } from '@/lib/api/settings';
+import { getPageSettings, getSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
@@ -47,7 +47,26 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies, accounts, groups] = await Promise.all([
+  const scope = resolveListScope(params.scope);
+
+  /*
+   * All at once, bar one: the table waits only for the settings it is priced in (request-memoized,
+   * and shared with the layout on a full load), and everything else starts at once — the pickers'
+   * options, the full plan lists (filtered in-memory below to the same active ∪ linked-archived
+   * subset includeIds used to return) and the onboarding probe.
+   */
+  const settingsRead = getSettings().catch(() => null);
+  const [
+    { settings, creditCards },
+    supportedCurrencies,
+    accounts,
+    groups,
+    data,
+    allObligations,
+    allSubscriptions,
+    allInstallments,
+    onboardingStatus,
+  ] = await Promise.all([
     getPageSettings(),
     // Entry forms restrict their currency picker to the convertible set; on a fetch error the
     // picker degrades to the full list and the API's 422 still guards.
@@ -64,18 +83,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
      * nothing at all, so a solo user sees no added friction (X3).
      */
     getGroups().catch(() => []),
-  ]);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
-  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-
-  const currency = resolveActiveCurrency(cookieStore, primary);
-  const scope = resolveListScope(params.scope);
-
-  // Round 2: the table data plus everything that doesn't depend on it — the full plan lists
-  // (filtered in-memory below to the same active ∪ linked-archived subset includeIds used to
-  // return) and the onboarding probe (request-memoized; shared with the layout when it probes).
-  const [data, allObligations, allSubscriptions, allInstallments, onboardingStatus] =
-    await Promise.all([
+    settingsRead.then((pageSettings) =>
       getExpenses({
         scope,
         search: params.search,
@@ -83,16 +91,23 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         paymentMethod: params.payment_method,
         dateFrom: params.date_from,
         dateTo: params.date_to,
-        currency,
+        currency: resolveActiveCurrency(
+          cookieStore,
+          pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
+        ),
         page: resolvePageParam(params.page),
         sortBy: params.sort_by as 'date' | 'amount' | 'category' | 'payment_method' | undefined,
         sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
       }),
-      getPaymentObligations({ showArchived: true }).catch(() => []),
-      getSubscriptions({ showArchived: true }).catch(() => []),
-      getInstallments({ showArchived: true }).catch(() => []),
-      getOnboardingStatus().catch(() => null),
-    ]);
+    ),
+    getPaymentObligations({ showArchived: true }).catch(() => []),
+    getSubscriptions({ showArchived: true }).catch(() => []),
+    getInstallments({ showArchived: true }).catch(() => []),
+    getOnboardingStatus().catch(() => null),
+  ]);
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
 
   // Show this section's first-run sample only while it's empty.
   const showSample = data.items.length === 0 ? (onboardingStatus?.sampleExpenses ?? false) : false;

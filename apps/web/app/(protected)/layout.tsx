@@ -4,11 +4,16 @@ import { redirect } from 'next/navigation';
 import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { LanguageAutoSync } from '@/app/(protected)/_components/language-auto-sync';
 import { MobileNavBar } from '@/app/(protected)/_components/mobile-nav-bar';
+import {
+  NavigationPendingProvider,
+  NavigationProgressBar,
+  PendingMain,
+} from '@/app/(protected)/_components/navigation-pending';
 import { QuickAddProvider } from '@/app/(protected)/_components/quick-add';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { SkipLink } from '@/components/skip-link';
-import { MAIN_CONTENT_ID, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
+import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getNotifications } from '@/lib/api/notifications';
@@ -45,12 +50,19 @@ export default async function ProtectedLayout({ children }: ProtectedLayoutProps
   // The bell's rows come from here rather than from a client fetch, so the unread state is correct on
   // every navigation with nothing polling. It fails soft to an empty bell: a feed that cannot load must
   // not take the whole app's shell down with it.
-  const [settings, { mode: signupMode }, supportedCurrencies, notifications] = await Promise.all([
-    getSettings().catch(() => null),
-    getSignupContext(),
-    getSupportedCurrencies().catch(() => undefined),
-    getNotifications(1, NOTIFICATION_POPOVER_SIZE).catch(() => null),
-  ]);
+  // All at once, so the shell (and with it a full load's first byte) waits on the slowest read
+  // only: the newcomer probe below starts the moment the settings say it is needed.
+  const settingsRead = getSettings().catch(() => null);
+  const [settings, { mode: signupMode }, supportedCurrencies, notifications, status] =
+    await Promise.all([
+      settingsRead,
+      getSignupContext(),
+      getSupportedCurrencies().catch(() => undefined),
+      getNotifications(1, NOTIFICATION_POPOVER_SIZE).catch(() => null),
+      settingsRead.then((read) =>
+        read && read.onboardingCompleted !== true ? getOnboardingStatus().catch(() => null) : null,
+      ),
+    ]);
   const cookieStore = await cookies();
 
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
@@ -74,74 +86,73 @@ export default async function ProtectedLayout({ children }: ProtectedLayoutProps
   const sidebarExpanded = cookieStore.get(SIDEBAR_EXPANDED_COOKIE)?.value === 'true';
   let initialExpanded = true;
   let showDisclosureToggle = false;
-  if (settings && !onboarded) {
-    const status = await getOnboardingStatus().catch(() => null);
-    if (hasNoCoreData(status)) {
-      showDisclosureToggle = true;
-      initialExpanded = sidebarExpanded;
-    }
+  if (settings && !onboarded && hasNoCoreData(status)) {
+    showDisclosureToggle = true;
+    initialExpanded = sidebarExpanded;
   }
 
   return (
     <SidebarProvider>
       {/* First in the DOM so it is the first Tab stop, ahead of the whole sidebar. */}
       <SkipLink />
-      {settings && (
-        <>
-          <TimezoneAutoSync
-            storedTimezone={settings.timezone}
-            storedMode={settings.timezoneMode}
-            timezoneCookie={cookieStore.get(TIMEZONE_COOKIE)?.value ?? null}
-          />
-          <LanguageAutoSync
-            storedLanguage={settings.language}
-            storedMode={settings.languageMode}
-            localeCookie={cookieStore.get(LOCALE_COOKIE)?.value ?? null}
-          />
-        </>
-      )}
       {/*
-       * The quick-add's forms are owned HERE, beside the sidebar rather than inside it: below `md` the
-       * sidebar is a Sheet that unmounts when it closes, and opening a form closes it. The sidebar
-       * keeps only the trigger, which reaches this owner through context. Its pre-fill inputs cost
-       * nothing extra — they are fields of the settings read above.
+       * The navigation feedback (no route loading state: the old page stays until the new one is
+       * ready). Around the sidebar, whose items turn active on the click, and the main column, which
+       * shows the progress bar and the dimmed page once a navigation runs long.
        */}
-      <QuickAddProvider
-        primaryCurrency={primary}
-        preferredCurrencies={settings?.preferredCurrencies ?? undefined}
-        supportedCurrencies={supportedCurrencies}
-        timeZone={settings?.timezone ?? undefined}
-      >
-        <AppSidebar
-          notifications={notifications?.items ?? []}
-          unreadNotifications={notifications?.unread ?? 0}
-          displayCurrencies={displayCurrencies}
-          activeCurrency={activeCurrency}
+      <NavigationPendingProvider>
+        {settings && (
+          <>
+            <TimezoneAutoSync
+              storedTimezone={settings.timezone}
+              storedMode={settings.timezoneMode}
+              timezoneCookie={cookieStore.get(TIMEZONE_COOKIE)?.value ?? null}
+            />
+            <LanguageAutoSync
+              storedLanguage={settings.language}
+              storedMode={settings.languageMode}
+              localeCookie={cookieStore.get(LOCALE_COOKIE)?.value ?? null}
+            />
+          </>
+        )}
+        {/*
+         * The quick-add's forms are owned HERE, beside the sidebar rather than inside it: below `md` the
+         * sidebar is a Sheet that unmounts when it closes, and opening a form closes it. The sidebar
+         * keeps only the trigger, which reaches this owner through context. Its pre-fill inputs cost
+         * nothing extra — they are fields of the settings read above.
+         */}
+        <QuickAddProvider
+          primaryCurrency={primary}
+          preferredCurrencies={settings?.preferredCurrencies ?? undefined}
           supportedCurrencies={supportedCurrencies}
-          currencyCollapsed={currencyCollapsed}
-          isAdmin={session.user.isAdmin}
-          signupMode={signupMode}
-          initialExpanded={initialExpanded}
-          showDisclosureToggle={showDisclosureToggle}
-        />
-      </QuickAddProvider>
-      {/*
-       * `SidebarInset` is a plain column (see its definition) and this `<main>` is the page's only
-       * one — it used to be nested inside a second `<main>` that `SidebarInset` rendered itself,
-       * which is what `landmark-no-duplicate-main` and `landmark-main-is-top-level` fire on. The
-       * mobile header is its SIBLING rather than its child, because a `header` inside `main` maps to
-       * generic and would not be a banner at all.
-       */}
-      <SidebarInset className="min-w-0">
-        <MobileNavBar />
-        <main
-          id={MAIN_CONTENT_ID}
-          tabIndex={-1}
-          className="flex-1 flex flex-col min-w-0 overflow-x-hidden outline-none"
+          timeZone={settings?.timezone ?? undefined}
         >
-          {children}
-        </main>
-      </SidebarInset>
+          <AppSidebar
+            notifications={notifications?.items ?? []}
+            unreadNotifications={notifications?.unread ?? 0}
+            displayCurrencies={displayCurrencies}
+            activeCurrency={activeCurrency}
+            supportedCurrencies={supportedCurrencies}
+            currencyCollapsed={currencyCollapsed}
+            isAdmin={session.user.isAdmin}
+            signupMode={signupMode}
+            initialExpanded={initialExpanded}
+            showDisclosureToggle={showDisclosureToggle}
+          />
+        </QuickAddProvider>
+        {/*
+         * `SidebarInset` is a plain column (see its definition) and this `<main>` is the page's only
+         * one — it used to be nested inside a second `<main>` that `SidebarInset` rendered itself,
+         * which is what `landmark-no-duplicate-main` and `landmark-main-is-top-level` fire on. The
+         * mobile header is its SIBLING rather than its child, because a `header` inside `main` maps to
+         * generic and would not be a banner at all.
+         */}
+        <SidebarInset className="min-w-0">
+          <NavigationProgressBar />
+          <MobileNavBar />
+          <PendingMain>{children}</PendingMain>
+        </SidebarInset>
+      </NavigationPendingProvider>
     </SidebarProvider>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 
 interface InvestorDashboardToolbarProps {
   isFiltered: boolean;
@@ -15,7 +16,7 @@ interface InvestorDashboardToolbarProps {
 
 export function InvestorDashboardToolbar({ isFiltered }: InvestorDashboardToolbarProps) {
   const t = useTranslations('investorDashboard');
-  const router = useRouter();
+  const router = usePendingRouter();
   const searchParams = useSearchParams();
 
   function handleBack() {

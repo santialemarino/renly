@@ -1,7 +1,9 @@
 import { getTranslations } from 'next-intl/server';
 
+import { Separator } from '@repo/ui/components';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
-import { NotificationSettingsSections } from '@/app/(protected)/notifications/_components/notification-settings-sections';
+import { NotificationChannelsSection } from '@/app/(protected)/notifications/_components/notification-channels-section';
+import { PushSection } from '@/app/(protected)/notifications/_components/push-section';
 import { getNotificationPreferences } from '@/lib/api/notifications';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -25,7 +27,11 @@ export default async function NotificationSettingsPage() {
   return (
     <div className="flex flex-col flex-1 items-start p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <NotificationSettingsSections preferences={preferences} />
+      <div className="flex flex-col w-full max-w-3xl gap-y-8">
+        <NotificationChannelsSection initialPreferences={preferences} />
+        <Separator />
+        <PushSection initialPreferences={preferences} />
+      </div>
     </div>
   );
 }

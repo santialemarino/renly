@@ -62,6 +62,18 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
 
   const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
 
+  /*
+   * The two option lists — the smart search's investments and collections, which also name a
+   * single-collection filter in the subtitle — sit OUTSIDE the figures' try: a failure there costs the
+   * search its suggestions (and the subtitle its name, which then falls back to the unfiltered one),
+   * not the whole dashboard. They need nothing from settings, so they start first and run alongside
+   * every other read.
+   */
+  const optionsPromise = Promise.all([
+    getCollections().catch(() => []),
+    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
+  ]);
+
   // Always fetch settings — needed for currency fallback and period presets.
   const settings = await getSettings().catch(() => null);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
@@ -117,16 +129,11 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
     endDate,
   };
 
-  /*
-   * The two option lists — the smart search's investments and collections, which also name a
-   * single-collection filter in the subtitle — sit OUTSIDE the figures' try: a failure there costs the
-   * search its suggestions (and the subtitle its name, which then falls back to the unfiltered one),
-   * not the whole dashboard.
-   */
-  const optionsPromise = Promise.all([
-    getCollections().catch(() => []),
-    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
-  ]);
+  // One investment's own metrics, for the subtitle, read alongside the portfolio's.
+  const singleInvestmentId = isSingleInvestment ? investmentIds[0] : undefined;
+  const detailPromise = singleInvestmentId
+    ? getInvestmentMetrics(singleInvestmentId, currency).catch(() => null)
+    : Promise.resolve(null);
 
   // Fetch all data in parallel.
   let metrics, evolution, categoryAllocation, collectionAllocation, investmentsSummary;
@@ -151,10 +158,7 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   const [collections, investmentsList] = await optionsPromise;
 
   // For single investment drill-down, fetch detailed metrics.
-  const singleInvestmentId = isSingleInvestment ? investmentIds[0] : undefined;
-  const investmentDetail = singleInvestmentId
-    ? await getInvestmentMetrics(singleInvestmentId, currency).catch(() => null)
-    : null;
+  const investmentDetail = await detailPromise;
 
   // Build subtitle based on filter context.
   let filterName: string | null = null;

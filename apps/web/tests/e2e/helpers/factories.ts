@@ -69,13 +69,11 @@ export async function createExpenseViaQuickAdd(page: Page, marker: string, amoun
 }
 
 /*
- * Loads a list page and waits for the LIST, not the page. A protected page streams behind its
- * `loading.tsx` skeleton, and `goto` resolves on `load` while that skeleton is still what is on screen:
- * a row count taken there is 0 for a row that exists. The cleanups below read that 0 as "already gone"
- * and returned without deleting — every run leaked its row, passing ones included, until the leftovers
- * pushed the next run's row under the cookie banner. The toolbar is rendered by the page itself, in the
- * same commit as the table, and the skeleton only draws placeholders for it — so once it is on screen
- * the rows are too.
+ * Loads a list page and waits for the LIST, not just the document: a row count taken before the list
+ * is on screen is 0 for a row that exists, and the cleanups below read that 0 as "already gone" and
+ * return without deleting — every run then leaks its row until the leftovers push the next run's row
+ * under the cookie banner. The toolbar is rendered in the same commit as the table, so once it is on
+ * screen the rows are too.
  */
 async function openListPage(page: Page, route: string) {
   await page.goto(route);

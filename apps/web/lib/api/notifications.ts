@@ -17,8 +17,6 @@
 
 import 'server-only';
 
-import { cache } from 'react';
-
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type {
   NotificationChannel,
@@ -135,24 +133,18 @@ export function mapPreferences(raw: NotificationPreferencesRaw): NotificationPre
 
 // --- API functions ---
 
-/*
- * One page of the caller's notifications, newest first, with the total and the unread count.
- * Request-memoized (by its arguments), like the preferences below, so the notifications page and its
- * loading state share one call.
- */
-export const getNotifications = cache(
-  async (page = 1, pageSize?: number): Promise<NotificationFeed> => {
-    const qs = new URLSearchParams({ page: String(page) });
-    if (pageSize !== undefined) qs.set('page_size', String(pageSize));
-    const res = await authenticatedFetch(`/notifications?${qs.toString()}`, { method: 'GET' });
-    if (!res.ok) throw new Error('Failed to fetch notifications');
-    return mapFeed(await res.json());
-  },
-);
+/** One page of the caller's notifications, newest first, with the total and the unread count. */
+export async function getNotifications(page = 1, pageSize?: number): Promise<NotificationFeed> {
+  const qs = new URLSearchParams({ page: String(page) });
+  if (pageSize !== undefined) qs.set('page_size', String(pageSize));
+  const res = await authenticatedFetch(`/notifications?${qs.toString()}`, { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to fetch notifications');
+  return mapFeed(await res.json());
+}
 
 /** The full preferences grid, plus whether this deployment can send web push at all. */
-export const getNotificationPreferences = cache(async (): Promise<NotificationPreferences> => {
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
   const res = await authenticatedFetch('/notifications/preferences', { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch notification preferences');
   return mapPreferences(await res.json());
-});
+}

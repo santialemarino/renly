@@ -49,17 +49,18 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
    */
   const scope = resolveListScope(params.scope);
 
-  const [data, collections, settings, supportedCurrencies, groups] = await Promise.all([
-    getInvestments({
-      scope,
-      search: params.search,
-      collectionIds,
-      category: params.category,
-      activeOnly: params.show_archived !== 'true',
-      page: resolvePageParam(params.page),
-      sortBy: params.sort_by as 'name' | 'category' | 'base_currency' | 'broker' | undefined,
-      sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
-    }),
+  const investmentsRead = getInvestments({
+    scope,
+    search: params.search,
+    collectionIds,
+    category: params.category,
+    activeOnly: params.show_archived !== 'true',
+    page: resolvePageParam(params.page),
+    sortBy: params.sort_by as 'name' | 'category' | 'base_currency' | 'broker' | undefined,
+    sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
+  });
+  const [data, collections, settings, supportedCurrencies, groups, showSample] = await Promise.all([
+    investmentsRead,
     // The collection filter's options and the form's picker: empty on error, the list still renders.
     getCollections().catch(() => []),
     getSettings().catch(() => null),
@@ -71,16 +72,16 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
      * lose the control that narrowed it. Empty for every solo user, and then nothing renders.
      */
     getGroups().catch(() => []),
+    // Show this section's first-run sample only while it's empty; fetch the flag as soon as the list
+    // says so, and only then, so a populated section never pays for the extra read.
+    investmentsRead.then(async (investments) =>
+      investments.items.length === 0
+        ? ((await getOnboardingStatus().catch(() => null))?.sampleInvestments ?? false)
+        : false,
+    ),
   ]);
 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-
-  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
-  // populated section never pays for the extra read.
-  const showSample =
-    data.items.length === 0
-      ? ((await getOnboardingStatus().catch(() => null))?.sampleInvestments ?? false)
-      : false;
 
   // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
   // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.

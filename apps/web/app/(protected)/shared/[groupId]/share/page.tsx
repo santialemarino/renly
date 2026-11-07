@@ -10,6 +10,7 @@ import { getPot, getPotHoldings, getPotOwnershipEvents } from '@/lib/api/pots';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 export async function generateMetadata() {
   return await generatePageMetadata('shared.pots.share');
@@ -43,11 +44,12 @@ export default async function SharePage({ params, searchParams }: SharePageProps
   const id = Number(groupId);
   if (!Number.isInteger(id) || id <= 0) notFound();
 
-  const group = await getGroup(id);
-  if (!group) notFound();
-
   const potId = potParam === undefined ? null : Number(potParam);
   if (potId !== null && (!Number.isInteger(potId) || potId <= 0)) notFound();
+
+  // Every read starts now, beside the group's own; the group is awaited first, so a group that does
+  // not exist is the 404 whatever the others answered.
+  const groupRead = getGroup(id);
 
   /*
    * The two private lists are the eligible set, and they are the right lists rather than filtered
@@ -55,16 +57,29 @@ export default async function SharePage({ params, searchParams }: SharePageProps
    * in either. Active-only because an archived holding contributes nothing to the pot's value, so
    * sharing one and then dividing that value would divide a figure it is not part of.
    */
-  const [accounts, investments, settings, supportedCurrencies] = await Promise.all([
-    getAccounts(),
-    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
-    getSettings().catch(() => null),
-    // The new pot's currency picker offers only the convertible set; on a fetch error it degrades to
-    // the full list and the API's 422 still guards.
-    getSupportedCurrencies().catch(() => undefined),
-  ]);
+  const listsRead = startRead(
+    Promise.all([
+      getAccounts(),
+      getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
+      getSettings().catch(() => null),
+      // The new pot's currency picker offers only the convertible set; on a fetch error it degrades to
+      // the full list and the API's 422 still guards.
+      getSupportedCurrencies().catch(() => undefined),
+    ]),
+  );
+  // The pot this run fills, when it is filling one.
+  const potReads =
+    potId === null
+      ? null
+      : startRead(
+          Promise.all([getPot(potId), getPotHoldings(potId), getPotOwnershipEvents(potId)]),
+        );
 
-  if (potId === null) {
+  const group = await groupRead;
+  if (!group) notFound();
+  const [accounts, investments, settings, supportedCurrencies] = await listsRead;
+
+  if (potReads === null) {
     // Nothing to fill yet, so this run has to create it — which the API allows group admins only.
     if (group.myRole !== 'admin') notFound();
     return (
@@ -82,11 +97,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
     );
   }
 
-  const [pot, holdings, events] = await Promise.all([
-    getPot(potId),
-    getPotHoldings(potId),
-    getPotOwnershipEvents(potId),
-  ]);
+  const [pot, holdings, events] = await potReads;
   // Null covers both "no such pot" and "one you may not see". The group check matters just as much: a
   // pot id from ANOTHER group in this group's URL would otherwise be filled from this group's roster.
   if (!pot || !holdings || !events || pot.groupId !== group.id) notFound();
