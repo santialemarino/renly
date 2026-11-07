@@ -25,22 +25,32 @@ const authenticated = e2eCredentials() !== null;
 // 3000 by default, a production build in CI) — globalSetup fails fast when nothing answers there.
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: false,
+  /*
+   * Every test is its own unit of scheduling, so `--shard=i/n` splits the suite evenly by test rather
+   * than by file (the three largest files are over half of it). It changes nothing about ORDER: with
+   * one worker, a run or a shard still executes its tests one at a time, in file order, and a file's
+   * `beforeAll` / `afterAll` still run once around the tests of that file the worker gets. What it
+   * requires is that no test leans on an earlier test in its file having run — a file that ever does
+   * opts out with `test.describe.configure({ mode: 'default' })`, which keeps it whole on one shard.
+   */
+  fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
-  // Single worker by default so files run serially too — `fullyParallel: false` only disables
-  // intra-file parallelism. Bump this once the suite is large and tests are proven independent.
+  /*
+   * One worker: the authenticated specs share ONE harness account and change it as they go (display
+   * currencies, digest cadence, notification state), so two tests at once would race on it. CI gets
+   * its parallelism from shards instead, each with a database and harness account of its own.
+   */
   workers: 1,
   /*
-   * CI adds two: `github` turns each failure into an annotation on the PR's diff, and `json` writes
-   * the results the workflow checks after the run — that every spec file executed in its project and
-   * that nothing skipped: the ways a run can go green on less than the whole suite.
+   * CI swaps the HTML report for two others: `github` turns each failure into an annotation on the
+   * PR's diff, and `blob` writes the shard's raw results. The workflow merges every shard's blob into
+   * one HTML report and one JSON file, and checks the JSON — that every spec file executed in its
+   * project and that nothing skipped: the ways a run can go green on less than the whole suite.
    */
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ...(isCI ? ([['github'], ['json', { outputFile: 'test-results/results.json' }]] as const) : []),
-  ],
+  reporter: isCI
+    ? [['list'], ['github'], ['blob']]
+    : [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   outputDir: 'test-results',
   // Logs in once and saves the state the authenticated project loads. A no-op when unconfigured.
   globalSetup: './tests/e2e/global-setup.ts',
