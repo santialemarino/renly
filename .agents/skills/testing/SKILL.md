@@ -20,7 +20,7 @@ description: Where tests live, how to run them, and what to test in the Renly re
 uv run pytest tests/ -v
 
 # From repo root
-pnpm test:api        # API unit tests (pytest)
+pnpm test:api        # API tests (pytest on 4 workers, `-n 4 --dist loadfile`: ~30s vs ~60s serially)
 pnpm test:web        # Web unit tests (Vitest, single run)
 
 # From apps/web
@@ -53,8 +53,8 @@ pnpm test:e2e        # Playwright E2E
   must read one of the four variables (an `xfail` counts as a skip there too — fix the test instead).
   CI runs them in parallel (pytest-xdist): `tests/conftest.py` points each worker (`gw0`, `gw1`, …) at
   `<database>_<worker>`, a copy made beforehand with `CREATE DATABASE <db>_gw0 TEMPLATE <db>`, and refuses
-  a `-n` run whose copies are missing rather than let the suites skip. Locally, make one copy per worker
-  of your clone before `pytest -n 4 --dist loadfile`, or run them serially. Today:
+  a `-n` run whose copies are missing rather than let the suites skip. `pnpm test:api` runs on 4 workers too, so with the
+  integration variables exported, make `<clone>_gw0` … `<clone>_gw3` first, or run `uv run pytest` without `-n`. Today:
   - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
   - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
   - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (the BYPASSRLS admin role, `renly_admin`).
