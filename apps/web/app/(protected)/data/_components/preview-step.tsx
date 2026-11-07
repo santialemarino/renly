@@ -21,8 +21,8 @@ import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 const MotionButton = motion.create(Button);
 
 const STATUS_STYLES: Record<ImportRowStatus, string> = {
-  valid: 'text-green-700',
-  duplicate: 'text-amber-600',
+  valid: 'text-success',
+  duplicate: 'text-warning',
   invalid: 'text-destructive',
 };
 
@@ -56,11 +56,9 @@ export function PreviewStep({
     <div className="flex flex-col gap-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-paragraph-sm">
         <span>{t('import.preview.summary', { total: summary.total })}</span>
-        <span className="text-green-700">
-          {t('import.preview.valid', { count: summary.valid })}
-        </span>
+        <span className="text-success">{t('import.preview.valid', { count: summary.valid })}</span>
         {summary.duplicate > 0 && (
-          <span className="text-amber-600">
+          <span className="text-warning">
             {t('import.preview.duplicate', { count: summary.duplicate })}
           </span>
         )}
@@ -106,7 +104,7 @@ export function PreviewStep({
                     </span>
                   )}
                   {row.warnings.length > 0 && (
-                    <span className="block text-paragraph-xs text-amber-600">
+                    <span className="block text-paragraph-xs text-warning">
                       {row.warnings.join(' ')}
                     </span>
                   )}

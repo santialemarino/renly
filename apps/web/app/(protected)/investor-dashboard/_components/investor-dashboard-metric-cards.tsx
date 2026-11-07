@@ -42,9 +42,7 @@ export function InvestorDashboardMetricCards({
         text={metrics.twr !== null ? fmt.signedPct(metrics.twr) : '—'}
         figureClassName={valueColor(metrics.twr)}
         icon={trendIcon(metrics.twr)}
-        iconClassName={
-          metrics.twr !== null && metrics.twr > 0 ? 'text-emerald-600' : 'text-red-500'
-        }
+        iconClassName={metrics.twr !== null && metrics.twr > 0 ? 'text-gain' : 'text-loss'}
       />
 
       {/* IRR */}
@@ -53,9 +51,7 @@ export function InvestorDashboardMetricCards({
         text={metrics.irr !== null ? fmt.signedPct(metrics.irr) : '—'}
         figureClassName={valueColor(metrics.irr)}
         icon={trendIcon(metrics.irr)}
-        iconClassName={
-          metrics.irr !== null && metrics.irr > 0 ? 'text-emerald-600' : 'text-red-500'
-        }
+        iconClassName={metrics.irr !== null && metrics.irr > 0 ? 'text-gain' : 'text-loss'}
       />
 
       {/* Gain + simple return % + month change subtext */}

@@ -16,25 +16,25 @@ import { useFormatters } from '@/lib/i18n/formatters';
 function savingsRateColor(rate: number | null, healthyPct: number, moderatePct: number): string {
   if (rate === null) return 'text-muted-foreground';
   const ratePct = rate * 100;
-  if (ratePct >= healthyPct) return 'text-emerald-600';
-  if (ratePct >= moderatePct) return 'text-amber-500';
-  return 'text-red-500';
+  if (ratePct >= healthyPct) return 'text-success';
+  if (ratePct >= moderatePct) return 'text-warning';
+  return 'text-danger';
 }
 
 // Returns color class for income/expense ratio against the user's healthy threshold + the
 // hardcoded break-even point (mathematical constant — ratio of 1 means break-even).
 function ratioColor(ratio: number | null, healthy: number): string {
   if (ratio === null) return 'text-muted-foreground';
-  if (ratio >= healthy) return 'text-emerald-600';
-  if (ratio >= INCOME_EXPENSE_RATIO_BREAKEVEN) return 'text-amber-500';
-  return 'text-red-500';
+  if (ratio >= healthy) return 'text-success';
+  if (ratio >= INCOME_EXPENSE_RATIO_BREAKEVEN) return 'text-warning';
+  return 'text-danger';
 }
 
 // Returns color class for the liquidity state. Backend classifies; frontend maps to colour.
 function liquidityColor(state: LiquidityState): string {
-  if (state === 'healthy') return 'text-emerald-600';
-  if (state === 'caution') return 'text-amber-500';
-  if (state === 'at_risk') return 'text-red-500';
+  if (state === 'healthy') return 'text-success';
+  if (state === 'caution') return 'text-warning';
+  if (state === 'at_risk') return 'text-danger';
   return 'text-muted-foreground';
 }
 

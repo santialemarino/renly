@@ -683,8 +683,8 @@ export function AppSidebar({
               disabled={loggingOut}
               size="lg"
               className={cn(
-                'text-paragraph-medium hover:text-red-500 hover:bg-transparent focus-visible:text-red-500 focus-visible:bg-transparent focus-visible:outline-none focus-visible:ring-0 active:bg-transparent [&_svg]:size-5',
-                loggingOut && 'text-red-800 hover:text-red-800',
+                'text-paragraph-medium hover:text-danger hover:bg-transparent focus-visible:text-danger focus-visible:bg-transparent focus-visible:outline-none focus-visible:ring-0 active:bg-transparent [&_svg]:size-5',
+                loggingOut && 'text-danger',
               )}
             >
               <LogOut />

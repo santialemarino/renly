@@ -70,7 +70,7 @@ export function CheckEmailNotice({ title, description, onResend }: CheckEmailNot
     <AuthStatusScreen icon={MailCheck} tone="info" title={title} description={description}>
       <div className="flex flex-col items-center gap-y-3">
         {sent && (
-          <p className="text-paragraph-sm-medium text-green-600 animate-in fade-in duration-300">
+          <p className="text-paragraph-sm-medium text-success animate-in fade-in duration-300">
             {t('checkEmail.resent')}
           </p>
         )}

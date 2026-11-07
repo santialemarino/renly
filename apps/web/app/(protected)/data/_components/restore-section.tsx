@@ -107,10 +107,10 @@ export function RestoreSection() {
                   {shownEntities.map((entity) => (
                     <TableRow key={entity.entity}>
                       <TableCell>{t(`restore.entities.${entity.entity}`)}</TableCell>
-                      <TableCell className={cn(entity.restore > 0 && 'text-green-700')}>
+                      <TableCell className={cn(entity.restore > 0 && 'text-success')}>
                         {entity.restore}
                       </TableCell>
-                      <TableCell className={cn(entity.skippedUnresolved > 0 && 'text-amber-600')}>
+                      <TableCell className={cn(entity.skippedUnresolved > 0 && 'text-warning')}>
                         {entity.skippedUnresolved}
                       </TableCell>
                     </TableRow>

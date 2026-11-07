@@ -207,7 +207,7 @@ export function CreditCardReconciliationsSection({
                               </TableCell>
                               <TableCell>
                                 {status === 'reconciled' && (
-                                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                                  <Badge className="bg-success-subtle text-success hover:bg-success-subtle">
                                     {t('statusReconciled')}
                                   </Badge>
                                 )}
@@ -220,7 +220,7 @@ export function CreditCardReconciliationsSection({
                                       <Badge
                                         role="note"
                                         tabIndex={0}
-                                        className="bg-amber-100 text-amber-700 hover:bg-amber-100"
+                                        className="bg-warning-subtle text-warning hover:bg-warning-subtle"
                                       >
                                         {t('statusStale')}
                                       </Badge>

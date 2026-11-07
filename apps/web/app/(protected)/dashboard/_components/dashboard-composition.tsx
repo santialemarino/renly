@@ -29,8 +29,8 @@ import { useFormatters } from '@/lib/i18n/formatters';
 
 const LIABILITIES_COLOR = CHART_COLOR_NEGATIVE;
 const CASH_COLOR = CHART_COLOR_POSITIVE;
-// A receivable is an asset that belongs with cash rather than beside it, so it takes the same hue two
-// steps lighter — see CHART_COLOR_POSITIVE_SOFT for why it is not the blue one.
+// A receivable is an asset that belongs with cash rather than beside it, so it takes the same hue at
+// another lightness — see CHART_COLOR_POSITIVE_SOFT for which, and why it is not the blue one.
 const RECEIVABLE_COLOR = CHART_COLOR_POSITIVE_SOFT;
 
 interface DashboardCompositionProps {

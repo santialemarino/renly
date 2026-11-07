@@ -94,9 +94,9 @@ function ObligationRowContent({
   //                              aligns naturally to the left with no phantom indent.
   const dotColor =
     status === 'match'
-      ? 'text-emerald-500'
+      ? 'text-success'
       : status === 'mismatch' && isSelected
-        ? 'text-amber-500'
+        ? 'text-warning'
         : 'text-muted-foreground';
   return (
     <div className="flex min-w-0 items-center gap-x-2">

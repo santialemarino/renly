@@ -22,10 +22,12 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* 0.54, not shadcn's 0.556: secondary text sits on `--muted` as often as on white (tags, table hover rows),
+     and 0.556 measured 4.34:1 there, under WCAG 1.4.3's 4.5. 0.54 clears 4.6:1 on muted and 5.1:1 on white. */
+  --muted-foreground: oklch(0.54 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.215 27.33);
+  --destructive: var(--danger);
   --border: oklch(0.922 0 0);
   --input: oklch(0.985 0 0);
   --input-readonly: oklch(0.94 0 0);
@@ -56,9 +58,6 @@
   --accent-0: oklch(0.985 0 0);
   --accent-2: oklch(0.922 0 0);
   --accent-3: oklch(0.87 0 0);
-  --destructive-foreground: oklch(0.577 0.215 27.33);
-  --destructive-subtle: oklch(0.971 0.013 17.38);
-  --destructive-border: oklch(0.637 0.208 25.33);
   --border-0: oklch(0.985 0 0);
   --border-1: oklch(0.97 0 0);
   --border-3: oklch(0.87 0 0);
@@ -75,8 +74,42 @@
   --outline-hover: oklch(0 0 0 / 3.33%);
   --outline-active: oklch(0 0 0 / 5%);
   --stone-700: oklch(0.327 0.005 55.45);
-  --schemes-error-container: oklch(0.9221 0.0301 22.78);
-  --schemes-error: oklch(0.5013 0.1783 28.7);
+
+  /* Status intents — the ONLY place a status hue is written (a unit test refuses raw red/green/amber/…
+     palette classes and colour literals everywhere else). Values are Tailwind's own palette steps, one
+     rule per intent: the bare token is text AND icons (the 700 step, >= 4.5:1 on background, card,
+     input, muted and its own -subtle tint), -subtle is the tint (50), -border the hairline (200), and
+     -solid carries white text (600, 4.8:1). The tint and border are decorative: the foreground on them
+     carries the state. Contrast: success 5.4 white / 4.9 muted, warning 5.1 / 4.6, danger 6.4 / 5.9,
+     info 6.8 / 6.3. */
+  --success: oklch(0.508 0.118 165.612); /* emerald-700 */
+  --success-subtle: oklch(0.979 0.021 166.113); /* emerald-50 */
+  --success-border: oklch(0.905 0.093 164.15); /* emerald-200 */
+  --warning: oklch(0.555 0.163 48.998); /* amber-700 */
+  --warning-subtle: oklch(0.987 0.022 95.277); /* amber-50 */
+  --warning-border: oklch(0.924 0.12 95.746); /* amber-200 */
+  --danger: oklch(0.505 0.213 27.518); /* red-700 */
+  --danger-subtle: oklch(0.971 0.013 17.38); /* red-50 */
+  --danger-border: oklch(0.885 0.062 18.334); /* red-200 */
+  --danger-solid: oklch(0.577 0.245 27.325); /* red-600 — white on it 4.8:1 */
+  --danger-solid-hover: var(--danger); /* red-700 */
+  --danger-solid-active: oklch(0.444 0.177 26.899); /* red-800 */
+  --info: oklch(0.488 0.243 264.376); /* blue-700 */
+  --info-subtle: oklch(0.97 0.014 254.604); /* blue-50 */
+  --info-border: oklch(0.882 0.059 254.128); /* blue-200 */
+
+  /* Money direction, as aliases: a call site says what the colour MEANS (a gain, a loss, an amount owed)
+     and the mapping to an intent lives here. Never colour alone — a sign or an arrow carries it too. */
+  --gain: var(--success);
+  --loss: var(--danger);
+
+  /* Chart marks (non-text, >= 3:1 on white), apart in LIGHTNESS as well as hue so gain and loss survive
+     colour-vision deficiency: gain 3.7:1, loss 6.4:1, 1.75:1 to each other (emerald-600 vs red-500 was
+     1.04 — identical under deuteranopia). The soft gain (a receivable: money on its way to cash) is the
+     same hue at the far end of the scale, 9.7:1, since no step lighter than gain clears 3:1. */
+  --chart-gain: oklch(0.596 0.145 163.225); /* emerald-600 */
+  --chart-gain-soft: oklch(0.378 0.077 168.94); /* emerald-900 */
+  --chart-loss: var(--danger); /* red-700 */
 
   /* `text-heading-1` steps down on phones, where 48px wraps a short headline onto five lines. */
   --heading-1-size: 2.25rem; /* 36px */

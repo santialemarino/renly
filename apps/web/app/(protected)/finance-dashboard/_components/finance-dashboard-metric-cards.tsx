@@ -23,7 +23,7 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
       <MetricCard
         label={t('cards.totalIncome')}
         amount={overview.totalIncome}
-        figureClassName="text-emerald-600"
+        figureClassName="text-gain"
       >
         {overview.incomeChangePct !== null && overview.incomeChangePct !== 0 && (
           <div className="flex items-center gap-x-1">
@@ -31,9 +31,9 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
               {fmt.signedPct(overview.incomeChangePct)} {t('cards.vsPreviousPeriod')}
             </span>
             {overview.incomeChangePct > 0 ? (
-              <TrendingUp className="size-3.5 text-emerald-600" />
+              <TrendingUp className="size-3.5 text-gain" />
             ) : (
-              <TrendingDown className="size-3.5 text-red-500" />
+              <TrendingDown className="size-3.5 text-loss" />
             )}
           </div>
         )}
@@ -43,7 +43,7 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
       <MetricCard
         label={t('cards.totalExpenses')}
         amount={overview.totalExpenses}
-        figureClassName="text-red-500"
+        figureClassName="text-loss"
       >
         {overview.expenseChangePct !== null && overview.expenseChangePct !== 0 && (
           <div className="flex items-center gap-x-1">
@@ -52,9 +52,9 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
             </span>
             {/* For expenses, up is bad (red), down is good (green). */}
             {overview.expenseChangePct > 0 ? (
-              <TrendingUp className="size-3.5 text-red-500" />
+              <TrendingUp className="size-3.5 text-loss" />
             ) : (
-              <TrendingDown className="size-3.5 text-emerald-600" />
+              <TrendingDown className="size-3.5 text-gain" />
             )}
           </div>
         )}
@@ -66,16 +66,16 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
         amount={overview.net}
         figureClassName={valueColor(overview.net)}
         icon={overview.net === 0 ? undefined : overview.net > 0 ? TrendingUp : TrendingDown}
-        iconClassName={overview.net > 0 ? 'text-emerald-600' : 'text-red-500'}
+        iconClassName={overview.net > 0 ? 'text-gain' : 'text-loss'}
       />
 
       {/* Credit Card Balance */}
       <MetricCard
         label={t('cards.creditCardBalance')}
         amount={overview.creditCardBalance}
-        figureClassName={overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground'}
+        figureClassName={overview.creditCardBalance > 0 ? 'text-loss' : 'text-muted-foreground'}
         icon={overview.creditCardBalance > 0 ? CreditCard : undefined}
-        iconClassName="text-red-500"
+        iconClassName="text-loss"
       />
     </MetricCardGrid>
   );

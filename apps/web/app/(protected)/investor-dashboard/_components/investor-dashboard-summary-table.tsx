@@ -112,12 +112,12 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                         isGainZero
                           ? 'text-muted-foreground'
                           : (item.absoluteGain ?? 0) > 0
-                            ? 'text-emerald-600'
-                            : 'text-red-500',
+                            ? 'text-gain'
+                            : 'text-loss',
                       )}
                     >
                       {item.absoluteGain !== null ? (
-                        <MoneyFigure>{fmt.value(item.absoluteGain)}</MoneyFigure>
+                        <MoneyFigure>{fmt.signedValue(item.absoluteGain)}</MoneyFigure>
                       ) : (
                         '—'
                       )}
@@ -129,8 +129,8 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                           isChangeZero
                             ? 'text-muted-foreground'
                             : (item.monthChangePct ?? 0) > 0
-                              ? 'text-emerald-600'
-                              : 'text-red-500',
+                              ? 'text-gain'
+                              : 'text-loss',
                         )}
                       >
                         {item.monthChangePct !== null ? fmt.signedPct(item.monthChangePct) : '—'}

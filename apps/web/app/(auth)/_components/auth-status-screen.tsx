@@ -7,7 +7,7 @@ type Tone = 'info' | 'success' | 'error';
 // Icon + circle colors per tone, so every auth result screen shares one visual language.
 const TONE_STYLES: Record<Tone, { icon: string; circle: string }> = {
   info: { icon: 'text-blue-600', circle: 'bg-blue-50' },
-  success: { icon: 'text-green-500', circle: 'bg-green-50' },
+  success: { icon: 'text-success', circle: 'bg-success-subtle' },
   error: { icon: 'text-destructive', circle: 'bg-destructive/10' },
 };
 

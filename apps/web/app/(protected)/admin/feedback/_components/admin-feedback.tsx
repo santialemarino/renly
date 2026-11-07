@@ -20,9 +20,9 @@ import { useFormatters } from '@/lib/i18n/formatters';
 
 // Badge tone per category (outline base — quiet status chips).
 const CATEGORY_CLASS: Record<FeedbackCategory, string> = {
-  bug: 'bg-red-50 border-red-200 text-red-700',
+  bug: 'bg-danger-subtle border-danger-border text-danger',
   idea: 'bg-blue-50 border-blue-200 text-blue-800',
-  question: 'bg-amber-50 border-amber-200 text-amber-700',
+  question: 'bg-warning-subtle border-warning-border text-warning',
   other: 'text-muted-foreground',
 };
 
