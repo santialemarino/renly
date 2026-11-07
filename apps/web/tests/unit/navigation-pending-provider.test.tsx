@@ -142,6 +142,16 @@ describe('NavigationPendingProvider', () => {
     expect(state().pendingPathname).toBeNull();
   });
 
+  it('forgets a finished navigation, so returning to the URL it left does not revive it', () => {
+    const { rerender } = render(<Shell />);
+    click('dashboard');
+    commit(rerender, '/dashboard');
+    // Back where it started without a click the shell saw (a redirect, a bare router call).
+    commit(rerender, '/expenses');
+    act(() => vi.advanceTimersByTime(NAVIGATION_PENDING_DELAY_MS * 2));
+    expect(state()).toEqual({ pendingPathname: null, showProgress: false, busy: false });
+  });
+
   it('lets a newer click take over, and a click back to the current page end it', () => {
     render(<Shell />);
     click('dashboard');

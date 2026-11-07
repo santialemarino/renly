@@ -35,9 +35,14 @@ export interface AnchorLike {
   hasAttribute(name: string): boolean;
 }
 
-// A URL's path + query, the form every pending navigation is compared in.
+/*
+ * A URL's path + query, the form every pending navigation is compared in. The query is re-serialised
+ * the way the router's own `useSearchParams().toString()` writes it, so a link written `?q=a,b` or
+ * `?q=a%20b` compares equal to the committed `?q=a%2Cb` / `?q=a+b` it lands on.
+ */
 export function pathAndQuery(url: URL): string {
-  return url.pathname + url.search;
+  const query = new URLSearchParams(url.search).toString();
+  return query ? `${url.pathname}?${query}` : url.pathname;
 }
 
 // The path part of a path + query.

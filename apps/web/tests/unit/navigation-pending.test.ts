@@ -61,6 +61,18 @@ describe('linkDestination', () => {
     expect(linkDestination(PLAIN, anchor('/expenses?page=2#row-3'), HERE)).toBeNull();
   });
 
+  it('writes the query as the router does, so a link to the committed URL compares equal', () => {
+    // What the shell compares against: the committed path plus `useSearchParams().toString()`.
+    const committed = (search: string) => `/investments?${new URLSearchParams(search).toString()}`;
+    for (const href of ['/investments?search=a,b', '/investments?search=a%20b']) {
+      const here = new URL(href, HERE);
+      const to = linkDestination(PLAIN, anchor(href), here);
+      expect(to, href).toBe(committed(here.search));
+      // So a click on it while it is the page on screen starts nothing that could never end.
+      expect(beginNavigation(1, committed(here.search), to!), href).toBeNull();
+    }
+  });
+
   it('keeps a link to the current URL, which is a navigation of its own', () => {
     expect(linkDestination(PLAIN, anchor('/expenses?page=2'), HERE)).toBe('/expenses?page=2');
   });
