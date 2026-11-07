@@ -41,6 +41,7 @@ import {
   POT_VISIBILITIES,
   type PotVisibility,
 } from '@/lib/constants/pots';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { todayInTimezone } from '@/lib/utils/dates';
 
@@ -120,7 +121,11 @@ export function ShareWizard({
    * loading label for good. So the primary is unavailable until the navigation lands. The second is
    * honesty: until a refresh lands, `pot` still describes the state BEFORE the write.
    */
-  const [isNavigating, startNavigation] = useTransition();
+  // The refresh after a write is this transition; a move to another URL goes through the shell's
+  // router, so the shell shows it too.
+  const [isRefreshing, startNavigation] = useTransition();
+  const pendingRouter = usePendingRouter();
+  const isNavigating = isRefreshing || pendingRouter.isPending;
 
   const seats = useMemo(() => group.members.filter((m) => m.isActive), [group.members]);
   const today = todayInTimezone(timeZone);
@@ -276,7 +281,7 @@ export function ShareWizard({
       // the navigation to cancel — a cancelled one never settles at all, and the flow hangs for good.
       const madeId = created;
       if (madeId !== null) {
-        startNavigation(() => router.replace(sharedSharePath(group.id, madeId)));
+        pendingRouter.replace(sharedSharePath(group.id, madeId));
       }
     }
   }
