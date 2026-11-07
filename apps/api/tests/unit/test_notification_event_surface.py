@@ -31,7 +31,7 @@ from pathlib import Path
 import pytest
 
 from app.models.notification import NotificationEvent
-from app.services import notification_service
+from app.services import notification_digest_service, notification_service
 
 # Reads the web app's source, so it runs on every commit whichever app is staged (see the testing skill).
 pytestmark = pytest.mark.cross_app
@@ -142,6 +142,15 @@ class TestBothSidesRouteTheSameEvents:
         # a disagreement sends the email to the group and the feed row to the pot for the same event.
         api = {event.value for event in notification_service._POT_LINKED_EVENTS}
         assert api == set(_web_routed_events("POT_LINKED_EVENTS"))
+
+    def test_the_email_links_name_the_pages_the_web_routes_them_to(self):
+        # Every email's footer opens the notification SETTINGS and the digest's "see them all" opens the
+        # INBOX — two pages the web can move, and a moved one is a 404 in every inbox until somebody
+        # opens an email. Read off ROUTES rather than restated.
+        routes = dict(re.findall(r"^  (\w+): '([^']+)',", _WEB_ROUTES.read_text(), re.MULTILINE))
+        assert notification_service._SETTINGS_PATH == routes["notificationSettings"]
+        assert notification_digest_service._SETTINGS_PATH == routes["notificationSettings"]
+        assert notification_digest_service._NOTIFICATIONS_PATH == routes["notifications"]
 
 
 class TestTheListIsTheInvariant:

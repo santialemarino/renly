@@ -37,6 +37,7 @@ export const ROUTES = {
   preferences: '/preferences',
   alerts: '/alerts',
   notifications: '/notifications',
+  notificationSettings: '/notifications/settings',
   localization: '/localization',
   integrations: '/integrations',
   account: '/account',

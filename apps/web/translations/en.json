@@ -3200,10 +3200,18 @@
   "notifications": {
     "metadata": {
       "title": "Notifications",
-      "description": "What Renly tells you about, and where it reaches you."
+      "description": "Everything Renly has told you, newest first."
     },
     "title": "Notifications",
-    "subtitle": "What Renly tells you about, and where it reaches you.",
+    "subtitle": "Everything Renly has told you, newest first.",
+    "settings": {
+      "metadata": {
+        "title": "Notification settings",
+        "description": "What Renly tells you about, and where it reaches you."
+      },
+      "title": "Notification settings",
+      "subtitle": "What Renly tells you about, and where it reaches you."
+    },
     "bell": {
       "unread": "{count, plural, one {# unread notification} other {# unread notifications}}",
       "none": "No notifications",
@@ -3213,13 +3221,12 @@
       "emptyDescription": "Activity in your groups shows up here."
     },
     "feed": {
-      "title": "Recent notifications",
-      "description": "Everything Renly has told you, newest first.",
       "empty": "Nothing yet",
       "emptyDescription": "Activity in your groups — an invite, a shared expense, a payment — shows up here.",
       "markAll": "Mark all read",
       "markAllDone": "All caught up.",
       "markAllError": "Could not mark them read. Try again.",
+      "settings": "Notification settings",
       "unreadDot": "Unread",
       "count": "{count, plural, one {# notification} other {# notifications}}"
     },

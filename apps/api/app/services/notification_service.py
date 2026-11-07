@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # in the payload, so the app's routing stays in one place on the side that routes.
 _GROUP_PATH = "/shared/{group_id}"
 _POT_PATH = "/shared/pots/{pot_id}"
-_SETTINGS_PATH = "/notifications"
+_SETTINGS_PATH = "/notifications/settings"
 
 # Events whose link is the POT rather than the group. Everything else is group activity, and an event
 # of these three whose payload names no pot falls back to the group — which cannot currently happen,
