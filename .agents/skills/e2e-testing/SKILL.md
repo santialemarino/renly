@@ -459,7 +459,7 @@ One job, serial, Chromium only, built from the same pieces a developer uses:
    invite-gate spec needs the launch default, `invite`. It is then verified in SQL and given what the
    authenticated specs assume of a lived-in account: two display currencies (ARS + USD); a card owing
    a USD and an ARS charge from three months ago plus a USD one from today; and 30 past-dated expenses
-   (so `/expenses` renders its pager, and an expense a spec adds today still lands on page one). The
+   (so `/expenses` renders its pager, and an expense a spec adds today still lands on page one); and six notifications, three unread, inserted in SQL (so `/notifications` renders rows, not its empty state). The
    card holds BOTH currencies because the conversion-basis spec checks each display currency, and a
    bucket already in the display currency never converts — each pass needs one in the other
    currency, dated where the rate differs from today's. **A new spec that assumes account data adds
