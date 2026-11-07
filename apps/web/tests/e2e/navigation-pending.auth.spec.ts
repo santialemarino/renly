@@ -23,7 +23,7 @@ import {
  *
  * - The destination's nav item is active from the click itself, not from the swap.
  * - Past `NAVIGATION_PENDING_DELAY_MS`, and only then, a progress bar across the top of the main column
- *   and — for a change of page — the old page dimmed, `aria-busy` and inert; the sidebar stays usable,
+ *   and — for a change of page — the old page dimmed, `aria-busy` and taking no pointer input; the sidebar stays usable,
  *   so another click takes over. Both are gone in the frame the new page arrives.
  * - A navigation faster than the delay shows neither.
  *
@@ -65,7 +65,7 @@ test.describe('navigation feedback', () => {
     await markClick(page);
     await sidebarLink(page, TARGET).click();
     await expect(page.getByTestId(PROGRESS_BAR)).toBeVisible();
-    // The page is busy and inert, the sidebar is not.
+    // The page is busy and takes no pointer input; the sidebar still does.
     const main = page.locator('main');
     await expect(main).toHaveAttribute('aria-busy', 'true');
     expect(await main.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe('none');

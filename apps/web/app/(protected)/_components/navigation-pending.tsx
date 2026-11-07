@@ -35,8 +35,9 @@ interface NavigationPendingProviderProps {
  *
  * - at once, the destination's nav item turns active (`pendingPathname`, read by the sidebar);
  * - past `NAVIGATION_PENDING_DELAY_MS`, a progress bar across the top of the main column and, for a
- *   change of page, the old page dimmed, busy and inert inside `<main>` only — the sidebar and its bell
- *   stay usable, so another click can take over. Both go on the swap. A faster navigation shows neither.
+ *   change of page, the old page dimmed, `aria-busy` and taking no pointer input inside `<main>` only
+ *   (keyboard focus is untouched) — the sidebar and its bell stay usable, so another click can take
+ *   over. Both go on the swap. A faster navigation shows neither.
  *
  * It sees every in-app link click (captured on the document, so a `<Link>` anywhere counts with no
  * wiring), back and forward (`popstate`), and programmatic pushes reported through `usePendingRouter`.

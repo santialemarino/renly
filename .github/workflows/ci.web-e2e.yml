@@ -317,9 +317,8 @@ jobs:
             where email = '$E2E_EMAIL'"
 
           # Notifications, so /notifications renders rows (read and unread) rather than its empty state:
-          # the page-entrance spec measures the inbox's rows against its loading state, and the
-          # accessibility sweep scans the row text. Inserted directly — the API writes them only as a
-          # side effect of group and plan activity. Dated in the past, newest first.
+          # the accessibility sweep scans the row text. Inserted directly — the API writes them only as
+          # a side effect of group and plan activity. Dated in the past, newest first.
           docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly -c "
             insert into notifications (user_id, event, payload, created_at, read_at)
             select id, 'plan_charged',
