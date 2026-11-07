@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { ROUTES } from '@/config/routes';
 import { NOTIFICATION_EVENTS } from '@/lib/constants/notifications';
@@ -38,6 +38,19 @@ function expectRealCopy(text: string | null, key: string) {
   expect(text, `${key} rendered its own key path`).not.toContain(key);
 }
 
+/*
+ * A switch's save is a Server Action: a POST carrying the `next-action` header. The switches save a
+ * moment after the last click (a burst of clicks is one write), so a spec that reloads to check what
+ * was stored waits for that answer first — a reload sent before it would drop the write.
+ */
+function isSave(request: Request) {
+  return request.method() === 'POST' && request.headers()['next-action'] !== undefined;
+}
+
+function waitForSave(page: Page) {
+  return page.waitForResponse((response) => isSave(response.request()));
+}
+
 async function openPreferences(page: Page) {
   await page.goto(ROUTES.notificationSettings);
   // The loading state draws the page's own sections (test ids included) until the page replaces it.
@@ -68,6 +81,48 @@ test.describe('notification preferences', () => {
     }
   });
 
+  test('a switch flips at once, stays live, and a burst of clicks saves its final value', async ({
+    page,
+  }) => {
+    // A cell rather than the cadence, so the two tests never touch the same answer. Read first and
+    // restored in a `finally`, like the cadence below: the account is real.
+    await openPreferences(page);
+    const cell = () =>
+      page.getByTestId(`notification-event-${NOTIFICATION_EVENTS[0]}`).getByRole('switch').nth(1);
+    const original = await cell().getAttribute('data-state');
+    const flipped = original === 'checked' ? 'unchecked' : 'checked';
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (isSave(request)) writes.push(request.url());
+    });
+
+    try {
+      // Three clicks in a burst. Each lands — the switch is never disabled while it saves — and the
+      // burst ends on the opposite of where it began.
+      const saved = waitForSave(page);
+      await cell().click();
+      await expect(cell()).toHaveAttribute('data-state', flipped);
+      await expect(cell()).toBeEnabled();
+      await cell().click();
+      await cell().click();
+      await expect(cell()).toHaveAttribute('data-state', flipped);
+      await saved;
+      // One write for the burst, not one per click.
+      expect(writes).toHaveLength(1);
+
+      await page.reload();
+      await expect(page.getByTestId('page-skeleton')).toHaveCount(0, { timeout: 30_000 });
+      await expect(cell()).toHaveAttribute('data-state', flipped);
+    } finally {
+      if ((await cell().getAttribute('data-state')) !== original) {
+        const restored = waitForSave(page);
+        await cell().click();
+        await expect(cell()).toHaveAttribute('data-state', original!);
+        await restored;
+      }
+    }
+  });
+
   test('the email cadence round-trips through a reload', async ({ page }) => {
     // One test, not two: splitting the flip and the check would make the second depend on the first
     // having run, which `workers: 1` happens to guarantee today and no spec should rely on.
@@ -80,9 +135,11 @@ test.describe('notification preferences', () => {
     const original = await digest.getAttribute('data-state');
 
     try {
+      const saved = waitForSave(page);
       await digest.click();
       const flipped = original === 'checked' ? 'unchecked' : 'checked';
       await expect(digest).toHaveAttribute('data-state', flipped);
+      await saved;
 
       // The reload is the point. The switch reflecting a click proves only that React re-rendered;
       // this proves the answer reached the API, was stored, and came back on the next server render.
@@ -94,8 +151,10 @@ test.describe('notification preferences', () => {
     } finally {
       const control = page.getByTestId('notification-digest-switch');
       if ((await control.getAttribute('data-state')) !== original) {
+        const restored = waitForSave(page);
         await control.click();
         await expect(control).toHaveAttribute('data-state', original!);
+        await restored;
       }
     }
   });
