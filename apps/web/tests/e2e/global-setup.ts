@@ -181,9 +181,8 @@ async function signIn(
     if (mustBeAdmin) {
       await page.goto(ADMIN_PATH);
       /*
-       * Wait for the page to END in one of its two outcomes, not for `load`: the route streams behind
-       * a skeleton, and a `notFound()` there is swapped in after hydration — at `load` neither the
-       * not-found page nor the form is on screen yet, and a count taken then passes for anyone.
+       * Wait for the page to END in one of its two outcomes, then read which one it was: a count taken
+       * before either is on screen passes for anyone.
        */
       await page.locator(`${NOT_FOUND}, ${ADMIN_CONTENT}`).first().waitFor({
         timeout: LOGIN_TIMEOUT_MS,

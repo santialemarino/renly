@@ -53,7 +53,7 @@ const NOT_FOUND = 'the record the page is about: a 404 is notFound(), anything e
 
 // Every bare read a protected page or layout makes, and why its failure may take the page.
 const PRIMARY: Record<string, Record<string, string>> = {
-  'accounts/(list)': { getAccountsGrouped: LIST },
+  accounts: { getAccountsGrouped: LIST },
   'accounts/[id]': { getAccount: NOT_FOUND },
   collections: { getCollections: LIST },
   'credit-cards': { getCreditCards: LIST },
@@ -80,15 +80,15 @@ const PRIMARY: Record<string, Record<string, string>> = {
     getPortfolioEvolution: FIGURES,
     getPortfolioMetrics: FIGURES,
   },
-  'notifications/(inbox)': { getNotifications: LIST },
+  notifications: { getNotifications: LIST },
   'notifications/settings': {
     getNotificationPreferences:
       'the page IS these switches: every one "off" after a failed read states a choice nobody made',
   },
   'payment-obligations': { getPaymentObligations: LIST },
   'payments-calendar': { getPaymentsCalendar: LIST },
-  'shared/(groups)': { getGroups: LIST },
-  'shared/[groupId]/(hub)': {
+  shared: { getGroups: LIST },
+  'shared/[groupId]': {
     getGroup: NOT_FOUND,
     getPots: 'an empty pots section would say the group shares nothing',
     getSharedExpenses:
@@ -109,7 +109,7 @@ const PRIMARY: Record<string, Record<string, string>> = {
     getInvestments:
       'the eligible set IS the page: an empty list would say there is nothing to share',
   },
-  'shared/pots/[id]/(pot)': {
+  'shared/pots/[id]': {
     getGroup: NOT_FOUND,
     getPot: NOT_FOUND,
     getPotHoldings: NOT_FOUND,

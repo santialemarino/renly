@@ -53,8 +53,6 @@ function waitForSave(page: Page) {
 
 async function openPreferences(page: Page) {
   await page.goto(ROUTES.notificationSettings);
-  // The loading state draws the page's own sections (test ids included) until the page replaces it.
-  await expect(page.getByTestId('page-skeleton')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByTestId('notification-digest-switch')).toBeVisible();
 }
 
@@ -111,7 +109,6 @@ test.describe('notification preferences', () => {
       expect(writes).toHaveLength(1);
 
       await page.reload();
-      await expect(page.getByTestId('page-skeleton')).toHaveCount(0, { timeout: 30_000 });
       await expect(cell()).toHaveAttribute('data-state', flipped);
     } finally {
       if ((await cell().getAttribute('data-state')) !== original) {

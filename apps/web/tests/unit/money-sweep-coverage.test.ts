@@ -28,7 +28,7 @@ const PROTECTED = join(WEB, 'app', '(protected)');
 const isRouteGroup = (name: string) => /^\(.+\)$/.test(name);
 
 // Whether a folder is a page's: it holds a page.tsx itself, or one inside a route group of its own
-// (a detail page moved into `(hub)/` still owns its folder's `_components`, and nothing above it does).
+// (a page moved into a `(group)/` still owns its folder's `_components`, and nothing above it does).
 function isPageFolder(dir: string): boolean {
   if (existsSync(join(dir, 'page.tsx'))) return true;
   return readdirSync(dir).some(
@@ -50,8 +50,7 @@ function tsxUnder(dir: string, stopAtPages: boolean): string[] {
 
 /*
  * Every page folder under (protected), as its route pattern. Route-group segments are dropped, as in
- * the URL: a list page whose details live under it sits in one (`accounts/(list)/page.tsx`, so its
- * loading state wraps only that page) and still serves `/accounts`.
+ * the URL: a page inside a `(group)/` folder serves its parent's path.
  */
 function pageRoutes(dir = PROTECTED): [string, string][] {
   const out: [string, string][] = [];

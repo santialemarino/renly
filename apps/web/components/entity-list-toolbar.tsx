@@ -6,16 +6,24 @@ import { Archive, Plus } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
 
 import { Button, Pill, SearchInput } from '@repo/ui/components';
-import {
-  TOOLBAR_ACTIONS,
-  TOOLBAR_FILTERS,
-  TOOLBAR_ITEM,
-  TOOLBAR_ROW,
-  TOOLBAR_SEARCH,
-} from '@/components/entity-list-toolbar-layout';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { SEARCH_MAX } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
+
+// The row: everything wraps, so a narrow screen stacks rather than overflows.
+const TOOLBAR_ROW = 'flex flex-wrap items-center gap-x-3 gap-y-2';
+
+// The search item grows; `min-w-48` matches `SearchInput`'s own container minimum.
+const TOOLBAR_SEARCH = 'min-w-48 flex-1';
+
+// The filters group takes its own row until `lg`, where it joins the search row.
+const TOOLBAR_FILTERS = 'flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto';
+
+// The trailing actions group (archived pill, extra actions, add) takes its own row until `md`.
+const TOOLBAR_ACTIONS = 'flex flex-wrap basis-full md:basis-auto items-center gap-x-3 gap-y-2';
+
+// One control inside the filters or actions group: never narrower than its content, sharing the rest.
+const TOOLBAR_ITEM = 'min-w-fit flex-1';
 
 /*
  * The add button, as one all-or-nothing group: a label with no handler (or the reverse) is a type error

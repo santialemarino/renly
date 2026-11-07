@@ -3,7 +3,6 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { API_BASE, apiToken } from './helpers/api';
 import { testMarker } from './helpers/factories';
 import { listPages } from './helpers/list-pages';
-import { waitForPageEntrance } from './helpers/loading-states';
 
 /*
  * Every list toolbar's controls are reachable: at each width, a click at the centre of every visible
@@ -205,7 +204,6 @@ test.describe('list toolbars (signed in)', () => {
           // Exactly one, and the shared one: a hand-rolled toolbar carries no such testid.
           await expect(page.getByTestId('entity-list-toolbar')).toHaveCount(1, { timeout: 20_000 });
           await page.evaluate(() => document.fonts.ready);
-          await waitForPageEntrance(page);
           const report = await settledReport(page);
           if (route === '/snapshots') {
             /*

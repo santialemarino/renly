@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { ROUTES } from '@/config/routes';
-import { START, waitForPageEntrance } from './helpers/loading-states';
 
 /*
  * Where the bell opens, and where its links lead.
@@ -15,6 +14,8 @@ import { START, waitForPageEntrance } from './helpers/loading-states';
  * `/notifications/settings`.
  */
 
+// Where each test starts: a page with no notification UI of its own.
+const START = ROUTES.alerts;
 const BELL = 'notification-bell';
 const PANEL = 'notification-panel';
 const SIDEBAR = '[data-slot="sidebar-container"]';
@@ -32,7 +33,7 @@ const HEIGHT = 900;
 async function openStart(page: Page, width: number, height = HEIGHT) {
   await page.setViewportSize({ width, height });
   await page.goto(START);
-  await waitForPageEntrance(page);
+  await expect(page.locator('main h1')).toBeVisible();
 }
 
 async function box(page: Page, selector: string) {
@@ -111,11 +112,9 @@ test.describe('the notification bell', () => {
     await page.getByTestId(BELL).click();
     await page.getByTestId('notification-see-all').click();
     await expect(page).toHaveURL(ROUTES.notifications);
-    await waitForPageEntrance(page);
 
     await page.getByTestId('notification-settings-link').click();
     await expect(page).toHaveURL(ROUTES.notificationSettings);
-    await waitForPageEntrance(page);
     await expect(page.getByTestId('notification-digest-switch')).toBeVisible();
   });
 });
