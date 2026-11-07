@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, EyeOff, Minus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -22,6 +22,7 @@ import { cn } from '@repo/ui/lib';
 import { MoneyFigure } from '@/components/money-figure';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentsSummaryResponse } from '@/lib/api/metrics';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface InvestorDashboardSummaryTableProps {
@@ -31,7 +32,7 @@ interface InvestorDashboardSummaryTableProps {
 export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSummaryTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('investorDashboard');
-  const router = useRouter();
+  const router = usePendingRouter();
   const searchParams = useSearchParams();
   const [hideInactive, setHideInactive] = useState(false);
 

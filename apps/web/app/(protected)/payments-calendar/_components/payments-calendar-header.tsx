@@ -1,12 +1,12 @@
 'use client';
 
-import { useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { currentYearMonth } from '@/lib/utils/dates';
 
@@ -19,9 +19,8 @@ interface PaymentsCalendarHeaderProps {
 export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalendarHeaderProps) {
   const fmt = useFormatters();
   const t = useTranslations('paymentsCalendar');
-  const router = useRouter();
+  const router = usePendingRouter();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
 
   // Locale-aware month name (e.g. "May" / "mayo").
   const monthLabel = fmt.monthLong(year, month);
@@ -30,7 +29,7 @@ export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalend
     const params = new URLSearchParams(searchParams.toString());
     params.set('year', String(targetYear));
     params.set('month', String(targetMonth));
-    startTransition(() => router.push(`${ROUTES.paymentsCalendar}?${params.toString()}`));
+    router.push(`${ROUTES.paymentsCalendar}?${params.toString()}`);
   }
 
   function handlePrevious() {

@@ -23,6 +23,7 @@ import type {
   InvestmentListResponse,
   InvestmentSortField,
 } from '@/lib/api/investments';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { bySectionPot, sectionedRows } from '@/lib/list-scope';
 
@@ -155,6 +156,7 @@ export function InvestmentsDataTable({
 }: InvestmentsDataTableProps) {
   const t = useTranslations('investments');
   const router = useRouter();
+  const { push } = usePendingRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
     useTableSort<InvestmentSortField>(ROUTES.investments, { resetPage: true });
 
@@ -172,7 +174,7 @@ export function InvestmentsDataTable({
    * history actually live.
    */
   function handleRowClick(investment: Investment) {
-    router.push(
+    push(
       investment.potId !== null
         ? sharedPotPath(investment.potId)
         : `${ROUTES.investorDashboard}?investment_id=${investment.id}`,

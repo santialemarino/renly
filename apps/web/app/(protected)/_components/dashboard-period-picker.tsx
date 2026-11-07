@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
@@ -13,6 +13,7 @@ import { cn } from '@repo/ui/lib';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/constants/period-presets';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { getDateFnsLocale } from '@/lib/i18n/locales';
 import { formatPresetLabel } from '@/lib/utils/period-presets';
 
@@ -35,7 +36,7 @@ export function DashboardPeriodPicker({
   const locale = useLocale();
   const t = useTranslations(translationNamespace);
   const tCommon = useTranslations('common');
-  const router = useRouter();
+  const router = usePendingRouter();
   const searchParams = useSearchParams();
   const dateFnsLocale = getDateFnsLocale(locale);
 

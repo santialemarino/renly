@@ -21,6 +21,7 @@ import { StatList } from '@/components/stat-list';
 import { sharedGroupPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings } from '@/lib/api/pots';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { potLabel } from '@/lib/pots';
 
@@ -44,6 +45,7 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');
   const router = useRouter();
+  const { push } = usePendingRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -103,7 +105,7 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
       toast.success(t('pots.delete.success'));
       // Back to the GROUP HUB, not the groups list: the page we are on no longer exists, and the hub is
       // where the group's remaining shared money is. The comment said hub and the code said list.
-      router.push(sharedGroupPath(pot.groupId));
+      push(sharedGroupPath(pot.groupId));
     } catch {
       toast.error(t('pots.delete.error'));
     } finally {

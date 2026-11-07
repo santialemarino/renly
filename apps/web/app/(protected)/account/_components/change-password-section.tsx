@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
@@ -25,11 +24,12 @@ import {
   PASSWORD_CONTAINS_UPPERCASE_REGEX,
   PASSWORD_MIN_LENGTH,
 } from '@/lib/constants/form';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 
 export function ChangePasswordSection() {
   const t = useTranslations('account');
   const tCommon = useTranslations('common');
-  const router = useRouter();
+  const router = usePendingRouter();
 
   const form = useForm<ChangePasswordData>({
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },

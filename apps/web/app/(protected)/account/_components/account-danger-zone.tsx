@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -22,6 +21,7 @@ import { userSignOut } from '@/auth';
 import { ExportDataButton } from '@/components/export-data-button';
 import { SectionHeader } from '@/components/section-header';
 import { LOGIN_ROUTE } from '@/config/routes';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 
 interface AccountDangerZoneProps {
   email: string;
@@ -30,7 +30,7 @@ interface AccountDangerZoneProps {
 export function AccountDangerZone({ email }: AccountDangerZoneProps) {
   const t = useTranslations('account');
   const tCommon = useTranslations('common');
-  const router = useRouter();
+  const router = usePendingRouter();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [password, setPassword] = useState('');

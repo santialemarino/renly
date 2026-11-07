@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   ChevronDown,
   ChevronRight,
@@ -62,6 +62,8 @@ import { ALL_ROUTE_PATHS, LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { AppNotification } from '@/lib/api/notifications';
 import type { SignupMode } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { useNavigationPending } from '@/lib/hooks/use-navigation-pending';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 
 /*
  * Progressive disclosure (UX-7): advanced nav items hidden from a first-run newcomer until they
@@ -205,7 +207,8 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const t = useTranslations('sidebar');
   const pathname = usePathname();
-  const router = useRouter();
+  const { pendingPathname } = useNavigationPending();
+  const router = usePendingRouter();
   const { setOpenMobile } = useSidebar();
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -217,10 +220,17 @@ export function AppSidebar({
   const [expandedByUser, setExpandedByUser] = useState(initialExpanded);
   const reduce = useReducedMotion() ?? false;
 
+  /*
+   * The page being shown, or the one a navigation in flight is going to: the destination's item turns
+   * active on the click rather than when its page arrives, and goes back if that navigation is dropped.
+   */
+  const shownPathname = pendingPathname ?? pathname;
+
   // Active on the exact path, or on a deeper sub-path that isn't itself a distinct route (so /admin
   // doesn't light up on the sibling /admin/feedback).
   const isActive = (href: string) =>
-    pathname === href || (pathname.startsWith(href + '/') && !ROUTE_PATH_SET.has(pathname));
+    shownPathname === href ||
+    (shownPathname.startsWith(href + '/') && !ROUTE_PATH_SET.has(shownPathname));
   const isCommitmentsActive = COMMITMENTS_GROUP.some(({ href }) => isActive(href));
   // Finances "section" is active when any direct child or any nested Commitments child is active.
   const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href)) || isCommitmentsActive;

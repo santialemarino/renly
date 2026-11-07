@@ -1,12 +1,13 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Building2, FolderOpen, Tag } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { SmartSearch, type SmartSearchGroup } from '@/components/smart-search';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
+import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 const ICON_CLASS = 'size-4 shrink-0 text-muted-foreground';
@@ -33,7 +34,7 @@ export function InvestorDashboardSearch({
   const locale = useLocale();
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
-  const router = useRouter();
+  const router = usePendingRouter();
 
   const searchGroups: SmartSearchGroup[] = [
     {
