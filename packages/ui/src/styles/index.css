@@ -29,11 +29,11 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.985 0 0);
   --input-readonly: oklch(0.94 0 0);
-  /* The focus ring: the app's blue (Tailwind's blue-600), drawn SOLID (`ring-ring`, never
-     `ring-ring/<alpha>`). Dark enough to clear WCAG 1.4.11's 3:1 on every surface a ring sits on (~5.2:1
-     on background, ~4.8:1 on muted), where the old light grey at half alpha measured 1.2:1. Hover borders
-     use `border-3`, a light grey, not this. */
-  --ring: oklch(0.546 0.245 262.881);
+  /* The focus ring: Renly's brand blue (Tailwind's blue-800, the wordmark's and the blue button's), drawn
+     SOLID (`ring-ring`, never `ring-ring/<alpha>`). Clears WCAG 1.4.11's 3:1 on every surface a ring sits
+     on (~8.8:1 on background, ~8.1:1 on muted, ~7:1 on the sidebar's accent), where the old light grey at
+     half alpha measured 1.2:1. Hover borders use `border-3`, a light grey, not this. */
+  --ring: oklch(0.424 0.199 265.638);
   --chart-1: oklch(0.648 0.217 37.071);
   --chart-2: oklch(0.605 0.107 184.17);
   --chart-3: oklch(0.397 0.07 227.19);
