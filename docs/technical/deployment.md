@@ -282,14 +282,16 @@ pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front
 
 ## CI
 
-`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on PRs that touch their app or their own
-workflow file (`ci.web.yml` also on any file Prettier formats, since it checks the whole tree), on the
-versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
+`ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on every PR, scoped by the PR's files with
+the pre-commit hook's rules: the full suite when their own app (or a root file both read) changed, only the
+cross-app tests when just the other app did, and for docs-only PRs only the Prettier check; every push to
+`main` runs both in full. They run on the versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
 also checks Prettier formatting over the whole tree and lints and type-checks `packages/ui`. `ci.api.yml`
 also replays the migration chain from its baseline — online, and as the script `alembic upgrade --sql`
 writes — and fails when either database's schema differs from the one `01_create_tables.sql` builds.
 `ci.web-e2e.yml` runs the Playwright suite against compose's Postgres (built by `pnpm db:init`), the
-API and a production web build: on a PR that touches its floor paths or carries the `run-e2e` label,
-every night on `main`, and on demand. Its `e2e-required` job is the one to mark as a required check.
+API and a production web build: on a PR that touches its floor paths or carries the `run-e2e` label
+(split across four shards, merged and checked for a full run afterwards), every night on `main`, and on
+demand (both unsharded). Its `e2e-required` job is the one to mark as a required check.
 The `e2e-testing` skill describes the job. None of them is a deploy pipeline — wiring a deploy step is
 done against the chosen host at go-live.

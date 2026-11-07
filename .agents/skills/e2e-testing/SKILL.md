@@ -246,7 +246,10 @@ A spec that temporarily changes ACCOUNT STATE rather than adding a row (a settin
 `afterAll` can leave it changed, so check that setting on the account before trusting the next run.
 
 **A round trip is ONE test, not two.** Splitting create and delete across tests makes the second depend
-on the first having run — which `workers: 1` happens to guarantee today and no spec should rely on.
+on the first having run — and with `fullyParallel: true` the two can land on different CI shards, each
+with its own database, so the second would find nothing. Every test in a file must pass on its own; a
+file that genuinely cannot opts out with `test.describe.configure({ mode: 'default' })`, which keeps it
+whole on one shard and in order.
 
 ### Text that must not be cut off
 
@@ -323,7 +326,7 @@ Headless by default. Pass `--headed` (or use `pnpm test:e2e:headed`) when visual
 
 ### Parallelization
 
-Off by default — `fullyParallel: false` disables intra-file parallelism and `workers: 1` keeps files serial as well, so the suite is fully sequential regardless of environment. Increase `workers` (and consider `fullyParallel: true`) once the suite is large enough that runtime matters and all tests are confirmed independent.
+`workers: 1`, always: the authenticated specs share ONE harness account and change it as they go (display currencies, digest cadence, notification state), so two tests at once would race on it. Parallelism comes from CI SHARDS instead (see "What the job does"), each a whole environment of its own. `fullyParallel: true` makes each test its own unit for `--shard=i/n`, so the suite splits evenly by test rather than by file — with one worker it changes nothing about order: a run or a shard still executes its tests one at a time, in file order, and a file's `beforeAll` / `afterAll` run once around the tests of that file the worker gets (again after a failure restarts the worker). What it asks is that no test leans on an earlier one in its file; a file that does opts out with `test.describe.configure({ mode: 'default' })`. Locally a plain `pnpm --filter web test:e2e` still runs everything, in order.
 
 ### Retries
 
@@ -435,14 +438,21 @@ label.**
 decides). It reports on every run and fails when a job it needs failed or was cancelled, so a PR
 whose gate skipped `e2e-web` passes. One exception keeps it honest: a run cancelled because ANOTHER run on
 the same commit superseded it (labels added at PR creation fire `opened` and one `labeled` per label in
-the same second) waits for the run that actually ran the gate — its `changes` job succeeded and its suite
-was not cancelled, whatever its run id — and reports that run's `e2e-required` conclusion as its own,
+the same second) waits for the run that actually ran the gate — its `changes` job succeeded and none of
+its suite shards was cancelled, whatever its run id — and reports that run's `e2e-required` conclusion as its own,
 instead of a false red; cancelled with no run that ran the gate, it fails. The gate lives in the job rather than in `on.paths` because a
 workflow skipped by a path filter leaves a required check pending forever.
 
 ### What the job does
 
-One job, serial, Chromium only, built from the same pieces a developer uses:
+Chromium only, built from the same pieces a developer uses. On a PR the suite runs as FOUR shards
+(`e2e-web (1)` … `(4)`, a matrix job), each doing steps 1–6 below on its own runner — its own database,
+seeds, harness account and servers — and running a quarter of the tests (`--shard=i/4`) on one worker;
+no fail-fast, so a red shard leaves the others to finish. The nightly run and a dispatch are ONE shard
+running everything in order, so a test that passes or fails only after another file's tests still has a
+net. A separate `e2e-report` job then merges the shards' results and runs steps 7–8 once, on the merged
+whole. Each shard restores Next's build cache (`apps/web/.next/cache`, keyed on the lockfile and the
+web sources), as `ci-web` does.
 
 1. **Database:** `pnpm db:init`, unchanged — compose's Postgres image, `00_roles.sql`,
    `01_create_tables.sql`, an Alembic stamp. No CI-only schema path.
@@ -470,19 +480,23 @@ One job, serial, Chromium only, built from the same pieces a developer uses:
    `globalSetup` makes the same check first and fails at once with "start the web and API servers"
    when either is not running (a port that refuses the connection); a server that is up but slow — a
    cold `next dev` compile — gets a warning and the run carries on.
-6. **Run:** `pnpm --filter web test:e2e` with `CI=true` (so `forbidOnly` + `retries: 2`), plus two
-   reporters the config adds only in CI — `github`, which annotates the PR diff at each failure, and
-   `json`, written to `test-results/results.json`.
-7. **Require a full run:** a step reads that JSON against the spec files ON DISK and fails the job
-   unless every `*.auth.spec.ts` executed a test in `chromium-authenticated`, every other `*.spec.ts`
-   executed one in `chromium`, and nothing skipped. Each is a way the suite exits 0 on less than
-   itself: unset credentials drop the authenticated project, a `testMatch` that stops matching leaves
-   it running nothing, and a missing seed makes the conversion-basis spec skip. So **no spec may skip
-   in CI** — a spec that genuinely cannot run there has to be made to run, not skipped.
-8. **Artifacts** (14 days, uploaded on every run): the HTML report (`playwright-report`), the API and
-   web server logs (`e2e-server-logs`), and `playwright-test-results` — which holds traces, screenshots
-   and videos only for tests that FAILED (they are `retain-on-failure`), plus the JSON results. To read
-   a failure: download `playwright-report`, then `pnpm --filter web exec playwright show-report <dir>`.
+6. **Run:** `pnpm --filter web test:e2e --shard=<i>/<n>` with `CI=true` (so `forbidOnly` +
+   `retries: 2`). In CI the config swaps the HTML reporter for `github`, which annotates the PR diff at
+   each failure, and `blob`, the shard's raw results, uploaded as `blob-report-<i>`.
+7. **Require a full run** (`e2e-report`): `playwright merge-reports` turns every shard's blob into one
+   HTML report and one `test-results/results.json`, and a step reads that JSON against the spec files
+   ON DISK and fails the job unless every `*.auth.spec.ts` executed a test in
+   `chromium-authenticated`, every other `*.spec.ts` executed one in `chromium`, and nothing skipped.
+   Each is a way the suite exits 0 on less than itself: unset credentials drop the authenticated
+   project, a `testMatch` that stops matching leaves it running nothing, a missing seed makes the
+   conversion-basis spec skip, and a shard whose results never arrived leaves its specs out. So **no
+   spec may skip in CI** — a spec that genuinely cannot run there has to be made to run, not skipped.
+   `e2e-required` needs this job too, and the nightly verdict is the shards' and this job's together.
+8. **Artifacts** (14 days, uploaded on every run): the merged HTML report (`playwright-report`, from
+   `e2e-report`), and per shard the API and web server logs (`e2e-server-logs-<i>`) and
+   `playwright-test-results-<i>` — which holds traces, screenshots and videos only for tests that
+   FAILED (they are `retain-on-failure`). To read a failure: download `playwright-report`, then
+   `pnpm --filter web exec playwright show-report <dir>`.
    The per-run secrets are masked in the job LOG only; a failed test's trace records its requests and
    can hold the harness session's bearer token (no spec sends the password — they read the token from
    the saved session). That is harmless — the account and its database are discarded with the runner —
