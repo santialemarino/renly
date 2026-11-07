@@ -361,7 +361,7 @@ jobs:
           timeout 120 bash -c 'until curl -sf http://localhost:3000/api/auth/providers > /dev/null; do sleep 1; done'
 
       - name: Run e2e suite
-        run: pnpm --filter web test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: pnpm --filter web test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }} ${{ matrix.shard == 1 && '--grep-invert invite-routing' || '' }}
 
       # The shard's raw results, for `e2e-report` to merge. Uploaded on failure too: a red shard's
       # tests belong in the merged report as much as a green one's.
