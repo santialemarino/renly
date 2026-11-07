@@ -8,6 +8,7 @@ import { getSignupContext } from '@/lib/api/signup-context';
 import { AdminForbiddenError } from '@/lib/api/types';
 import { resolvePageParam } from '@/lib/list-scope';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 export async function generateMetadata() {
   return await generatePageMetadata('admin');
@@ -21,18 +22,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const t = await getTranslations('admin');
   const query = await searchParams;
 
+  // The API gates invite reads on is_admin (403 for non-admins). A logged-in non-admin who reaches
+  // this route gets a real 404 — hiding the page's existence — rather than a 403; logged-out users
+  // were already redirected to /login by the route gate. Other errors surface normally. Started now,
+  // beside the mode read, and awaited after it, so the mode's 404 still wins.
+  const invitesRead = startRead(
+    getInvites(resolvePageParam(query.page)).catch((error) => {
+      if (error instanceof AdminForbiddenError) return null;
+      throw error;
+    }),
+  );
+
   // Invites only matter in invite-only mode — in open mode anyone can sign up, so the page is gone
   // for everyone (real 404, matching the hidden sidebar item).
   const { mode } = await getSignupContext();
   if (mode !== 'invite') notFound();
 
-  // The API gates invite reads on is_admin (403 for non-admins). A logged-in non-admin who reaches
-  // this route gets a real 404 — hiding the page's existence — rather than a 403; logged-out users
-  // were already redirected to /login by the route gate. Other errors surface normally.
-  const invites = await getInvites(resolvePageParam(query.page)).catch((error) => {
-    if (error instanceof AdminForbiddenError) return null;
-    throw error;
-  });
+  const invites = await invitesRead;
   if (invites === null) notFound();
 
   return (

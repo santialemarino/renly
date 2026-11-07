@@ -33,6 +33,7 @@ import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency
 import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
+import { startRead } from '@/lib/utils/start-read';
 
 export async function generateMetadata() {
   return await generatePageMetadata('dashboard');
@@ -57,15 +58,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // Always fetch settings — needed for currency fallback and period presets.
   const settings = await getSettings().catch(() => null);
 
-  // The first-run welcome only shows until onboarding is dismissed/completed; fetch its checklist
-  // status only in that window so returning users don't pay for the extra read.
-  const showWelcome = Boolean(settings) && !settings?.onboardingCompleted;
-  const onboardingStatus = showWelcome ? await getOnboardingStatus().catch(() => null) : null;
-
-  // Auto-launch the welcome tour once for a first-run newcomer who hasn't seen it — the shared
-  // no-core-data signal UX-7 uses for the reduced sidebar, plus the dedicated tour flag. Rides the
-  // status already fetched for the checklist, so it costs no extra request.
-  const autoStartTour = hasNoCoreData(onboardingStatus) && !onboardingStatus?.tourCompleted;
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const secondary = settings?.secondaryCurrency ?? null;
   const displayCurrencies = secondary
@@ -101,15 +93,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     dateTo: endDate,
   };
 
-  // Fetch all data in parallel.
-  let overview, evolution, composition, liquidity;
-  try {
-    [overview, evolution, composition, liquidity] = await Promise.all([
+  // The figures, all at once; started before the welcome's own read below so the two run together.
+  const figuresRead = startRead(
+    Promise.all([
       getDashboardOverview(filterParams),
       getDashboardEvolution(filterParams),
       getDashboardComposition({ currency }),
       getDashboardLiquidity({ currency }),
-    ]);
+    ]),
+  );
+
+  // The first-run welcome only shows until onboarding is dismissed/completed; fetch its checklist
+  // status only in that window so returning users don't pay for the extra read.
+  const showWelcome = Boolean(settings) && !settings?.onboardingCompleted;
+  const onboardingStatus = showWelcome ? await getOnboardingStatus().catch(() => null) : null;
+
+  // Auto-launch the welcome tour once for a first-run newcomer who hasn't seen it — the shared
+  // no-core-data signal UX-7 uses for the reduced sidebar, plus the dedicated tour flag. Rides the
+  // status already fetched for the checklist, so it costs no extra request.
+  const autoStartTour = hasNoCoreData(onboardingStatus) && !onboardingStatus?.tourCompleted;
+
+  let overview, evolution, composition, liquidity;
+  try {
+    [overview, evolution, composition, liquidity] = await figuresRead;
   } catch {
     return (
       <div className="flex flex-col flex-1 p-8 gap-y-2">

@@ -24,7 +24,7 @@ import {
 } from '@/lib/api/group-settlements';
 import { getGroup } from '@/lib/api/groups';
 import { getPots } from '@/lib/api/pots';
-import { getPageSettings } from '@/lib/api/settings';
+import { getPageSettings, getSettings, type SettingsData } from '@/lib/api/settings';
 import { getSharedExpenses } from '@/lib/api/shared-expenses';
 import { getSharedIncome } from '@/lib/api/shared-income';
 import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
@@ -33,6 +33,7 @@ import { ACTIVITY_PAGE_SIZE } from '@/lib/constants/shared-activity';
 import { resolvePageParam } from '@/lib/list-scope';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 // Its own namespace rather than the list's, so a hub tab isn't titled "Groups".
 export async function generateMetadata() {
@@ -59,21 +60,19 @@ export default async function GroupHubPage({ params, searchParams }: GroupHubPag
   const id = Number(groupId);
   if (!Number.isInteger(id) || id <= 0) notFound();
 
-  // Null covers both "no such group" and "one you are not a member of", so the page's answer is
-  // identical either way and cannot be used to probe which groups exist.
-  const group = await getGroup(id);
-  if (!group) notFound();
-
-  const { settings, creditCards } = await getPageSettings();
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   /*
    * The display currency the user is browsing in, used ONLY for the glance figure beside each
    * balance bucket. The buckets themselves are never converted: each currency is its own settle line,
    * and a converted one would be a figure nobody can actually pay.
    */
-  const displayCurrency = resolveActiveCurrency(cookieStore, primary);
+  const displayCurrencyOf = (settings: SettingsData | null) =>
+    resolveActiveCurrency(cookieStore, settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY);
 
   /*
+   * Every read starts now, beside the group's own: they need only its id (the balances also the
+   * settings their glance figure is priced in). The group is awaited first, so a group that does not
+   * exist — or is not yours — is the 404 whatever the others answered.
+   *
    * Only this group's pots, and only the ones the viewer may see — RLS decides that, so the list
    * simply comes back shorter for a member the pot is hidden from rather than erroring.
    *
@@ -90,7 +89,34 @@ export default async function GroupHubPage({ params, searchParams }: GroupHubPag
    * leg. Archived ones are included so a settlement that named one still reads back by name; the
    * pickers only ever offer active accounts.
    */
+  const groupRead = getGroup(id);
+  const settingsRead = getSettings().catch(() => null);
+  const reads = startRead(
+    Promise.all([
+      getPageSettings(),
+      getPots(id),
+      getSharedExpenses(id, resolvePageParam(query.expensesPage)),
+      getSharedIncome(id, resolvePageParam(query.incomePage)),
+      settingsRead.then((settings) => getGroupBalances(id, displayCurrencyOf(settings))),
+      getGroupSettlements(id, resolvePageParam(query.settlementsPage)),
+      getGroupMoneySettings(id).catch(() => null),
+      getAccounts({ showArchived: true }),
+      // The currency picker degrades to the full ISO list on a fetch error, and the API's 422 guards.
+      getSupportedCurrencies().catch(() => undefined),
+      // Caught, unlike the four money reads, and the difference is what each list would say when
+      // empty: "nothing shared yet" about a group that has shared plenty is a lie, while an empty
+      // activity section says only that nothing is being shown — which is true of a failed read.
+      getGroupActivity(id, ACTIVITY_PAGE_SIZE).catch(() => []),
+    ]),
+  );
+
+  // Null covers both "no such group" and "one you are not a member of", so the page's answer is
+  // identical either way and cannot be used to probe which groups exist.
+  const group = await groupRead;
+  if (!group) notFound();
+
   const [
+    { settings, creditCards },
     pots,
     expenses,
     income,
@@ -100,21 +126,7 @@ export default async function GroupHubPage({ params, searchParams }: GroupHubPag
     accounts,
     supportedCurrencies,
     activity,
-  ] = await Promise.all([
-    getPots(group.id),
-    getSharedExpenses(group.id, resolvePageParam(query.expensesPage)),
-    getSharedIncome(group.id, resolvePageParam(query.incomePage)),
-    getGroupBalances(group.id, displayCurrency),
-    getGroupSettlements(group.id, resolvePageParam(query.settlementsPage)),
-    getGroupMoneySettings(group.id).catch(() => null),
-    getAccounts({ showArchived: true }),
-    // The currency picker degrades to the full ISO list on a fetch error, and the API's 422 guards.
-    getSupportedCurrencies().catch(() => undefined),
-    // Caught, unlike the four money reads, and the difference is what each list would say when empty:
-    // "nothing shared yet" about a group that has shared plenty is a lie, while an empty activity
-    // section says only that nothing is being shown — which is true of a failed read.
-    getGroupActivity(group.id, ACTIVITY_PAGE_SIZE).catch(() => []),
-  ]);
+  ] = await reads;
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-6">

@@ -18,6 +18,7 @@ import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { resolvePageParam } from '@/lib/list-scope';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 // Its own namespace rather than the group list's, so a pot tab isn't titled "Groups".
 export async function generateMetadata() {
@@ -45,8 +46,9 @@ export default async function PotPage({ params, searchParams }: PotPageProps) {
 
   // Null covers both "no such pot" and "one you may not see", so the page's answer is identical either
   // way and an id cannot be used to discover which pots exist.
-  const pot = await getPot(potId);
-  if (!pot) notFound();
+  // Every read starts with the pot's own; only the group waits for it (it needs the pot's group id).
+  // The pot is awaited first, so a pot that does not exist is the 404 whatever the others answered.
+  const potRead = getPot(potId);
 
   /*
    * The group carries the roster every dialog needs (which seats exist, which is yours, who is an
@@ -59,17 +61,23 @@ export default async function PotPage({ params, searchParams }: PotPageProps) {
    * refuses an archived pot leg — an archived holding is excluded from the pot's value, so sharing one
    * or routing money through it would move a balance the NAV never sees.
    */
-  const [group, holdings, events, series, accounts, investments, settings] = await Promise.all([
-    getGroup(pot.groupId),
-    getPotHoldings(potId),
-    getPotOwnershipEvents(potId, resolvePageParam(query.page)),
-    getPotSeries(potId),
-    // Both feed only the move-in picker and a movement's private leg: empty on error, like a user
-    // with nothing private to move, and the pot itself still renders.
-    getAccounts().catch(() => []),
-    getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
-    getSettings().catch(() => null),
-  ]);
+  const reads = startRead(
+    Promise.all([
+      potRead.then((found) => (found ? getGroup(found.groupId) : null)),
+      getPotHoldings(potId),
+      getPotOwnershipEvents(potId, resolvePageParam(query.page)),
+      getPotSeries(potId),
+      // Both feed only the move-in picker and a movement's private leg: empty on error, like a user
+      // with nothing private to move, and the pot itself still renders.
+      getAccounts().catch(() => []),
+      getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }).catch(() => null),
+      getSettings().catch(() => null),
+    ]),
+  );
+
+  const pot = await potRead;
+  if (!pot) notFound();
+  const [group, holdings, events, series, accounts, investments, settings] = await reads;
   if (!group || !holdings || !events || !series) notFound();
 
   return (

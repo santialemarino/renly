@@ -10,7 +10,7 @@ import {
   getPaymentObligations,
   type PaymentObligationSortField,
 } from '@/lib/api/payment-obligations';
-import { getPageSettings } from '@/lib/api/settings';
+import { getPageSettings, getSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -37,35 +37,41 @@ export default async function PaymentObligationsPage({
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
-    getPageSettings(),
-    // The obligation form and the Mark-Paid expense dialog restrict their currency picker to the
-    // convertible set; on a fetch error the picker degrades to the full list and the API's 422 still
-    // guards.
-    getSupportedCurrencies().catch(() => undefined),
-    /*
-     * Accounts for the optional "paid from" link on a non-card Mark-Paid expense and for an
-     * obligation's default funding account (empty on error → the fields hide themselves). Archived
-     * ones are included so a stored link or default that has since been archived still renders by
-     * name instead of a blank picker; the pickers only ever OFFER active accounts.
-     */
-    getAccounts({ showArchived: true }).catch(() => []),
-  ]);
+  const settingsRead = getSettings().catch(() => null);
+  // All at once, bar one: the list waits only for the settings it is priced in (request-memoized,
+  // shared with the layout on a full load); the pickers' reads start at once.
+  const [{ settings, creditCards }, supportedCurrencies, accounts, obligations] = await Promise.all(
+    [
+      getPageSettings(),
+      // The obligation form and the Mark-Paid expense dialog restrict their currency picker to the
+      // convertible set; on a fetch error the picker degrades to the full list and the API's 422 still
+      // guards.
+      getSupportedCurrencies().catch(() => undefined),
+      /*
+       * Accounts for the optional "paid from" link on a non-card Mark-Paid expense and for an
+       * obligation's default funding account (empty on error → the fields hide themselves). Archived
+       * ones are included so a stored link or default that has since been archived still renders by
+       * name instead of a blank picker; the pickers only ever OFFER active accounts.
+       */
+      getAccounts({ showArchived: true }).catch(() => []),
+      settingsRead.then((pageSettings) =>
+        getPaymentObligations({
+          search: params.search,
+          sortBy: params.sort_by as PaymentObligationSortField | undefined,
+          sortOrder: params.sort_order as SortOrder | undefined,
+          showArchived: params.show_archived === 'true',
+          currency: resolveActiveCurrency(
+            cookieStore,
+            pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
+          ),
+        }),
+      ),
+    ],
+  );
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-
   const currency = resolveActiveCurrency(cookieStore, primary);
 
-  const obligations = await getPaymentObligations({
-    search: params.search,
-    sortBy: params.sort_by as PaymentObligationSortField | undefined,
-    sortOrder: params.sort_order as SortOrder | undefined,
-    showArchived: params.show_archived === 'true',
-    currency,
-  });
-
-  // Teach the empty state only during first-run (before onboarding is completed) and only when no
-  // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
   const hasActiveFilters = !!params.search || params.show_archived === 'true';
   const firstRun = isFirstRunEmptyState(obligations.length === 0, hasActiveFilters, settings);
 

@@ -32,39 +32,41 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const t = await getTranslations('accounts');
   const params = await searchParams;
 
-  const [{ settings }, supportedCurrencies] = await Promise.all([
-    getPageSettings(),
-    // The account form restricts its currency picker to the convertible set; on a fetch error the
-    // picker degrades to the full list and the API's 422 still guards.
-    getSupportedCurrencies().catch(() => undefined),
-  ]);
-  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-
   const scope = resolveListScope(params.scope);
-  const { items: accounts, sections } = await getAccountsGrouped({
-    scope,
-    search: params.search,
-    sortBy: params.sort_by as AccountSortField | undefined,
-    sortOrder: params.sort_order as SortOrder | undefined,
-    showArchived: params.show_archived === 'true',
-  });
-  /*
-   * The transfer dialog's pickers need EVERY account, not the page's filtered view — searching
-   * "Galicia" must not make the destination list empty and the transfer uncreatable. Every other page
-   * that renders an account picker fetches unfiltered for the same reason (those pass
-   * `showArchived: true`, since their pickers must be able to NAME an already-stored archived link;
-   * the transfer pickers deliberately exclude archived accounts, so this call stays active-only).
-   */
-  // Only the transfer dialog reads it, so a failure leaves that dialog without options, not the page.
-  const allAccounts = await getAccounts().catch(() => []);
 
-  /*
-   * The groups the user belongs to, which is the ONE signal that turns the scope filter on — the same
-   * one the entry forms' scope control uses (X3). Read separately from `sections` on purpose:
-   * `sections` follows the current filter, so a page narrowed to "Yours" would otherwise lose the
-   * control that narrowed it. Empty for every solo user, and then nothing renders.
-   */
-  const groups = await getGroups().catch(() => []);
+  // One round: none of these reads needs another's answer.
+  const [{ settings }, supportedCurrencies, { items: accounts, sections }, allAccounts, groups] =
+    await Promise.all([
+      getPageSettings(),
+      // The account form restricts its currency picker to the convertible set; on a fetch error the
+      // picker degrades to the full list and the API's 422 still guards.
+      getSupportedCurrencies().catch(() => undefined),
+      getAccountsGrouped({
+        scope,
+        search: params.search,
+        sortBy: params.sort_by as AccountSortField | undefined,
+        sortOrder: params.sort_order as SortOrder | undefined,
+        showArchived: params.show_archived === 'true',
+      }),
+      /*
+       * The transfer dialog's pickers need EVERY account, not the page's filtered view — searching
+       * "Galicia" must not make the destination list empty and the transfer uncreatable. Every other
+       * page that renders an account picker fetches unfiltered for the same reason (those pass
+       * `showArchived: true`, since their pickers must be able to NAME an already-stored archived
+       * link; the transfer pickers deliberately exclude archived accounts, so this call stays
+       * active-only). Only the transfer dialog reads it, so a failure leaves that dialog without
+       * options, not the page.
+       */
+      getAccounts().catch(() => []),
+      /*
+       * The groups the user belongs to, which is the ONE signal that turns the scope filter on — the
+       * same one the entry forms' scope control uses (X3). Read separately from `sections` on purpose:
+       * `sections` follows the current filter, so a page narrowed to "Yours" would otherwise lose the
+       * control that narrowed it. Empty for every solo user, and then nothing renders.
+       */
+      getGroups().catch(() => []),
+    ]);
+  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.

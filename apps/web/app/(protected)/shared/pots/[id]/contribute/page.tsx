@@ -4,6 +4,7 @@ import { canContributeHolding } from '@/app/(protected)/shared/pot-rules';
 import { ContributeWizard } from '@/app/(protected)/shared/pots/[id]/contribute/_components/contribute-wizard';
 import { getContributableHoldings, getPot } from '@/lib/api/pots';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 export async function generateMetadata() {
   return await generatePageMetadata('shared.pots.contribute');
@@ -37,7 +38,12 @@ export default async function ContributePage({ params }: ContributePageProps) {
   const potId = Number(id);
   if (!Number.isInteger(potId) || potId <= 0) notFound();
 
-  const pot = await getPot(potId);
+  // The holdings start with the pot; the pot is awaited first, so its checks are the 404s whatever the
+  // holdings read answered.
+  const potRead = getPot(potId);
+  const holdingsRead = startRead(getContributableHoldings(potId));
+
+  const pot = await potRead;
   if (!pot) notFound();
   // Entirely a write flow, so there is nothing to show without write access — the same answer /admin
   // gives a non-admin, rather than a read-only view of a form that could not be submitted.
@@ -50,7 +56,7 @@ export default async function ContributePage({ params }: ContributePageProps) {
    */
   if (!canContributeHolding(pot)) notFound();
 
-  const holdings = await getContributableHoldings(potId);
+  const holdings = await holdingsRead;
   if (!holdings) notFound();
 
   return <ContributeWizard pot={pot} holdings={holdings} />;

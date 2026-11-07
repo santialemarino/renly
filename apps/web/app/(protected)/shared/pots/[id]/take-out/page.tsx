@@ -8,6 +8,7 @@ import { getPot, getPotHoldings } from '@/lib/api/pots';
 import { getSettings } from '@/lib/api/settings';
 import { isIsoDate } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { startRead } from '@/lib/utils/start-read';
 
 export async function generateMetadata() {
   return await generatePageMetadata('shared.pots.takeOut');
@@ -43,20 +44,27 @@ export default async function TakeOutPage({ params, searchParams }: TakeOutPageP
   // A malformed date is dropped rather than 404'd: it would otherwise be a way to break a shared link.
   const asOfDate = date !== undefined && isIsoDate(date) ? date : undefined;
 
-  const pot = await getPot(potId, asOfDate);
+  // Every read starts with the pot's own; only the group waits for it (it needs the pot's group id).
+  // The pot is awaited first, so its checks are the 404s whatever the others answered.
+  const potRead = getPot(potId, asOfDate);
+  const reads = startRead(
+    Promise.all([
+      potRead.then((found) => (found ? getGroup(found.groupId) : null)),
+      getPotHoldings(potId),
+      // The private leg's picker only: empty on error (the picker says so), the take-out still renders.
+      getAccounts().catch(() => []),
+      getSettings().catch(() => null),
+    ]),
+  );
+
+  const pot = await potRead;
   if (!pot) notFound();
   // Entirely a write flow, so there is nothing to show without write access — the same answer /admin
   // gives a non-admin, rather than a read-only view of a form that could not be submitted.
   if (!pot.canWrite) notFound();
   if (!canTakeShareOut(pot) && asOfDate === undefined) notFound();
 
-  const [group, holdings, accounts, settings] = await Promise.all([
-    getGroup(pot.groupId),
-    getPotHoldings(potId),
-    // The private leg's picker only: empty on error (the picker says so), the take-out still renders.
-    getAccounts().catch(() => []),
-    getSettings().catch(() => null),
-  ]);
+  const [group, holdings, accounts, settings] = await reads;
   if (!group || !holdings) notFound();
 
   return (
