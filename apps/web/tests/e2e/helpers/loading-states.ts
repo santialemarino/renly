@@ -158,6 +158,28 @@ export async function holdNavigation<Held, Released>(
   }
 }
 
+/*
+ * Waits until the page has finished entering: no loading state on screen, nothing in the hold, and the
+ * page no longer `inert`. For up to `PAGE_SKELETON_MIN_VISIBLE_MS` after the content arrives, a loading
+ * state that had become visible stays over it as an inert copy and the page underneath is `inert` — so
+ * a hit test (`elementFromPoint`) made in that window lands on the page's wrapper, not on its controls.
+ * Playwright's own clicks wait that out; a spec that hit-tests by hand waits for this first.
+ */
+export async function waitForPageEntrance(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            !document.querySelector('[data-page-skeleton]') &&
+            !document.querySelector('[data-testid="page-entrance-hold"]')?.childElementCount &&
+            !document.querySelector('.page-entrance[inert]'),
+        ),
+      { timeout: NAV_TIMEOUT, message: 'the page never finished entering' },
+    )
+    .toBe(true);
+}
+
 // The reason a spec gives when `holdNavigation` could not hold anything.
 export const NO_PREFETCH_REASON =
   'this server does not prefetch loading states (a dev server), so none can be held on screen';
