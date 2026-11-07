@@ -70,7 +70,7 @@ export function NotificationRow({ notification, onOpen, className }: Notificatio
             {t(`events.${row.detailKey}`, row.params)}
           </span>
         )}
-        <span className="text-paragraph-xs text-muted-foreground/80">
+        <span className="text-paragraph-xs text-muted-foreground">
           {fmt.timestampDate(notification.createdAt)}
         </span>
       </span>
