@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
  *
  *   1. a palette utility (`text-emerald-600`, `hover:bg-red-50/50`, `ring-amber-500/40`…), in any string,
  *      template or cva map, under any variant prefix;
- *   2. a colour literal whose hue is a status hue: `oklch(…)` by its own hue angle, `#hex` / `rgb(…)` by
+ *   2. a colour literal whose hue is a status hue: `oklch(…)` by its own hue angle, `#hex` / `rgb(…)` / `hsl(…)` by
  *      its HSL hue (blue brand values and greys pass);
  *   3. a reference to a palette variable (`var(--color-red-500)`, `text-(--color-red-500)`).
  *
@@ -71,11 +71,14 @@ const PALETTE_CLASS = new RegExp(
   'g',
 );
 const PALETTE_VARIABLE = new RegExp(`--color-(?:${STATUS_HUES})-\\d{2,3}\\b`, 'g');
-const OKLCH = /oklch\(\s*([\d.]+%?)\s+([\d.]+)\s+([\d.]+)/g;
+// Channels may be split by spaces or, inside a Tailwind arbitrary value, by underscores
+// (`text-[oklch(0.5_0.2_27)]`); the legacy rgb/hsl syntax also takes commas.
+const OKLCH = /oklch\(\s*([\d.]+%?)[\s_]+([\d.]+)[\s_]+([\d.]+)/g;
 // A hex colour where a colour goes (a string, an arbitrary value, a CSS declaration), so an issue
 // reference in prose (`#170`) is not one.
-const HEX = /(?<=['"`[(,]|:\s?)#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})(?![\w-])/g;
-const RGB = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/g;
+const HEX = /(?<=['"`[(,]|:\s?)#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})(?![\w-])/g;
+const RGB = /rgba?\(\s*(\d+)[\s_,]+(\d+)[\s_,]+(\d+)/g;
+const HSL = /hsla?\(\s*([\d.]+)(?:deg)?[\s_,]+([\d.]+)%[\s_,]+([\d.]+)%/g;
 
 // oklch hue angles of the status families (red through teal) and of rose; a near-grey has no hue.
 function isStatusOklch([, , chroma, hue]: RegExpMatchArray): boolean {
@@ -103,10 +106,18 @@ function isStatusRgb(r: number, g: number, b: number): boolean {
 }
 
 function hexIsStatus([hex]: RegExpMatchArray): boolean {
+  // A 4- or 8-digit hex carries an alpha after the colour; only the colour is judged.
   const digits = hex.slice(1);
-  const full = digits.length === 3 ? [...digits].map((d) => d + d).join('') : digits;
+  const full =
+    digits.length <= 4 ? [...digits.slice(0, 3)].map((d) => d + d).join('') : digits.slice(0, 6);
   const channel = (i: number) => parseInt(full.slice(i, i + 2), 16);
   return isStatusRgb(channel(0), channel(2), channel(4));
+}
+
+// An hsl() colour by the same hue band as rgb; a near-grey (low saturation) has no hue.
+function hslIsStatus([, hue, saturation, lightness]: RegExpMatchArray): boolean {
+  const [h, sat, l] = [Number(hue) % 360, Number(saturation), Number(lightness)];
+  return sat >= 20 && l > 3 && l < 98 && (h < 185 || h >= 330);
 }
 
 function rgbIsStatus([, r, g, b]: RegExpMatchArray): boolean {
@@ -131,6 +142,7 @@ describe('status colours come from the semantic tokens', () => {
       ...offenders(path, source, OKLCH, isStatusOklch),
       ...offenders(path, source, HEX, hexIsStatus),
       ...offenders(path, source, RGB, rgbIsStatus),
+      ...offenders(path, source, HSL, hslIsStatus),
     ]);
     expect(found).toEqual([]);
   });
@@ -152,6 +164,7 @@ describe('status colours come from the semantic tokens', () => {
         ...offenders('x', source, OKLCH, isStatusOklch),
         ...offenders('x', source, HEX, hexIsStatus),
         ...offenders('x', source, RGB, rgbIsStatus),
+        ...offenders('x', source, HSL, hslIsStatus),
       ].length > 0;
     for (const bad of [
       `'text-red-500'`,
@@ -168,7 +181,14 @@ describe('status colours come from the semantic tokens', () => {
       'box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.5)',
       'background: var(--color-red-500)',
       `'text-(--color-emerald-600)'`,
-      `'text-[oklch(0.555_0.163_48.998)]'`.replace(/_/g, ' '),
+      `'text-[oklch(0.555_0.163_48.998)]'`,
+      `'text-[oklch(55.5%_0.163_48.998)]'`,
+      `'bg-[rgb(220_38_38)]'`,
+      `'text-[rgba(220,38,38,0.5)]'`,
+      `'text-[hsl(0_72%_51%)]'`,
+      'color: hsl(142deg 71% 45%);',
+      `'text-[#dc2626cc]'`,
+      `'#d22a'`,
     ])
       expect(caught(bad), bad).toBe(true);
     for (const good of [
@@ -184,6 +204,10 @@ describe('status colours come from the semantic tokens', () => {
       `href="#faded"`,
       '// removed in #170, see #235',
       'var(--color-blue-800)',
+      `'text-[hsl(221_83%_53%)]'`,
+      'hsl(var(--sidebar-border))',
+      `'#1e40afcc'`,
+      `'text-[oklch(0.424_0.199_265.638)]'`,
     ])
       expect(caught(good), good).toBe(false);
   });
