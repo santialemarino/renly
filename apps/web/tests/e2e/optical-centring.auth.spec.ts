@@ -11,9 +11,13 @@ import { waitForPageContent } from './helpers/text-clipping';
  * Every icon + text row is `flex items-center`, which centres the label's line box on the icon; the
  * app font's vertical metrics are overridden (`lib/fonts/plus-jakarta-sans.ts`) so that the letters'
  * optical middle is where that box's middle is. With the face's own metrics every label drew low —
- * measured 1.0-1.5px at 14px, 0.9px at 16px, 1.9px at 24px — and this spec fails any row more than
- * TOLERANCE_PX off its icon. The browser rounds the baseline to a whole pixel, so a row can sit up to
- * about half a pixel off with the right metrics; 0.75px leaves room for that and nothing more.
+ * measured 1.0-1.5px at 14px, 0.9px at 16px, 1.9px at 24px, about 1px on average over these pages.
+ *
+ * The browser rounds each baseline to a whole pixel, and how it rounds depends on the platform's font
+ * stack, so one row can land up to about a pixel off even with the right metrics (a 12.8px button
+ * measured 0.70px high on macOS and 0.84px high on Linux CI). So each row is held to ROW_TOLERANCE_PX,
+ * which catches a row that is really off, and the rows together to MEAN_TOLERANCE_PX, which catches the
+ * font drawing everything low again: right metrics average about 0.25px, the face's own about 1px.
  *
  * Kept from passing vacuously: every page must render its own content and show rows, and the run must
  * meet each size the app's rows come in (`REQUIRED_SIZES`: the 12px field hints, the 12.8px small
@@ -24,7 +28,8 @@ import { waitForPageContent } from './helpers/text-clipping';
 // The pages: the sidebar on every one, the 12px field hints (/preferences), the small buttons (/data),
 // the snapshot badges (/snapshots), a concept hint and the account rows (/accounts, seeded below).
 const ROUTES = ['/dashboard', '/accounts', '/preferences', '/data', '/snapshots'] as const;
-const TOLERANCE_PX = 0.75;
+const ROW_TOLERANCE_PX = 1;
+const MEAN_TOLERANCE_PX = 0.5;
 const REQUIRED_SIZES = [12, 12.8, 14, 16];
 
 // The concept hint /accounts shows once there is an account (`DismissableHint` derives the test id).
@@ -68,6 +73,7 @@ test.beforeEach(async ({ page }) => {
 test('text beside an icon sits optically centred on it', async ({ page }) => {
   const failures: string[] = [];
   const sizes = new Set<number>();
+  const offsets: number[] = [];
   for (const route of ROUTES) {
     await page.goto(route);
     expect(await waitForPageContent(page), `${route}: its own content never rendered`).toBe(true);
@@ -80,7 +86,8 @@ test('text beside an icon sits optically centred on it', async ({ page }) => {
     expect(rows.length, `${route}: no icon + text rows found`).toBeGreaterThan(0);
     for (const row of rows) {
       sizes.add(row.fontSize);
-      if (Math.abs(row.offset) > TOLERANCE_PX) {
+      offsets.push(Math.abs(row.offset));
+      if (Math.abs(row.offset) > ROW_TOLERANCE_PX) {
         failures.push(
           `${route}: "${row.label}" (${row.fontSize}px) sits ${Math.abs(row.offset)}px ${row.offset > 0 ? 'low' : 'high'}`,
         );
@@ -89,7 +96,12 @@ test('text beside an icon sits optically centred on it', async ({ page }) => {
   }
 
   expect(failures).toEqual([]);
-  console.log(`icon + text rows measured at: ${[...sizes].sort((a, b) => a - b).join(', ')}px`);
+  const mean = offsets.reduce((sum, offset) => sum + offset, 0) / offsets.length;
+  console.log(
+    `${offsets.length} icon + text rows at ${[...sizes].sort((a, b) => a - b).join(', ')}px, ` +
+      `${mean.toFixed(2)}px off their icon on average`,
+  );
+  expect(mean, 'the rows sit off their icons on average').toBeLessThanOrEqual(MEAN_TOLERANCE_PX);
   for (const size of REQUIRED_SIZES) {
     expect([...sizes], `no ${size}px row was measured`).toContain(size);
   }
