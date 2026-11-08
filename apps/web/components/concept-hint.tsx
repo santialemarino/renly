@@ -34,7 +34,7 @@ export function ConceptHint({ storageKey, anchor, show, children }: ConceptHintP
   return (
     <DismissableHint storageKey={storageKey} show={show}>
       {children}{' '}
-      <InlineLink href={helpAnchorPath(anchor)} color="brand">
+      <InlineLink href={helpAnchorPath(anchor)} color="brand" size="inherit">
         {tCommon('learnMore')}
       </InlineLink>
     </DismissableHint>
