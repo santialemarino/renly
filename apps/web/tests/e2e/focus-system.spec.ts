@@ -53,7 +53,7 @@ test.describe('focus system (signed out)', () => {
     expectRingContrast(await measureRing(email.locator('xpath=..')));
 
     await page.goto(LANDING);
-    // The header's outline "Log in" link-button: the base Button, neutral variant.
+    // The header's outline "Log in" link-button: the base Button, outline variant.
     const login = page.locator(`header a[href="${LOGIN}"]`);
     await tabTo(page, login);
     expect(await login.evaluate((element) => element.matches(':focus-visible'))).toBe(true);

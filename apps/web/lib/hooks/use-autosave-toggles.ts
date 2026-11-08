@@ -160,7 +160,11 @@ export function useAutosaveToggles<V>(options: AutosaveTogglesOptions<V>) {
   }, [overrides, equals, confirmed]);
 
   // A burst still waiting when the control goes (a click, then a navigation) is written at once
-  // rather than lost. Nobody is left to show its outcome, so a failure is swallowed.
+  // rather than lost. Behind a write in flight, that write's answer sends it through the normal end of
+  // a save: `onError` or the caller's success toast shows on the next page and `onSettled` still runs
+  // (the pot's own-access refresh). With nothing in flight it goes straight to `write`: whatever the
+  // caller does on success still happens, but a failure has no control left to roll back and skips
+  // `onError` and `onSettled`.
   useEffect(() => {
     const pending = entries.current;
     return () => {
