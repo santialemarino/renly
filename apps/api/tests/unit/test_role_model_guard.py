@@ -191,6 +191,18 @@ class TestTheStartupRefusal:
         assert "hunter2" not in message
         assert "db.internal" not in message
 
+    # A catalogue read that raises still closes the check's engine.
+    @pytest.mark.asyncio
+    async def test_a_failed_read_still_disposes_the_engine(self, monkeypatch):
+        async def failing_read(_connection):
+            raise RuntimeError("catalogue unreadable")
+
+        monkeypatch.setattr(role_model_guard, "read_role_model", failing_read)
+        engine, _urls = _stub_engine(monkeypatch)
+        with pytest.raises(RuntimeError):
+            await verify_role_model(_settings(Environment.production))
+        assert engine.disposed is True
+
     # The refusal is wired into startup: entering the lifespan of a production app raises before the
     # scheduler starts.
     @pytest.mark.asyncio
