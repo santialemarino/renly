@@ -21,10 +21,10 @@ import messages from '../../translations/en.json';
  */
 
 vi.mock('@repo/ui/components', () => {
-  const plain =
-    (tag: string) =>
-    ({ children }: { children?: ReactNode }) =>
-      createElement(tag, null, children);
+  const plain = (tag: string) =>
+    function Plain({ children }: { children?: ReactNode }) {
+      return createElement(tag, null, children);
+    };
   return {
     Badge: plain('span'),
     Table: plain('table'),

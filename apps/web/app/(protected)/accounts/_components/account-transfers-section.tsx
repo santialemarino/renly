@@ -56,7 +56,6 @@ export function AccountTransfersSection({
     page,
     loading,
     failed,
-    invalidate,
     retry,
     goToPage,
     listRef,
