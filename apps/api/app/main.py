@@ -13,7 +13,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import Settings
 from app.config import settings as default_settings
-from app.db import engine
 from app.domain import DomainError
 from app.middleware import BodySizeLimitMiddleware
 from app.observability import init_sentry
@@ -63,7 +62,7 @@ logger = logging.getLogger(__name__)
 # startup and shuts it down on exit.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await verify_role_model(app.state.settings, engine)
+    await verify_role_model(app.state.settings)
     start_scheduler()
     yield
     stop_scheduler()
