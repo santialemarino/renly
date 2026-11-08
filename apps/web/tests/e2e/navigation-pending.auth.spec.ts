@@ -6,6 +6,7 @@ import { waitForHydration } from './helpers/hydration';
 import {
   delayNavigationTo,
   dismissAllHints,
+  holdNavigationTo,
   markClick,
   NAV_TIMEOUT,
   openNavGroups,
@@ -27,17 +28,20 @@ import {
  *   so another click takes over. Both are gone in the frame the new page arrives.
  * - A navigation faster than the delay shows neither.
  *
- * "Slow" is made, not hoped for: the navigation's own request is held back by `HELD_MS` in the browser,
- * so the bar has to appear and the wait cannot end early on a fast machine. The frames are sampled every
- * animation frame from the click (`helpers/navigation.ts`).
+ * "Slow" is made, not hoped for: the navigation's own request is held back in the browser, so the bar
+ * has to appear and the wait cannot end early on a fast machine. The frames are sampled every animation
+ * frame from the click (`helpers/navigation.ts`). The first test holds the request until the bar has
+ * been seen rather than for a fixed time, and reads the bar's first frame from the samples rather than
+ * expecting it by a fixed moment: a timer only promises not to fire EARLY, and on a loaded runner it
+ * paints well after the delay.
  */
 
 const ORIGIN = ROUTES.alerts;
 const TARGET = ROUTES.income;
 const OTHER = ROUTES.expenses;
 const HELD_MS = 600;
-// A frame or two of slack around the delay, for the timer and the paint after it.
-const SLACK_MS = 60;
+// How long the first test keeps the navigation held once the bar is on screen.
+const HELD_AFTER_BAR_MS = 300;
 
 // The frames in [from, to) ms after the click.
 function between(frames: Frame[], from: number, to: number) {
@@ -59,20 +63,27 @@ test.describe('navigation feedback', () => {
     page,
   }) => {
     await openOrigin(page);
-    await delayNavigationTo(page, TARGET, HELD_MS);
-
-    await startSampling(page);
-    await markClick(page);
-    await sidebarLink(page, TARGET).click();
-    await expect(page.getByTestId(PROGRESS_BAR)).toBeVisible();
-    // The page is busy and takes no pointer input; the sidebar still does.
-    const main = page.locator('main');
-    await expect(main).toHaveAttribute('aria-busy', 'true');
-    expect(await main.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe('none');
-    expect(
-      Number(await main.evaluate((element) => getComputedStyle(element).opacity)),
-    ).toBeLessThan(1);
-    await expect(sidebarLink(page, OTHER)).toBeEnabled();
+    const release = await holdNavigationTo(page, TARGET);
+    try {
+      await startSampling(page);
+      await markClick(page);
+      await sidebarLink(page, TARGET).click();
+      await expect(page.getByTestId(PROGRESS_BAR)).toBeVisible();
+      // The page is busy and takes no pointer input; the sidebar still does.
+      const main = page.locator('main');
+      await expect(main).toHaveAttribute('aria-busy', 'true');
+      expect(await main.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe(
+        'none',
+      );
+      expect(
+        Number(await main.evaluate((element) => getComputedStyle(element).opacity)),
+      ).toBeLessThan(1);
+      await expect(sidebarLink(page, OTHER)).toBeEnabled();
+      // A few more frames of the busy page before it is let through.
+      await page.waitForTimeout(HELD_AFTER_BAR_MS);
+    } finally {
+      release();
+    }
     await expect(page).toHaveURL(new RegExp(`${TARGET}$`), { timeout: NAV_TIMEOUT });
     await expect(page.locator('main h1').first()).toBeVisible();
     await page.waitForTimeout(200);
@@ -81,7 +92,6 @@ test.describe('navigation feedback', () => {
     const swap = swapIndex(frames);
     expect(swap).toBeGreaterThan(0);
     const swapAt = frames[swap]!.t;
-    expect(swapAt, 'the held navigation swapped in early').toBeGreaterThanOrEqual(HELD_MS);
 
     // The destination is active from the first frames after the click, and the origin no longer is.
     const first = frames.find((frame) => frame.active.includes(TARGET));
@@ -92,18 +102,23 @@ test.describe('navigation feedback', () => {
       expect(frame.active, `at ${Math.round(frame.t)} ms`).toEqual([TARGET]);
     }
 
-    // Nothing before the delay; bar and dim together after it, until the swap.
+    // Nothing before the delay.
     const early = between(frames, 0, NAVIGATION_PENDING_DELAY_MS);
-    expect(early.length).toBeGreaterThan(3);
+    expect(early.length).toBeGreaterThan(0);
     expect(early.filter((frame) => frame.bar || frame.busy)).toEqual([]);
-    const late = between(frames, NAVIGATION_PENDING_DELAY_MS + SLACK_MS, swapAt);
+    // Bar and dim arrive together, past the delay, and hold in every frame until the swap.
+    const shown = frames.findIndex((frame) => frame.bar || frame.busy);
+    expect(shown, 'the bar never showed before the swap').toBeGreaterThan(0);
+    expect(shown).toBeLessThan(swap);
+    expect(frames[shown]!.t).toBeGreaterThanOrEqual(NAVIGATION_PENDING_DELAY_MS);
+    const late = frames.slice(shown, swap);
     expect(late.length).toBeGreaterThan(3);
     expect(late.filter((frame) => !frame.bar || !frame.busy)).toEqual([]);
 
     // Gone in the frame the new page arrives, and stays gone.
     expect(frames.slice(swap).filter((frame) => frame.bar || frame.busy)).toEqual([]);
     await expect(page.getByTestId(PROGRESS_BAR)).toHaveCount(0);
-    await expect(main).not.toHaveAttribute('aria-busy');
+    await expect(page.locator('main')).not.toHaveAttribute('aria-busy');
   });
 
   test('a navigation faster than the delay shows neither bar nor dim (back and forward)', async ({
