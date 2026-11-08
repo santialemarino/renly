@@ -118,8 +118,9 @@ jobs:
       # Cancels every older run of this workflow for this PR that has not finished: a superseded push's,
       # or one on this same commit (a label added after the push). Only the run for the PR's CURRENT head
       # does it, read live, so re-running an old run never cancels a newer one; and only runs that started
-      # before this one (smaller id), so two runs never cancel each other. A run from a fork has a
-      # read-only token and cannot cancel: it then runs beside the older one, which is slower, not wrong.
+      # before this one (smaller id), so two runs never cancel each other. Matched on the PR number too, so
+      # two PRs from one head branch never cancel each other. A run from a fork lists no PR and has a
+      # read-only token, so it cancels nothing: it then runs beside the older one, slower, not wrong.
       - name: Cancel the runs this one supersedes
         uses: actions/github-script@v7
         with:
@@ -141,7 +142,8 @@ jobs:
               (run) =>
                 run.id < context.runId &&
                 run.status !== 'completed' &&
-                run.head_repository?.full_name === pr.head.repo.full_name,
+                run.head_repository?.full_name === pr.head.repo.full_name &&
+                run.pull_requests?.some((other) => other.number === pr.number),
             );
             for (const run of older) {
               try {
@@ -535,6 +537,9 @@ jobs:
   # Every step carries `always()`: a step's default condition is `success()`, which a CANCELLED run (the
   # `changes` job of a newer run cancels this one whole) turns false — both checks would be skipped, and
   # a job whose steps all skipped passes.
+  # Shards that ran with no merged report after them (`e2e-web` not skipped, `e2e-report` skipped: the run
+  # was cancelled between the two) mean the full-run check never ran, so that case takes the cancelled
+  # path too: it can only report another run's verdict, or fail — never pass on its own results.
   e2e-required:
     needs: [changes, e2e-web, e2e-report]
     if: always()
@@ -549,7 +554,9 @@ jobs:
           echo "::error::changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}, e2e-report: ${{ needs.e2e-report.result }}"
           exit 1
       - name: When cancelled, report the run on this commit that actually ran, or fail
-        if: ${{ always() && !contains(needs.*.result, 'failure') && contains(needs.*.result, 'cancelled') }}
+        if: >-
+          ${{ always() && !contains(needs.*.result, 'failure') && (contains(needs.*.result, 'cancelled') ||
+          (needs.e2e-web.result != 'skipped' && needs.e2e-report.result == 'skipped')) }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -581,6 +588,7 @@ jobs:
                 });
                 const changes = job(listed.jobs, 'changes');
                 const shards = listed.jobs.filter((j) => j.name === 'e2e-web' || j.name.startsWith('e2e-web ('));
+                const report = job(listed.jobs, 'e2e-report');
                 const gate = job(listed.jobs, 'e2e-required');
                 if (!changes || changes.status !== 'completed') {
                   // A completed run with no `changes` job (a startup failure) will never get one.
@@ -590,6 +598,9 @@ jobs:
                 }
                 if (changes.conclusion !== 'success') { settled.set(run.id, null); continue; }
                 if (shards.some((s) => s.status === 'completed' && s.conclusion === 'cancelled')) { settled.set(run.id, null); continue; }
+                // Shards that ran but were never merged and checked: that run did not run the gate either.
+                const shardsRan = shards.some((s) => s.status === 'completed' && s.conclusion !== 'skipped');
+                if (shardsRan && report?.status === 'completed' && report.conclusion === 'skipped') { settled.set(run.id, null); continue; }
                 if (gate?.status === 'completed') settled.set(run.id, gate.conclusion);
                 else pending = true;
               }
