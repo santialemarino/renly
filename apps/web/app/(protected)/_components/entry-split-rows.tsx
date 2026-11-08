@@ -151,7 +151,7 @@ export function EntrySplitRows<T extends SplitFormValues & FieldValues>({
           <span
             className={cn(
               'text-paragraph-sm-medium tabular-nums',
-              balanced ? 'text-emerald-600' : 'text-amber-600',
+              balanced ? 'text-success' : 'text-warning',
             )}
           >
             {totalLabel}

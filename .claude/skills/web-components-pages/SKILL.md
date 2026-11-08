@@ -175,7 +175,7 @@ Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-x
 ## Rounding and design tokens
 
 - **Never sharp / fully square.** `--radius` 0.625rem (`packages/ui/src/styles/index.css`) + the scale (`--radius-mini`, `--radius-0.5xl`, `--radius-1.5xl` in `packages/ui/src/styles/theme.css`): buttons/inputs `rounded-lg`, cards `rounded-1.5xl` (or `rounded-xl` compact), badges `rounded-full` (square variant only when intentional). A grouped surface/container (a section panel, a callout) rounds too — audit every box you add.
-- Use the oklch design tokens (`--ring`, `--destructive`, `--accent`, `--ghost`, `border-0..5`, …) — never raw hex. Variants via CVA (Button/Badge): extend variants, don't fork the component.
+- Use the oklch design tokens (`--ring`, `--destructive`, `--accent`, `--ghost`, `border-0..5`, …) — never raw hex. Status colours are the semantic tokens (`text-success`, `bg-warning-subtle`, `text-gain` / `text-loss`, …), never a palette shade like `text-red-500` (ux-motion → Status colours; a unit test enforces it). Variants via CVA (Button/Badge): extend variants, don't fork the component.
 
 ## API boundary and naming conventions
 

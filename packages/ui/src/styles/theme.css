@@ -39,9 +39,6 @@
   --color-accent-0: var(--accent-0);
   --color-accent-2: var(--accent-2);
   --color-accent-3: var(--accent-3);
-  --color-destructive-border: var(--destructive-border);
-  --color-destructive-subtle: var(--destructive-subtle);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-contrast: var(--contrast);
   --color-backdrop: var(--backdrop);
   --color-mid: var(--mid);
@@ -58,8 +55,26 @@
   --color-border-4: var(--border-4);
   --color-border-5: var(--border-5);
   --color-stone-700: var(--stone-700);
-  --color-schemes-error-container: var(--schemes-error-container);
-  --color-schemes-error: var(--schemes-error);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-border: var(--danger-border);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
+  --color-danger-solid-active: var(--danger-solid-active);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-border: var(--info-border);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --color-chart-gain: var(--chart-gain);
+  --color-chart-gain-soft: var(--chart-gain-soft);
+  --color-chart-loss: var(--chart-loss);
 
   /* Fonts (project-specific) */
   /* The app's next/font face, through the variable its root layout sets on <html>; the family name is

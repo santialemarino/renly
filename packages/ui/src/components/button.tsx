@@ -17,9 +17,9 @@ const buttonVariants = cva(
         ghost:
           'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
         destructive:
-          // red-600 carries white text at 4.8:1 (red-500 was 3.8:1, below the 4.5:1 a label needs);
+          // The danger solid (red-600) carries white text at 4.8:1 (red-500 was 3.8:1, below a label's 4.5:1);
           // hover and press step darker from there.
-          'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus-visible:ring-red-500/50 focus-visible:border-red-500/40 border-transparent',
+          'bg-danger-solid text-white hover:bg-danger-solid-hover active:bg-danger-solid-active focus-visible:ring-danger/50 focus-visible:border-danger/40 border-transparent',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

@@ -547,7 +547,7 @@ export function TakeOutWizard({
                 </p>
 
                 {!movesValue && (
-                  <p className="text-paragraph-sm text-amber-600">
+                  <p className="text-paragraph-sm text-warning">
                     {t('pots.takeOut.confirm.valueWaits')}
                   </p>
                 )}

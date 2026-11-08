@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
@@ -54,25 +55,44 @@ export function InvestorDashboardDistribution({
 
   const hasTargets = !isCategoryMode && chartData.some((e) => e.targetPercentage != null);
 
-  // A collection with a target shows it after its share, coloured by which side of it the share is.
-  const slices = chartData.map((entry) => ({
-    name: entry.name,
-    value: entry.value,
-    percentage: entry.percentage,
-    extra: entry.targetPercentage != null && (
-      <span
-        className={`shrink-0 text-paragraph-mini ${
-          entry.difference != null && entry.difference > 0
-            ? 'text-red-500'
-            : entry.difference != null && entry.difference < 0
-              ? 'text-amber-500'
-              : 'text-muted-foreground'
-        }`}
-      >
-        ({fmt.pct(entry.targetPercentage)}%)
-      </span>
-    ),
-  }));
+  /*
+   * A collection with a target shows it after its share, marked by which side of it the share is. The
+   * arrow carries that as well as the colour (red and amber are one colour under protanopia), and the
+   * legend below names both arrows; a screen reader hears the side in words.
+   */
+  const slices = chartData.map((entry) => {
+    const side =
+      entry.difference != null && entry.difference > 0
+        ? 'over'
+        : entry.difference != null && entry.difference < 0
+          ? 'under'
+          : null;
+    return {
+      name: entry.name,
+      value: entry.value,
+      percentage: entry.percentage,
+      extra: entry.targetPercentage != null && (
+        <span
+          className={`inline-flex shrink-0 items-center gap-x-0.5 text-paragraph-mini ${
+            side === 'over'
+              ? 'text-danger'
+              : side === 'under'
+                ? 'text-warning'
+                : 'text-muted-foreground'
+          }`}
+        >
+          {side === 'over' && <ArrowUp aria-hidden className="size-3" />}
+          {side === 'under' && <ArrowDown aria-hidden className="size-3" />}
+          {side && (
+            <span className="sr-only">
+              {side === 'over' ? t('distribution.overAllocated') : t('distribution.underAllocated')}
+            </span>
+          )}
+          ({fmt.pct(entry.targetPercentage)}%)
+        </span>
+      ),
+    };
+  });
 
   return (
     <DistributionDonut
@@ -103,11 +123,13 @@ export function InvestorDashboardDistribution({
               transition={{ duration: ANIMATION_DEFAULT }}
               className="flex items-center justify-center gap-x-4 text-paragraph-xs text-muted-foreground"
             >
-              <span>
-                <span className="text-red-500">●</span> {t('distribution.overAllocated')}
+              <span className="inline-flex items-center gap-x-1">
+                <ArrowUp aria-hidden className="size-3 text-danger" />
+                {t('distribution.overAllocated')}
               </span>
-              <span>
-                <span className="text-amber-500">●</span> {t('distribution.underAllocated')}
+              <span className="inline-flex items-center gap-x-1">
+                <ArrowDown aria-hidden className="size-3 text-warning" />
+                {t('distribution.underAllocated')}
               </span>
             </motion.div>
           )}

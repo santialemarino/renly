@@ -28,7 +28,7 @@ const CheckItem = ({ checked, label, isInvalid }: CheckItemProps) => (
     <div className="size-3 flex items-center justify-center relative shrink-0">
       <Check
         className={cn(
-          'size-3! shrink-0! text-green-600 transition-opacity duration-200',
+          'size-3! shrink-0! text-success transition-opacity duration-200',
           checked ? 'opacity-100' : 'opacity-0 absolute',
         )}
       />
@@ -77,16 +77,16 @@ export function PasswordMeter({
 
   const strengthColors: Record<PasswordStrength, string> = {
     empty: 'bg-neutral-300',
-    weak: 'bg-orange-400',
-    moderate: 'bg-blue-500',
-    strong: 'bg-green-500',
+    weak: 'bg-warning',
+    moderate: 'bg-info',
+    strong: 'bg-success',
   };
 
   const strengthTextColors: Record<PasswordStrength, string> = {
     empty: 'text-neutral-400',
-    weak: 'text-orange-500',
-    moderate: 'text-blue-600',
-    strong: 'text-green-600',
+    weak: 'text-warning',
+    moderate: 'text-info',
+    strong: 'text-success',
   };
 
   return (

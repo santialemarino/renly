@@ -340,7 +340,7 @@ export function BuyOutWizard({ pot, group, asOfDate, timeZone }: BuyOutWizardPro
                  * private accounts, and nothing in Renly spans those, so it is not recorded — stated
                  * plainly rather than routed through the shared account as two events that never happened.
                  */}
-                <p className="text-paragraph-sm text-amber-600">
+                <p className="text-paragraph-sm text-warning">
                   {t('pots.buyOut.recorded.cashNotRecorded')}
                 </p>
 
