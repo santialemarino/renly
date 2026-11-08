@@ -23,6 +23,8 @@ const HAMBURGER = '[data-sidebar="trigger"]';
 
 // Sub-pixel rounding only.
 const TOLERANCE_PX = 2;
+// The popover's gap from the sidebar's edge (`POPOVER_GAP_PX` in the bell).
+const GAP_PX = 8;
 // The popover keeps at least this much from the viewport's bottom edge (its collision padding).
 const MIN_BOTTOM_ROOM_PX = 8;
 
@@ -73,6 +75,49 @@ test.describe('the notification bell', () => {
       await expect(bell).toBeFocused();
     });
   }
+
+  /*
+   * The distance to the sidebar's edge is measured, so it has to be measured again while the popover is
+   * open whenever the layout moves under it. A larger text size scales the sidebar and the header's
+   * padding with it (both are in rem) without any resize event, and the window can then resize too; the
+   * popover must sit the same gap past the sidebar's edge after each.
+   */
+  test('keeps its gap from the sidebar while the layout changes under it', async ({ page }) => {
+    await openStart(page, 1440);
+    const bell = page.getByTestId(BELL);
+    await bell.click();
+    const panel = page.getByTestId(PANEL);
+    await expect(panel).toBeVisible();
+    await page.waitForTimeout(400);
+
+    const expectGap = async (when: string) => {
+      const sidebar = await box(page, SIDEBAR);
+      const panelBox = (await panel.boundingBox())!;
+      expect(
+        Math.abs(panelBox.x - (sidebar.x + sidebar.width + GAP_PX)),
+        `the panel is not ${GAP_PX}px past the sidebar ${when}`,
+      ).toBeLessThanOrEqual(TOLERANCE_PX);
+    };
+    await expectGap('on open');
+
+    const headerPadding = () =>
+      bell.evaluate((element) => getComputedStyle(element.parentElement!).paddingRight);
+    const before = await headerPadding();
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '32px';
+    });
+    // Proven to have moved the bell inside the header, which is what the old offset no longer fits.
+    await expect.poll(headerPadding).not.toBe(before);
+    await expect(panel).toBeVisible();
+    await expect.poll(async () => (await panel.boundingBox())?.x).toBeGreaterThan(0);
+    await page.waitForTimeout(200);
+    await expectGap('after the text size grew');
+
+    await page.setViewportSize({ width: 1280, height: HEIGHT });
+    await page.waitForTimeout(200);
+    await expect(panel).toBeVisible();
+    await expectGap('after the window resized');
+  });
 
   test('fits a short viewport and scrolls its list rather than the page', async ({ page }) => {
     const height = 420;
