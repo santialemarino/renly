@@ -115,7 +115,13 @@ function SettlementsSection({
                 </div>
 
                 {/* Where focus waits while a retry or a page change swaps these lines (see the hook). */}
-                <div ref={listRef} tabIndex={-1} className="outline-none">
+                <div
+                  ref={listRef}
+                  role="group"
+                  aria-label={t('settlements.title')}
+                  tabIndex={-1}
+                  className="outline-none"
+                >
                   <AnimatePresence mode="wait">
                     {loading ? (
                       <motion.p

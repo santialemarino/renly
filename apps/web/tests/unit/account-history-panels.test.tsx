@@ -323,6 +323,48 @@ describe('focus through a retry or a page change', () => {
     expect(document.activeElement).toBe(current);
   });
 
+  it('leaves focus on the page already shown when its link is pressed', async () => {
+    actions.fetchAccountReconciliations.mockResolvedValue({
+      items: [RECONCILIATION],
+      total: 60,
+      pageSize: 25,
+      latestAsOfDate: RECONCILIATION.asOfDate,
+    });
+    const view = render(reconciliations(false));
+    view.rerender(reconciliations(true));
+    await elapse(600);
+
+    const one = screen.getByRole('link', { name: '1' });
+    expect(one).toHaveAttribute('aria-current', 'page');
+    one.focus();
+    fireEvent.click(one);
+    await elapse(600);
+    expect(actions.fetchAccountReconciliations).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(one);
+  });
+
+  it('leaves focus where the reader put it during the load', async () => {
+    actions.fetchAccountTransfers
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'));
+    const view = render(transfers(false));
+    view.rerender(transfers(true));
+    await elapse(600);
+
+    const retry = screen.getByRole('button', { name: PAGED.retry });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(list().getAttribute('tabindex')).toBe('-1');
+    // The reader moves on while the retry is loading (and fails again).
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    await elapse(600);
+    expect(screen.getByRole('button', { name: PAGED.retry })).not.toBe(retry);
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
   it('moves nothing when focus was not in the list', async () => {
     actions.fetchAccountTransfers.mockRejectedValueOnce(new Error('offline'));
     const view = render(transfers(false));

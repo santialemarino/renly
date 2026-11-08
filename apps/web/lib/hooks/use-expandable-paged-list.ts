@@ -38,7 +38,8 @@ interface UseExpandablePagedListOptions<R> {
  * (`listRef`, a `tabIndex={-1}` wrapper around the swapped lines) rather than let it fall to the body,
  * and once the load has landed hand it on: to the new page's link in the pager after a page change, to
  * the Retry again after another failure, and otherwise it stays on the list, one Tab from the rows.
- * Nothing moves if the reader has already put focus somewhere else.
+ * Nothing moves if the reader has already put focus somewhere else, and a press on the page already
+ * shown holds nothing (it loads nothing).
  */
 export function useExpandablePagedList<R extends Page<unknown>>({
   expanded,
@@ -146,12 +147,15 @@ export function useExpandablePagedList<R extends Page<unknown>>({
     holdFocus('retry');
     invalidate();
   }, [holdFocus, invalidate]);
+  // The pager also answers a press on the page already shown, which loads nothing: no hold then, or
+  // focus would wait on the list for a load that never comes.
   const goToPage = useCallback(
     (next: number) => {
+      if (next === page) return;
       holdFocus('page');
       setPage(next);
     },
-    [holdFocus],
+    [holdFocus, page],
   );
 
   return {
