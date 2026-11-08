@@ -31,15 +31,15 @@ Use **api-\*** skills when touching the backend; **web-\*** when touching the fr
 
 ## 2. Lints and checks before commit
 
-Before committing (or suggesting a commit), ensure lints and checks pass. The repo runs them on every commit via Husky (`scripts/pre-commit.sh`), **scoped by the staged paths**:
+Before committing (or suggesting a commit), ensure lints and checks pass. The repo runs a FAST subset on every commit via Husky (`scripts/pre-commit.sh`) and the full suites in CI, whose `ci-api`, `ci-web` and `e2e-required` checks are required before a merge to `main`. The hook, **scoped by the staged paths**:
 
 1. **lint-staged** always (ruff + format on staged Python, ESLint fix + Prettier on staged web/`packages/ui` code, Prettier on staged JSON/Markdown/CSS/YAML).
-2. **`check:api` + `test:api`** when anything under `apps/api/` (or `docs/public/api-reference.md`, which the API suite reads) is staged.
-3. **`check:web` + `test:web`** when anything under `apps/web/` or `packages/`, or `pnpm-lock.yaml` / `pnpm-workspace.yaml` / `turbo.json` / `tsconfig*`, is staged. `test:web` is where the accessibility, translation-parity and route-coverage guards live.
-4. **Nothing more** for docs, `.claude/`, `.agents/`, `.github/`, `*.md` and `LICENSE`; **everything** for any other path (the root `package.json`, root config, `scripts/`, `.husky/`, docker).
-5. **The cross-app tests of the side not fully run** (`pnpm --filter <app> run test:cross-app`) whenever any code is staged, because they read the other app's source.
+2. **The type checks of the side staged:** `check:api` when anything under `apps/api/` (or `docs/public/api-reference.md`, which the API suite reads) is staged; `check:web` when anything under `apps/web/` or `packages/`, or `pnpm-lock.yaml` / `pnpm-workspace.yaml` / `turbo.json` / `tsconfig*`, is.
+3. **The tests related to the staged files:** on the web `vitest related --run` (the test files that import a staged file, directly or not); on the API the same question answered from the import graph by `scripts/api-related-tests.py`. A side's FULL suite runs instead when a staged path is one no import reaches: on the API anything but a Python module of `app/` or `tests/` (schema, migrations, `pyproject.toml`, `uv.lock`, the API reference, a deleted file); on the web the lockfile and workspace files, `tsconfig*`, a `package.json`, the Vitest config and the test setup.
+4. **Both apps' cross-app tests** (`pnpm --filter <app> run test:cross-app`) whenever any code is staged: they read the other app's source by path, which no import graph sees.
+5. **Nothing more** for docs, `.claude/`, `.agents/`, `.github/`, `*.md` and `LICENSE`; **both full suites** for any other path (the root `package.json`, root config, `scripts/`, `.husky/`, docker).
 
-`PRE_COMMIT_DRY_RUN=1 bash scripts/pre-commit.sh` prints the plan for the current staged set (and then fails, so it can never let a commit through). The `testing` skill has the cross-app tagging. So the tree should stay green — but don’t leave broken state or rely on “fix later.” If you’re about to commit a change the hook will not fully check, or want the whole picture, run from repo root:
+What the hook does NOT run is every other test — in particular the structural guards that read source by path rather than importing it (route coverage, translation parity, the tag and enum guards): CI runs them on every PR. `PRE_COMMIT_DRY_RUN=1 bash scripts/pre-commit.sh` prints the plan for the current staged set (and then fails, so it can never let a commit through). The `testing` skill has the cross-app tagging. So the tree should stay green — but don’t leave broken state or rely on “fix later.” Before pushing a change whose blast radius goes past its imports (a new page, a renamed message key, a new enum, a guard's population), or whenever you want the whole picture, run from repo root:
 
 - `pnpm lint` (and fix if needed)
 - `pnpm format:check` (or `pnpm format` to fix)
@@ -48,7 +48,7 @@ Before committing (or suggesting a commit), ensure lints and checks pass. The re
 - `pnpm test:api`
 - `pnpm test:web`
 
-So: no strict obligation to run these manually every time, since pre-commit runs the ones the staged paths can affect; the obligation is not to commit code that would fail any of them.
+So: no strict obligation to run these manually every time; the obligation is not to push code that would fail any of them, and CI is the gate that proves it.
 
 ## 3. Exhaustive compliance check before finishing
 

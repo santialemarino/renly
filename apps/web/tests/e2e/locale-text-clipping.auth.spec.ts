@@ -37,15 +37,19 @@ import { TEXT_SWEEP_WIDTHS, textSweepRoutes } from './helpers/text-pages';
 const SWEEP_HEIGHT = 1000;
 
 /*
- * The time budget, for one locale's whole sweep: locally 900s, because a cold dev server compiles each
- * of ~25 routes on first visit; in CI 300s, where the production build compiles nothing. Retries are off
- * for the same reason as the money sweep's: the harness already re-measures a layout still settling,
- * so a retry could only repeat a real finding at the cost of another whole sweep.
+ * The time budget, for one page in one language, through every width: locally 180s, because a cold dev
+ * server compiles the route on first visit; in CI 60s, where the production build compiles nothing.
+ * Retries are off for the same reason as the money sweep's: the harness already re-measures a layout
+ * still settling, so a retry could only repeat a real finding at the cost of another sweep of the page.
+ *
+ * One test per page and language, not one per language sweeping every page: the PR run splits the suite
+ * across shards by test COUNT, so the two sweeps (over a minute each) weighed as much as two one-second
+ * tests and left their shard minutes behind the others.
  */
 // eslint-disable-next-line turbo/no-undeclared-env-vars
 const ciEnv = process.env.CI;
 const isCI = !!ciEnv && ciEnv !== 'false' && ciEnv !== '0';
-const SWEEP_BUDGET_MS = isCI ? 300_000 : 900_000;
+const PAGE_BUDGET_MS = isCI ? 60_000 : 180_000;
 // A cold dev server's first compile of a route can outlast the default 30s navigation timeout.
 const NAVIGATION_TIMEOUT_MS = isCI ? 30_000 : 120_000;
 
@@ -77,24 +81,61 @@ function url(route: string): string {
   return route;
 }
 
-for (const locale of ['es', 'en'] as const) {
-  test(`no text is clipped without a full-text cue, at any width (${locale})`, async ({ page }) => {
-    test.setTimeout(SWEEP_BUDGET_MS);
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
+const LOCALES = ['es', 'en'] as const;
+type Locale = (typeof LOCALES)[number];
+type TabStopCases = { fits: number; standalone: number; nested: number };
 
-    const failures: string[] = [];
-    const stops = { fits: 0, standalone: 0, nested: 0 };
-    for (const route of textSweepRoutes()) {
+/*
+ * The tab-stop contract must have run on real cases of each kind it rules on — text that fits, cut
+ * text on its own, cut text inside a link or a button — so a sweep that met none cannot pass it. One
+ * page rarely shows all three, so the cases are counted over a language's WHOLE sweep, in two places:
+ *   * here, in `afterAll`, when this worker ran every page of the language (a local run, the nightly
+ *     run, or a shard that happened to get all of them);
+ *   * and in CI's merged report, which sums the `tab-stops` annotation each test leaves across every
+ *     shard (`ci.web-e2e.yml`, "Require a full run").
+ */
+const casesMet: Record<Locale, TabStopCases & { pages: Set<string> }> = {
+  es: { fits: 0, standalone: 0, nested: 0, pages: new Set() },
+  en: { fits: 0, standalone: 0, nested: 0, pages: new Set() },
+};
+
+test.afterAll(() => {
+  for (const locale of LOCALES) {
+    const met = casesMet[locale];
+    if (met.pages.size !== textSweepRoutes().length) continue;
+    console.log(`truncating tooltips checked (${locale}): ${JSON.stringify(met)}`);
+    expect(met.fits, `${locale}: no text that fits met the tab-stop check`).toBeGreaterThan(0);
+    expect(
+      met.standalone,
+      `${locale}: no cut text on its own met the tab-stop check`,
+    ).toBeGreaterThan(0);
+    expect(
+      met.nested,
+      `${locale}: no cut text in a link or button met the tab-stop check`,
+    ).toBeGreaterThan(0);
+  }
+});
+
+for (const locale of LOCALES) {
+  for (const route of textSweepRoutes()) {
+    test(`no text is clipped without a full-text cue, at any width: ${route} (${locale})`, async ({
+      page,
+    }) => {
+      test.setTimeout(PAGE_BUDGET_MS);
+      await page
+        .context()
+        .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
+
       await page.setViewportSize({ width: Math.max(...TEXT_SWEEP_WIDTHS), height: SWEEP_HEIGHT });
       await page.goto(url(route), { timeout: NAVIGATION_TIMEOUT_MS });
-      if (!(await waitForPageContent(page))) {
-        failures.push(`${route}: its own content never rendered inside <main>`);
-        continue;
-      }
+      expect(
+        await waitForPageContent(page),
+        `${route}: its own content never rendered inside <main>`,
+      ).toBe(true);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
 
+      const failures: string[] = [];
+      const stops: TabStopCases = { fits: 0, standalone: 0, nested: 0 };
       for (const width of TEXT_SWEEP_WIDTHS) {
         await page.setViewportSize({ width, height: SWEEP_HEIGHT });
         const where = `${route} @${width}px`;
@@ -135,16 +176,17 @@ for (const locale of ['es', 'en'] as const) {
         stops.nested += tabStops.nested;
         failures.push(...tabStops.findings.map((finding) => `${where}: ${finding}`));
       }
-    }
 
-    expect(failures).toEqual([]);
-    /*
-     * The tab-stop contract ran on real cases of each kind it rules on — text that fits, cut text on
-     * its own, cut text inside a link or a button — so a sweep that met none cannot pass it.
-     */
-    console.log(`truncating tooltips checked (${locale}): ${JSON.stringify(stops)}`);
-    expect(stops.fits).toBeGreaterThan(0);
-    expect(stops.standalone).toBeGreaterThan(0);
-    expect(stops.nested).toBeGreaterThan(0);
-  });
+      test
+        .info()
+        .annotations.push({ type: 'tab-stops', description: JSON.stringify({ locale, ...stops }) });
+      const met = casesMet[locale];
+      met.fits += stops.fits;
+      met.standalone += stops.standalone;
+      met.nested += stops.nested;
+      met.pages.add(route);
+
+      expect(failures).toEqual([]);
+    });
+  }
 }
