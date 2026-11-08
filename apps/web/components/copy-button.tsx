@@ -54,7 +54,7 @@ export function CopyButton({ value, ariaLabel, className }: CopyButtonProps) {
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: ANIMATION_FAST }}
           >
-            <Check className="size-4 text-emerald-600" />
+            <Check className="size-4 text-success" />
           </motion.div>
         ) : (
           <motion.div

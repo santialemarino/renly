@@ -48,7 +48,7 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
         label={t('cards.cash')}
         amount={overview.cashTotal}
         icon={overview.cashTotal !== 0 ? Landmark : undefined}
-        iconClassName="text-emerald-600"
+        iconClassName="text-success"
       >
         {/*
          * Counts the user's own accounts PLUS their share of any a pot holds, which is the same money
@@ -91,16 +91,16 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
         amount={netCashFlow}
         figureClassName={valueColor(netCashFlow)}
         icon={netCashFlow === 0 ? undefined : netCashFlow > 0 ? TrendingUp : TrendingDown}
-        iconClassName={netCashFlow > 0 ? 'text-emerald-600' : 'text-red-500'}
+        iconClassName={netCashFlow > 0 ? 'text-gain' : 'text-loss'}
       />
 
       {/* Credit Card Balance */}
       <MetricCard
         label={t('cards.creditCardBalance')}
         amount={overview.creditCardBalance}
-        figureClassName={overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground'}
+        figureClassName={overview.creditCardBalance > 0 ? 'text-loss' : 'text-muted-foreground'}
         icon={overview.creditCardBalance > 0 ? CreditCard : undefined}
-        iconClassName="text-red-500"
+        iconClassName="text-loss"
       >
         {/* The last of the three money cards to get a hint, and the one that most needed it: a bucket
             in another currency is valued at the user's chosen dollar rate, while the bill will be

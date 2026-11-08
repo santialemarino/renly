@@ -118,7 +118,7 @@ export async function PaymentsCalendarList({
                       {item.isPaid ? (
                         <Badge
                           variant="default"
-                          className="shrink-0 bg-emerald-100 [a&]:hover:bg-emerald-100 text-emerald-800"
+                          className="shrink-0 bg-success-subtle [a&]:hover:bg-success-subtle text-success"
                         >
                           {t('types.paid')}
                         </Badge>

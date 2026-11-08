@@ -162,13 +162,21 @@ class TestPoolConfiguration:
             assert engine.pool.timeout() == timeout
 
     # The admin timeout equals SQLAlchemy's default, so its value alone cannot show it was set: every
-    # engine in app/ must pass pool_timeout explicitly.
+    # pooled engine in app/ must pass pool_timeout explicitly. An engine on NullPool (the startup role-model
+    # check's one connection) has no pool to wait on, so a timeout there would mean nothing.
     def test_every_engine_passes_pool_timeout(self):
         engines = []
+        unpooled = []
         for path in sorted(_APP_DIR.rglob("*.py")):
             for node in ast.walk(ast.parse(path.read_text())):
                 if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "create_async_engine":
-                    engines.append((f"{path.relative_to(_APP_DIR)}:{node.lineno}", {kw.arg for kw in node.keywords}))
+                    where = f"{path.relative_to(_APP_DIR)}:{node.lineno}"
+                    poolclass = next((kw.value for kw in node.keywords if kw.arg == "poolclass"), None)
+                    if getattr(poolclass, "id", None) == "NullPool":
+                        unpooled.append(where)
+                        continue
+                    engines.append((where, {kw.arg for kw in node.keywords}))
         assert len(engines) == 3
+        assert [where.split(":")[0] for where in unpooled] == ["role_model_guard.py"]
         offenders = [where for where, kwargs in engines if "pool_timeout" not in kwargs]
         assert offenders == [], f"engines without an explicit pool_timeout: {offenders}"

@@ -109,6 +109,24 @@ export async function delayNavigationTo(page: Page, path: string, ms: number) {
   );
 }
 
+/*
+ * Holds every navigation to `path` until the returned `release` is called, so a test can assert what
+ * the page shows while it waits for as long as that takes, rather than racing a fixed hold. Call
+ * `release` in a `finally`: a request still held when the test ends keeps its route open.
+ */
+export async function holdNavigationTo(page: Page, path: string): Promise<() => void> {
+  let release = () => {};
+  const released = new Promise<void>((done) => (release = done));
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      if (isNavigationTo(route.request(), path)) await released;
+      await route.continue().catch(() => undefined);
+    },
+  );
+  return release;
+}
+
 // One sampled frame, timed from the click.
 export interface Frame {
   t: number;

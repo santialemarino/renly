@@ -14,8 +14,9 @@ run-name: 'CI API by @${{ github.actor }}'
 #   * cross-app — only the web side changed (`apps/web/**`, `packages/**`, the lockfile and workspace
 #     files, `tsconfig*`): Ruff plus the suite's cross-app tests (`pytest -m cross_app`), the ones that
 #     read the web app's source, with no database. An untagged one fails the suite's own tag guard.
-#   * none — nothing but docs, skills and markdown: `ci-api` is skipped, which a required check reads
-#     as passed.
+#   * none — nothing but docs, skills and markdown: the suite job is skipped, and `ci-api` passes.
+# The suite runs in `api-tests`; `ci-api`, the required check, is a separate job that always runs and
+# reads its result, because a required check that is itself skipped reads as passed.
 on:
   push:
     branches:
@@ -65,10 +66,10 @@ jobs:
           echo "api=$api web=$web -> $mode"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
-  ci-api:
+  api-tests:
     needs: changes
     # `always()` and the empty-mode fallback below: if `changes` itself fails, this runs the full
-    # suite rather than being skipped — a skipped required check reads as passed.
+    # suite rather than being skipped.
     if: ${{ always() && !cancelled() && needs.changes.outputs.mode != 'none' }}
     runs-on: ubuntu-latest
     defaults:
@@ -140,6 +141,21 @@ jobs:
           psql -v ON_ERROR_STOP=1 -h localhost -U renly -d renly -f database/00_roles.sql
           psql -v ON_ERROR_STOP=1 -h localhost -U renly -d renly -f database/01_create_tables.sql
           uv run alembic stamp head
+
+      # One copy of the database per test worker (`renly_gw0`, …), taken from the one just built: the
+      # suite runs on every core with pytest-xdist, and tests/conftest.py points each worker at its own
+      # copy, so no two workers share accounts, rows or query counts. Made before anything else connects,
+      # since a template must have no other session open.
+      - name: Copy the database for each test worker
+        if: env.MODE == 'full'
+        env:
+          PGPASSWORD: renly
+        run: |
+          workers="$(nproc)"
+          for i in $(seq 0 $((workers - 1))); do
+            psql -v ON_ERROR_STOP=1 -q -h localhost -U renly -d postgres -c "CREATE DATABASE renly_gw$i TEMPLATE renly"
+          done
+          echo "TEST_WORKERS=$workers" >> "$GITHUB_ENV"
 
       # The schema file builds every fresh database; the migration chain upgrades every live one. This
       # replays the chain from its baseline twice — online, and as the script `alembic upgrade --sql`
@@ -236,9 +252,12 @@ jobs:
           raise SystemExit(1 if failed else 0)
           PY
 
+      # `--dist loadfile` keeps each test file on one worker, in its own order, so module-level state
+      # (seeded accounts, rate-limit buckets, caches) behaves as in a serial run. The cross-app run below
+      # stays serial: it is a few seconds, less than starting the workers.
       - name: Run tests
         if: env.MODE == 'full'
-        run: uv run pytest tests/ -v --junitxml=pytest-results.xml
+        run: uv run pytest tests/ -n "$TEST_WORKERS" --dist loadfile -v --junitxml=pytest-results.xml
 
       - name: Run cross-app tests
         if: env.MODE == 'cross-app'
@@ -260,3 +279,23 @@ jobs:
           print(f"{total} tests, {skipped} skipped")
           raise SystemExit(1 if skipped or total == 0 else 0)
           PY
+
+  # The REQUIRED check. It always runs and passes only when `api-tests` succeeded, or when `changes`
+  # succeeded and chose `none`, which skips it. A failed or cancelled suite, or one skipped for any
+  # other reason (a cancelled run), fails it.
+  ci-api:
+    needs: [changes, api-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # `always()` on the step too: a step's default condition is `success()`, which a cancelled run
+      # turns false — the step would be skipped and the job would pass on nothing.
+      - name: Require the suite
+        if: always()
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          MODE: ${{ needs.changes.outputs.mode }}
+          TESTS: ${{ needs.api-tests.result }}
+        run: |
+          echo "changes: $CHANGES ($MODE), api-tests: $TESTS"
+          [ "$TESTS" = success ] || { [ "$TESTS" = skipped ] && [ "$CHANGES" = success ] && [ "$MODE" = none ]; }

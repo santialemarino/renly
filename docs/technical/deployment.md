@@ -285,7 +285,9 @@ pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front
 `ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on every PR, scoped by the PR's files with
 the pre-commit hook's rules: the full suite when their own app (or a root file both read) changed, only the
 cross-app tests when just the other app did, and for docs-only PRs only the Prettier check; every push to
-`main` runs both in full. They run on the versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
+`main` runs both in full. CI Web runs its checks and its build as two parallel jobs, and CI API runs its
+suite on every core of the runner (pytest-xdist, one copy of the database per worker); in each, a small
+`ci-web` / `ci-api` job reads the others' results and is the check to mark required. They run on the versions the images run (Python 3.14, the API image's base, with `uv sync --locked`; Node from `.nvmrc`). `ci.web.yml`
 also checks Prettier formatting over the whole tree and lints and type-checks `packages/ui`. `ci.api.yml`
 also replays the migration chain from its baseline — online, and as the script `alembic upgrade --sql`
 writes — and fails when either database's schema differs from the one `01_create_tables.sql` builds.

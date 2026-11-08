@@ -83,6 +83,9 @@ function SettlementsSection({
     loading,
     failed,
     invalidate,
+    retry,
+    goToPage,
+    listRef,
   } = useExpandablePagedList({
     expanded,
     fetchPage: (requestedPage: number) => fetchSettlements(cardId, requestedPage),
@@ -111,119 +114,130 @@ function SettlementsSection({
                   </Button>
                 </div>
 
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.p
-                      key="loading"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="text-paragraph-sm text-muted-foreground"
-                    >
-                      {t('settlements.loading')}
-                    </motion.p>
-                  ) : failed ? (
-                    <PagedListLoadError key="error" onRetry={invalidate} />
-                  ) : total === 0 ? (
-                    <motion.p
-                      key="empty"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="text-paragraph-sm text-muted-foreground"
-                    >
-                      {t('settlements.empty')}
-                    </motion.p>
-                  ) : (
-                    <motion.div
-                      key="table"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                    >
-                      <Table label={t('settlements.title')}>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t('settlements.table.date')}</TableHead>
-                            <TableHead>{t('settlements.table.amount')}</TableHead>
-                            <TableHead>{t('settlements.table.currency')}</TableHead>
-                            <TableHead>{t('settlements.table.account')}</TableHead>
-                            <TableHead>{t('settlements.table.notes')}</TableHead>
-                            <TableHead className="w-12 text-center">{t('table.actions')}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {settlements.map((s) => (
-                            <TableRow key={s.id}>
-                              <TableCell>{fmt.date(s.date)}</TableCell>
-                              {/* The CARD leg — what this payment cleared off the bucket — stays the
+                {/* Where focus waits while a retry or a page change swaps these lines (see the hook). */}
+                <div
+                  ref={listRef}
+                  role="group"
+                  aria-label={t('settlements.title')}
+                  tabIndex={-1}
+                  className="outline-none"
+                >
+                  <AnimatePresence mode="wait">
+                    {loading ? (
+                      <motion.p
+                        key="loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="text-paragraph-sm text-muted-foreground"
+                      >
+                        {t('settlements.loading')}
+                      </motion.p>
+                    ) : failed ? (
+                      <PagedListLoadError key="error" onRetry={retry} />
+                    ) : total === 0 ? (
+                      <motion.p
+                        key="empty"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="text-paragraph-sm text-muted-foreground"
+                      >
+                        {t('settlements.empty')}
+                      </motion.p>
+                    ) : (
+                      <motion.div
+                        key="table"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                      >
+                        <Table label={t('settlements.title')}>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t('settlements.table.date')}</TableHead>
+                              <TableHead>{t('settlements.table.amount')}</TableHead>
+                              <TableHead>{t('settlements.table.currency')}</TableHead>
+                              <TableHead>{t('settlements.table.account')}</TableHead>
+                              <TableHead>{t('settlements.table.notes')}</TableHead>
+                              <TableHead className="w-12 text-center">
+                                {t('table.actions')}
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {settlements.map((s) => (
+                              <TableRow key={s.id}>
+                                <TableCell>{fmt.date(s.date)}</TableCell>
+                                {/* The CARD leg — what this payment cleared off the bucket — stays the
                                   headline, because that is what this table is about. When the funding
                                   account was in another currency, what actually left it rides
                                   underneath: the two amounts together ARE the rate record, and neither
                                   alone says what happened. Deliberately not SignedAmountCell: every row
                                   here is a payment, so a sign would carry no information and would
                                   restyle a shipped column. */}
-                              <TableCell className="text-paragraph-sm tabular-nums">
-                                {/* The headline carries its own code ONLY when a second, differently
+                                <TableCell className="text-paragraph-sm tabular-nums">
+                                  {/* The headline carries its own code ONLY when a second, differently
                                     denominated figure sits under it. Uncoded (the Currency column names
                                     it) the two lines read as one currency — "100" over "130.000 ARS" —
                                     which is exactly the misreading the two-leg model exists to prevent. */}
-                                {s.accountAmount && s.accountCurrency ? (
-                                  <MoneyFigure>{`${fmt.amount(s.amount, s.currency)} ${s.currency}`}</MoneyFigure>
-                                ) : (
-                                  <MoneyFigure>{fmt.amount(s.amount, s.currency)}</MoneyFigure>
-                                )}
-                                {s.accountAmount && s.accountCurrency && (
-                                  <span className="block text-paragraph-xs text-muted-foreground">
-                                    {t('settlements.table.paidWith', {
-                                      amount: `${fmt.amount(s.accountAmount, s.accountCurrency)} ${s.accountCurrency}`,
-                                    })}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell>{s.currency}</TableCell>
-                              {/* Names the account the bill was paid from, so a mis-picked link is
+                                  {s.accountAmount && s.accountCurrency ? (
+                                    <MoneyFigure>{`${fmt.amount(s.amount, s.currency)} ${s.currency}`}</MoneyFigure>
+                                  ) : (
+                                    <MoneyFigure>{fmt.amount(s.amount, s.currency)}</MoneyFigure>
+                                  )}
+                                  {s.accountAmount && s.accountCurrency && (
+                                    <span className="block text-paragraph-xs text-muted-foreground">
+                                      {t('settlements.table.paidWith', {
+                                        amount: `${fmt.amount(s.accountAmount, s.accountCurrency)} ${s.accountCurrency}`,
+                                      })}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell>{s.currency}</TableCell>
+                                {/* Names the account the bill was paid from, so a mis-picked link is
                                   visible instead of write-only. An em dash means the settlement was
                                   recorded without one: the card debt dropped and no cash was
                                   recorded leaving. */}
-                              <TableCell className="text-muted-foreground">
-                                <TruncatingTooltip
-                                  text={s.accountName ?? '—'}
-                                  className="block max-w-40"
-                                />
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">
-                                <TruncatingTooltip
-                                  text={s.notes ?? '—'}
-                                  className="block max-w-48"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <RowActionButton
-                                  icon={Trash2}
-                                  tooltip={t('settlements.deleteTooltip')}
-                                  variant="destructive"
-                                  className="size-7"
-                                  iconClassName="size-3.5"
-                                  onClick={() => setDeleteSettlementState(s)}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      <TablePagination
-                        page={page}
-                        totalPages={Math.max(1, Math.ceil(total / pageSize))}
-                        totalLabel={t('settlements.table.total', { total })}
-                        onPageChange={setPage}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                                <TableCell className="text-muted-foreground">
+                                  <TruncatingTooltip
+                                    text={s.accountName ?? '—'}
+                                    className="block max-w-40"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  <TruncatingTooltip
+                                    text={s.notes ?? '—'}
+                                    className="block max-w-48"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <RowActionButton
+                                    icon={Trash2}
+                                    tooltip={t('settlements.deleteTooltip')}
+                                    variant="destructive"
+                                    className="size-7"
+                                    iconClassName="size-3.5"
+                                    onClick={() => setDeleteSettlementState(s)}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <TablePagination
+                          page={page}
+                          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                          totalLabel={t('settlements.table.total', { total })}
+                          onPageChange={goToPage}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
                 <SettlementFormDialog
                   open={addOpen}

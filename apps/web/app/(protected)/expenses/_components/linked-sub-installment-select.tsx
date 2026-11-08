@@ -123,8 +123,8 @@ function installmentNextChargeDate(installment: Installment): string {
 //   - mismatch + unselected -> muted (avoid lighting up the dropdown with amber on
 //                              browse — sort order already deprioritises them).
 function dotColorClass(status: MatchStatus, isSelected: boolean): string {
-  if (status === 'match') return 'text-emerald-500';
-  if (status === 'mismatch' && isSelected) return 'text-amber-500';
+  if (status === 'match') return 'text-success';
+  if (status === 'mismatch' && isSelected) return 'text-warning';
   return 'text-muted-foreground';
 }
 

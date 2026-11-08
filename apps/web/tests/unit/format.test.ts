@@ -117,8 +117,8 @@ describe('formatList', () => {
 
 describe('valueColor', () => {
   it('maps sign to a color class', () => {
-    expect(valueColor(5)).toBe('text-emerald-700');
-    expect(valueColor(-5)).toBe('text-red-600');
+    expect(valueColor(5)).toBe('text-gain');
+    expect(valueColor(-5)).toBe('text-loss');
     expect(valueColor(0)).toBe('text-muted-foreground');
     expect(valueColor(null)).toBe('text-muted-foreground');
   });

@@ -14,18 +14,24 @@ export const CHART_COLOR_PRIMARY = 'oklch(0.424 0.199 265.638)'; // blue-800
  * against a target of 8). Two genuinely independent categories should not use this pair.
  */
 export const CHART_COLOR_SECONDARY = 'oklch(0.707 0.165 254.624)'; // blue-400
-export const CHART_COLOR_POSITIVE = 'oklch(0.596 0.145 163.225)'; // emerald-600
+/*
+ * Gain / loss marks are the status tokens' chart steps (`--chart-gain` / `--chart-loss` in the UI token
+ * file), so a status hue is written in one place. Recharts passes these straight to SVG `fill` and to
+ * the legend's swatch style, where a CSS variable resolves like any colour.
+ */
+export const CHART_COLOR_POSITIVE = 'var(--chart-gain)';
 /*
  * A second asset segment that belongs WITH cash rather than beside it — money owed to you is money on
- * its way to your account, not a holding. Same hue two steps lighter, for the reason CHART_COLOR_SECONDARY
- * gives: relatedness reads, and lightness is the colour-vision-robust axis.
+ * its way to your account, not a holding. Same hue at the far (dark) end of the scale, for the reason
+ * CHART_COLOR_SECONDARY gives: relatedness reads, and lightness is the colour-vision-robust axis. No
+ * step lighter than the gain colour clears the 3:1 a chart mark needs on white.
  *
  * It is deliberately NOT CHART_COLOR_SECONDARY, which is blue-400 and therefore identical to
  * DONUT_COLORS[3] — a donut with four investment categories would have drawn two different things in
  * exactly the same colour, and identity is never colour alone.
  */
-export const CHART_COLOR_POSITIVE_SOFT = 'oklch(0.765 0.177 163.223)'; // emerald-400
-export const CHART_COLOR_NEGATIVE = 'oklch(0.637 0.237 25.331)'; // red-500
+export const CHART_COLOR_POSITIVE_SOFT = 'var(--chart-gain-soft)';
+export const CHART_COLOR_NEGATIVE = 'var(--chart-loss)';
 
 // --- Layout ---
 

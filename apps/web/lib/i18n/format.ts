@@ -90,14 +90,13 @@ export function formatSharePct(value: number, locale?: string): string {
 }
 
 /*
- * Returns the color class: green for positive, red for negative, grey for zero/null. The shades are
- * the lightest that clear 4.5:1 on white at every text size these land on (a 12px month delta among
- * them): emerald-700 is 5.4:1 and red-600 4.8:1, where the emerald-600 / red-500 they replace measured
- * 3.7:1 and 3.8:1.
+ * Returns the color class: the gain token for positive, the loss token for negative, grey for zero/null.
+ * Both tokens clear 4.5:1 on white and on muted at every text size these land on (a 12px month delta
+ * among them); the shades live in the token file, not here.
  */
 export function valueColor(value: number | null): string {
   if (value === null || value === 0) return 'text-muted-foreground';
-  return value > 0 ? 'text-emerald-700' : 'text-red-600';
+  return value > 0 ? 'text-gain' : 'text-loss';
 }
 
 /*

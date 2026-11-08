@@ -70,7 +70,7 @@ export function PotShareRows({ form, seats, showTotalError }: PotShareRowsProps)
         <span
           className={cn(
             'text-paragraph-sm-medium tabular-nums',
-            balanced ? 'text-emerald-600' : 'text-amber-600',
+            balanced ? 'text-success' : 'text-warning',
           )}
         >
           {`${fmt.sharePct(total)}% / ${POT_PERCENTAGE_TOTAL}%`}

@@ -54,10 +54,12 @@ export function AccountReconciliationsSection({
     total,
     pageSize,
     page,
-    setPage,
     loading,
     failed,
     invalidate,
+    retry,
+    goToPage,
+    listRef,
   } = useExpandablePagedList({
     expanded,
     reloadToken,
@@ -119,132 +121,147 @@ export function AccountReconciliationsSection({
                   )}
                 </div>
 
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.p
-                      key="loading"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="mt-3 text-paragraph-sm text-muted-foreground"
-                    >
-                      {t('loading')}
-                    </motion.p>
-                  ) : failed ? (
-                    <PagedListLoadError key="error" onRetry={invalidate} className="mt-3" />
-                  ) : total === 0 ? (
-                    <motion.p
-                      key="empty"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="mt-3 text-paragraph-sm text-muted-foreground"
-                    >
-                      {t('empty')}
-                    </motion.p>
-                  ) : (
-                    <motion.div
-                      key="table"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="mt-3"
-                    >
-                      <Table label={t('title')}>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t('table.date')}</TableHead>
-                            <TableHead className="text-right">{t('table.realBalance')}</TableHead>
-                            <TableHead className="text-right">
-                              {t('table.computedBalance')}
-                            </TableHead>
-                            <TableHead>{t('table.adjustment')}</TableHead>
-                            {isShared && <TableHead>{t('table.reconciledBy')}</TableHead>}
-                            <TableHead className="w-16 text-center">{t('table.actions')}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {reconciliations.map((reconciliation) => {
-                            const isLatest = reconciliation.asOfDate === latestDate;
-                            return (
-                              <TableRow key={reconciliation.id}>
-                                <TableCell className="text-paragraph-sm-medium">
-                                  {fmt.date(reconciliation.asOfDate)}
-                                </TableCell>
-                                <TableCell className="text-right text-paragraph-sm tabular-nums">
-                                  <MoneyFigure>
-                                    {fmt.amount(reconciliation.statementBalance, account.currency)}
-                                  </MoneyFigure>
-                                </TableCell>
-                                <TableCell className="text-right text-paragraph-sm tabular-nums text-muted-foreground">
-                                  <MoneyFigure>
-                                    {fmt.amount(reconciliation.computedBalance, account.currency)}
-                                  </MoneyFigure>
-                                </TableCell>
-                                <TableCell className="text-paragraph-xs text-muted-foreground">
-                                  {adjustmentLabel(reconciliation)}
-                                </TableCell>
-                                {isShared && (
-                                  <TableCell className="text-paragraph-xs text-muted-foreground">
-                                    {/* Null once that seat has no account left, exactly as the group's
-                                        activity trail leaves an actor unnamed for the same reason. */}
-                                    {reconciliation.reconciledBy ?? t('table.reconciledByUnknown')}
+                {/* Where focus waits while a retry or a page change swaps these lines (see the hook). */}
+                <div
+                  ref={listRef}
+                  role="group"
+                  aria-label={t('title')}
+                  tabIndex={-1}
+                  className="outline-none"
+                >
+                  <AnimatePresence mode="wait">
+                    {loading ? (
+                      <motion.p
+                        key="loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="mt-3 text-paragraph-sm text-muted-foreground"
+                      >
+                        {t('loading')}
+                      </motion.p>
+                    ) : failed ? (
+                      <PagedListLoadError key="error" onRetry={retry} className="mt-3" />
+                    ) : total === 0 ? (
+                      <motion.p
+                        key="empty"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="mt-3 text-paragraph-sm text-muted-foreground"
+                      >
+                        {t('empty')}
+                      </motion.p>
+                    ) : (
+                      <motion.div
+                        key="table"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="mt-3"
+                      >
+                        <Table label={t('title')}>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t('table.date')}</TableHead>
+                              <TableHead className="text-right">{t('table.realBalance')}</TableHead>
+                              <TableHead className="text-right">
+                                {t('table.computedBalance')}
+                              </TableHead>
+                              <TableHead>{t('table.adjustment')}</TableHead>
+                              {isShared && <TableHead>{t('table.reconciledBy')}</TableHead>}
+                              <TableHead className="w-16 text-center">
+                                {t('table.actions')}
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {reconciliations.map((reconciliation) => {
+                              const isLatest = reconciliation.asOfDate === latestDate;
+                              return (
+                                <TableRow key={reconciliation.id}>
+                                  <TableCell className="text-paragraph-sm-medium">
+                                    {fmt.date(reconciliation.asOfDate)}
                                   </TableCell>
-                                )}
-                                <TableCell className="text-center">
-                                  {/*
-                                   * Withhold rather than disable: a Radix tooltip never fires on a
-                                   * disabled trigger, so notLatestTooltip could never actually explain
-                                   * why an older reconciliation can't be deleted. Reconciliation is
-                                   * forward-only — delete newest-first.
-                                   *
-                                   * Matching on the DATE names exactly one row, and that is the
-                                   * database's guarantee rather than this list's: an account holds one
-                                   * reconciliation per as_of_date (UNIQUE, since re-running a date
-                                   * replaces it). It also has to be the date rather than the first row,
-                                   * because the history is paginated and only page 1 starts at the
-                                   * newest — `latestDate` is the account's newest across every page, so
-                                   * later pages correctly offer no delete at all.
-                                   */}
-                                  {isLatest ? (
-                                    <RowActionButton
-                                      icon={Trash2}
-                                      tooltip={t('delete.tooltip')}
-                                      variant="destructive"
-                                      className="size-7"
-                                      iconClassName="size-3.5"
-                                      testId="reconciliation-delete"
-                                      onClick={() => setDeleteTarget(reconciliation)}
-                                    />
-                                  ) : (
-                                    <RowLockedIndicator
-                                      icon={Lock}
-                                      tooltip={t('delete.notLatestTooltip')}
-                                      label={t('delete.notLatestLabel')}
-                                      className="size-7"
-                                      iconClassName="size-3.5"
-                                    />
+                                  <TableCell className="text-right text-paragraph-sm tabular-nums">
+                                    <MoneyFigure>
+                                      {fmt.amount(
+                                        reconciliation.statementBalance,
+                                        account.currency,
+                                      )}
+                                    </MoneyFigure>
+                                  </TableCell>
+                                  <TableCell className="text-right text-paragraph-sm tabular-nums text-muted-foreground">
+                                    <MoneyFigure>
+                                      {fmt.amount(reconciliation.computedBalance, account.currency)}
+                                    </MoneyFigure>
+                                  </TableCell>
+                                  <TableCell className="text-paragraph-xs text-muted-foreground">
+                                    {adjustmentLabel(reconciliation)}
+                                  </TableCell>
+                                  {isShared && (
+                                    <TableCell className="text-paragraph-xs text-muted-foreground">
+                                      {/* Null once that seat has no account left, exactly as the group's
+                                        activity trail leaves an actor unnamed for the same reason. */}
+                                      {reconciliation.reconciledBy ??
+                                        t('table.reconciledByUnknown')}
+                                    </TableCell>
                                   )}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                      {total > 0 && (
-                        <TablePagination
-                          page={page}
-                          totalPages={Math.max(1, Math.ceil(total / pageSize))}
-                          totalLabel={t('table.total', { total })}
-                          onPageChange={setPage}
-                        />
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                                  <TableCell className="text-center">
+                                    {/*
+                                     * Withhold rather than disable: a Radix tooltip never fires on a
+                                     * disabled trigger, so notLatestTooltip could never actually explain
+                                     * why an older reconciliation can't be deleted. Reconciliation is
+                                     * forward-only — delete newest-first.
+                                     *
+                                     * Matching on the DATE names exactly one row, and that is the
+                                     * database's guarantee rather than this list's: an account holds one
+                                     * reconciliation per as_of_date (UNIQUE, since re-running a date
+                                     * replaces it). It also has to be the date rather than the first row,
+                                     * because the history is paginated and only page 1 starts at the
+                                     * newest — `latestDate` is the account's newest across every page, so
+                                     * later pages correctly offer no delete at all.
+                                     */}
+                                    {isLatest ? (
+                                      <RowActionButton
+                                        icon={Trash2}
+                                        tooltip={t('delete.tooltip')}
+                                        variant="destructive"
+                                        className="size-7"
+                                        iconClassName="size-3.5"
+                                        testId="reconciliation-delete"
+                                        onClick={() => setDeleteTarget(reconciliation)}
+                                      />
+                                    ) : (
+                                      <RowLockedIndicator
+                                        icon={Lock}
+                                        tooltip={t('delete.notLatestTooltip')}
+                                        label={t('delete.notLatestLabel')}
+                                        className="size-7"
+                                        iconClassName="size-3.5"
+                                      />
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                        {total > 0 && (
+                          <TablePagination
+                            page={page}
+                            totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                            totalLabel={t('table.total', { total })}
+                            onPageChange={goToPage}
+                          />
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
                 <AccountReconciliationDeleteDialog
                   open={!!deleteTarget}

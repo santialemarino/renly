@@ -305,7 +305,7 @@ export function ContributeWizard({ pot, holdings }: ContributeWizardProps) {
                  * "the value waits" line has.
                  */}
                 {pot.isStale && pot.valuedAsOf !== null && (
-                  <p className="text-paragraph-sm text-amber-600">
+                  <p className="text-paragraph-sm text-warning">
                     {t('pots.contribute.confirm.stale', { date: fmt.date(pot.valuedAsOf) })}
                   </p>
                 )}

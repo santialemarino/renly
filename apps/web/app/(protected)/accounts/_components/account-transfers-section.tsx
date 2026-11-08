@@ -54,10 +54,11 @@ export function AccountTransfersSection({
     total,
     pageSize,
     page,
-    setPage,
     loading,
     failed,
-    invalidate,
+    retry,
+    goToPage,
+    listRef,
   } = useExpandablePagedList({
     expanded,
     reloadToken,
@@ -111,126 +112,139 @@ export function AccountTransfersSection({
                   )}
                 </div>
 
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.p
-                      key="loading"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="mt-3 text-paragraph-sm text-muted-foreground"
-                    >
-                      {t('loading')}
-                    </motion.p>
-                  ) : failed ? (
-                    <PagedListLoadError key="error" onRetry={invalidate} className="mt-3" />
-                  ) : total === 0 ? (
-                    <motion.p
-                      key="empty"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="mt-3 text-paragraph-sm text-muted-foreground"
-                    >
-                      {t('empty')}
-                    </motion.p>
-                  ) : (
-                    <motion.div
-                      key="table"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: ANIMATION_FAST }}
-                      className="mt-3"
-                    >
-                      <Table label={t('title')}>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t('table.date')}</TableHead>
-                            <TableHead>{t('table.direction')}</TableHead>
-                            <TableHead className="text-right">{t('table.amount')}</TableHead>
-                            <TableHead>{t('table.notes')}</TableHead>
-                            <TableHead className="w-16 text-center">{t('table.actions')}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {transfers.map((transfer) => {
-                            const outgoing = transfer.fromAccountId === account.id;
-                            // The counterpart is whichever leg isn't this account — the row is read
-                            // from this account's point of view, so it shows where money went or
-                            // came from, not both names.
-                            const counterpart = outgoing
-                              ? transfer.toAccountName
-                              : transfer.fromAccountName;
-                            const amount = outgoing ? transfer.fromAmount : transfer.toAmount;
-                            const currency = outgoing ? transfer.fromCurrency : transfer.toCurrency;
-                            const crossCurrency = transfer.fromCurrency !== transfer.toCurrency;
-                            return (
-                              <TableRow key={transfer.id}>
-                                <TableCell className="text-paragraph-sm-medium">
-                                  {fmt.date(transfer.date)}
-                                </TableCell>
-                                <TableCell>
-                                  <span className="flex items-center gap-x-1.5 text-paragraph-sm">
-                                    {outgoing ? (
-                                      <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
-                                    ) : (
-                                      <ArrowDownLeft className="size-4 shrink-0 text-muted-foreground" />
-                                    )}
-                                    {outgoing
-                                      ? t('table.sentTo', { account: counterpart })
-                                      : t('table.receivedFrom', { account: counterpart })}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <SignedAmountCell
-                                    amount={amount}
-                                    currency={currency}
-                                    outgoing={outgoing}
-                                    /* Both sides are shown only when they differ — that pair IS the
+                {/* Where focus waits while a retry or a page change swaps these lines (see the hook). */}
+                <div
+                  ref={listRef}
+                  role="group"
+                  aria-label={t('title')}
+                  tabIndex={-1}
+                  className="outline-none"
+                >
+                  <AnimatePresence mode="wait">
+                    {loading ? (
+                      <motion.p
+                        key="loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="mt-3 text-paragraph-sm text-muted-foreground"
+                      >
+                        {t('loading')}
+                      </motion.p>
+                    ) : failed ? (
+                      <PagedListLoadError key="error" onRetry={retry} className="mt-3" />
+                    ) : total === 0 ? (
+                      <motion.p
+                        key="empty"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="mt-3 text-paragraph-sm text-muted-foreground"
+                      >
+                        {t('empty')}
+                      </motion.p>
+                    ) : (
+                      <motion.div
+                        key="table"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: ANIMATION_FAST }}
+                        className="mt-3"
+                      >
+                        <Table label={t('title')}>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t('table.date')}</TableHead>
+                              <TableHead>{t('table.direction')}</TableHead>
+                              <TableHead className="text-right">{t('table.amount')}</TableHead>
+                              <TableHead>{t('table.notes')}</TableHead>
+                              <TableHead className="w-16 text-center">
+                                {t('table.actions')}
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {transfers.map((transfer) => {
+                              const outgoing = transfer.fromAccountId === account.id;
+                              // The counterpart is whichever leg isn't this account — the row is read
+                              // from this account's point of view, so it shows where money went or
+                              // came from, not both names.
+                              const counterpart = outgoing
+                                ? transfer.toAccountName
+                                : transfer.fromAccountName;
+                              const amount = outgoing ? transfer.fromAmount : transfer.toAmount;
+                              const currency = outgoing
+                                ? transfer.fromCurrency
+                                : transfer.toCurrency;
+                              const crossCurrency = transfer.fromCurrency !== transfer.toCurrency;
+                              return (
+                                <TableRow key={transfer.id}>
+                                  <TableCell className="text-paragraph-sm-medium">
+                                    {fmt.date(transfer.date)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="flex items-center gap-x-1.5 text-paragraph-sm">
+                                      {outgoing ? (
+                                        <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
+                                      ) : (
+                                        <ArrowDownLeft className="size-4 shrink-0 text-muted-foreground" />
+                                      )}
+                                      {outgoing
+                                        ? t('table.sentTo', { account: counterpart })
+                                        : t('table.receivedFrom', { account: counterpart })}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <SignedAmountCell
+                                      amount={amount}
+                                      currency={currency}
+                                      outgoing={outgoing}
+                                      /* Both sides are shown only when they differ — that pair IS the
                                        record of the rate, and one derived number can't read
                                        correctly for both buying and selling. */
-                                    subLine={
-                                      crossCurrency &&
-                                      t('table.crossCurrency', {
-                                        from: `${fmt.amount(transfer.fromAmount, transfer.fromCurrency)} ${transfer.fromCurrency}`,
-                                        to: `${fmt.amount(transfer.toAmount, transfer.toCurrency)} ${transfer.toCurrency}`,
-                                      })
-                                    }
-                                  />
-                                </TableCell>
-                                <TableCell className="text-paragraph-sm text-muted-foreground">
-                                  <TruncatingTooltip
-                                    text={transfer.notes ?? '—'}
-                                    className="block max-w-48"
-                                  />
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <RowActionButton
-                                    icon={Trash2}
-                                    tooltip={t('delete.tooltip')}
-                                    variant="destructive"
-                                    onClick={() => setDeleteTarget(transfer)}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                      {total > 0 && (
-                        <TablePagination
-                          page={page}
-                          totalPages={Math.max(1, Math.ceil(total / pageSize))}
-                          totalLabel={t('table.total', { total })}
-                          onPageChange={setPage}
-                        />
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                                      subLine={
+                                        crossCurrency &&
+                                        t('table.crossCurrency', {
+                                          from: `${fmt.amount(transfer.fromAmount, transfer.fromCurrency)} ${transfer.fromCurrency}`,
+                                          to: `${fmt.amount(transfer.toAmount, transfer.toCurrency)} ${transfer.toCurrency}`,
+                                        })
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-paragraph-sm text-muted-foreground">
+                                    <TruncatingTooltip
+                                      text={transfer.notes ?? '—'}
+                                      className="block max-w-48"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <RowActionButton
+                                      icon={Trash2}
+                                      tooltip={t('delete.tooltip')}
+                                      variant="destructive"
+                                      onClick={() => setDeleteTarget(transfer)}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                        {total > 0 && (
+                          <TablePagination
+                            page={page}
+                            totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                            totalLabel={t('table.total', { total })}
+                            onPageChange={goToPage}
+                          />
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </motion.div>
           </TableCell>

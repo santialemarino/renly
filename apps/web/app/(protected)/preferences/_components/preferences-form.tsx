@@ -160,7 +160,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: ANIMATION_DEFAULT }}
                   >
-                    <AlertTriangle className="size-4 text-amber-500" />
+                    <AlertTriangle className="size-4 text-warning" />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -200,7 +200,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: ANIMATION_DEFAULT }}
                   >
-                    <AlertTriangle className="size-4 text-amber-500" />
+                    <AlertTriangle className="size-4 text-warning" />
                   </motion.div>
                 )}
               </AnimatePresence>

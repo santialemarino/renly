@@ -68,7 +68,7 @@ describe('the focus ring is solid', () => {
    * `--ring` is dark enough to clear 3:1 on its own; halving its alpha is what took the old ring to
    * 1.2:1, so every spelling of an alpha on it is refused: the named utility (`ring-ring/50`), the
    * CSS-variable utility (`ring-(--ring)/50`, `ring-[var(--ring)]/50`), and a `color-mix` naming the token
-   * with a percentage on EITHER side. The variant-tinted rings (`ring-red-500/50`, `ring-blue-800/50`)
+   * with a percentage on EITHER side. The variant-tinted rings (`ring-danger/50`, `ring-blue-800/50`)
    * are other tokens and keep their alpha.
    */
   it('never draws the ring token at a reduced alpha', () => {

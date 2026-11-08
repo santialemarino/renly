@@ -193,9 +193,9 @@ function CellContent({ cell, baseCurrency, displayCurrency, hint }: CellContentP
             <span
               className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums cursor-default ${
                 cell.periodReturnPct > 0
-                  ? 'text-emerald-700'
+                  ? 'text-gain'
                   : cell.periodReturnPct < 0
-                    ? 'text-red-600'
+                    ? 'text-loss'
                     : 'text-muted-foreground'
               }`}
             >
@@ -552,7 +552,7 @@ export function SnapshotsGrid({ grid, currency, firstRun }: SnapshotsGridProps) 
                       {overdueHint !== null && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="w-fit text-paragraph-mini-medium text-amber-700 cursor-default">
+                            <span className="w-fit text-paragraph-mini-medium text-warning cursor-default">
                               {t('grid.overdue')}
                             </span>
                           </TooltipTrigger>

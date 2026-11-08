@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bell } from 'lucide-react';
@@ -30,6 +30,7 @@ import type { AppNotification } from '@/lib/api/notifications';
 // viewport's edges when it has to shift to fit.
 const POPOVER_GAP_PX = 8;
 const POPOVER_COLLISION_PADDING_PX = 16;
+const SIDEBAR_SELECTOR = '[data-slot="sidebar-container"]';
 
 const TRIGGER_CLASS =
   'group/bell relative grid size-8 shrink-0 place-items-center rounded-lg outline-none hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:ring-3 focus-visible:ring-ring transition-colors';
@@ -41,7 +42,7 @@ const TRIGGER_CLASS =
  * of this popover.
  */
 function offsetPastSidebar(trigger: HTMLElement): number {
-  const sidebar = trigger.closest('[data-slot="sidebar-container"]');
+  const sidebar = trigger.closest(SIDEBAR_SELECTOR);
   if (!sidebar) return POPOVER_GAP_PX;
   return (
     sidebar.getBoundingClientRect().right - trigger.getBoundingClientRect().right + POPOVER_GAP_PX
@@ -86,7 +87,28 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
   const [isRefreshing, startTransition] = useTransition();
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Measured on every open, so the popover follows the sidebar however it is laid out at the time.
+  /*
+   * Re-measured while it is open, whenever the window or the sidebar's own geometry changes: a resize,
+   * or a change of text size, which scales the sidebar and the header's padding with it. Radix moves
+   * the popover with its anchor on its own; the distance to the sidebar's edge is the part it cannot know.
+   */
+  useEffect(() => {
+    const trigger = triggerRef.current;
+    if (!open || isMobile || !trigger) return;
+    const measure = () => setSideOffset(offsetPastSidebar(trigger));
+    measure();
+    const observer = new ResizeObserver(measure);
+    [trigger.closest(SIDEBAR_SELECTOR), trigger.parentElement].forEach(
+      (element) => element && observer.observe(element),
+    );
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [open, isMobile]);
+
+  // Measured on every open too, so the first frame is already in place.
   function handleOpenChange(next: boolean) {
     if (next && triggerRef.current) setSideOffset(offsetPastSidebar(triggerRef.current));
     setOpen(next);

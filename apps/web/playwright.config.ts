@@ -26,12 +26,14 @@ const authenticated = e2eCredentials() !== null;
 export default defineConfig({
   testDir: './tests/e2e',
   /*
-   * Every test is its own unit of scheduling, so `--shard=i/n` splits the suite evenly by test rather
-   * than by file (the three largest files are over half of it). It changes nothing about ORDER: with
-   * one worker, a run or a shard still executes its tests one at a time, in file order, and a file's
-   * `beforeAll` / `afterAll` still run once around the tests of that file the worker gets. What it
-   * requires is that no test leans on an earlier test in its file having run — a file that ever does
-   * opts out with `test.describe.configure({ mode: 'default' })`, which keeps it whole on one shard.
+   * `--shard=i/n` splits the suite by test COUNT rather than by file, so one file's tests can land on
+   * different shards: a file without `beforeAll` / `afterAll` is split test by test, and a file with
+   * them into at most n consecutive runs of its tests, each with its own `beforeAll` / `afterAll` around
+   * it. Within a shard (and in an unsharded run) the order is unchanged — one worker, one test at a
+   * time, in file order. What it requires is that no test leans on an earlier test in its file having
+   * run — a file that ever does opts out with `test.describe.configure({ mode: 'default' })`, which keeps
+   * it whole on one shard. And since a shard's share is a count, not a time, a test that runs for a
+   * minute weighs as much as one that runs for a second: keep long sweeps split into a test per page.
    */
   fullyParallel: true,
   forbidOnly: isCI,

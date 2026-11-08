@@ -149,7 +149,7 @@ export function SettlementPlanStep({ plan, onToggle, pending }: SettlementPlanSt
        * because it is the one outcome somebody would not expect from paying a debt.
        */}
       {Number(plan.leftover) > 0 && (
-        <p className="text-paragraph-sm text-amber-600">
+        <p className="text-paragraph-sm text-warning">
           {t('settlements.plan.leftover', {
             amount: fmt.amount(plan.leftover, plan.currency),
             currency: plan.currency,

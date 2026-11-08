@@ -2,7 +2,8 @@ import logging
 from dataclasses import dataclass
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import Settings
 
@@ -137,11 +138,19 @@ def role_model_problems(facts: RoleModelFacts) -> list[str]:
 
 
 # Refuses to start in production when the database's roles cannot enforce the policies; a no-op elsewhere.
-async def verify_role_model(app_settings: Settings, engine: AsyncEngine) -> None:
+# Reads the catalogue through the app's own settings, on a one-connection engine closed once the check is
+# done, so the verdict is about the DATABASE_URL those settings name rather than the module-level default.
+# It checks that URL only: requests still go through the module-level engines, so an app built with other
+# settings serves through `app.db` whatever this check read.
+async def verify_role_model(app_settings: Settings) -> None:
     if not app_settings.is_production:
         return
-    async with engine.connect() as connection:
-        facts = await read_role_model(connection)
+    engine = create_async_engine(app_settings.database_url, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            facts = await read_role_model(connection)
+    finally:
+        await engine.dispose()
     problems = role_model_problems(facts)
     if not problems:
         logger.info("Database role model verified: %d policied tables, all FORCEd, no privileged role.", len(facts.policied_tables))
