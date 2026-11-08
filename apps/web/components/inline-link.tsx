@@ -26,9 +26,12 @@ const INLINE_LINK_UNDERLINE_GROUP = {
 } as const;
 
 // Default type scale per size. Callers can override the size/weight via className (twMerge wins).
+// `inherit` takes no type scale at all: a link inside running copy (a hint, a paragraph, a table
+// cell) must take that copy's size and line height, or a bigger link pushes the whole line down.
 const INLINE_LINK_SIZES = {
   sm: 'text-paragraph-sm-medium',
   md: 'text-heading-5',
+  inherit: '',
 } as const;
 
 // The animated underline shared by both layouts.
