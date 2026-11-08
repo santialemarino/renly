@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
  * in the browser, so every module that imports one of them must be a client component — however it
  * imports it (named, namespace or dynamic, through the alias or a relative path) — and no module may
  * re-export one, which would hide the real caller from this check: neither `export { a } from` nor an
- * import handed on by a local `export { a }` / `export default a`.
+ * import handed on by a local `export { a }` / `export default a` / `export const b = a` (or `= ns.a`).
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +86,9 @@ const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 // A local re-export, which names no module: `export { a, b as c };` or `export default a;`.
 const LOCAL_EXPORT = /\bexport\s+(?:\{([^}]*)\}(?!\s*from\b)|default\s+(\w+)\s*;)/g;
+// A value handed on through an exported binding: `export const b = a;` or `export const b = ns.a;`.
+const BOUND_EXPORT =
+  /\bexport\s+(?:const|let|var)\s+\w+(?:\s*:[^=;]+)?\s*=\s*(\w+)(?:\s*\.\s*(\w+))?\s*;/g;
 
 // The value names in a `{ … }` clause, each as [the name before `as`, the name after it].
 function clauseNames(braces: string): [string, string][] {
@@ -99,44 +102,61 @@ function clauseNames(braces: string): [string, string][] {
     });
 }
 
-// The names each module takes from the browser module, as values: an import (`kind: 'import'`) or a
-// re-export (`kind: 'export'`) — `export … from`, or an imported name handed on by a local export. A
-// namespace import, `export *` or a dynamic import takes every name.
-function browserModuleImports(): { file: string; kind: 'import' | 'export'; names: string[] }[] {
-  const everything = browserCalls();
-  return FILES.flatMap((file) => {
-    const source = read(file);
-    // The local binding each imported browser call lives under in this file.
-    const locals = new Map<string, string[]>();
-    const statements = [...source.matchAll(STATEMENT)]
-      .filter((match) => !match[2] && isBrowserModule(file, match[4] as string))
-      .map((match) => {
-        const kind = match[1] as 'import' | 'export';
-        const clause = match[3] as string;
-        const braces = clause.match(/\{([^}]*)\}/);
-        const namespace = clause.match(/\*\s+as\s+(\w+)/);
-        const pairs = braces ? clauseNames(braces[1] as string) : [];
-        if (kind === 'import') {
-          pairs.forEach(([name, local]) => locals.set(local, [name]));
-          if (namespace) locals.set(namespace[1] as string, everything);
-        }
-        const names = clause.includes('*') ? everything : pairs.map(([name]) => name);
-        return { file, kind, names };
-      });
-    const handedOn = [...source.matchAll(LOCAL_EXPORT)]
-      .map((match) =>
-        (match[1] !== undefined
-          ? clauseNames(match[1]).map(([local]) => local)
-          : [match[2] as string]
-        ).flatMap((local) => locals.get(local) ?? []),
-      )
-      .filter((names) => names.length > 0)
-      .map((names) => ({ file, kind: 'export' as const, names }));
-    const dynamic = [...source.matchAll(DYNAMIC_IMPORT)]
-      .filter((match) => isBrowserModule(file, match[1] as string))
-      .map(() => ({ file, kind: 'import' as const, names: everything }));
-    return [...statements, ...handedOn, ...dynamic];
+type BrowserModuleUse = { file: string; kind: 'import' | 'export'; names: string[] };
+
+// The names one module takes from the browser module, as values: an import (`kind: 'import'`) or a
+// re-export (`kind: 'export'`) — `export … from`, or an imported name handed on by a local export or an
+// exported binding. A namespace import, `export *` or a dynamic import takes every name.
+function browserModuleUses(file: string, source: string, everything: string[]): BrowserModuleUse[] {
+  // The local binding each imported browser call lives under in this file.
+  const locals = new Map<string, string[]>();
+  const statements = [...source.matchAll(STATEMENT)]
+    .filter((match) => !match[2] && isBrowserModule(file, match[4] as string))
+    .map((match) => {
+      const kind = match[1] as 'import' | 'export';
+      const clause = match[3] as string;
+      const braces = clause.match(/\{([^}]*)\}/);
+      const namespace = clause.match(/\*\s+as\s+(\w+)/);
+      const pairs = braces ? clauseNames(braces[1] as string) : [];
+      if (kind === 'import') {
+        pairs.forEach(([name, local]) => locals.set(local, [name]));
+        if (namespace) locals.set(namespace[1] as string, everything);
+      }
+      const names = clause.includes('*') ? everything : pairs.map(([name]) => name);
+      return { file, kind, names };
+    });
+  const handedOn = [...source.matchAll(LOCAL_EXPORT)].map((match) =>
+    (match[1] !== undefined
+      ? clauseNames(match[1]).map(([local]) => local)
+      : [match[2] as string]
+    ).flatMap((local) => locals.get(local) ?? []),
+  );
+  // `= ns.member` hands on that one member of a namespace import; `= local` the whole binding.
+  const bound = [...source.matchAll(BOUND_EXPORT)].map((match) => {
+    const taken = locals.get(match[1] as string) ?? [];
+    const member = match[2];
+    return member === undefined ? taken : taken.filter((name) => name === member);
   });
+  const exported = [...handedOn, ...bound]
+    .filter((names) => names.length > 0)
+    .map((names) => ({ file, kind: 'export' as const, names }));
+  const dynamic = [...source.matchAll(DYNAMIC_IMPORT)]
+    .filter((match) => isBrowserModule(file, match[1] as string))
+    .map(() => ({ file, kind: 'import' as const, names: everything }));
+  return [...statements, ...exported, ...dynamic];
+}
+
+// Every module's uses of the browser module.
+function browserModuleImports(): BrowserModuleUse[] {
+  const everything = browserCalls();
+  return FILES.flatMap((file) => browserModuleUses(file, read(file), everything));
+}
+
+// The browser calls a module hands on, for the fixtures below.
+function reExported(source: string): string[] {
+  return browserModuleUses('lib/fixture.ts', source, ['registerRequest', 'forgotPasswordRequest'])
+    .filter(({ kind }) => kind === 'export')
+    .flatMap(({ names }) => names);
 }
 
 describe('server-side API calls', () => {
@@ -183,6 +203,35 @@ describe('server-side API calls', () => {
       reExports,
       'import a browser call from lib/auth-api.ts itself, not through a re-export',
     ).toEqual([]);
+  });
+
+  it('recognises every way a module can hand a browser call on', () => {
+    const named = "import { registerRequest } from '@/lib/auth-api';\n";
+    const namespace = "import * as authApi from './auth-api';\n";
+    expect(reExported("export { registerRequest } from '@/lib/auth-api';")).toEqual([
+      'registerRequest',
+    ]);
+    expect(reExported(`${named}export { registerRequest as register };`)).toEqual([
+      'registerRequest',
+    ]);
+    expect(reExported(`${named}export default registerRequest;`)).toEqual(['registerRequest']);
+    expect(reExported(`${named}export const register = registerRequest;`)).toEqual([
+      'registerRequest',
+    ]);
+    expect(
+      reExported(`${named}export const register: typeof registerRequest = registerRequest;`),
+    ).toEqual(['registerRequest']);
+    expect(reExported(`${namespace}export const register = authApi.registerRequest;`)).toEqual([
+      'registerRequest',
+    ]);
+    expect(reExported(`${namespace}export let api = authApi;`)).toEqual([
+      'registerRequest',
+      'forgotPasswordRequest',
+    ]);
+    // A call of the browser function, or a binding that names something else, hands nothing on.
+    expect(reExported(`${named}export const done = registerRequest(data);`)).toEqual([]);
+    expect(reExported(`${named}export const other = somethingElse;`)).toEqual([]);
+    expect(reExported(`${named}const register = registerRequest;`)).toEqual([]);
   });
 
   it('the browser module never reads the secret', () => {
