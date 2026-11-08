@@ -32,16 +32,22 @@ import messages from '../../translations/en.json';
 
 vi.mock('motion/react', () => {
   const MOTION_PROPS = new Set(['initial', 'animate', 'exit', 'transition', 'layout']);
+  // One component per tag, as the real `motion` keeps: a new one on every read would remount the
+  // panel's whole subtree on each render, and the element holding focus with it.
+  const elements = new Map<string, (props: Record<string, unknown>) => ReactNode>();
   const motion = new Proxy(
     {},
     {
-      get: (_, tag: string) =>
-        function MotionElement(props: Record<string, unknown>) {
-          const rest = Object.fromEntries(
-            Object.entries(props).filter(([key]) => !MOTION_PROPS.has(key)),
-          );
-          return createElement(tag, rest);
-        },
+      get: (_, tag: string) => {
+        if (!elements.has(tag))
+          elements.set(tag, function MotionElement(props: Record<string, unknown>) {
+            const rest = Object.fromEntries(
+              Object.entries(props).filter(([key]) => !MOTION_PROPS.has(key)),
+            );
+            return createElement(tag, rest);
+          });
+        return elements.get(tag);
+      },
     },
   );
   return { AnimatePresence: ({ children }: { children: ReactNode }) => children, motion };
@@ -256,5 +262,117 @@ describe('a history that fails to load', () => {
     expect(actions.fetchAccountTransfers).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText(TRANSFERS.empty)).toBeTruthy();
+  });
+});
+
+/*
+ * Retry and the pager unmount the control that was clicked (the panel swaps its lines for the loading
+ * line), so focus must not fall to the body: it waits on the list, then lands on the Retry again after
+ * another failure, or on the new page's link after a page change.
+ */
+describe('focus through a retry or a page change', () => {
+  const list = () => document.activeElement as HTMLElement;
+
+  it('waits on the list and comes back to the Retry when the load fails again', async () => {
+    actions.fetchAccountTransfers
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'));
+    const view = render(transfers(false));
+    view.rerender(transfers(true));
+    await elapse(600);
+
+    const retry = screen.getByRole('button', { name: PAGED.retry });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(list()).not.toBe(document.body);
+    expect(list().getAttribute('tabindex')).toBe('-1');
+
+    await elapse(600);
+    const again = screen.getByRole('button', { name: PAGED.retry });
+    expect(again).not.toBe(retry);
+    expect(document.activeElement).toBe(again);
+
+    // The next retry lands, and focus stays in the panel, on the list the rows are in.
+    fireEvent.click(again);
+    await elapse(600);
+    expect(screen.getByText(TRANSFERS.empty)).toBeTruthy();
+    expect(list().getAttribute('tabindex')).toBe('-1');
+    expect(list().contains(screen.getByText(TRANSFERS.empty))).toBe(true);
+  });
+
+  it("lands on the new page's link after a page change", async () => {
+    actions.fetchAccountReconciliations.mockResolvedValue({
+      items: [RECONCILIATION],
+      total: 60,
+      pageSize: 25,
+      latestAsOfDate: RECONCILIATION.asOfDate,
+    });
+    const view = render(reconciliations(false));
+    view.rerender(reconciliations(true));
+    await elapse(600);
+
+    const two = screen.getByRole('link', { name: '2' });
+    two.focus();
+    fireEvent.click(two);
+    expect(list().getAttribute('tabindex')).toBe('-1');
+
+    await elapse(600);
+    expect(actions.fetchAccountReconciliations).toHaveBeenLastCalledWith(ACCOUNT.id, 2);
+    const current = screen.getByRole('link', { name: '2' });
+    expect(current).toHaveAttribute('aria-current', 'page');
+    expect(document.activeElement).toBe(current);
+  });
+
+  it('leaves focus on the page already shown when its link is pressed', async () => {
+    actions.fetchAccountReconciliations.mockResolvedValue({
+      items: [RECONCILIATION],
+      total: 60,
+      pageSize: 25,
+      latestAsOfDate: RECONCILIATION.asOfDate,
+    });
+    const view = render(reconciliations(false));
+    view.rerender(reconciliations(true));
+    await elapse(600);
+
+    const one = screen.getByRole('link', { name: '1' });
+    expect(one).toHaveAttribute('aria-current', 'page');
+    one.focus();
+    fireEvent.click(one);
+    await elapse(600);
+    expect(actions.fetchAccountReconciliations).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(one);
+  });
+
+  it('leaves focus where the reader put it during the load', async () => {
+    actions.fetchAccountTransfers
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'));
+    const view = render(transfers(false));
+    view.rerender(transfers(true));
+    await elapse(600);
+
+    const retry = screen.getByRole('button', { name: PAGED.retry });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(list().getAttribute('tabindex')).toBe('-1');
+    // The reader moves on while the retry is loading (and fails again).
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    await elapse(600);
+    expect(screen.getByRole('button', { name: PAGED.retry })).not.toBe(retry);
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it('moves nothing when focus was not in the list', async () => {
+    actions.fetchAccountTransfers.mockRejectedValueOnce(new Error('offline'));
+    const view = render(transfers(false));
+    view.rerender(transfers(true));
+    await elapse(600);
+
+    fireEvent.click(screen.getByRole('button', { name: PAGED.retry }));
+    await elapse(600);
+    expect(document.activeElement).toBe(document.body);
   });
 });

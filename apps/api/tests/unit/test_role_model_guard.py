@@ -31,10 +31,11 @@ def _sound(**overrides) -> RoleModelFacts:
     return RoleModelFacts(**values)
 
 
-# An engine the guard may open a connection on; records whether it did.
+# An engine the guard may open a connection on; records whether it did and whether it was closed.
 class _FakeEngine:
     def __init__(self) -> None:
         self.connected = False
+        self.disposed = False
 
     def connect(self):
         engine = self
@@ -48,6 +49,22 @@ class _FakeEngine:
                 return False
 
         return _Connection()
+
+    async def dispose(self) -> None:
+        self.disposed = True
+
+
+# Replaces the guard's engine factory; returns the engine it hands out and the URLs it was asked for.
+def _stub_engine(monkeypatch) -> tuple[_FakeEngine, list[str]]:
+    engine = _FakeEngine()
+    urls: list[str] = []
+
+    def fake_create(url, **_kwargs):
+        urls.append(url)
+        return engine
+
+    monkeypatch.setattr(role_model_guard, "create_async_engine", fake_create)
+    return engine, urls
 
 
 def _stub_catalogue(monkeypatch, facts: RoleModelFacts) -> None:
@@ -149,34 +166,49 @@ class TestTheStartupRefusal:
     @pytest.mark.asyncio
     async def test_development_never_reads_the_catalogue(self, monkeypatch):
         _stub_catalogue(monkeypatch, _sound(request_role=RoleFacts(name="renly", superuser=True, bypass_rls=True)))
-        engine = _FakeEngine()
-        await verify_role_model(_settings(Environment.development), engine)
+        engine, urls = _stub_engine(monkeypatch)
+        await verify_role_model(_settings(Environment.development))
         assert engine.connected is False
+        assert urls == []
 
     @pytest.mark.asyncio
     async def test_production_with_a_sound_model_starts(self, monkeypatch):
         _stub_catalogue(monkeypatch, _sound())
-        engine = _FakeEngine()
-        await verify_role_model(_settings(Environment.production), engine)
+        engine, _urls = _stub_engine(monkeypatch)
+        await verify_role_model(_settings(Environment.production))
         assert engine.connected is True
+        assert engine.disposed is True
 
     @pytest.mark.asyncio
     async def test_production_with_a_problem_refuses_naming_it_without_the_connection_string(self, monkeypatch):
         _stub_catalogue(monkeypatch, _sound(policied_tables=[_table("public.pots", forced=False)]))
+        _stub_engine(monkeypatch)
         with pytest.raises(UnsafeRoleModelError) as exc_info:
-            await verify_role_model(_settings(Environment.production), _FakeEngine())
+            await verify_role_model(_settings(Environment.production))
         message = str(exc_info.value)
         assert message.startswith("Refusing to start in production")
         assert "public.pots" in message
         assert "hunter2" not in message
         assert "db.internal" not in message
 
+    # A catalogue read that raises still closes the check's engine.
+    @pytest.mark.asyncio
+    async def test_a_failed_read_still_disposes_the_engine(self, monkeypatch):
+        async def failing_read(_connection):
+            raise RuntimeError("catalogue unreadable")
+
+        monkeypatch.setattr(role_model_guard, "read_role_model", failing_read)
+        engine, _urls = _stub_engine(monkeypatch)
+        with pytest.raises(RuntimeError):
+            await verify_role_model(_settings(Environment.production))
+        assert engine.disposed is True
+
     # The refusal is wired into startup: entering the lifespan of a production app raises before the
     # scheduler starts.
     @pytest.mark.asyncio
     async def test_the_lifespan_refuses_before_starting_the_scheduler(self, monkeypatch):
         _stub_catalogue(monkeypatch, _sound(request_role=RoleFacts(name="postgres", superuser=True, bypass_rls=False)))
-        monkeypatch.setattr(main_module, "engine", _FakeEngine())
+        _stub_engine(monkeypatch)
         started = []
         monkeypatch.setattr(main_module, "start_scheduler", lambda: started.append(True))
         monkeypatch.setattr(main_module, "stop_scheduler", lambda: None)
@@ -186,6 +218,23 @@ class TestTheStartupRefusal:
             async with main_module.lifespan(app):
                 pass
         assert started == []
+
+    # The check reads the database the app's own settings name, not the module-level default engine's: an app
+    # built with other settings is verified against its own DATABASE_URL.
+    @pytest.mark.asyncio
+    async def test_the_lifespan_checks_the_database_its_settings_name(self, monkeypatch):
+        _stub_catalogue(monkeypatch, _sound())
+        engine, urls = _stub_engine(monkeypatch)
+        monkeypatch.setattr(main_module, "start_scheduler", lambda: None)
+        monkeypatch.setattr(main_module, "stop_scheduler", lambda: None)
+        app_settings = _settings(Environment.production)
+        assert app_settings.database_url != main_module.default_settings.database_url
+        app = FastAPI()
+        app.state.settings = app_settings
+        async with main_module.lifespan(app):
+            pass
+        assert urls == [_DB_URL]
+        assert engine.disposed is True
 
     def test_create_app_hands_its_settings_to_the_lifespan(self):
         app_settings = _settings(Environment.production)

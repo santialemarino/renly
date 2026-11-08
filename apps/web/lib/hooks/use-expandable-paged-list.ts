@@ -30,8 +30,16 @@ interface UseExpandablePagedListOptions<R> {
  * because a failed load forgets the key.
  *
  * A failed load sets `failed` (the panel shows a retry rather than its empty line, which would claim the
- * list is empty) and forgets its cache key, so `invalidate()` or closing and reopening the panel asks
- * again instead of serving the failure for good.
+ * list is empty) and forgets its cache key, so `retry()`, `invalidate()` or closing and reopening the
+ * panel asks again instead of serving the failure for good.
+ *
+ * Retry and the pager unmount the control that was clicked: the panel swaps its content for the loading
+ * line. So when focus is inside the list, `retry()` and `goToPage()` first move it to the list itself
+ * (`listRef`, a `tabIndex={-1}` wrapper around the swapped lines) rather than let it fall to the body,
+ * and once the load has landed hand it on: to the new page's link in the pager after a page change, to
+ * the Retry again after another failure, and otherwise it stays on the list, one Tab from the rows.
+ * Nothing moves if the reader has already put focus somewhere else, and a press on the page already
+ * shown holds nothing (it loads nothing).
  */
 export function useExpandablePagedList<R extends Page<unknown>>({
   expanded,
@@ -52,6 +60,10 @@ export function useExpandablePagedList<R extends Page<unknown>>({
   // The page the last load asked for; null until the first fetch.
   const lastPageRef = useRef<number | null>(null);
   const fetchPageRef = useRef(fetchPage);
+  // The wrapper the panel's lines swap inside, and what a held focus is waiting for: the pager after a
+  // page change, or the end of a retry.
+  const listRef = useRef<HTMLDivElement>(null);
+  const heldFocusRef = useRef<'page' | 'retry' | null>(null);
 
   useEffect(() => {
     fetchPageRef.current = fetchPage;
@@ -88,9 +100,63 @@ export function useExpandablePagedList<R extends Page<unknown>>({
     load(page, !pageChange);
   }, [expanded, reloadToken, localToken, page, load]);
 
+  // Hands a held focus on once the load has landed and its line has mounted (the panel may still be
+  // fading the loading line out). A MutationObserver, because that mount is the panel's, not this hook's.
+  useEffect(() => {
+    const list = listRef.current;
+    const held = heldFocusRef.current;
+    if (loading || !list || !held) return;
+    const land = () => {
+      if (document.activeElement !== list) return true;
+      // A failed load's line is the only thing in the list, and its one button is the Retry.
+      const target = failed
+        ? list.querySelector<HTMLElement>('button')
+        : held === 'page'
+          ? list.querySelector<HTMLElement>('[aria-current="page"]')
+          : list;
+      target?.focus({ preventScroll: true });
+      return target !== null;
+    };
+    if (land()) {
+      heldFocusRef.current = null;
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (!land()) return;
+      heldFocusRef.current = null;
+      observer.disconnect();
+    });
+    observer.observe(list, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [loading, failed]);
+
+  // Moves focus from a control about to unmount to the list, when that is where it is.
+  const holdFocus = useCallback((held: 'page' | 'retry') => {
+    const list = listRef.current;
+    if (!list || !list.contains(document.activeElement)) return;
+    list.focus({ preventScroll: true });
+    heldFocusRef.current = held;
+  }, []);
+
   // Drops the cache so the open panel re-reads the current page — for a write made inside the panel, or
   // the retry after a failed load.
   const invalidate = useCallback(() => setLocalToken((token) => token + 1), []);
+
+  // The Retry after a failed load, and the pager: each unmounts the control it was clicked on.
+  const retry = useCallback(() => {
+    holdFocus('retry');
+    invalidate();
+  }, [holdFocus, invalidate]);
+  // The pager also answers a press on the page already shown, which loads nothing: no hold then, or
+  // focus would wait on the list for a load that never comes.
+  const goToPage = useCallback(
+    (next: number) => {
+      if (next === page) return;
+      holdFocus('page');
+      setPage(next);
+    },
+    [holdFocus, page],
+  );
 
   return {
     data,
@@ -99,8 +165,11 @@ export function useExpandablePagedList<R extends Page<unknown>>({
     pageSize: data?.pageSize ?? API_DEFAULT_PAGE_SIZE,
     page,
     setPage,
+    goToPage,
     loading,
     failed,
     invalidate,
+    retry,
+    listRef,
   };
 }
