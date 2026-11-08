@@ -11,7 +11,7 @@
     "format:check": "uv run ruff format --check .",
     "check-types": "echo 'No typecheck for Python'",
     "check": "uv run python -c \"from app.main import app\"",
-    "test": "uv run pytest tests/ -v",
+    "test": "uv run pytest tests/ -n 4 --dist loadfile -v",
     "test:cross-app": "uv run pytest tests/ -m cross_app -q",
     "migrate": "uv run alembic upgrade head",
     "migrate:make": "uv run alembic revision --autogenerate -m",

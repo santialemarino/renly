@@ -64,10 +64,12 @@ jobs:
           echo "web=$web api=$api -> $mode"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
-  ci-web:
+  # The checks and the build run side by side, each on a runner of its own; `ci-web` below is the one
+  # check to mark required, and it reads both.
+  web-checks:
     needs: changes
     # `always()` and the empty-mode fallback below: if `changes` itself fails, this runs the full
-    # suite rather than being skipped — a skipped required check reads as passed.
+    # checks rather than being skipped.
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     env:
@@ -75,17 +77,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      # Next's build cache (Turbopack's included), restored from the newest build with the same lockfile.
-      # Keyed before the install, so the source hash never walks node_modules; Next re-validates what it
-      # restores, so a stale entry costs a slower build, never a wrong one.
-      - name: Cache the Next build
-        if: env.MODE == 'full'
-        uses: actions/cache@v4
-        with:
-          path: apps/web/.next/cache
-          key: next-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**', '!**/.next/**', '!apps/web/tests/**') }}
-          restore-keys: next-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - uses: pnpm/action-setup@v4
         with:
@@ -128,10 +119,61 @@ jobs:
         if: env.MODE == 'cross-app'
         run: pnpm --filter web run test:cross-app
 
+  # The production build, on a full run only.
+  web-build:
+    needs: changes
+    if: ${{ always() && !cancelled() && (needs.changes.outputs.mode || 'full') == 'full' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Next's build cache (Turbopack's included), restored from the newest build with the same lockfile.
+      # Keyed before the install, so the source hash never walks node_modules; Next re-validates what it
+      # restores, so a stale entry costs a slower build, never a wrong one.
+      - name: Cache the Next build
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**', '!**/.next/**', '!apps/web/tests/**') }}
+          restore-keys: next-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build UI package
-        if: env.MODE == 'full'
         run: pnpm build:ui
 
       - name: Build web
-        if: env.MODE == 'full'
         run: pnpm build:web
+
+  # The REQUIRED check. It always runs (a skipped required check reads as passed, so it is never
+  # skipped itself) and passes only when `web-checks` succeeded and `web-build` succeeded — or was
+  # skipped because `changes` chose a run with no build. A failed or cancelled half, or a build skipped
+  # on a full run, fails it.
+  ci-web:
+    needs: [changes, web-checks, web-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # `always()` on the step too: a step's default condition is `success()`, which a cancelled run
+      # turns false — the step would be skipped and the job would pass on nothing.
+      - name: Require both halves
+        if: always()
+        env:
+          MODE: ${{ needs.changes.outputs.mode || 'full' }}
+          CHECKS: ${{ needs.web-checks.result }}
+          BUILD: ${{ needs.web-build.result }}
+        run: |
+          echo "mode: $MODE, web-checks: $CHECKS, web-build: $BUILD"
+          [ "$CHECKS" = success ] || exit 1
+          if [ "$MODE" = full ]; then [ "$BUILD" = success ]; else [ "$BUILD" = skipped ]; fi

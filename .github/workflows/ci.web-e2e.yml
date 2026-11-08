@@ -34,14 +34,18 @@ on:
         type: boolean
         default: false
 
-# A new push (or label) on a PR supersedes the run in flight; every run on the same commit reaches the
-# same gate decision, so the replacement stands in for it fully. Other events run to the end. The groups
-# are on the jobs that do the work (`changes`, and each shard of `e2e-web`), NOT on the workflow: a superseded run's `e2e-required` keeps
-# running to wait for its successor, and a workflow-level group would make that successor wait for it —
-# a deadlock (seen on #243).
+# A new push (or label) on a PR supersedes the runs in flight: the newest run's `changes` job cancels
+# every older run of this workflow for the PR, WHOLE, so no run is ever left with some shards cancelled
+# and others not. (Per-shard concurrency groups did that: two runs whose shards queued interleaved
+# cancelled one shard of each other, and neither could then report the suite.) Every run on the same
+# commit reaches the same gate decision, so the replacement stands in for it fully: a cancelled run's
+# `e2e-required` still runs (`always()`) and reports the run that replaced it. Only the `changes` job keeps
+# a concurrency group, so two runs that arrive at once collapse into one before any shard starts. No
+# workflow-level group: a superseded run's `e2e-required` keeps running to wait for its successor, and a
+# workflow-level group would make that successor wait for it — a deadlock (seen on #243).
 
-# Read-only by default. The two jobs that need more (`changes` reads the PR's file list, the nightly
-# report writes an issue) widen it for themselves only.
+# Read-only by default. The jobs that need more (`changes` reads the PR's file list and cancels the runs
+# it supersedes, the nightly report writes an issue) widen it for themselves only.
 permissions:
   contents: read
 
@@ -71,6 +75,7 @@ jobs:
       group: ci-web-e2e-changes-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
+      actions: write
       pull-requests: read
     outputs:
       floor: ${{ steps.filter.outputs.floor }}
@@ -110,6 +115,45 @@ jobs:
               - 'scripts/db-init.mjs'
               - 'docker-compose.yml'
 
+      # Cancels every older run of this workflow for this PR that has not finished: a superseded push's,
+      # or one on this same commit (a label added after the push). Only the run for the PR's CURRENT head
+      # does it, read live, so re-running an old run never cancels a newer one; and only runs that started
+      # before this one (smaller id), so two runs never cancel each other. Matched on the PR number too, so
+      # two PRs from one head branch never cancel each other. A run from a fork lists no PR and has a
+      # read-only token, so it cancels nothing: it then runs beside the older one, slower, not wrong.
+      - name: Cancel the runs this one supersedes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { data: live } = await github.rest.pulls.get({ ...context.repo, pull_number: pr.number });
+            if (live.head.sha !== pr.head.sha) {
+              core.info(`not the PR's head (${live.head.sha}); cancelling nothing`);
+              return;
+            }
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...context.repo,
+              workflow_id: 'ci.web-e2e.yml',
+              event: 'pull_request',
+              branch: pr.head.ref,
+              per_page: 50,
+            });
+            const older = data.workflow_runs.filter(
+              (run) =>
+                run.id < context.runId &&
+                run.status !== 'completed' &&
+                run.head_repository?.full_name === pr.head.repo.full_name &&
+                run.pull_requests?.some((other) => other.number === pr.number),
+            );
+            for (const run of older) {
+              try {
+                await github.rest.actions.cancelWorkflowRun({ ...context.repo, run_id: run.id });
+                core.info(`cancelled run ${run.id} (${run.head_sha})`);
+              } catch (error) {
+                core.warning(`could not cancel run ${run.id}: ${error.message}`);
+              }
+            }
+
   e2e-web:
     needs: changes
     # Four shards on a PR, one on the nightly run and a dispatch; `strategy.job-total` below is that
@@ -119,26 +163,27 @@ jobs:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1, 2, 3, 4]' || '[1]') }}
-    # `always()` so a skipped `changes` (schedule, dispatch) does not skip this job too; on a PR it
-    # still requires `changes` to have succeeded.
+    # `!cancelled()` so a skipped `changes` (schedule, dispatch) does not skip this job too; on a PR it
+    # still requires `changes` to have succeeded. Not `always()`: a cancelled run does not cancel a job
+    # whose condition still holds, so a superseded run's shards would keep running.
     if: >-
-      always() && (
+      ${{ !cancelled() && (
         github.event_name == 'schedule' ||
         github.event_name == 'workflow_dispatch' ||
         (needs.changes.result == 'success' && (
           needs.changes.outputs.floor == 'true' ||
           needs.changes.outputs.run_e2e == 'true'
         ))
-      )
-    # A dispatch gets a group of its own. A group holds ONE pending job, and a job arriving while one
-    # waits cancels it: shared, a dispatch waiting behind a running nightly (or a nightly behind a
-    # dispatch) would be cancelled by the next arrival — and a cancelled nightly reads as red and
-    # opens the `e2e-red` issue. Two dispatches on one branch still queue in theirs; a PR's ref is its
-    # own (`refs/pull/<n>/merge`), so the PR grouping `e2e-required` relies on is unchanged. Each shard
-    # has a group of its own: sharing one, the four would queue behind (and cancel) each other.
+      ) }}
+    # No group on a PR (the `changes` job supersedes older runs whole). The nightly run and a dispatch
+    # queue on their ref, never cancelling: a dispatch gets a group of its own, because a group holds ONE
+    # pending job and a job arriving while one waits cancels it — shared, a dispatch waiting behind a
+    # running nightly (or a nightly behind a dispatch) would be cancelled by the next arrival, and a
+    # cancelled nightly reads as red and opens the `e2e-red` issue. Two dispatches on one branch still
+    # queue in theirs.
     concurrency:
-      group: ci-web-e2e-suite-${{ github.event_name == 'workflow_dispatch' && 'dispatch-' || '' }}${{ github.ref }}-${{ matrix.shard }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ci-web-e2e-suite-${{ github.event_name == 'pull_request' && format('run-{0}', github.run_id) || format('{0}{1}', github.event_name == 'workflow_dispatch' && 'dispatch-' || '', github.ref) }}-${{ matrix.shard }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -391,10 +436,10 @@ jobs:
 
   # Merges every shard's blob into one HTML report and one JSON file, and checks from the JSON that the
   # shards together ran the whole suite. Runs whenever the shards ran to an end, red or green; skipped
-  # with them, and when a newer push cancelled them.
+  # with them, and when a newer push cancelled them (`!cancelled()`, for the same reason as the shards).
   e2e-report:
     needs: e2e-web
-    if: always() && contains(fromJSON('["success", "failure"]'), needs.e2e-web.result)
+    if: ${{ !cancelled() && contains(fromJSON('["success", "failure"]'), needs.e2e-web.result) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -457,6 +502,20 @@ jobs:
             echo "::error::$skipped test(s) skipped; CI must run the whole suite."
             failed=1
           fi
+          # The text sweep runs one test per page, so its tab-stop contract can only be shown to have met
+          # real cases of each kind over a language's whole sweep — summed here across every shard from
+          # the `tab-stops` annotation each of its tests leaves.
+          for locale in es en; do
+            met="$(jq --arg l "$locale" '[.. | objects | select(has("annotations") and has("results"))
+              | .annotations[] | select(.type == "tab-stops") | .description | fromjson | select(.locale == $l)]
+              | {pages: length, fits: (map(.fits) | add // 0), standalone: (map(.standalone) | add // 0),
+                 nested: (map(.nested) | add // 0)}' "$report")"
+            echo "text sweep tab stops ($locale): $met"
+            if [ "$(jq '.pages > 0 and .fits > 0 and .standalone > 0 and .nested > 0' <<< "$met")" != true ]; then
+              echo "::error::The text sweep ($locale) did not meet every kind of tab stop it rules on: $met"
+              failed=1
+            fi
+          done
           exit "$failed"
 
       - name: Upload Playwright report
@@ -475,6 +534,12 @@ jobs:
   # next to the real one: it waits for the run on that commit that actually ran the gate and reports that
   # run's `e2e-required` conclusion as its own, so they agree and neither is ever green before the real
   # result exists. Cancelled with no run that ran the gate (a person, a timeout) it fails as before.
+  # Every step carries `always()`: a step's default condition is `success()`, which a CANCELLED run (the
+  # `changes` job of a newer run cancels this one whole) turns false — both checks would be skipped, and
+  # a job whose steps all skipped passes.
+  # Shards that ran with no merged report after them (`e2e-web` not skipped, `e2e-report` skipped: the run
+  # was cancelled between the two) mean the full-run check never ran, so that case takes the cancelled
+  # path too: it can only report another run's verdict, or fail — never pass on its own results.
   e2e-required:
     needs: [changes, e2e-web, e2e-report]
     if: always()
@@ -484,19 +549,21 @@ jobs:
       actions: read
     steps:
       - name: Fail if a needed job failed
-        if: contains(needs.*.result, 'failure')
+        if: always() && contains(needs.*.result, 'failure')
         run: |
           echo "::error::changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}, e2e-report: ${{ needs.e2e-report.result }}"
           exit 1
       - name: When cancelled, report the run on this commit that actually ran, or fail
-        if: ${{ !contains(needs.*.result, 'failure') && contains(needs.*.result, 'cancelled') }}
+        if: >-
+          ${{ always() && !contains(needs.*.result, 'failure') && (contains(needs.*.result, 'cancelled') ||
+          (needs.e2e-web.result != 'skipped' && needs.e2e-report.result == 'skipped')) }}
         uses: actions/github-script@v7
         with:
           script: |
             // The run that "actually ran" is one whose `changes` job succeeded and none of whose suite
-            // shards (`e2e-web (1)` … `(4)`) was cancelled. Which run that is depends on which job entered the concurrency group last, NOT on
-            // run ids (several runs on one commit start in the same second when a PR is opened with
-            // labels), so every other run on the commit is inspected. Runs that were themselves cancelled
+            // shards (`e2e-web (1)` … `(4)`) was cancelled. Which run that is depends on which `changes`
+            // job entered its concurrency group last, NOT on run ids (several runs on one commit start in
+            // the same second when a PR is opened with labels), so every other run on the commit is inspected. Runs that were themselves cancelled
             // are never waited on — they may be waiting too — so this cannot deadlock.
             const sha = context.payload.pull_request?.head.sha ?? context.sha;
             const me = context.runId;
@@ -521,6 +588,7 @@ jobs:
                 });
                 const changes = job(listed.jobs, 'changes');
                 const shards = listed.jobs.filter((j) => j.name === 'e2e-web' || j.name.startsWith('e2e-web ('));
+                const report = job(listed.jobs, 'e2e-report');
                 const gate = job(listed.jobs, 'e2e-required');
                 if (!changes || changes.status !== 'completed') {
                   // A completed run with no `changes` job (a startup failure) will never get one.
@@ -530,6 +598,9 @@ jobs:
                 }
                 if (changes.conclusion !== 'success') { settled.set(run.id, null); continue; }
                 if (shards.some((s) => s.status === 'completed' && s.conclusion === 'cancelled')) { settled.set(run.id, null); continue; }
+                // Shards that ran but were never merged and checked: that run did not run the gate either.
+                const shardsRan = shards.some((s) => s.status === 'completed' && s.conclusion !== 'skipped');
+                if (shardsRan && report?.status === 'completed' && report.conclusion === 'skipped') { settled.set(run.id, null); continue; }
                 if (gate?.status === 'completed') settled.set(run.id, gate.conclusion);
                 else pending = true;
               }
@@ -549,7 +620,8 @@ jobs:
               await new Promise((resolve) => setTimeout(resolve, 60_000));
             }
             core.setFailed('the run that superseded this one did not finish within 45 minutes');
-      - run: 'echo "changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}, e2e-report: ${{ needs.e2e-report.result }}"'
+      - if: always()
+        run: 'echo "changes: ${{ needs.changes.result }}, e2e-web: ${{ needs.e2e-web.result }}, e2e-report: ${{ needs.e2e-report.result }}"'
 
   # The nightly net's memory: one open `e2e-red` issue while main's nightly run is red, updated on
   # each further red night and closed by the first green one. A dispatch with `report` ticked does the
