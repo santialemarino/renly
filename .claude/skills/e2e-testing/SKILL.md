@@ -267,9 +267,10 @@ both on a production build:
   `config/nav.ts`) from another page and samples `<main>` on every animation frame: never empty, never
   both pages, no layout shift. It fails the moment a `loading.tsx` or a fade comes back.
 - **`navigation-pending.auth.spec.ts`** holds the navigation's request in the browser
-  (`delayNavigationTo`) so the wait is real on any machine: the clicked item is active from the click,
-  the progress bar and the busy, dimmed `<main>` appear only past `NAVIGATION_PENDING_DELAY_MS` and go
-  on the swap, a newer click takes over, back/forward and a programmatic query navigation, the error
+  (`delayNavigationTo` for a fixed time, `holdNavigationTo` until the test releases it) so the wait is
+  real on any machine: the clicked item is active from the click, the progress bar and the busy, dimmed
+  `<main>` appear only past `NAVIGATION_PENDING_DELAY_MS` (read from the samples, never expected by a
+  fixed moment: the delay's timer only promises not to fire early) and go on the swap, a newer click takes over, back/forward and a programmatic query navigation, the error
   boundary clearing them, and the reduced-motion twins.
 
 The frame sampler in `tests/e2e/helpers/navigation.ts` (`startSampling` / `markClick` / `stopSampling`)
