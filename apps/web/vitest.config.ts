@@ -14,6 +14,10 @@ export default defineConfig({
   // Force a single React copy — `@repo/ui` is consumed from source, so without this the
   // component and the test tree can resolve different React instances and hooks throw.
   resolve: { dedupe: ['react', 'react-dom'] },
+  // No PostCSS for tests: the app's config names Tailwind's plugin as a string, which Next resolves and
+  // Vite cannot. A plain run never processes CSS, but `vitest related` (the pre-commit hook) walks every
+  // test's imports, CSS included, and would stop on it.
+  css: { postcss: { plugins: [] } },
   test: {
     projects: [
       {

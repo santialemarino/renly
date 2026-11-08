@@ -17,8 +17,8 @@ pnpm dev          # start web (3000) + api (8000); run db:init first if DB is fr
 pnpm db:init      # start Postgres and apply schema (first time only)
 pnpm check:api    # API import check (pre-commit, when API paths are staged)
 pnpm check:web    # TypeScript type check (pre-commit, when web paths are staged)
-pnpm test:api     # API unit tests (pre-commit, when API paths are staged)
-pnpm test:web     # web unit tests (pre-commit, when web paths are staged)
+pnpm test:api     # API tests (pre-commit runs only the related ones; CI runs all)
+pnpm test:web     # web unit tests (pre-commit runs only the related ones; CI runs all)
 pnpm format       # format everything
 pnpm lint:fix     # ESLint auto-fix
 ```
@@ -37,7 +37,7 @@ pnpm lint:fix     # ESLint auto-fix
 - Never `git add .` or `git add -A` — stage files individually by name
 - Never stage `.claude/plans/` or `docs/internal/` — both gitignored
 - Never stage temporary or scratch `.md` files unless the user explicitly names them
-- Pre-commit (`scripts/pre-commit.sh`) is scoped by the staged paths: lint-staged always, then `check:api` + `test:api` for staged API paths, `check:web` + `test:web` for staged web/`packages/` paths, everything for root config and scripts, nothing more for docs and skills — plus the other app's cross-app tests whenever code is staged (see `agent-workflow` §2). Don't commit code that would fail any of these
+- Pre-commit (`scripts/pre-commit.sh`) is a fast check scoped by the staged paths: lint-staged always, then the staged side's type check (`check:api` / `check:web`) and only the tests related to the staged files (`vitest related`, `scripts/api-related-tests.py`), both apps' cross-app tests whenever code is staged, the full suites for root config and scripts, nothing more for docs and skills (see `agent-workflow` §2). The full suites run in CI, whose `ci-api`, `ci-web` and `e2e-required` checks are required to merge. Don't push code that would fail any of them
 
 ## PR asset upload policy
 

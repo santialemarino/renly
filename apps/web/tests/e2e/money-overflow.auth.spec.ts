@@ -40,19 +40,20 @@ const TYPICAL_FIGURE_CHARS = 13;
 const SWEEP_HEIGHT = 1000;
 
 /*
- * The time budget, which has to fit inside CI's 30-minute e2e job next to every other spec.
+ * The time budget, for one page in one language, through every width: locally 180s, because a cold dev
+ * server compiles the route on first visit (45s for one was measured); in CI 60s, since the production
+ * build compiles nothing and a page takes a few seconds there. Retries are OFF for this file: the
+ * harness already re-measures a layout that is still settling, so a retry could only repeat a real
+ * finding at the cost of another sweep of the page.
  *
- * One test per locale sweeps all thirteen pages, so a budget covers a whole sweep: locally 600s, because
- * a cold dev server compiles each route on first visit (45s for one was measured); in CI 240s, since the
- * production build compiles nothing and a green sweep takes about a minute there. Retries are OFF for
- * this file: the harness already re-measures a layout that is still settling, so a retry could only
- * repeat a real finding at the cost of another whole sweep. Worst case in CI is therefore 2 × 240s =
- * 8 minutes, however broken the pages are.
+ * One test per page and language, not one per language sweeping every page: the PR run splits the suite
+ * across shards by test COUNT, so a single test that ran a minute weighed as much as a one-second one
+ * and left its shard far behind the others.
  */
 // eslint-disable-next-line turbo/no-undeclared-env-vars
 const ciEnv = process.env.CI;
 const isCI = !!ciEnv && ciEnv !== 'false' && ciEnv !== '0';
-const SWEEP_BUDGET_MS = isCI ? 240_000 : 600_000;
+const PAGE_BUDGET_MS = isCI ? 60_000 : 180_000;
 
 test.describe.configure({ retries: 0 });
 
@@ -91,20 +92,20 @@ async function shrunkTypicalFigures(page: Page): Promise<string[]> {
 }
 
 for (const locale of ['en', 'es'] as const) {
-  test(`no money figure is clipped, at any width (${locale})`, async ({ page }) => {
-    test.setTimeout(SWEEP_BUDGET_MS);
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
+  for (const route of MONEY_SWEEP_ROUTES) {
+    test(`no money figure is clipped, at any width: ${route} (${locale})`, async ({ page }) => {
+      test.setTimeout(PAGE_BUDGET_MS);
+      await page
+        .context()
+        .addCookies([{ name: 'NEXT_LOCALE', value: locale, domain: 'localhost', path: '/' }]);
 
-    const failures: string[] = [];
-    for (const route of MONEY_SWEEP_ROUTES) {
       // Loaded once, then resized through every width: the same page reflowing is what a reader
       // resizing a window or rotating a tablet sees, and one load per page keeps the cost down.
       await page.setViewportSize({ width: Math.max(...SWEEP_WIDTHS), height: SWEEP_HEIGHT });
       await page.goto(url(route));
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
 
+      const failures: string[] = [];
       for (const width of SWEEP_WIDTHS) {
         await page.setViewportSize({ width, height: SWEEP_HEIGHT });
         const where = `${route} @${width}px`;
@@ -125,8 +126,8 @@ for (const locale of ['en', 'es'] as const) {
           );
         }
       }
-    }
 
-    expect(failures).toEqual([]);
-  });
+      expect(failures).toEqual([]);
+    });
+  }
 }
