@@ -102,6 +102,23 @@ describe('the notification bell', () => {
     expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('hands one optimistic read over to the server props without counting it twice', async () => {
+    const { rerender } = render(bell([notification(1), notification(2)], 2));
+    const rows = await screen.findAllByRole('link', { name: /Group 1/ });
+    await act(async () => {
+      fireEvent.click(rows[0]!);
+    });
+    expect(trigger()).toHaveAccessibleName('1 unread notification');
+
+    // The refresh after the write: the server now says row 1 is read and one is left.
+    rerender(bell([notification(1, true), notification(2)], 1));
+    expect(trigger()).toHaveAccessibleName('1 unread notification');
+
+    // And a later refresh with a new arrival counts it.
+    rerender(bell([notification(3), notification(1, true), notification(2)], 2));
+    expect(trigger()).toHaveAccessibleName('2 unread notifications');
+  });
+
   it('lets the server answer replace its own optimistic "mark all read"', async () => {
     const { rerender } = render(bell([notification(1), notification(2)], 2));
     await act(async () => {
