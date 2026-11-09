@@ -32,8 +32,9 @@ _DEFAULT_LOCALE = SUPPORTED_LANGUAGES[0]
 
 # One entry per event, and for two events a second entry per VARIANT — an ownership change reads
 # differently for a first division than for a re-agreement, and a recorded payment reads differently to
-# the person who paid than to the person who was paid. The variant is a payload field, so the caller
-# never decides the wording.
+# the person who paid than to the person who was paid. A pot event that names a seat has a `_you` form
+# for the reader who IS that seat, so nobody reads their own name in the third person. The variant is a
+# payload field, so the template never guesses the wording.
 #
 # `subject` and `body` are the email; `push` is the lock-screen line (the push TITLE is always the group
 # or pot name, supplied by the caller). `{link}` is filled with the page the notification points at.
@@ -63,6 +64,26 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} recorded a change of split in {pot}",
         },
+        # The same change of split read by one of its two seats, so the reader is "you" rather than their
+        # own name in the third person. The subject and push name no seat, so they stay the base ones.
+        "ownership_changed.reagreement_from_you": {
+            "subject": "{actor} recorded a change of split in {pot}",
+            "body": (
+                '{actor} recorded a change of split in "{pot}", in the group "{group}": '
+                "from you to {to_member}.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} recorded a change of split in {pot}",
+        },
+        "ownership_changed.reagreement_to_you": {
+            "subject": "{actor} recorded a change of split in {pot}",
+            "body": (
+                '{actor} recorded a change of split in "{pot}", in the group "{group}": '
+                "from {from_member} to you.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} recorded a change of split in {pot}",
+        },
         "ownership_changed.confirmed": {
             "subject": "{actor} agreed to the change of split in {pot}",
             "body": (
@@ -73,10 +94,50 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} agreed to the change of split in {pot}",
         },
+        "ownership_changed.confirmed_from_you": {
+            "subject": "{actor} agreed to the change of split in {pot}",
+            "body": (
+                '{actor} agreed to the change of split from you to {to_member} in "{pot}", '
+                'in the group "{group}".\n\n'
+                "The entry is now settled and can no longer be removed unless they take that back.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} agreed to the change of split in {pot}",
+        },
+        "ownership_changed.confirmed_to_you": {
+            "subject": "{actor} agreed to the change of split in {pot}",
+            "body": (
+                '{actor} agreed to the change of split from {from_member} to you in "{pot}", '
+                'in the group "{group}".\n\n'
+                "The entry is now settled and can no longer be removed unless they take that back.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} agreed to the change of split in {pot}",
+        },
         "ownership_changed.unconfirmed": {
             "subject": "{actor} withdrew their agreement to the change of split in {pot}",
             "body": (
                 '{actor} withdrew their agreement to the change of split from {from_member} to {to_member} in "{pot}", '
+                'in the group "{group}".\n\n'
+                "Nobody's share has changed; the entry can be removed again.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} withdrew their agreement in {pot}",
+        },
+        "ownership_changed.unconfirmed_from_you": {
+            "subject": "{actor} withdrew their agreement to the change of split in {pot}",
+            "body": (
+                '{actor} withdrew their agreement to the change of split from you to {to_member} in "{pot}", '
+                'in the group "{group}".\n\n'
+                "Nobody's share has changed; the entry can be removed again.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} withdrew their agreement in {pot}",
+        },
+        "ownership_changed.unconfirmed_to_you": {
+            "subject": "{actor} withdrew their agreement to the change of split in {pot}",
+            "body": (
+                '{actor} withdrew their agreement to the change of split from {from_member} to you in "{pot}", '
                 'in the group "{group}".\n\n'
                 "Nobody's share has changed; the entry can be removed again.\n\n"
                 "See the pot and its ownership here:\n{link}"
@@ -128,6 +189,40 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "subject": "{member} took money out of {pot}",
             "body": ('{member} took {amount} {currency} out of "{pot}", in the group "{group}".\n\nSee the pot and its movements here:\n{link}'),
             "push": "{member} took money out of {pot}",
+        },
+        # A movement recorded for SOMEBODY ELSE's share names who recorded it, because the person named
+        # is not the person who acted. Read by that person, it says "you".
+        "pot_movement.contribution_for_member": {
+            "subject": "{actor} recorded that {member} added money to {pot}",
+            "body": (
+                '{actor} recorded that {member} added {amount} {currency} to "{pot}", in the group "{group}".\n\n'
+                "See the pot and its movements here:\n{link}"
+            ),
+            "push": "{actor} recorded that {member} added money to {pot}",
+        },
+        "pot_movement.contribution_for_you": {
+            "subject": "{actor} recorded that you added money to {pot}",
+            "body": (
+                '{actor} recorded that you added {amount} {currency} to "{pot}", in the group "{group}".\n\n'
+                "See the pot and its movements here:\n{link}"
+            ),
+            "push": "{actor} recorded that you added money to {pot}",
+        },
+        "pot_movement.withdrawal_for_member": {
+            "subject": "{actor} recorded that {member} took money out of {pot}",
+            "body": (
+                '{actor} recorded that {member} took {amount} {currency} out of "{pot}", in the group "{group}".\n\n'
+                "See the pot and its movements here:\n{link}"
+            ),
+            "push": "{actor} recorded that {member} took money out of {pot}",
+        },
+        "pot_movement.withdrawal_for_you": {
+            "subject": "{actor} recorded that you took money out of {pot}",
+            "body": (
+                '{actor} recorded that you took {amount} {currency} out of "{pot}", in the group "{group}".\n\n'
+                "See the pot and its movements here:\n{link}"
+            ),
+            "push": "{actor} recorded that you took money out of {pot}",
         },
         "pot_movement.reconciliation_surplus": {
             "subject": "{actor} reconciled {account}",
@@ -293,6 +388,24 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} registró un cambio de reparto en {pot}",
         },
+        "ownership_changed.reagreement_from_you": {
+            "subject": "{actor} registró un cambio de reparto en {pot}",
+            "body": (
+                '{actor} registró un cambio de reparto en "{pot}", en el grupo "{group}": '
+                "de vos a {to_member}.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} registró un cambio de reparto en {pot}",
+        },
+        "ownership_changed.reagreement_to_you": {
+            "subject": "{actor} registró un cambio de reparto en {pot}",
+            "body": (
+                '{actor} registró un cambio de reparto en "{pot}", en el grupo "{group}": '
+                "de {from_member} a vos.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} registró un cambio de reparto en {pot}",
+        },
         "ownership_changed.confirmed": {
             "subject": "{actor} aceptó el cambio de reparto en {pot}",
             "body": (
@@ -303,10 +416,50 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} aceptó el cambio de reparto en {pot}",
         },
+        "ownership_changed.confirmed_from_you": {
+            "subject": "{actor} aceptó el cambio de reparto en {pot}",
+            "body": (
+                '{actor} aceptó el cambio de reparto de vos a {to_member} en "{pot}", '
+                'en el grupo "{group}".\n\n'
+                "La entrada queda acordada y ya no se puede eliminar, salvo que retire esa aceptación.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} aceptó el cambio de reparto en {pot}",
+        },
+        "ownership_changed.confirmed_to_you": {
+            "subject": "{actor} aceptó el cambio de reparto en {pot}",
+            "body": (
+                '{actor} aceptó el cambio de reparto de {from_member} a vos en "{pot}", '
+                'en el grupo "{group}".\n\n'
+                "La entrada queda acordada y ya no se puede eliminar, salvo que retire esa aceptación.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} aceptó el cambio de reparto en {pot}",
+        },
         "ownership_changed.unconfirmed": {
             "subject": "{actor} retiró su aceptación del cambio de reparto en {pot}",
             "body": (
                 '{actor} retiró su aceptación del cambio de reparto de {from_member} a {to_member} en "{pot}", '
+                'en el grupo "{group}".\n\n'
+                "La parte de cada uno no cambió; la entrada se puede volver a eliminar.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} retiró su aceptación en {pot}",
+        },
+        "ownership_changed.unconfirmed_from_you": {
+            "subject": "{actor} retiró su aceptación del cambio de reparto en {pot}",
+            "body": (
+                '{actor} retiró su aceptación del cambio de reparto de vos a {to_member} en "{pot}", '
+                'en el grupo "{group}".\n\n'
+                "La parte de cada uno no cambió; la entrada se puede volver a eliminar.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} retiró su aceptación en {pot}",
+        },
+        "ownership_changed.unconfirmed_to_you": {
+            "subject": "{actor} retiró su aceptación del cambio de reparto en {pot}",
+            "body": (
+                '{actor} retiró su aceptación del cambio de reparto de {from_member} a vos en "{pot}", '
                 'en el grupo "{group}".\n\n'
                 "La parte de cada uno no cambió; la entrada se puede volver a eliminar.\n\n"
                 "Podés ver el fondo y su reparto acá:\n{link}"
@@ -358,6 +511,38 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "subject": "{member} sacó dinero de {pot}",
             "body": ('{member} sacó {amount} {currency} de "{pot}", en el grupo "{group}".\n\nPodés ver el fondo y sus movimientos acá:\n{link}'),
             "push": "{member} sacó dinero de {pot}",
+        },
+        "pot_movement.contribution_for_member": {
+            "subject": "{actor} registró que {member} puso dinero en {pot}",
+            "body": (
+                '{actor} registró que {member} puso {amount} {currency} en "{pot}", en el grupo "{group}".\n\n'
+                "Podés ver el fondo y sus movimientos acá:\n{link}"
+            ),
+            "push": "{actor} registró que {member} puso dinero en {pot}",
+        },
+        "pot_movement.contribution_for_you": {
+            "subject": "{actor} registró que pusiste dinero en {pot}",
+            "body": (
+                '{actor} registró que pusiste {amount} {currency} en "{pot}", en el grupo "{group}".\n\n'
+                "Podés ver el fondo y sus movimientos acá:\n{link}"
+            ),
+            "push": "{actor} registró que pusiste dinero en {pot}",
+        },
+        "pot_movement.withdrawal_for_member": {
+            "subject": "{actor} registró que {member} sacó dinero de {pot}",
+            "body": (
+                '{actor} registró que {member} sacó {amount} {currency} de "{pot}", en el grupo "{group}".\n\n'
+                "Podés ver el fondo y sus movimientos acá:\n{link}"
+            ),
+            "push": "{actor} registró que {member} sacó dinero de {pot}",
+        },
+        "pot_movement.withdrawal_for_you": {
+            "subject": "{actor} registró que sacaste dinero de {pot}",
+            "body": (
+                '{actor} registró que sacaste {amount} {currency} de "{pot}", en el grupo "{group}".\n\n'
+                "Podés ver el fondo y sus movimientos acá:\n{link}"
+            ),
+            "push": "{actor} registró que sacaste dinero de {pot}",
         },
         "pot_movement.reconciliation_surplus": {
             "subject": "{actor} concilió {account}",

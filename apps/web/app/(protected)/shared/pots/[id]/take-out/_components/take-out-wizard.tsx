@@ -26,6 +26,7 @@ import {
   holderShare,
   isPriceable,
   potLegAccounts,
+  takeOutMovesValue,
   wholeExitOutcome,
 } from '@/app/(protected)/shared/pot-rules';
 import { DatePickerInput } from '@/components/date-picker-input';
@@ -160,8 +161,7 @@ export function TakeOutWizard({
   const share = holderShare(pot, Number(watched.memberId));
   const forOwnSeat = canNamePrivateLeg(Number(watched.memberId), mySeatId);
   const crossCurrency = watched.amountCurrency !== pot.baseCurrency;
-  // Both sides named is what makes the pot's value fall with the money that left it.
-  const movesValue = !!watched.potAccountId && !!watched.privateAccountId;
+  const movesValue = takeOutMovesValue(watched.potAccountId ?? '');
 
   /*
    * A money figure with its currency beside it. `fmt.amount` formats the NUMBER at the currency's

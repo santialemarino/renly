@@ -15,7 +15,7 @@ from app.config import Settings
 from app.config import settings as default_settings
 from app.domain import DomainError
 from app.middleware import BodySizeLimitMiddleware
-from app.observability import init_sentry
+from app.observability import configure_logging, init_sentry
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.role_model_guard import verify_role_model
 from app.routers import (
@@ -198,6 +198,8 @@ _EXCEPTION_HANDLERS = {
 # come from settings (SEC-9); rate limiting and the body-size limit are wired as middleware (SEC-1/12).
 def create_app(app_settings: Settings | None = None) -> FastAPI:
     app_settings = app_settings or default_settings
+    # The app's own log lines (and the console provider's emails) reach the terminal at LOG_LEVEL.
+    configure_logging(app_settings)
     # Wire up error tracking before the app is built (no-op unless a Sentry DSN is configured).
     init_sentry(app_settings)
     docs_enabled = not app_settings.is_production

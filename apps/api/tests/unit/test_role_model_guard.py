@@ -3,7 +3,7 @@ from fastapi import FastAPI
 
 from app import main as main_module
 from app import role_model_guard
-from app.config import Environment, Settings
+from app.config import EmailProvider, Environment, Settings
 from app.role_model_guard import PoliciedTable, RoleFacts, RoleModelFacts, UnsafeRoleModelError, role_model_problems, verify_role_model
 
 # The production refusal of a database whose roles make RLS decorative (`app/role_model_guard.py`), with
@@ -12,13 +12,16 @@ from app.role_model_guard import PoliciedTable, RoleFacts, RoleModelFacts, Unsaf
 
 _DB_URL = "postgresql+asyncpg://renly_app:hunter2-db-password@db.internal:5432/renly"
 _SECRET = "x" * 32
+# A production configuration has to name a real email provider (the console one is refused there), so
+# every settings object built here carries one; nothing in this file sends an email.
+_EMAIL = {"email_provider": EmailProvider.resend, "email_api_key": "re_key", "email_from": "Renly <noreply@renly.app>"}
 
 _APP = RoleFacts(name="renly_app", superuser=False, bypass_rls=False)
 _OWNER = RoleFacts(name="renly", superuser=False, bypass_rls=False)
 
 
 def _settings(environment: Environment) -> Settings:
-    return Settings(_env_file=None, database_url=_DB_URL, jwt_secret=_SECRET, environment=environment)
+    return Settings(_env_file=None, database_url=_DB_URL, jwt_secret=_SECRET, environment=environment, **_EMAIL)
 
 
 def _table(name: str, *, owner: RoleFacts = _OWNER, enabled: bool = True, forced: bool = True, acts_as_owner: bool = False) -> PoliciedTable:

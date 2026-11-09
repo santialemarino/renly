@@ -31,8 +31,9 @@ _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 # What each renderer supplies itself (notification_templates.notification_email / push_body).
 _BUILDER_FIELDS = {"subject": {"product"}, "body": {"product", "link"}, "push": {"product"}}
 
-# The one site whose variant set is a guard rather than an expression the reader can follow:
-# record_movement refuses any `type` other than these two before it writes or announces anything.
+# The one variant expression whose values are a guard rather than something the reader can follow:
+# record_movement's `type.value`, because it refuses any `type` other than these two before it writes or
+# announces anything. Every variant built from it (`f"{type.value}_for_you"`) is read through this.
 _VARIANT_DOMAINS = {
     ("pot_ownership_service", "record_movement"): {"contribution", "withdrawal"},
 }
@@ -177,6 +178,15 @@ def _values(expr: ast.expr, ctx: _Ctx) -> set[str]:
         raise _Unresolved(f"a non-string variant {expr.value!r}")
     if isinstance(expr, ast.IfExp):
         return _values(expr.body, ctx) | _values(expr.orelse, ctx)
+    if isinstance(expr, ast.JoinedStr):
+        # An f-string: every combination of the values its parts can take.
+        out = {""}
+        for part in expr.values:
+            options = {part.value} if isinstance(part, ast.Constant) else _values(part.value, ctx)
+            out = {prefix + option for prefix in out for option in options}
+        return out
+    if ast.unparse(expr) == "type.value" and (ctx.module.name, ctx.fn.name) in _VARIANT_DOMAINS:
+        return set(_VARIANT_DOMAINS[(ctx.module.name, ctx.fn.name)])
     if isinstance(expr, ast.Name) and expr.id in ctx.bindings:
         value, caller = ctx.bindings[expr.id]
         return _values(value, caller)
@@ -304,8 +314,6 @@ def _sites() -> list[tuple[str, NotificationEvent, set[str], set[str | None]]]:
                     keys = _payload(payload, ctx)
                     if "variant" not in keys:
                         variants: set[str | None] = {None}
-                    elif (module.name, fn.name) in _VARIANT_DOMAINS:
-                        variants = set(_VARIANT_DOMAINS[(module.name, fn.name)])
                     else:
                         value, value_ctx = keys["variant"]
                         variants = set(_values(value, value_ctx))
