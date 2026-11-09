@@ -28,7 +28,6 @@ import { getPageSettings, getSettings, type SettingsData } from '@/lib/api/setti
 import { getSharedExpenses } from '@/lib/api/shared-expenses';
 import { getSharedIncome } from '@/lib/api/shared-income';
 import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
-import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVITY_PAGE_SIZE } from '@/lib/constants/shared-activity';
 import { resolvePageParam } from '@/lib/list-scope';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
@@ -66,7 +65,7 @@ export default async function GroupHubPage({ params, searchParams }: GroupHubPag
    * and a converted one would be a figure nobody can actually pay.
    */
   const displayCurrencyOf = (settings: SettingsData | null) =>
-    resolveActiveCurrency(cookieStore, settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY);
+    resolveActiveCurrency(cookieStore, settings);
 
   /*
    * Every read starts now, beside the group's own: they need only its id (the balances also the

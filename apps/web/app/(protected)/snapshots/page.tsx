@@ -12,12 +12,12 @@ import { getCollections } from '@/lib/api/collections';
 import { getGroups } from '@/lib/api/groups';
 import { getSettings, type SettingsData } from '@/lib/api/settings';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
-import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import {
   ACTIVE_CURRENCY_COOKIE,
+  displayCurrenciesFor,
   ORIGINAL_CURRENCY,
   resolveCurrencySelection,
 } from '@/lib/stores/currency-store';
@@ -45,12 +45,8 @@ function gridCurrency(
   settings: SettingsData | null,
   saved: string | undefined,
 ): string | undefined {
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
-  const secondary = settings?.secondaryCurrency ?? null;
-  const displayCurrencies = secondary
-    ? [primary, secondary, ORIGINAL_CURRENCY]
-    : [primary, ORIGINAL_CURRENCY];
-  const activeCurrency = resolveCurrencySelection(saved, displayCurrencies, primary);
+  const displayCurrencies = displayCurrenciesFor(settings);
+  const activeCurrency = resolveCurrencySelection(saved, displayCurrencies, displayCurrencies[0]!);
   return activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
 }
 

@@ -12,7 +12,6 @@ import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getPaymentsCalendar } from '@/lib/api/payments-calendar';
 import { getPageSettings, getSettings, type SettingsData } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
-import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { currentYearMonth } from '@/lib/utils/dates';
@@ -74,19 +73,15 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
       return getPaymentsCalendar({
         year,
         month,
-        currency: resolveActiveCurrency(
-          cookieStore,
-          pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
-        ),
+        currency: resolveActiveCurrency(cookieStore, pageSettings),
       });
     }),
     getPaymentObligations({ showArchived: true }).catch(() => []),
     getSubscriptions({ showArchived: true }).catch(() => []),
     getInstallments({ showArchived: true }).catch(() => []),
   ]);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-  const currency = resolveActiveCurrency(cookieStore, primary);
+  const currency = resolveActiveCurrency(cookieStore, settings);
   const timeZone = settings?.timezone ?? undefined;
   const { year, month } = calendarMonth(settings);
 

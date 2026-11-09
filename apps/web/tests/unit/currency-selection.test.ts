@@ -16,6 +16,7 @@ import {
 
 const PRIMARY = 'ARS';
 const CHOICES = [PRIMARY, 'USD', ORIGINAL_CURRENCY];
+const SETTINGS = { primaryCurrency: PRIMARY, secondaryCurrency: 'USD' };
 
 function cookies(value?: string) {
   return {
@@ -42,20 +43,30 @@ describe('resolveCurrencySelection (the switcher)', () => {
 
 describe('resolveActiveCurrency (the pages)', () => {
   it('converts to the primary currency when nothing was chosen', () => {
-    expect(resolveActiveCurrency(cookies(), PRIMARY)).toBe(PRIMARY);
-    expect(resolveActiveCurrency(cookies(''), PRIMARY)).toBe(PRIMARY);
+    expect(resolveActiveCurrency(cookies(), SETTINGS)).toBe(PRIMARY);
+    expect(resolveActiveCurrency(cookies(''), SETTINGS)).toBe(PRIMARY);
   });
 
   it('converts to an explicitly chosen currency', () => {
-    expect(resolveActiveCurrency(cookies('USD'), PRIMARY)).toBe('USD');
+    expect(resolveActiveCurrency(cookies('USD'), SETTINGS)).toBe('USD');
   });
 
   it('shows original amounts only when "original" was chosen', () => {
-    expect(resolveActiveCurrency(cookies(ORIGINAL_CURRENCY), PRIMARY)).toBeUndefined();
+    expect(resolveActiveCurrency(cookies(ORIGINAL_CURRENCY), SETTINGS)).toBeUndefined();
+  });
+
+  it('converts to the primary once the chosen currency is no longer one of the user’s', () => {
+    // The secondary was USD when it was chosen, and is EUR now: the sidebar and the dashboards fall
+    // back to the primary, and so must every list page.
+    const changed = { primaryCurrency: PRIMARY, secondaryCurrency: 'EUR' };
+    expect(resolveActiveCurrency(cookies('USD'), changed)).toBe(PRIMARY);
+    expect(resolveActiveCurrency(cookies('USD'), { ...changed, secondaryCurrency: null })).toBe(
+      PRIMARY,
+    );
   });
 
   it('agrees with the switcher for a missing cookie', () => {
-    expect(resolveActiveCurrency(cookies(), PRIMARY)).toBe(
+    expect(resolveActiveCurrency(cookies(), SETTINGS)).toBe(
       resolveCurrencySelection(undefined, CHOICES, PRIMARY),
     );
   });

@@ -16,7 +16,6 @@ import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getPageSettings, getSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
-import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveListScope, resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -91,10 +90,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         paymentMethod: params.payment_method,
         dateFrom: params.date_from,
         dateTo: params.date_to,
-        currency: resolveActiveCurrency(
-          cookieStore,
-          pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
-        ),
+        currency: resolveActiveCurrency(cookieStore, pageSettings),
         page: resolvePageParam(params.page),
         sortBy: params.sort_by as 'date' | 'amount' | 'category' | 'payment_method' | undefined,
         sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
@@ -105,9 +101,8 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     getInstallments({ showArchived: true }).catch(() => []),
     getOnboardingStatus().catch(() => null),
   ]);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-  const currency = resolveActiveCurrency(cookieStore, primary);
+  const currency = resolveActiveCurrency(cookieStore, settings);
 
   // Show this section's first-run sample only while it's empty.
   const showSample = data.items.length === 0 ? (onboardingStatus?.sampleExpenses ?? false) : false;
