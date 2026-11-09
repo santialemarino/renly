@@ -153,6 +153,8 @@ If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDE
 
 You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **collection** (Retirement, Trading, Kids, etc.).
 
+An investment can belong to more than one collection. Each collection's percentage is its share of your whole portfolio — every investment counted once — so it compares fairly against the collection's target. When collections overlap, their percentages can add up to more than 100%.
+
 ## Dashboard composition and finance comparisons
 
 **Net worth composition (assets vs. liabilities).** The composition donut on the main dashboard sizes each slice by its value, and the percentages are shares of the values actually shown — your asset categories plus a "liabilities" slice when you carry a card balance. When you have a net card credit (the card owes you), there is no liabilities slice and your asset percentages add up to exactly 100%.

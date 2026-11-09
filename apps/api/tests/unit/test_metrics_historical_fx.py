@@ -205,3 +205,32 @@ class TestTheRuleHoldsAcrossSurfaces:
         headline = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, currency="USD")
         assert evolution.points[-1].date == date(today.year, today.month, 1)
         assert evolution.points[-1].total_value == headline.total_value
+
+
+# An investment can sit in several collections. Each collection's share is of the PORTFOLIO — every
+# investment counted once — so a target compares against what is really there. Summing the buckets as
+# the base counted the shared investment once per collection and shrank every share.
+@pytest.mark.usefixtures("wired")
+class TestOverlappingCollections:
+    @pytest.mark.asyncio
+    async def test_shares_are_of_the_portfolio_counted_once(self, monkeypatch):
+        collections = metrics_service.collection_repository
+        monkeypatch.setattr(
+            collections,
+            "list_by_user",
+            AsyncMock(
+                return_value=[
+                    InvestmentCollection(id=7, user_id=1, name="Argentina", target_percentage=Decimal("50")),
+                    InvestmentCollection(id=8, user_id=1, name="Everything", target_percentage=Decimal("100")),
+                ]
+            ),
+        )
+        monkeypatch.setattr(collections, "get_investment_ids_by_collections", AsyncMock(return_value={7: [_ARS], 8: [_ARS, _USD]}))
+        response = await metrics_service.get_allocation_by_collection(AsyncMock(), 1, currency="USD")
+        allocation = await metrics_service.get_allocation(AsyncMock(), 1, currency="USD")
+        # 62.50 + 50 = 112.50 held; the peso holding is in both collections but in the portfolio once.
+        assert response.total_value == allocation.total_value == Decimal("112.50")
+        by_name = {item.collection_name: item for item in response.items}
+        assert by_name["Everything"].percentage == Decimal("100")
+        assert by_name["Everything"].difference == Decimal("0")
+        assert by_name["Argentina"].percentage == Decimal("62.50") / Decimal("112.50") * 100

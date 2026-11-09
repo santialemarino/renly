@@ -495,7 +495,11 @@ async def get_allocation_by_collection(
     if unassigned > ZERO:
         collection_values["Unassigned"] = unassigned
 
-    total_value = sum(collection_values.values(), ZERO)
+    # The base is the portfolio itself — every investment once — not the sum of the buckets: an
+    # investment can sit in several collections, and summing the buckets counted it once per collection,
+    # shrinking every share and every comparison with a target. Each share is therefore "this much of
+    # the portfolio is in this collection", and overlapping collections can add up to more than 100%.
+    total_value = sum(inv_values.values(), ZERO)
 
     items = []
     for name, value in sorted(collection_values.items(), key=lambda x: x[1], reverse=True):
