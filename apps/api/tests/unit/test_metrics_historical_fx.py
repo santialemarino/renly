@@ -104,9 +104,9 @@ class TestHistoryAtItsOwnDateHoldingsAtTodaysRate:
             (date(2026, 1, 10), Decimal("100.00")),
             (date(2026, 2, 10), Decimal("100.00")),
         ]
-        # The IRR's flows are dated, so each converts at its own date: paid 100 USD in January, worth
-        # 100 USD at the February snapshot — no money-weighted return in dollars.
-        assert response.irr is not None and abs(response.irr) < 1e-6
+        # The IRR's flows convert at their own dates and it closes TODAY on the value now: paid 100 USD
+        # in January, worth 62.50 USD on March 20 — a money-weighted loss, like the gain above.
+        assert response.irr is not None and response.irr < 0
 
     @pytest.mark.asyncio
     async def test_portfolio_metrics(self):
@@ -125,7 +125,8 @@ class TestHistoryAtItsOwnDateHoldingsAtTodaysRate:
         # today: the peso holding is 100 USD at both February points, then 62.50 once March's rate
         # applies to it — a 37.5% fall the gain above shows too. (The dollar holding's 50 is capital.)
         assert response.twr == Decimal("-0.375")
-        assert response.irr is not None and abs(response.irr) < 1e-6
+        # The IRR closes on the same value today, so it is a loss too.
+        assert response.irr is not None and response.irr < 0
 
     @pytest.mark.asyncio
     async def test_portfolio_metrics_over_a_past_window(self):

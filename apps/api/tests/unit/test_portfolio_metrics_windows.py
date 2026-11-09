@@ -31,6 +31,19 @@ def _wire(monkeypatch, snapshots: list[InvestmentSnapshot], transactions: list[T
     monkeypatch.setattr(repo, "list_transactions_by_investments", AsyncMock(return_value=transactions))
     monkeypatch.setattr(metrics_service.settings_service, "get_user_today", AsyncMock(return_value=today))
 
+    async def by_id(_session, investment_id, _user_id):
+        return next(h for h in holdings if h.id == investment_id)
+
+    async def snapshots_of(_session, ids):
+        return [s for s in snapshots if s.investment_id in ids]
+
+    async def transactions_of(_session, ids):
+        return [t for t in transactions if t.investment_id in ids]
+
+    monkeypatch.setattr(repo, "list_snapshots_by_investments", snapshots_of)
+    monkeypatch.setattr(repo, "list_transactions_by_investments", transactions_of)
+    monkeypatch.setattr(metrics_service.investment_repository, "get_by_id", by_id)
+
 
 def _deposit(d: date, amount: str, kind: TransactionType = TransactionType.deposit) -> Transaction:
     return Transaction(investment_id=1, user_id=1, date=d, amount=Decimal(amount), currency="USD", type=kind)
@@ -166,3 +179,53 @@ class TestTheTwrAndThePeriodReturnAgreeWithoutFlows:
         response = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, currency="ARS", start_date=start)
         assert response.total_return_pct is not None and response.twr is not None
         assert abs(response.twr - response.total_return_pct) < Decimal("1e-20")
+
+
+# Without a window the portfolio is a window opening before its first snapshot and still open today, so
+# its IRR is that window's — closing TODAY on the value the gain ends at, not on each holding's own last
+# snapshot. The fixture's two holdings were last valued months apart, and the dollar one is viewed in
+# pesos while the rate moves after its last snapshot.
+class TestTheAllTimeFiguresCloseToday:
+    _RATES = TestTheTwrAndThePeriodReturnAgreeWithoutFlows._RATES
+
+    def _wire(self, monkeypatch):
+        snaps = [
+            _snap(date(2025, 12, 10), "100"),
+            _snap(date(2026, 1, 10), "104"),
+            _snap(date(2026, 1, 5), "50", investment_id=2),
+            _snap(date(2026, 2, 10), "58", investment_id=2),
+        ]
+        _wire(monkeypatch, snaps, [_deposit(date(2026, 3, 20), "40")], date(2026, 4, 5))
+        lookup = RateLookup(dollar_preference="mep", rates_by_pair=self._RATES)
+        monkeypatch.setattr(metrics_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=lookup))
+
+    @pytest.mark.asyncio
+    async def test_the_all_time_irr_is_the_open_windows_from_before_the_first_snapshot(self, monkeypatch):
+        self._wire(monkeypatch)
+        all_time = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, currency="ARS")
+        window = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, currency="ARS", start_date=date(2025, 12, 1))
+        assert all_time.irr is not None
+        assert all_time.irr == window.irr
+
+    @pytest.mark.asyncio
+    async def test_a_single_holdings_irr_is_the_portfolios(self, monkeypatch):
+        self._wire(monkeypatch)
+        detail = await metrics_service.get_investment_metrics(AsyncMock(), 1, 1, currency="ARS")
+        alone = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, currency="ARS", investment_ids=[1])
+        assert detail.irr is not None
+        assert detail.irr == alone.irr
+
+    @pytest.mark.asyncio
+    async def test_the_all_time_gain_counts_a_buy_not_yet_snapshotted_at_cost(self, monkeypatch):
+        # Holding 1: 100 opening, 104 last valued, 40 bought on Mar 20 after that. Its gain is 4, not −36,
+        # and the portfolio's adds holding 2's 8; the value stays what the snapshots say.
+        self._wire(monkeypatch)
+        portfolio = await metrics_service.get_portfolio_metrics(AsyncMock(), 1)
+        assert portfolio.total_value == Decimal("162")
+        assert portfolio.total_invested == Decimal("190")
+        assert portfolio.absolute_gain == Decimal("12")
+        summary = {i.investment_id: i for i in (await metrics_service.get_investments_summary(AsyncMock(), 1)).items}
+        assert summary[1].absolute_gain == Decimal("4")
+        detail = await metrics_service.get_investment_metrics(AsyncMock(), 1, 1)
+        assert detail.absolute_gain == Decimal("4")
+        assert detail.simple_return is not None and abs(detail.simple_return - Decimal("4") / Decimal("140")) < Decimal("1e-20")

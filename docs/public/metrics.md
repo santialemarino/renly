@@ -132,8 +132,10 @@ last snapshot is neither a loss nor a gain until a snapshot values it. Every poi
 between the two is valued the same way too, at that point's own exchange rate, so with no money moving
 in or out, the period's TWR equals its simple return.
 
-Without a date filter, the cards show all-time values: current value, total net invested, and
-current value minus invested.
+Without a date filter, the cards show all-time values: current value, total net invested, and the
+gain — current value minus invested, with any money moved since your last snapshot counted at what you
+paid, so a purchase not yet snapshotted is not a loss. All-time TWR and IRR run from your first
+snapshot to today, exactly like a period that started before it.
 
 ## "vs last month"
 
