@@ -549,7 +549,11 @@ _NON_ARS_PAIRS = {
 # stored rate for a pair, we fall back to the earliest available rate so the page never breaks —
 # a deliberate trade-off: degraded historical accuracy for ancient dates beats a 503 page. Such a
 # rate is an ESTIMATE, and the lookup says so (`is_estimate_at`, `used_estimate`) so a response can
-# mark the figure instead of presenting it as the rate of its day.
+# mark the figure instead of presenting it as the rate of its day. One exception for the MEP preference:
+# MEP has no quotes before 2018-10-29, so a date before its history takes the BLUE rate OF THAT DATE —
+# the closest market rate that existed then — rather than MEP's first quote, years later. It is still
+# not the MEP rate, so it stays flagged as an estimate; only when blue has no rate that day either does
+# the earliest-MEP fallback apply.
 # Per-date rate maps are memoised so repeated lookups for the same date are O(1).
 class RateLookup:
     def __init__(
@@ -585,6 +589,11 @@ class RateLookup:
             # Fall back to MEP when the preferred pair has no stored rate (rather than
             # relying on `or`, which would also short-circuit on a hypothetical Decimal(0)).
             ars = self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
+        if ars is not None and ars[1] and ars_pair == ExchangeRatePair.USD_ARS_MEP:
+            # Before MEP's history: blue's rate of that date, still flagged as an estimate.
+            blue = self._lookup_pair(ExchangeRatePair.USD_ARS_BLUE, as_of_date)
+            if blue is not None and not blue[1]:
+                ars = (blue[0], True)
         if ars is not None:
             rate_map["ARS"] = ars[0]
             if ars[1]:
