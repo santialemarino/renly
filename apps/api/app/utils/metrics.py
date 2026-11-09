@@ -4,10 +4,11 @@
 
 import bisect
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from datetime import date as date_type
 from decimal import Decimal
 
-from app.domain.currency import get_ars_pair, is_supported
+from app.domain.currency import RatePoint, get_ars_pair, is_supported
 from app.domain.money import MONEY_PLACES, quantize
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.snapshot import InvestmentSnapshot
@@ -443,19 +444,25 @@ _NON_ARS_PAIRS = {
 # date <= as_of_date" (matches how a real bank-statement valuation looks back to the most recent
 # quoted rate at or before the transaction date). If the requested as_of_date predates every
 # stored rate for a pair, we fall back to the earliest available rate so the page never breaks —
-# a deliberate trade-off: degraded historical accuracy for ancient dates beats a 503 page.
+# a deliberate trade-off: degraded historical accuracy for ancient dates beats a 503 page. Such a
+# rate is an ESTIMATE, and the lookup says so (`is_estimate_at`, `used_estimate`) so a response can
+# mark the figure instead of presenting it as the rate of its day.
 # Per-date rate maps are memoised so repeated lookups for the same date are O(1).
 class RateLookup:
     def __init__(
         self,
         dollar_preference: str | None,
-        rates_by_pair: dict[ExchangeRatePair, list[ExchangeRate]],
+        rates_by_pair: Mapping[ExchangeRatePair, Sequence[RatePoint | ExchangeRate]],
     ) -> None:
         self._dollar_preference = dollar_preference
         self._rates_by_pair = rates_by_pair
         # bisect needs a list of comparable keys; cache the date lists alongside the rate lists.
         self._dates_by_pair: dict[ExchangeRatePair, list[date_type]] = {pair: [r.date for r in rates] for pair, rates in rates_by_pair.items()}
         self._cache: dict[date_type, dict[str, Decimal] | None] = {}
+        # Per date, the currencies whose rate in the map is the pre-history fallback.
+        self._estimated: dict[date_type, frozenset[str]] = {}
+        # True once any rate map this lookup served used a pre-history fallback.
+        self.used_estimate = False
 
     # Returns the rate map for as_of_date (latest rate where rate.date <= as_of_date per pair,
     # with earliest-available fallback). Returns None when no rates exist at all.
@@ -467,33 +474,51 @@ class RateLookup:
             return None
 
         rate_map: dict[str, Decimal] = {"USD": ONE}
+        estimated: set[str] = set()
 
         ars_pair = get_ars_pair(self._dollar_preference)
-        ars_rate = self._lookup_pair(ars_pair, as_of_date)
-        if ars_rate is None:
+        ars = self._lookup_pair(ars_pair, as_of_date)
+        if ars is None:
             # Fall back to MEP when the preferred pair has no stored rate (rather than
             # relying on `or`, which would also short-circuit on a hypothetical Decimal(0)).
-            ars_rate = self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
-        if ars_rate is not None:
-            rate_map["ARS"] = ars_rate
+            ars = self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
+        if ars is not None:
+            rate_map["ARS"] = ars[0]
+            if ars[1]:
+                estimated.add("ARS")
 
         for currency_code, pair in _NON_ARS_PAIRS.items():
-            rate = self._lookup_pair(pair, as_of_date)
-            if rate is not None:
-                rate_map[currency_code] = rate
+            found = self._lookup_pair(pair, as_of_date)
+            if found is not None:
+                rate_map[currency_code] = found[0]
+                if found[1]:
+                    estimated.add(currency_code)
 
         self._cache[as_of_date] = rate_map
+        self._estimated[as_of_date] = frozenset(estimated)
+        if estimated:
+            self.used_estimate = True
         return rate_map
 
+    # True when the rate map for as_of_date stands in the earliest stored rate for a date before that
+    # pair's history begins — for any of `currencies`, or for any currency when none are named.
+    def is_estimate_at(self, as_of_date: date_type, *currencies: str) -> bool:
+        self.get_rate_map_at(as_of_date)
+        estimated = self._estimated.get(as_of_date, frozenset())
+        if not currencies:
+            return bool(estimated)
+        return any(code in estimated for code in currencies)
+
     # Binary-search the pair's sorted rates for the latest entry with date <= as_of_date.
-    # Falls back to the earliest available rate when as_of_date predates all stored rates.
-    def _lookup_pair(self, pair: ExchangeRatePair, as_of_date: date_type) -> Decimal | None:
+    # Returns (rate, is_estimate): falls back to the earliest available rate, flagged as an estimate,
+    # when as_of_date predates all stored rates. None when the pair has no rates.
+    def _lookup_pair(self, pair: ExchangeRatePair, as_of_date: date_type) -> tuple[Decimal, bool] | None:
         rates = self._rates_by_pair.get(pair)
         if not rates:
             return None
         dates = self._dates_by_pair[pair]
         idx = bisect.bisect_right(dates, as_of_date) - 1
         if idx >= 0:
-            return rates[idx].rate
+            return rates[idx].rate, False
         # Pre-history fallback: use the earliest rate so display never breaks for ancient dates.
-        return rates[0].rate
+        return rates[0].rate, True

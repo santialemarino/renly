@@ -17,6 +17,18 @@ Docs (Swagger): http://localhost:8000/docs
 
 **Local DB:** From repo root, `pnpm db:init` starts Postgres and applies the schema.
 
+## Exchange-rate history
+
+The scheduler stores the latest rates every 6 hours and fills any weekday of the last 90 days left without
+one. To load the full history into a new database (or after a longer outage):
+
+```bash
+uv run python -m app.scripts.backfill_exchange_rates --since 2011-01-01 [--until YYYY-MM-DD] [--dry-run]
+```
+
+It writes through `DATABASE_ADMIN_URL`, so point that (and `DATABASE_URL`) at the database you mean. Re-running
+inserts nothing new. See `docs/technical/deployment.md` → Exchange-rate history.
+
 ## Check (no server)
 
 From repo root: `pnpm check:api` — same as pre-commit/CI; catches import and model errors. (Runs `uv run python -c "from app.main import app"` in `apps/api`.)

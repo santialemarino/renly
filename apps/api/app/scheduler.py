@@ -65,10 +65,14 @@ def _report_job_failure(event: JobExecutionEvent) -> None:
     )
 
 
-# Fetches latest exchange rates from all sources (DolarApi + Frankfurter) and stores them.
+# Fetches latest exchange rates from all sources (DolarApi + Frankfurter) and stores them under their
+# quote dates, then fills any weekday of the recent window left without a rate (the API was down, or a
+# provider failed) from the history providers (ArgentinaDatos + Frankfurter). Runs at startup, so a
+# restart after an outage fills the outage.
 async def _update_exchange_rates() -> None:
     async with AdminSessionLocal() as session:
         await exchange_rate_service.fetch_and_store_latest(session)
+        await exchange_rate_service.fill_recent_gaps(session)
 
 
 # Fetches latest asset prices for all ticker-linked investments.
