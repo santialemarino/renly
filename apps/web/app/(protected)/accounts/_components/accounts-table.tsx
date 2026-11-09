@@ -39,6 +39,15 @@ import { useFormatters } from '@/lib/i18n/formatters';
 import { bySectionPot, sectionedRows } from '@/lib/list-scope';
 
 const COLUMN_COUNT = 8;
+/*
+ * Columns shown from `md` up. Below it — a phone — a row is a small card: the name with the BALANCE
+ * right under it (then the type and currency), and the actions beside it; the two dates wait for a
+ * wider screen. Otherwise the table scrolled sideways at 390px with the balance and every action
+ * off-screen. The balance goes under the name rather than in its own column because a nine-digit
+ * balance beside a name and five actions does not fit a phone, and the name wraps — breaking a long
+ * word if it must — rather than pushing the row wider.
+ */
+const WIDE_ONLY = 'hidden md:table-cell';
 
 interface AccountsTableProps {
   accounts: Account[];
@@ -135,6 +144,7 @@ export function AccountsTable({
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
+                className={WIDE_ONLY}
               />
               <SortableTableHead
                 label={t('table.currency')}
@@ -142,17 +152,19 @@ export function AccountsTable({
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
+                className={WIDE_ONLY}
               />
-              <TableHead className="text-right">{t('table.balance')}</TableHead>
+              <TableHead className={cn(WIDE_ONLY, 'text-right')}>{t('table.balance')}</TableHead>
               <SortableTableHead
                 label={t('table.openingDate')}
                 column="opening_date"
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
+                className={WIDE_ONLY}
               />
-              <TableHead>{t('table.lastReconciled')}</TableHead>
-              <TableHead className="w-44 text-center">{t('table.actions')}</TableHead>
+              <TableHead className={WIDE_ONLY}>{t('table.lastReconciled')}</TableHead>
+              <TableHead className="md:w-44 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -220,22 +232,42 @@ export function AccountsTable({
                           </span>
                         </button>
                       </TableCell>
-                      <TableCell className="text-paragraph-sm-medium">{a.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="whitespace-normal wrap-anywhere md:whitespace-nowrap md:wrap-normal text-paragraph-sm-medium">
+                        {a.name}
+                        {/* Below `md` the balance, type and currency columns are hidden; they ride
+                            here, the balance first. */}
+                        <span className="flex flex-col md:hidden">
+                          <span className="text-paragraph-sm tabular-nums">
+                            <MoneyFigure>{fmt.amount(a.balance, a.currency)}</MoneyFigure>
+                          </span>
+                          <span className="text-paragraph-xs text-muted-foreground">
+                            {t(`types.${a.type}`)} · {a.currency}
+                          </span>
+                        </span>
+                      </TableCell>
+                      <TableCell className={cn(WIDE_ONLY, 'text-muted-foreground')}>
                         {t(`types.${a.type}`)}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{a.currency}</TableCell>
-                      <TableCell className="text-right text-paragraph-sm tabular-nums">
+                      <TableCell className={cn(WIDE_ONLY, 'text-muted-foreground')}>
+                        {a.currency}
+                      </TableCell>
+                      <TableCell
+                        className={cn(WIDE_ONLY, 'text-right text-paragraph-sm tabular-nums')}
+                      >
                         <MoneyFigure>{fmt.amount(a.balance, a.currency)}</MoneyFigure>
                       </TableCell>
-                      <TableCell>{fmt.date(a.openingDate)}</TableCell>
-                      <TableCell className="text-paragraph-sm text-muted-foreground">
+                      <TableCell className={WIDE_ONLY}>{fmt.date(a.openingDate)}</TableCell>
+                      <TableCell
+                        className={cn(WIDE_ONLY, 'text-paragraph-sm text-muted-foreground')}
+                      >
                         {a.lastReconciledDate
                           ? fmt.date(a.lastReconciledDate)
                           : t('table.neverReconciled')}
                       </TableCell>
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-x-1">
+                        {/* Below `md` the actions wrap into rows of three, so the column stays narrow
+                            enough for the balance beside it to stay on screen. */}
+                        <div className="grid grid-cols-3 md:flex items-center justify-items-center md:justify-center gap-1 md:gap-x-1">
                           {/* Shared by both states — an archived account's history is still worth
                               reading, and either state can be deleted. Only the middle differs. */}
                           <RowActionButton
