@@ -18,6 +18,12 @@ The total of all your deposits and purchases, minus all your withdrawals and sal
 
 Example: You deposited $8,000 over the past year and withdrew $1,000. Your invested capital is $7,000.
 
+If you started tracking an investment you already held — you recorded its value in a snapshot but no
+deposit or purchase on or before that date — the value of that first snapshot counts as money you put
+in: it is what the investment was worth when it entered Renly. Without it, the whole value of a holding
+recorded only through snapshots would read as gain. Returns (TWR and IRR) already treat a first
+snapshot this way.
+
 ## Absolute gain or loss
 
 **What it answers:** "Am I up or down in dollar terms?"

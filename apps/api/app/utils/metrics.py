@@ -53,6 +53,23 @@ def invested_capital(transactions: list[Transaction]) -> Decimal:
     return total
 
 
+# The first snapshot of an investment whose opening no recorded flow explains — none of its transactions
+# is dated on or before that snapshot — or None. Its value is capital the holding came in with, exactly
+# as the TWR and the IRR already treat a first snapshot, so invested capital counts it too: without it a
+# holding recorded only through snapshots reads its whole value as gain. When a transaction does sit on
+# or before the first snapshot, that transaction is the opening capital and nothing is added.
+def unexplained_opening(
+    snapshots: Sequence[InvestmentSnapshot],
+    transactions: Sequence[Transaction],
+) -> InvestmentSnapshot | None:
+    if not snapshots:
+        return None
+    first = snapshots[0]
+    if any(tx.date <= first.date for tx in transactions):
+        return None
+    return first
+
+
 # Computes net cash flow between two dates (exclusive start, inclusive end).
 def net_cash_flow(
     transactions: list[Transaction],

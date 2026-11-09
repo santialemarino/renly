@@ -245,7 +245,13 @@ async def get_portfolio_metrics(
         total_return_pct = absolute_gain / denominator if denominator > ZERO else None
     else:
         total_value = now_value
+        # Every flow, plus the opening value of a holding no flow explains (its first snapshot, at its
+        # own date) — the capital it came in with.
         total_invested = sum((amount for flows in flows_by_inv.values() for _, amount in flows), ZERO)
+        for inv_id in inv_ids:
+            opening = mh.unexplained_opening(snap_by_inv.get(inv_id, []), tx_by_inv.get(inv_id, []))
+            if opening is not None and opening.date in inv_date_value.get(inv_id, {}):
+                total_invested += inv_date_value[inv_id][opening.date]
         absolute_gain = total_value - total_invested
         # Simple return is only meaningful when invested capital is positive.
         total_return_pct = None
@@ -557,10 +563,12 @@ async def get_investments_summary(
 
         latest_snap = snaps[-1] if snaps else None
         current_value = latest_snap.value if latest_snap else None
-        cap = mh.invested_capital(txs)
-        absolute_gain = (current_value - cap) if current_value is not None else None
-        # Signed flows, each converted at its own date (positive = money in).
+        # Signed flows, each converted at its own date (positive = money in), plus the opening value of a
+        # holding no flow explains — the capital it came in with, at its first snapshot's date.
         flows = _signed_flows(txs, base, currency, lookup)
+        opening = mh.unexplained_opening(snaps, txs)
+        cap = mh.invested_capital(txs) + (opening.value if opening else ZERO)
+        absolute_gain = (current_value - cap) if current_value is not None else None
 
         # What the holding gained since the end of last month, consistent with the portfolio card: the
         # value now, less what it was worth then (at that day's rate, plus money moved in since its last
@@ -581,7 +589,7 @@ async def get_investments_summary(
         if currency and lookup:
             if current_value is not None:
                 current_value = now_values.get(inv.id)
-            cap = sum((amount for _, amount in flows), ZERO)
+            cap = sum((amount for _, amount in flows), ZERO) + _opening_in(opening, base, currency, lookup)
             absolute_gain = (current_value - cap) if current_value is not None else None
 
         items.append(
@@ -676,6 +684,23 @@ def _signed_flows(
     return flows
 
 
+# An unexplained opening's value in the display currency, at its own date — ZERO when there is none or it
+# cannot convert.
+def _opening_in(
+    opening: InvestmentSnapshot | None,
+    base: str,
+    currency: str | None,
+    lookup: mh.RateLookup | None,
+) -> Decimal:
+    if opening is None:
+        return ZERO
+    if not (currency and lookup):
+        return opening.value
+    rate_map = lookup.get_rate_map_at(opening.date)
+    converted = mh.convert_value(opening.value, base, currency, rate_map) if rate_map else None
+    return converted if converted is not None else ZERO
+
+
 # The net money that entered the portfolio inside the window (after, until] — either bound may be None:
 # real flows after each investment's first snapshot (one on or before it is embodied in that value),
 # plus the first snapshot itself of an investment born inside the window (contributed capital).
@@ -764,7 +789,9 @@ def _build_investment_metrics(
     lookup: mh.RateLookup | None = None,
     today: date_type | None = None,
 ) -> InvestmentMetricsResponse:
-    cap = mh.invested_capital(transactions)
+    # Capital in: every flow, plus the opening value of a holding no flow explains.
+    opening = mh.unexplained_opening(snapshots, transactions)
+    cap = mh.invested_capital(transactions) + (opening.value if opening else ZERO)
     latest_snap = snapshots[-1] if snapshots else None
     current_value = latest_snap.value if latest_snap else None
     absolute_gain = (current_value - cap) if current_value is not None else None
@@ -803,7 +830,7 @@ def _build_investment_metrics(
             rate_map = lookup.get_rate_map_at(today or latest_snap.date)
             if rate_map:
                 current_value = mh.convert_value(current_value, base, currency, rate_map)
-        converted_cap = ZERO
+        converted_cap = _opening_in(opening, base, currency, lookup)
         for tx in transactions:
             rate_map = lookup.get_rate_map_at(tx.date)
             amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else None
