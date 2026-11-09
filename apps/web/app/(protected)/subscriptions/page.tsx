@@ -9,7 +9,6 @@ import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getPageSettings, getSettings } from '@/lib/api/settings';
 import { getSubscriptions, type SubscriptionSortField } from '@/lib/api/subscriptions';
 import type { SortOrder } from '@/lib/api/types';
-import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -53,16 +52,12 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
           sortBy: params.sort_by as SubscriptionSortField | undefined,
           sortOrder: params.sort_order as SortOrder | undefined,
           showArchived: params.show_archived === 'true',
-          currency: resolveActiveCurrency(
-            cookieStore,
-            pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
-          ),
+          currency: resolveActiveCurrency(cookieStore, pageSettings),
         }),
       ),
     ]);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-  const currency = resolveActiveCurrency(cookieStore, primary);
+  const currency = resolveActiveCurrency(cookieStore, settings);
 
   const hasActiveFilters = !!params.search || params.show_archived === 'true';
   const firstRun = isFirstRunEmptyState(subscriptions.length === 0, hasActiveFilters, settings);

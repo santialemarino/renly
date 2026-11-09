@@ -46,9 +46,18 @@ import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { EXPANDED_PANEL_CLASS } from '@/lib/constants/tables';
 import { useExpandablePagedList } from '@/lib/hooks/use-expandable-paged-list';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
+
+/*
+ * Columns shown from `md` up. Below it — a phone — the row keeps the name, the BALANCE and the actions,
+ * the balance-first shape the other money lists have at that width, with the days and the currency
+ * moved under the name, which wraps (breaking a long word if it must) rather than pushing the row
+ * wider. Otherwise the table scrolled sideways at 390px with the balance off-screen.
+ */
+const WIDE_ONLY = 'hidden md:table-cell';
 
 interface SettlementsSectionProps {
   cardId: number;
@@ -97,15 +106,15 @@ function SettlementsSection({
     <AnimatePresence>
       {expanded && (
         <TableRow>
-          <TableCell colSpan={7} className="p-0">
+          <TableCell colSpan={7} className="p-0 whitespace-normal">
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
-              className="overflow-hidden"
+              className={EXPANDED_PANEL_CLASS}
             >
-              <div className="px-8 py-4 bg-muted/30">
+              <div className="px-4 md:px-8 py-4 bg-muted/30">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-paragraph-sm-medium">{t('settlements.title')}</span>
                   <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
@@ -360,6 +369,7 @@ export function CreditCardsTable({
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
+                className={WIDE_ONLY}
               />
               <SortableTableHead
                 label={t('table.dueDay')}
@@ -367,6 +377,7 @@ export function CreditCardsTable({
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
+                className={WIDE_ONLY}
               />
               <SortableTableHead
                 label={t('table.currency')}
@@ -374,6 +385,7 @@ export function CreditCardsTable({
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
+                className={WIDE_ONLY}
               />
               <TableHead>{t('table.balance')}</TableHead>
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
@@ -424,10 +436,17 @@ export function CreditCardsTable({
                           </span>
                         </button>
                       </TableCell>
-                      <TableCell className="text-paragraph-sm-medium">{card.name}</TableCell>
-                      <TableCell>{card.closingDay}</TableCell>
-                      <TableCell>{card.dueDay}</TableCell>
-                      <TableCell>{card.currency}</TableCell>
+                      <TableCell className="whitespace-normal wrap-anywhere md:whitespace-nowrap md:wrap-normal text-paragraph-sm-medium">
+                        {card.name}
+                        {/* Below `md` the day and currency columns are hidden; they ride here. */}
+                        <span className="block md:hidden text-paragraph-xs text-muted-foreground">
+                          {t('table.closingDay')} {card.closingDay} · {t('table.dueDay')}{' '}
+                          {card.dueDay} · {card.currency}
+                        </span>
+                      </TableCell>
+                      <TableCell className={WIDE_ONLY}>{card.closingDay}</TableCell>
+                      <TableCell className={WIDE_ONLY}>{card.dueDay}</TableCell>
+                      <TableCell className={WIDE_ONLY}>{card.currency}</TableCell>
                       <TableCell className="text-paragraph-sm tabular-nums">
                         <div className="flex flex-col gap-y-0.5">
                           {card.balances.map((bucket) => (

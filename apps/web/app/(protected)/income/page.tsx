@@ -13,7 +13,6 @@ import { getGroups } from '@/lib/api/groups';
 import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
-import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveListScope, resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -59,10 +58,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
       category: params.category,
       dateFrom: params.date_from,
       dateTo: params.date_to,
-      currency: resolveActiveCurrency(
-        cookieStore,
-        pageSettings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
-      ),
+      currency: resolveActiveCurrency(cookieStore, pageSettings),
       page: resolvePageParam(params.page),
       sortBy: params.sort_by as 'date' | 'amount' | 'category' | undefined,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
@@ -92,9 +88,8 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
         : false,
     ),
   ]);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
-  const currency = resolveActiveCurrency(cookieStore, primary);
+  const currency = resolveActiveCurrency(cookieStore, settings);
 
   // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
   // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.

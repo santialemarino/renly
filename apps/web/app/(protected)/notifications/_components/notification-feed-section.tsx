@@ -48,9 +48,11 @@ export function NotificationFeedSection({ feed, page }: NotificationFeedSectionP
 
   /*
    * Optimistic and un-awaited, deliberately: it fires alongside the row's own navigation, which would
-   * cancel an awaited Server Action before it settled. The `catch` is not optional even so — an
-   * un-caught rejection here is an error nobody sees — and swallowing it is the right recovery,
-   * because losing one costs an unread dot that the next visit puts back, not data.
+   * cancel an awaited Server Action before it settled. Once the write has landed, a refresh re-reads
+   * the layout, which is what brings the bell's count down: the navigation alone keeps the layout it
+   * already has. The `catch` is not optional even so — an un-caught rejection here is an error nobody
+   * sees — and swallowing it is the right recovery, because losing one costs an unread dot that the
+   * next visit puts back, not data.
    */
   function handleOpen(id: number) {
     setRows((current) =>
@@ -61,7 +63,9 @@ export function NotificationFeedSection({ feed, page }: NotificationFeedSectionP
       ),
     );
     setUnread((current) => Math.max(0, current - 1));
-    void markNotificationRead(id).catch(() => undefined);
+    void markNotificationRead(id)
+      .then(() => router.refresh())
+      .catch(() => undefined);
   }
 
   // Awaited, so the button can say it is working — and wrapped, because this action THROWS on a

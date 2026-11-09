@@ -30,6 +30,7 @@ import {
   ACTIVE_CURRENCY_COOKIE,
   CURRENCY_COLLAPSED_COOKIE,
   ORIGINAL_CURRENCY,
+  resolveCurrencySelection,
 } from '@/lib/stores/currency-store';
 
 interface ProtectedLayoutProps {
@@ -71,9 +72,11 @@ export default async function ProtectedLayout({ children }: ProtectedLayoutProps
     ? [primary, secondary, ORIGINAL_CURRENCY]
     : [primary, ORIGINAL_CURRENCY];
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? null;
-  const activeCurrency =
-    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
+  const activeCurrency = resolveCurrencySelection(
+    cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value,
+    displayCurrencies,
+    primary,
+  );
   const currencyCollapsed = cookieStore.get(CURRENCY_COLLAPSED_COOKIE)?.value === 'true';
 
   /*

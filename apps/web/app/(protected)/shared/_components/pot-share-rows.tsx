@@ -124,6 +124,8 @@ function ShareRow({ seat, index, form }: ShareRowProps) {
                 {...field}
                 containerClassName="w-28 shrink-0"
                 placeholder={t('pots.opening.shares.placeholder')}
+                // The visible name beside it is not a label element, and a placeholder is no name.
+                aria-label={t('pots.opening.shares.inputLabel', { name: seat.displayName })}
               />
             </FormControl>
             <span className="shrink-0 text-paragraph-sm text-muted-foreground">%</span>

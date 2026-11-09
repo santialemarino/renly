@@ -8,6 +8,7 @@ interface SortableTableHeadProps<T extends string> {
   sortBy: T | null;
   sortOrder: SortOrder;
   onSort: (column: T) => void;
+  className?: string;
 }
 
 // Sortable column header: the shared sort-button treatment (hover color shift + icon
@@ -18,9 +19,10 @@ export function SortableTableHead<T extends string>({
   sortBy,
   sortOrder,
   onSort,
+  className,
 }: SortableTableHeadProps<T>) {
   return (
-    <TableHead>
+    <TableHead className={className}>
       <button
         type="button"
         onClick={() => onSort(column)}

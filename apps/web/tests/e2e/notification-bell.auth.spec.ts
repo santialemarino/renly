@@ -1,6 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, request as playwrightRequest, test, type Page } from '@playwright/test';
 
 import { ROUTES } from '@/config/routes';
+import { API_BASE, apiToken, WEB_BASE } from './helpers/api';
+import { ADMIN_AUTH_STATE_PATH, e2eAdminCredentials } from './helpers/auth';
+import { testMarker } from './helpers/factories';
 
 /*
  * Where the bell opens, and where its links lead.
@@ -161,5 +164,103 @@ test.describe('the notification bell', () => {
     await page.getByTestId('notification-settings-link').click();
     await expect(page).toHaveURL(ROUTES.notificationSettings);
     await expect(page.getByTestId('notification-digest-switch')).toBeVisible();
+  });
+});
+
+/*
+ * The unread count after a read made somewhere other than the bell. The bell's rows and count come
+ * from the protected layout and are re-read by `router.refresh()`; it once copied them into state on
+ * mount, so after marking read in the inbox (one row, or all of them) the bell kept the old count until
+ * a full reload.
+ *
+ * Notifications only ever reach someone through another person's act, so a second account makes them:
+ * the harness opens two groups and invites the admin account into each, and the admin accepting each
+ * invite tells the harness ("… joined …"). Both groups are deleted afterwards. Needs the admin
+ * account, like the admin scans; CI always has it.
+ */
+test.describe('the bell after reads made elsewhere', () => {
+  test.skip(!e2eAdminCredentials(), 'needs E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD');
+
+  const groupIds: number[] = [];
+  let headers: Record<string, string>;
+
+  // The admin account's API token, read from its saved session as `apiToken()` reads the harness one.
+  async function adminToken(): Promise<string> {
+    const context = await playwrightRequest.newContext({
+      baseURL: WEB_BASE,
+      storageState: ADMIN_AUTH_STATE_PATH,
+    });
+    try {
+      const response = await context.get('/api/auth/session');
+      expect(response.ok()).toBe(true);
+      return (await response.json()).user.accessToken as string;
+    } finally {
+      await context.dispose();
+    }
+  }
+
+  test.beforeAll(async () => {
+    headers = { Authorization: `Bearer ${await apiToken()}` };
+    const admin = { Authorization: `Bearer ${await adminToken()}` };
+    const api = await playwrightRequest.newContext();
+    try {
+      // Whatever an earlier spec left unread does not matter: everything starts read.
+      await api.post(`${API_BASE}/notifications/read-all`, { headers });
+      for (const label of ['one', 'two']) {
+        const group = await api.post(`${API_BASE}/groups`, {
+          headers,
+          data: { name: `${testMarker(`bell-${label}`)}`, kind: 'other' },
+        });
+        expect(group.ok(), `POST /groups: ${group.status()}`).toBe(true);
+        const groupId: number = (await group.json()).id;
+        groupIds.push(groupId);
+        const seat = await api.post(`${API_BASE}/groups/${groupId}/members`, {
+          headers,
+          data: { display_name: 'E2E admin' },
+        });
+        expect(seat.ok(), `POST members: ${seat.status()}`).toBe(true);
+        const members = (await seat.json()).members as { id: number; display_name: string }[];
+        const seatId = members.find((member) => member.display_name === 'E2E admin')!.id;
+        const invite = await api.post(`${API_BASE}/groups/${groupId}/members/${seatId}/invite`, {
+          headers,
+          data: {},
+        });
+        expect(invite.ok(), `POST invite: ${invite.status()}`).toBe(true);
+        const token = new URL((await invite.json()).invite_url).searchParams.get('token');
+        const accepted = await api.post(`${API_BASE}/group-invites/${token}/accept`, {
+          headers: admin,
+        });
+        expect(accepted.ok(), `accept: ${accepted.status()} ${await accepted.text()}`).toBe(true);
+      }
+    } finally {
+      await api.dispose();
+    }
+  });
+
+  test.afterAll(async () => {
+    const api = await playwrightRequest.newContext();
+    for (const groupId of groupIds) await api.delete(`${API_BASE}/groups/${groupId}`, { headers });
+    await api.dispose();
+  });
+
+  test('follows a read in the inbox, then "Mark all read" there', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: HEIGHT });
+    await page.goto(ROUTES.notifications);
+    const bell = page.getByTestId(BELL);
+    await expect(bell).toHaveAccessibleName('2 unread notifications');
+
+    // Opening one navigates to its group; the bell there must already count one fewer.
+    await page
+      .locator('main')
+      .getByRole('link', { name: /joined/ })
+      .first()
+      .click();
+    await expect(page).not.toHaveURL(ROUTES.notifications);
+    await expect(bell).toHaveAccessibleName('1 unread notification');
+
+    await page.goto(ROUTES.notifications);
+    await expect(bell).toHaveAccessibleName('1 unread notification');
+    await page.locator('main').getByRole('button', { name: 'Mark all read' }).click();
+    await expect(bell).toHaveAccessibleName('No notifications');
   });
 });

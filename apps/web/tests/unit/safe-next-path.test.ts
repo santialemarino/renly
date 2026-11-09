@@ -16,6 +16,12 @@ describe('safeNextPath', () => {
     expect(safeNextPath(next)).toBe('/join?token=abc123');
   });
 
+  it('accepts a page under a protected route, query included', () => {
+    // A deep link a logged-out visitor opened: /login sends them back to it.
+    expect(safeNextPath('/shared/12?tab=pots')).toBe('/shared/12?tab=pots');
+    expect(safeNextPath('/accounts/5')).toBe('/accounts/5');
+  });
+
   it('accepts every route the app declares', () => {
     for (const path of ALL_ROUTE_PATHS) {
       expect(safeNextPath(path)).toBe(path);
@@ -26,7 +32,8 @@ describe('safeNextPath', () => {
     ['undefined', undefined],
     ['empty', ''],
     ['an unknown path', '/not-a-route'],
-    ['a path prefix that is not itself a route', '/shared/12'],
+    ['a path under a public route', '/help/anything'],
+    ['a route name with a suffix glued on', '/sharedx/12'],
   ])('rejects %s', (_label, value) => {
     expect(safeNextPath(value)).toBeNull();
   });
@@ -52,6 +59,11 @@ describe('safeNextPath', () => {
     ['a backslash-escaped protocol-relative URL', '/\\evil.example'],
   ])('rejects %s', (_label, value) => {
     expect(safeNextPath(value)).toBeNull();
+  });
+
+  it('rejects a repeated `next` (an array) rather than throwing on it', () => {
+    expect(safeNextPath(['/dashboard', '/expenses'])).toBeNull();
+    expect(safeNextPath(['https://evil.example'])).toBeNull();
   });
 
   it('returns the normalised path, not the input string', () => {

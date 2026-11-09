@@ -191,7 +191,7 @@ export function PaymentObligationsTable({
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
               />
-              <TableHead>{t('table.category')}</TableHead>
+              <TableHead>{t('table.label')}</TableHead>
               <TableHead>{t('table.paymentMethod')}</TableHead>
               <TableHead className="w-28 text-center">{t('table.actions')}</TableHead>
             </TableRow>
