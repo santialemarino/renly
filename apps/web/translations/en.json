@@ -1864,7 +1864,7 @@
       "searchPlaceholder": "Search investments...",
       "refresh": "Refresh prices",
       "refreshing": "Refreshing...",
-      "refreshSuccess": "{prices} prices fetched. They fill in the snapshot dialog — your values change once you record a snapshot.",
+      "refreshSuccess": "{prices} prices fetched — used for your next snapshot.",
       "refreshError": "Failed to refresh prices.",
       "interval": {
         "label": "Columns",
