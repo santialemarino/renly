@@ -23,8 +23,9 @@ const PARSE_BASE = 'https://renly.invalid';
  * (so `/a/../dashboard` cannot smuggle a non-route segment past check 3) and a fragment is dropped.
  * The query survives because the join link's token lives there.
  */
-export function safeNextPath(next: string | undefined): string | null {
-  if (!next || !next.startsWith('/')) return null;
+export function safeNextPath(next: string | string[] | undefined): string | null {
+  // A repeated `?next=` arrives as an array; which one was meant is anyone's guess, so neither is used.
+  if (typeof next !== 'string' || !next.startsWith('/')) return null;
 
   let url: URL;
   try {

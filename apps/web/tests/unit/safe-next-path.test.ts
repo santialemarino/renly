@@ -61,6 +61,11 @@ describe('safeNextPath', () => {
     expect(safeNextPath(value)).toBeNull();
   });
 
+  it('rejects a repeated `next` (an array) rather than throwing on it', () => {
+    expect(safeNextPath(['/dashboard', '/expenses'])).toBeNull();
+    expect(safeNextPath(['https://evil.example'])).toBeNull();
+  });
+
   it('returns the normalised path, not the input string', () => {
     // Dot segments resolve BEFORE the allowlist check, so a non-route segment cannot ride along; and
     // the returned value is what was checked, rather than whatever the caller happened to write.

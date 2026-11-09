@@ -11,7 +11,7 @@ export async function generateMetadata() {
 }
 
 interface LoginPageProps {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string | string[] }>;
 }
 
 /*
