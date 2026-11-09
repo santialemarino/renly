@@ -125,29 +125,70 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
      * point therefore lands on the headline's own figure, and the chart runs on to the current month
      * even when the newest snapshot is older. Before, the carried holding kept its snapshot's rate and
      * the chart stopped at the snapshot's month, so the two drifted apart by whatever the currency did.
+     *
+     * So the account needs a holding valued in an EARLIER month, in a currency the display converts —
+     * seeded here in the account's secondary currency, two months back. Investments can be archived but
+     * never deleted, so it is one fixed-name row found again (and unarchived) by every run and archived
+     * by its cleanup; archived holdings count nowhere.
      */
     const token = await apiToken();
     const headers = { Authorization: `Bearer ${token}` };
-    let anyHoldings = false;
-    for (const currency of await displayCurrencies(request, token)) {
-      const portfolio = await request.get(`${API_BASE}/metrics/portfolio?currency=${currency}`, {
+    const currencies = await displayCurrencies(request, token);
+    const holdingName = 'e2e-conversion-basis-holding';
+    const listed = await request.get(
+      `${API_BASE}/investments?active_only=false&page_size=100&search=${holdingName}`,
+      { headers },
+    );
+    expect(listed.ok()).toBe(true);
+    let id = ((await listed.json()).items as { id: number; name: string }[]).find(
+      (row) => row.name === holdingName,
+    )?.id;
+    if (id === undefined) {
+      const created = await request.post(`${API_BASE}/investments`, {
+        headers,
+        data: { name: holdingName, category: 'cedears', base_currency: currencies[1] },
+      });
+      expect(created.ok(), `POST /investments: ${created.status()}`).toBe(true);
+      id = (await created.json()).id as number;
+    } else {
+      const unarchived = await request.patch(`${API_BASE}/investments/${id}/unarchive`, {
         headers,
       });
-      const evolution = await request.get(
-        `${API_BASE}/metrics/portfolio/evolution?currency=${currency}`,
-        { headers },
-      );
-      expect(portfolio.ok()).toBe(true);
-      expect(evolution.ok()).toBe(true);
-      const points = (await evolution.json()).points as { date: string; total_value: string }[];
-      if (points.length === 0) continue;
-      anyHoldings = true;
-      const last = points[points.length - 1];
-      expect
-        .soft(last.total_value, `portfolio value in ${currency}`)
-        .toBe((await portfolio.json()).total_value);
+      expect(unarchived.ok(), `PATCH unarchive: ${unarchived.status()}`).toBe(true);
     }
-    test.skip(!anyHoldings, 'the harness account holds no valued investment to reconcile');
+    try {
+      const now = new Date();
+      const valuedOn = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 15));
+      const snapshot = await request.post(`${API_BASE}/investments/${id}/snapshots`, {
+        headers,
+        data: {
+          date: valuedOn.toISOString().slice(0, 10),
+          value: '1234.56',
+          currency: currencies[1],
+        },
+      });
+      expect(snapshot.ok(), `POST snapshot: ${snapshot.status()}`).toBe(true);
+
+      for (const currency of currencies) {
+        const portfolio = await request.get(`${API_BASE}/metrics/portfolio?currency=${currency}`, {
+          headers,
+        });
+        const evolution = await request.get(
+          `${API_BASE}/metrics/portfolio/evolution?currency=${currency}`,
+          { headers },
+        );
+        expect(portfolio.ok()).toBe(true);
+        expect(evolution.ok()).toBe(true);
+        const points = (await evolution.json()).points as { date: string; total_value: string }[];
+        expect(points.length, `portfolio evolution in ${currency}`).toBeGreaterThan(0);
+        const last = points[points.length - 1];
+        expect
+          .soft(last.total_value, `portfolio value in ${currency}`)
+          .toBe((await portfolio.json()).total_value);
+      }
+    } finally {
+      await request.patch(`${API_BASE}/investments/${id}/archive`, { headers });
+    }
   });
 
   test('every finance aggregate adds up to the rows it summarises', async ({ request }) => {
