@@ -79,9 +79,9 @@ Per row / per snapshot / per cashflow:
      → Unsupported pair: return unchanged
 ```
 
-The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pair via binary search. If `as_of_date` predates every stored rate, it falls back to the earliest available rate so the page never breaks. Per-date rate maps are memoised so repeated lookups for the same date are O(1).
+The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pair via binary search, so a weekend, a holiday or any other day without a stored rate uses the last earlier one. If `as_of_date` predates every stored rate, it falls back to the earliest available rate so the page never breaks — and that figure is an **estimate**: `lookup.is_estimate_at(as_of_date, *currencies)` says whether the map for that date stands in an earliest rate for any (or the named) currency, and `lookup.used_estimate` turns true once any map a request read did. No response carries the flag yet; a surface that wants to mark such figures reads it from the lookup it already holds. With the history backfilled (§5) the stored rates start in 2011 (MEP in 2018-10-29), so in practice only dates before those use the fallback. Per-date rate maps are memoised so repeated lookups for the same date are O(1).
 
-**Grouped-rates cache.** The full grouped-by-pair load that backs every `RateLookup` is served from a process-level TTL cache (`RATES_CACHE_TTL_SECONDS = 600`) in `exchange_rate_service.get_rates_grouped_by_pair_cached`. Rates are global (not per-user) and only change when the 6-hourly scheduler stores fresh quotes, so this stops every converting endpoint from re-reading the whole `exchange_rates` table per request. `exchange_rate_service.invalidate_rates_cache()` is called right after the scheduler upserts fresh rates so they serve immediately instead of waiting out the TTL. The composite index `idx_exchange_rates_pair_date (pair, date)` serves the per-pair, date-ordered scan (the pre-existing `idx_exchange_rates_date` on `date DESC` alone cannot).
+**Grouped-rates cache.** The full grouped-by-pair load that backs every `RateLookup` is served from a process-level TTL cache (`RATES_CACHE_TTL_SECONDS = 600`) in `exchange_rate_service.get_rates_grouped_by_pair_cached`. Rates are global (not per-user) and only change when the 6-hourly scheduler stores fresh quotes, so this stops every converting endpoint from re-reading the whole `exchange_rates` table per request. `exchange_rate_service.invalidate_rates_cache()` is called right after the scheduler stores fresh or gap-filled rates so they serve immediately instead of waiting out the TTL. It holds `(date, rate)` tuples (`RatePoint`), not ORM rows: the full history since 2011 is ~23k rows, about 8 MB that way against ~40 MB as ORM rows. The composite index `idx_exchange_rates_pair_date (pair, date)` serves the per-pair, date-ordered scan (the pre-existing `idx_exchange_rates_date` on `date DESC` alone cannot).
 
 **One rounding rule.** Every money figure in the app rounds **half-up**, through `domain/money.py`'s `quantize`. Half-up rather than Decimal's `ROUND_HALF_EVEN` default (banker's rounding) because these are figures a person reads and checks by hand. Two spellings take banker's rounding silently and are therefore the ways a second rule arrives: `.quantize()` with no `rounding=` (so `convert_value(4.69, ARS→USD)` at 1 USD = 2 ARS would give 2.34 where the rule gives 2.35), and the builtin `round(x, 2)`, which on a Decimal is `ROUND_HALF_EVEN` as well (10 × 0.2345 would store 2.34). A unit-suite guard (`test_one_rounding_rule.py`) walks `app/` and fails both: any `.quantize()` that omits the mode, and any two-argument `round()` to the money scale — the scale derived from `MONEY_PLACES`, with a non-literal `ndigits` failing too because nothing can prove it is not the money scale. A `round()` at another literal scale passes: the six-place rounding of a provider's quoted price and of the IRR solver's rate are not money figures.
 
@@ -156,14 +156,17 @@ Exchange rate providers follow the standardized provider pattern — see [extern
 
 **Current providers:**
 
-- **DolarApi** (`dolarapi.com/v1/dolares`) → USD/ARS oficial, MEP, blue rates. Average of buy/sell.
-- **Frankfurter** (`frankfurter.dev`) → USD/BRL, USD/EUR, USD/GBP rates. ECB data.
+- **DolarApi** (`dolarapi.com/v1/dolares`) → latest USD/ARS oficial, MEP, blue rates. Average of buy/sell.
+- **ArgentinaDatos** (`api.argentinadatos.com/v1/cotizaciones/dolares/{casa}`) → daily USD/ARS history, same midpoint.
+- **Frankfurter** (`api.frankfurter.dev/v1`) → USD/BRL, USD/EUR, USD/GBP, latest and ranges. ECB data.
+
+**Dates:** every rate is stored under the date its source quotes it for, never the server's date — see [scheduler.md](scheduler.md) → Exchange rates.
 
 **Schedule:**
 
-- **On startup**: immediate fetch (`next_run_time=datetime.now()`).
-- **Every 6 hours**: APScheduler interval job.
-- **Storage**: `exchange_rates` table with unique constraint on `(date, pair)`. Upsert on each fetch.
+- **On startup and every 6 hours**: store the latest quotes, then fill any weekday of the last 90 days that has no rate from the history providers.
+- **Older history**: the one-off backfill command, `uv run python -m app.scripts.backfill_exchange_rates --since 2011-01-01` ([deployment.md](deployment.md) → Exchange-rate history).
+- **Storage**: `exchange_rates` table with unique constraint on `(date, pair)`. The latest fetch upserts (the last quote of a day wins); the history fill only inserts days with no row, and replaces a stored row only when it is provably a stale quote under a later date.
 - **Pairs**: `USD_ARS_OFICIAL`, `USD_ARS_MEP`, `USD_ARS_BLUE`, `USD_BRL`, `USD_EUR`, `USD_GBP` (enum `ExchangeRatePair`).
 
 ### 6. Settings form — currency configuration

@@ -312,6 +312,7 @@ app/
 ├── repositories/    # <entity>_repository.py
 ├── routers/        # <feature>.py
 ├── schemas/        # <feature>.py
+├── scripts/        # one-off commands run with `uv run python -m app.scripts.<name>` (call services, like a router)
 ├── services/       # <feature>_service.py
 └── utils/          # general-purpose
 ```

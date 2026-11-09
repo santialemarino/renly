@@ -212,6 +212,10 @@ pnpm test:e2e        # Playwright E2E
   - `test_auto_snapshot_catchup_probe.py` — `LEDGER_TEST_DATABASE_URL`. The startup catch-up's one SQL
     probe ("an AUTO snapshot dated on or after the month-end"), whose two predicates the unit tests fake.
     Seeded in 2091, because the probe is global by design.
+  - `test_exchange_rate_writes.py` — `LEDGER_TEST_DATABASE_URL`. The two statements the rate history is
+    written with: the history fill's `ON CONFLICT DO NOTHING` leaves an existing rate exactly as it was and
+    counts only what it inserted (so a second run reads zero), and the upsert writes each row under its own
+    date. Seeded in 1990, before any real rate, because the table is global.
 - **Which role each URL names.** `RLS_TEST_DATABASE_URL` is `renly_app`; every other var, including
   `RLS_TEST_ADMIN_DATABASE_URL`, is `renly_admin` — never the owner, which under FORCE reads nothing when
   it is a NOSUPERUSER and everything when it is a superuser, so neither exercises what the suites assert.

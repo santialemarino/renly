@@ -280,6 +280,28 @@ pick a plan above that, or put a pooler (PgBouncer in transaction mode) in front
 
 ---
 
+## Exchange-rate history
+
+Every conversion uses the rate of the figure's own date, so the `exchange_rates` table needs one row per
+quoted day. The scheduler keeps the recent window filled on its own (see [`scheduler.md`](./scheduler.md)), but
+a new database, or one whose API sat idle for more than three months, needs the history loaded once:
+
+```bash
+# From apps/api, with DATABASE_ADMIN_URL pointing at the target database.
+uv run python -m app.scripts.backfill_exchange_rates --since 2011-01-01 --dry-run   # report only
+uv run python -m app.scripts.backfill_exchange_rates --since 2011-01-01
+```
+
+It reads ArgentinaDatos (USD/ARS oficial and blue from 2011-01-03, MEP from 2018-10-29) and Frankfurter
+(BRL/EUR/GBP, ECB business days) up to yesterday, and prints each pair's rows before and after. It is safe to
+re-run: it inserts only days with no stored rate, and replaces a stored rate only when it is provably a stale
+quote stamped with a later date (written by the latest fetch, equal to the previous day's quote, and different
+from the source's quote for its own date). A full run writes ~22,000 rows in a few seconds. If a source does not
+answer it writes nothing and exits 1; run it again later. Restart the API afterwards (or wait out the 10-minute
+rates cache) so running processes read the new rows.
+
+---
+
 ## CI
 
 `ci.api.yml` and `ci.web.yml` run lint / type-check / build / tests on every PR, scoped by the PR's files with

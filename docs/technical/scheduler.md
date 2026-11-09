@@ -59,12 +59,26 @@ OBLIGATION_REMINDER_LEAD_DAYS = 3
 
 ### 1. Exchange rates
 
-| Property         | Value                                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------------------ |
-| **Trigger**      | `interval` (every 6 hours)                                                                             |
-| **Also runs**    | Immediately on startup (`next_run_time=datetime.now()`)                                                |
-| **Service call** | `exchange_rate_service.fetch_and_store_latest(session)`                                                |
-| **What it does** | Fetches rates from all registered providers (DolarApi + Frankfurter) and upserts into `exchange_rates` |
+| Property          | Value                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Trigger**       | `interval` (every 6 hours)                                                                                      |
+| **Also runs**     | Immediately on startup (`next_run_time=datetime.now()`)                                                         |
+| **Service calls** | `exchange_rate_service.fetch_and_store_latest(session)`, then `exchange_rate_service.fill_recent_gaps(session)` |
+| **What it does**  | Stores the latest quotes (DolarApi + Frankfurter) under their quote dates, then fills missing weekdays          |
+
+**Quote dates.** Each rate is stored under the date its source quotes it for — DolarApi's `fechaActualizacion`
+(read as an Argentine calendar day, UTC-3) and Frankfurter's `date` (the ECB business day) — never the server's
+date, so a Friday quote read on Sunday stays Friday's. A later quote for the same date replaces the earlier one.
+
+**Gap filling.** The rates only arrive while the API runs, so an outage leaves days without a rate. Each run looks
+at the last `GAP_FILL_WINDOW_DAYS` (90) up to yesterday, lists the weekdays each pair has no row for, and asks the
+history provider of each such pair (ArgentinaDatos for ARS, Frankfurter for BRL/EUR/GBP) for exactly those pairs
+from the first missing day. It only inserts days with no stored row; a stored row is replaced only when it is
+provably a stale quote under a later date (see `exchange_rate_service.is_misdated`). Weekends are never expected:
+lookups carry the last earlier rate over them. A weekday the source itself has no quote for (an ECB holiday)
+stays missing and is asked for again next run: one small request, no row invented. A provider that does not
+answer is logged and retried next run. Anything older than the window is loaded with the one-off backfill
+command (`deployment.md` → Exchange-rate history).
 
 ### 2. Asset prices
 

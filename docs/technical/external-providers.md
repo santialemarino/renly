@@ -92,24 +92,39 @@ data.
 
 ### Exchange rate providers (`services/exchange_rate_providers.py`)
 
-**Signature:**
+Two kinds, each with its own registry. **Latest** providers return the current quotes and are run by the
+scheduler; **history** providers return every daily quote in a range and are run to fill missing days and by
+the backfill command.
+
+**Signatures:**
 
 ```python
-async def fetch_<name>() -> ExchangeRateResult
+async def fetch_<name>() -> ExchangeRateResult                                    # latest
+async def fetch_<name>_history(start, end, pairs) -> ExchangeRateResult           # history
 ```
 
-Where `ExchangeRateResult = list[tuple[ExchangeRatePair, Decimal]]`. Each provider returns `(pair, rate)` tuples. The service iterates `EXCHANGE_RATE_PROVIDERS` and stores results.
+Where `ExchangeRateResult = list[ExchangeRateQuote]` and `ExchangeRateQuote(pair, rate, quote_date)` is a
+NamedTuple. **`quote_date` is the date the source quotes the rate for**, never the server's date. The response
+parsing lives in pure `parse_*` functions so the unit suite reads recorded responses
+(`tests/unit/fixtures/exchange_rates/`) without the network. A latest provider logs and returns `[]` on failure,
+so one source never blocks the other; a history provider raises `ExchangeRateHistoryUnavailable`, because "no
+quotes in this range" and "the source did not answer" must not look alike.
 
-**Registry** (in `exchange_rate_providers.py`):
+**Registries** (in `exchange_rate_providers.py`):
 
 ```python
 EXCHANGE_RATE_PROVIDERS = [
     ExchangeRateProviderInfo("dolarapi", fetch_dolarapi),
     ExchangeRateProviderInfo("frankfurter", fetch_frankfurter),
 ]
+
+EXCHANGE_RATE_HISTORY_PROVIDERS = [
+    ExchangeRateHistoryProviderInfo("argentinadatos", (USD_ARS_OFICIAL, USD_ARS_BLUE, USD_ARS_MEP), fetch_argentinadatos_history),
+    ExchangeRateHistoryProviderInfo("frankfurter", (USD_BRL, USD_EUR, USD_GBP), fetch_frankfurter_history),
+]
 ```
 
-**Metadata:** `ExchangeRateProviderInfo(source, fetch)` — NamedTuple.
+Every pair has exactly one history provider (a unit test holds the registry to it).
 
 ### Frontend category capabilities (`lib/constants/categories.ts`)
 
@@ -169,10 +184,11 @@ The service fetches both in parallel (`asyncio.gather`). Selection: newer source
 
 ### Exchange rate providers
 
-| Provider    | Pairs                      | Notes                 |
-| ----------- | -------------------------- | --------------------- |
-| DolarApi    | USD/ARS oficial, MEP, blue | Averages compra/venta |
-| Frankfurter | USD/BRL, USD/EUR, USD/GBP  | ECB data              |
+| Provider       | Kind             | Pairs                      | Notes                                                                                                                                                                    |
+| -------------- | ---------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DolarApi       | latest           | USD/ARS oficial, MEP, blue | Midpoint of compra/venta; dated by `fechaActualizacion` (Argentine day, UTC-3)                                                                                           |
+| ArgentinaDatos | history          | USD/ARS oficial, MEP, blue | `/v1/cotizaciones/dolares/{oficial,blue,bolsa}`, whole series per call; oficial/blue from 2011-01-03, MEP from 2018-10-29; weekend repeats of the day before are dropped |
+| Frankfurter    | latest + history | USD/BRL, USD/EUR, USD/GBP  | ECB data; `/latest` is dated by its `date`, `/{start}..{end}` returns business days only                                                                                 |
 
 ## Adding a new provider
 
