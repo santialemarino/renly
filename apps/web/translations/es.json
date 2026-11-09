@@ -3276,13 +3276,33 @@
           "title": "{actor} registró un cambio de reparto en {pot}",
           "detail": "De {from_member} a {to_member}"
         },
+        "reagreement_from_you": {
+          "title": "{actor} registró un cambio de reparto en {pot}",
+          "detail": "De vos a {to_member}"
+        },
+        "reagreement_to_you": {
+          "title": "{actor} registró un cambio de reparto en {pot}",
+          "detail": "De {from_member} a vos"
+        },
         "deleted": {
           "title": "{actor} eliminó una entrada del historial de titularidad de {pot}"
         },
         "confirmed": {
           "title": "{actor} aceptó el cambio de reparto en {pot}"
         },
+        "confirmed_from_you": {
+          "title": "{actor} aceptó el cambio de reparto en {pot}"
+        },
+        "confirmed_to_you": {
+          "title": "{actor} aceptó el cambio de reparto en {pot}"
+        },
         "unconfirmed": {
+          "title": "{actor} retiró su aceptación en {pot}"
+        },
+        "unconfirmed_from_you": {
+          "title": "{actor} retiró su aceptación en {pot}"
+        },
+        "unconfirmed_to_you": {
           "title": "{actor} retiró su aceptación en {pot}"
         }
       },
@@ -3292,8 +3312,20 @@
         "contribution": {
           "title": "{member} puso {amount} {currency} en {pot}"
         },
+        "contribution_for_member": {
+          "title": "{actor} registró que {member} puso {amount} {currency} en {pot}"
+        },
+        "contribution_for_you": {
+          "title": "{actor} registró que pusiste {amount} {currency} en {pot}"
+        },
         "withdrawal": {
           "title": "{member} sacó {amount} {currency} de {pot}"
+        },
+        "withdrawal_for_member": {
+          "title": "{actor} registró que {member} sacó {amount} {currency} de {pot}"
+        },
+        "withdrawal_for_you": {
+          "title": "{actor} registró que sacaste {amount} {currency} de {pot}"
         },
         "reconciliation_surplus": {
           "title": "{actor} concilió {account}: {amount} {currency} más de lo que {pot} tenía registrado"

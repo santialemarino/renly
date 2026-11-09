@@ -3276,13 +3276,33 @@
           "title": "{actor} recorded a change of split in {pot}",
           "detail": "From {from_member} to {to_member}"
         },
+        "reagreement_from_you": {
+          "title": "{actor} recorded a change of split in {pot}",
+          "detail": "From you to {to_member}"
+        },
+        "reagreement_to_you": {
+          "title": "{actor} recorded a change of split in {pot}",
+          "detail": "From {from_member} to you"
+        },
         "deleted": {
           "title": "{actor} removed an entry from {pot}'s ownership history"
         },
         "confirmed": {
           "title": "{actor} agreed to the change of split in {pot}"
         },
+        "confirmed_from_you": {
+          "title": "{actor} agreed to the change of split in {pot}"
+        },
+        "confirmed_to_you": {
+          "title": "{actor} agreed to the change of split in {pot}"
+        },
         "unconfirmed": {
+          "title": "{actor} withdrew their agreement in {pot}"
+        },
+        "unconfirmed_from_you": {
+          "title": "{actor} withdrew their agreement in {pot}"
+        },
+        "unconfirmed_to_you": {
           "title": "{actor} withdrew their agreement in {pot}"
         }
       },
@@ -3292,8 +3312,20 @@
         "contribution": {
           "title": "{member} added {amount} {currency} to {pot}"
         },
+        "contribution_for_member": {
+          "title": "{actor} recorded that {member} added {amount} {currency} to {pot}"
+        },
+        "contribution_for_you": {
+          "title": "{actor} recorded that you added {amount} {currency} to {pot}"
+        },
         "withdrawal": {
           "title": "{member} took {amount} {currency} out of {pot}"
+        },
+        "withdrawal_for_member": {
+          "title": "{actor} recorded that {member} took {amount} {currency} out of {pot}"
+        },
+        "withdrawal_for_you": {
+          "title": "{actor} recorded that you took {amount} {currency} out of {pot}"
         },
         "reconciliation_surplus": {
           "title": "{actor} reconciled {account} — {amount} {currency} more than {pot} had recorded"

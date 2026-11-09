@@ -49,7 +49,9 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 /*
  * The events whose copy has more than one form, and the forms each one takes. A contribution and a
  * withdrawal are the same event; so are a first division and a re-agreement, and a recorded payment
- * read from the payer's seat rather than the payee's. A reconciliation of a shared account rides
+ * read from the payer's seat rather than the payee's. A pot event that names a seat has a `_you` form
+ * for the reader who IS that seat, and a movement recorded for somebody else's share a `_for_member`
+ * form that also names who recorded it. A reconciliation of a shared account rides
  * `pot_movement` too, because what it does to a reader is exactly what those two do — the pot's money
  * moved — and an event value is a migration where a variant is a line of copy.
  *
@@ -60,10 +62,26 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
  */
 export const NOTIFICATION_VARIANTS = {
   plan_charged: ['subscription', 'installment'],
-  ownership_changed: ['opening', 'reagreement', 'deleted', 'confirmed', 'unconfirmed'],
+  ownership_changed: [
+    'opening',
+    'reagreement',
+    'reagreement_from_you',
+    'reagreement_to_you',
+    'deleted',
+    'confirmed',
+    'confirmed_from_you',
+    'confirmed_to_you',
+    'unconfirmed',
+    'unconfirmed_from_you',
+    'unconfirmed_to_you',
+  ],
   pot_movement: [
     'contribution',
+    'contribution_for_member',
+    'contribution_for_you',
     'withdrawal',
+    'withdrawal_for_member',
+    'withdrawal_for_you',
     'reconciliation_surplus',
     'reconciliation_shortfall',
     'reconciliation_removed',
@@ -87,6 +105,8 @@ export const NOTIFICATION_VARIANTS = {
 export const NOTIFICATION_DETAIL_KEYS = {
   obligation_due: ['detail'],
   'ownership_changed.reagreement': ['detail'],
+  'ownership_changed.reagreement_from_you': ['detail'],
+  'ownership_changed.reagreement_to_you': ['detail'],
   'settle_marked_paid.payee': ['detail'],
   snapshot_due: ['detailValued', 'detailNever'],
 } as const;
