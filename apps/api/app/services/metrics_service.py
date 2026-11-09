@@ -213,11 +213,7 @@ async def get_portfolio_metrics(
 
     # Forward-filled portfolio totals plus portfolio-level period returns; a new investment's
     # first snapshot counts as contributed capital in its period, not return.
-    portfolio_totals, dated_returns = mh.portfolio_totals_and_returns(inv_date_value, flows_by_inv)
-
-    # Portfolio TWR: chain the period returns that fall inside the requested window.
-    portfolio_returns = [r for d, r in dated_returns if r is not None and (not start_date or d >= start_date) and (not end_date or d <= end_date)]
-    portfolio_twr = mh.twr(portfolio_returns)
+    portfolio_totals, _ = mh.portfolio_totals_and_returns(inv_date_value, flows_by_inv)
 
     # What the portfolio holds NOW — each investment's latest snapshot — at TODAY's rate: a holding is
     # worth what it would fetch today, so the headline, the allocation donuts and every per-holding
@@ -227,11 +223,15 @@ async def get_portfolio_metrics(
     # Headline value/invested/gain: all-time without a window, period metrics with one
     # (value at window end, net flows inside the window, gain = end - start - net flows). A boundary is
     # a point in time, so it values what was held THEN at that day's rate — a window still open today
-    # ends at the value now.
+    # ends at the value now. The start also counts money moved in since the last snapshot before it:
+    # that money was held on the start day, and leaving it out booked it as the window's gain and as
+    # the first period's return.
     window_start_value = ZERO
     if start_date or end_date:
         if start_date:
-            window_start_value = _portfolio_value_on(snap_by_inv, inv_currency, currency, lookup, start_date, min(start_date, today))
+            window_start_value = _portfolio_value_on(
+                snap_by_inv, inv_currency, currency, lookup, start_date, min(start_date, today)
+            ) + mh.flows_since_last_valuation(snap_by_inv, flows_by_inv, start_date)
         if end_date and end_date < today:
             window_end_value = _portfolio_value_on(snap_by_inv, inv_currency, currency, lookup, end_date, end_date)
         else:
@@ -269,6 +269,10 @@ async def get_portfolio_metrics(
         total_return_pct = None
         if total_invested > ZERO:
             total_return_pct = total_value / total_invested - ONE
+
+    # Portfolio TWR: chain only the periods inside the requested window (every period without one), the
+    # first running from the window start at the value held that day.
+    portfolio_twr = mh.windowed_twr(portfolio_totals, inv_date_value, flows_by_inv, start_date, end_date, window_start_value)
 
     # The change into today: the value now against the portfolio held at the end of last month, valued
     # at that day's rate — the same two points the net-worth chart's last two months are. Null when

@@ -114,7 +114,13 @@ the headline cards switch from all-time to period metrics:
   value counts as money in (it entered the portfolio during the period).
 - **Period gain** — end value − start value − net money moved in during the period. This
   isolates what the period itself earned you, regardless of how much was already there.
-- **TWR and IRR** are measured inside the period only.
+- **TWR and IRR** are measured inside the period only. The first stretch runs from the period's
+  start, not from your last snapshot before it, so a month that ended before the period began — even
+  one whose snapshot falls exactly on the start date — never counts toward it.
+
+The **start value** is what you held on the start date: each investment's last snapshot before it,
+plus any money you moved into it after that snapshot (no snapshot has seen it yet, so it counts at
+what you paid). Without it, a deposit made just before the period would read as the period's gain.
 
 Without a date filter, the cards show all-time values: current value, total net invested, and
 current value minus invested.

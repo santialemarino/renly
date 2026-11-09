@@ -13,6 +13,7 @@ from app.utils.metrics import (
     compute_period_returns,
     convert_optional,
     convert_value,
+    flows_since_last_valuation,
     invested_capital,
     month_over_month,
     net_cash_flow,
@@ -20,6 +21,7 @@ from app.utils.metrics import (
     portfolio_totals_and_returns,
     portfolio_value_at,
     twr,
+    windowed_twr,
     xirr,
 )
 
@@ -422,6 +424,81 @@ class TestPortfolioTotalsAndReturns:
 
     def test_empty(self):
         assert portfolio_totals_and_returns({}, {}) == ([], [])
+
+
+# --- windowed_twr ---
+
+
+class TestWindowedTwr:
+    # December earns +30% (100 on Dec 1, a 20 deposit on Dec 10, 150 on Jan 1) and January +2% (153 on
+    # Feb 1). A year-to-date window starts on Jan 1, so its TWR is January's 2% alone. The old filter
+    # chained every period whose END fell on or after the start — December ends ON Jan 1 — and reported
+    # the year at +32.6%. The December deposit keeps the chain from telescoping, so a chain that wrongly
+    # includes earlier periods cannot land on the right answer by accident.
+    IDV = {1: {date(2025, 12, 1): Decimal("100"), date(2026, 1, 1): Decimal("150"), date(2026, 2, 1): Decimal("153")}}
+    FLOWS = {1: [(date(2025, 12, 10), Decimal("20"))]}
+
+    def _totals(self, idv, flows):
+        totals, _ = portfolio_totals_and_returns(idv, flows)
+        return totals
+
+    def test_a_period_ending_on_the_start_is_not_chained(self):
+        result = windowed_twr(self._totals(self.IDV, self.FLOWS), self.IDV, self.FLOWS, date(2026, 1, 1), None, Decimal("150"))
+        assert result == Decimal("0.02")
+
+    def test_a_straddling_period_runs_from_the_start_value(self):
+        # Dec 15 → Jan 15 straddles the start. The window's first period runs from the start, valued at
+        # what was held that day (the caller's start value: 100 carried from Dec 15 plus the 50 deposited
+        # on Dec 20), so only Jan 1 → Feb 15 chains: (160 / 150) · (168 / 160) − 1 = 0.12. Chaining the
+        # straddling period whole would count December's days and the December deposit as the window's.
+        idv = {1: {date(2025, 12, 15): Decimal("100"), date(2026, 1, 15): Decimal("160"), date(2026, 2, 15): Decimal("168")}}
+        flows = {1: [(date(2025, 12, 20), Decimal("50"))]}
+        result = windowed_twr(self._totals(idv, flows), idv, flows, date(2026, 1, 1), None, Decimal("150"))
+        assert result == Decimal("0.12")
+
+    def test_a_flow_inside_the_first_period_is_netted(self):
+        # 150 on Jan 1, a 30 deposit on Jan 10, 183.6 on Feb 1: (183.6 − 30) / 150 − 1 = 0.024.
+        idv = {1: {date(2025, 12, 31): Decimal("150"), date(2026, 2, 1): Decimal("183.6")}}
+        flows = {1: [(date(2026, 1, 10), Decimal("30"))]}
+        assert windowed_twr(self._totals(idv, flows), idv, flows, date(2026, 1, 1), None, Decimal("150")) == Decimal("0.024")
+
+    def test_the_end_bounds_the_chain(self):
+        result = windowed_twr(self._totals(self.IDV, self.FLOWS), self.IDV, self.FLOWS, None, date(2026, 1, 1), ZERO)
+        assert result == Decimal("0.3")
+
+    def test_without_a_window_every_period_chains(self):
+        totals, returns = portfolio_totals_and_returns(self.IDV, self.FLOWS)
+        expected = twr([r for _, r in returns if r is not None])
+        assert windowed_twr(totals, self.IDV, self.FLOWS, None, None, ZERO) == expected == Decimal("0.326")
+
+    def test_nothing_held_at_the_start_has_no_first_return(self):
+        # The window opens before the first snapshot: there is no capital to measure a return on until
+        # the first value, after which the periods chain as usual.
+        result = windowed_twr(self._totals(self.IDV, self.FLOWS), self.IDV, self.FLOWS, date(2025, 11, 1), None, ZERO)
+        assert result == Decimal("0.326")
+
+
+# --- flows_since_last_valuation ---
+
+
+class TestFlowsSinceLastValuation:
+    SNAPS = {1: [_snap(1, date(2025, 12, 15), "100")], 2: [_snap(2, date(2026, 2, 1), "70")]}
+
+    def test_counts_only_flows_after_the_last_snapshot_up_to_the_day(self):
+        flows = {
+            1: [
+                (date(2025, 12, 15), Decimal("5")),
+                (date(2025, 12, 20), Decimal("50")),
+                (date(2026, 1, 1), Decimal("-8")),
+                (date(2026, 1, 2), Decimal("9")),
+            ]
+        }
+        # The Dec 15 flow is embodied in that day's snapshot, and Jan 2 is after the day asked about.
+        assert flows_since_last_valuation(self.SNAPS, flows, date(2026, 1, 1)) == Decimal("42")
+
+    def test_an_investment_not_yet_valued_contributes_nothing(self):
+        # Investment 2's first snapshot is after the day, so its January deposit is embodied in it.
+        assert flows_since_last_valuation(self.SNAPS, {2: [(date(2026, 1, 5), Decimal("70"))]}, date(2026, 1, 10)) == ZERO
 
 
 # --- portfolio_value_at ---

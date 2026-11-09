@@ -226,7 +226,6 @@ def portfolio_totals_and_returns(
     all_dates = sorted({d for dv in inv_date_value.values() for d in dv})
     if not all_dates:
         return [], []
-    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
 
     last_known: dict[int, Decimal] = {}
     totals: list[tuple[date_type, Decimal]] = []
@@ -238,10 +237,23 @@ def portfolio_totals_and_returns(
             total += last_known.get(inv_id, ZERO)
         totals.append((d, total))
 
+    return totals, _chain_period_returns(totals, inv_date_value, flows_by_inv)
+
+
+# The period return between each pair of consecutive (date, value) points. A period's net cash flow is
+# every real flow dated inside (prev, curr] after its investment's first snapshot, plus the first
+# snapshot itself of an investment born inside it (contributed capital, not return).
+# Returns [(date, period return or None)], one per point after the first.
+def _chain_period_returns(
+    points: list[tuple[date_type, Decimal]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+) -> list[tuple[date_type, Decimal | None]]:
+    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
     returns: list[tuple[date_type, Decimal | None]] = []
-    for i in range(1, len(totals)):
-        prev_date, prev_val = totals[i - 1]
-        curr_date, curr_val = totals[i]
+    for i in range(1, len(points)):
+        prev_date, prev_val = points[i - 1]
+        curr_date, curr_val = points[i]
         period_ncf = ZERO
         for inv_id, flows in flows_by_inv.items():
             first_date = first_snap_date.get(inv_id)
@@ -254,7 +266,33 @@ def portfolio_totals_and_returns(
             if prev_date < first_date <= curr_date:
                 period_ncf += inv_date_value[inv_id][first_date]
         returns.append((curr_date, period_return(prev_val, curr_val, period_ncf)))
-    return totals, returns
+    return returns
+
+
+# Time-weighted return over a window, chaining ONLY the periods that lie inside it. With a start, the
+# first period runs from the window start itself — valued at start_value, the portfolio held that day —
+# to the first total dated after it; every later total dated on or before the window end closes one
+# more period. A period that merely ENDS on the start, or straddles it, belongs to the time before the
+# window and is not counted: chaining it imported the return of whatever happened before the window
+# began (a year-to-date figure that included December). Without a start, every period ending on or
+# before the end counts. Same argument shapes as portfolio_totals_and_returns. Returns None when the
+# window holds no period with a return.
+def windowed_twr(
+    portfolio_totals: list[tuple[date_type, Decimal]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+    start_date: date_type | None,
+    end_date: date_type | None,
+    start_value: Decimal,
+) -> Decimal | None:
+    points: list[tuple[date_type, Decimal]] = [(start_date, start_value)] if start_date else []
+    for d, total in portfolio_totals:
+        if start_date and d <= start_date:
+            continue
+        if end_date and d > end_date:
+            break
+        points.append((d, total))
+    return twr([r for _, r in _chain_period_returns(points, inv_date_value, flows_by_inv) if r is not None])
 
 
 # Each investment's value in its own base currency on as_of_date: its last snapshot dated on or before
@@ -271,6 +309,26 @@ def holding_values_on(
         if held:
             values[inv_id] = held[-1].value
     return values
+
+
+# Net money moved into the portfolio after each investment's last snapshot on or before as_of_date, up
+# to and including that day — money a boundary valued from snapshots alone would miss, since no snapshot
+# has seen it yet. It counts at cost, the only figure there is for it until the next valuation. An
+# investment with no snapshot by then is left out: its flows are embodied in the first snapshot it gets.
+# flows_by_inv carries signed amounts (positive = money in), as portfolio_totals_and_returns takes them.
+def flows_since_last_valuation(
+    snapshots_by_inv: Mapping[int, Sequence[InvestmentSnapshot]],
+    flows_by_inv: Mapping[int, Sequence[tuple[date_type, Decimal]]],
+    as_of_date: date_type,
+) -> Decimal:
+    total = ZERO
+    for inv_id, snaps in snapshots_by_inv.items():
+        valued = [s.date for s in snaps if s.date <= as_of_date]
+        if not valued:
+            continue
+        last_valued = valued[-1]
+        total += sum((amount for d, amount in flows_by_inv.get(inv_id, []) if last_valued < d <= as_of_date), ZERO)
+    return total
 
 
 # The last day of the month before the one as_of_date falls in — the point a "vs last month" figure
