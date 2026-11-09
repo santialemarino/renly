@@ -28,7 +28,9 @@ export async function PublicHeader() {
             <a href={ROUTES.home}>{tCommon('goToDashboard')}</a>
           </Button>
         ) : mode === 'invite' ? (
-          <Button asChild blue size="sm">
+          // The same outline button as in open mode, only alone: the landing's own CTAs are the
+          // primary ones, and this bar's focus ring is the one the focus-system spec measures.
+          <Button asChild variant="outline" size="sm">
             <a href={ROUTES.auth.login}>{t('login')}</a>
           </Button>
         ) : (
