@@ -28,6 +28,7 @@ import {
   shareWizardEntry,
   showsCoverage,
   suggestedBaseCurrency,
+  takeOutMovesValue,
   valuedPointCount,
   wholeExitOutcome,
 } from '@/app/(protected)/shared/pot-rules';
@@ -355,6 +356,18 @@ describe('potLegAccounts', () => {
     // and an archived account is excluded from the pot's value, so money routed there would move the
     // account and leave the NAV where it was.
     expect(potLegAccounts(holdings, 'USD').map((a) => a.id)).toEqual([7]);
+  });
+});
+
+describe('takeOutMovesValue', () => {
+  it('moves the value once the shared account the money leaves is named', () => {
+    // The pot is worth what its accounts hold, so the shared leg alone moves it — including a take-out
+    // recorded for someone else, where no private account can be named at all.
+    expect(takeOutMovesValue('138')).toBe(true);
+  });
+
+  it('leaves the value waiting when no shared account is named', () => {
+    expect(takeOutMovesValue('')).toBe(false);
   });
 });
 

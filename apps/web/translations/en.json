@@ -2372,7 +2372,7 @@
         },
         "where": {
           "title": "Where does the money go?",
-          "description": "Naming an account on both sides is what makes the value here move with the money.",
+          "description": "Naming the shared account the money leaves is what makes the value here move with it.",
           "otherSeat": "This is recorded for someone else, so it cannot name one of your accounts — Renly only moves money into and out of your own.",
           "amountLabel": "Money coming out, in {currency}",
           "amountHint": "Filled in from what the share is worth. Change it if a different amount actually moved.",
@@ -2387,13 +2387,13 @@
           "nobodyLeft": "Nobody will own a share of this afterwards.",
           "oneHolderLeft": "After this, all of it is {name}'s.",
           "severalHoldersLeft": "The rest of you keep the same proportions to each other, and nobody else's share loses value.",
-          "valueWaits": "No account is named on one of the sides, so the value here will not move with the money: the shares change now and the value waits for its next update.",
+          "valueWaits": "No shared account is named, so the value here will not move with the money: the shares change now and the value waits for its next update.",
           "cta": "Take it out"
         },
         "done": {
           "title": "The share is out",
           "took": "{name} took out {amount} and no longer owns a share.",
-          "valueWaits": "The value here has not moved, because no account was named on one of the sides — so the shares that remain read higher than they are until it is updated.",
+          "valueWaits": "The value here has not moved, because no shared account was named — so the shares that remain read higher than they are until it is updated.",
           "nobodyLeft": "Nobody owns a share of this right now."
         }
       },
