@@ -184,8 +184,18 @@ class Settings(BaseSettings):
     # default). Resend delivers from that domain only to the account owner's own address, so every
     # verification, reset and invite email to a real user would be refused while the app looks healthy.
     # Development keeps the default, which is how a fresh checkout sends its first email.
+    #
+    # And production refuses the console provider outright. It sends nothing — nobody would receive a
+    # verification, reset or invite link, so nobody could finish signing up — and it prints every email,
+    # links and tokens included, into the logs. It is the default, so a deployment that never sets
+    # EMAIL_PROVIDER is refused here rather than starting with no email at all.
     @model_validator(mode="after")
     def _validate_email_provider(self) -> "Settings":
+        if self.email_provider == EmailProvider.console and self.is_production:
+            raise ValueError(
+                "email_provider must be 'resend' in production (EMAIL_PROVIDER); 'console', the default, "
+                "sends nothing and writes every email, its links included, to the logs."
+            )
         if self.email_provider != EmailProvider.resend:
             return self
         if not self.email_api_key:

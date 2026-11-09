@@ -1,14 +1,17 @@
-from app.config import Environment, Settings
+from app.config import EmailProvider, Environment, Settings
 from app.observability import init_sentry
 from app.rate_limit import CLIENT_IP_HEADER, INTERNAL_SECRET_HEADER
 
 _DB_URL = "postgresql+asyncpg://user:pass@localhost:5432/renly"
 _SECRET = "x" * 32
+# A production configuration has to name a real email provider (the console one is refused there), so
+# every settings object built here carries one; nothing in this file sends an email.
+_EMAIL = {"email_provider": EmailProvider.resend, "email_api_key": "re_key", "email_from": "Renly <noreply@renly.app>"}
 _DSN = "https://examplePublicKey@o0.ingest.sentry.io/0"
 
 
 def _settings(**overrides) -> Settings:
-    return Settings(database_url=_DB_URL, jwt_secret=_SECRET, **overrides)
+    return Settings(database_url=_DB_URL, jwt_secret=_SECRET, **{**_EMAIL, **overrides})
 
 
 # Records sentry_sdk.init calls so tests can assert on initialization without sending events.
