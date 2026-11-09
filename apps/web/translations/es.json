@@ -1864,7 +1864,7 @@
       "searchPlaceholder": "Buscar inversiones...",
       "refresh": "Actualizar precios",
       "refreshing": "Actualizando...",
-      "refreshSuccess": "{prices} precios actualizados.",
+      "refreshSuccess": "{prices} precios obtenidos. Se completan en el diálogo de snapshot: tus valores cambian cuando registrás un snapshot.",
       "refreshError": "No se pudieron actualizar los precios.",
       "interval": {
         "label": "Columnas",
