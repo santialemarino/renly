@@ -16,7 +16,11 @@ import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import {
+  ACTIVE_CURRENCY_COOKIE,
+  ORIGINAL_CURRENCY,
+  resolveCurrencySelection,
+} from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -35,8 +39,8 @@ interface SnapshotsPageProps {
   }>;
 }
 
-// The grid's display currency: the saved choice when it is still one of the user's (a stale cookie
-// falls back to the primary); none for "original".
+// The grid's display currency: the saved choice when it is still one of the user's (a stale or missing
+// cookie falls back to the primary); none for "original".
 function gridCurrency(
   settings: SettingsData | null,
   saved: string | undefined,
@@ -46,9 +50,7 @@ function gridCurrency(
   const displayCurrencies = secondary
     ? [primary, secondary, ORIGINAL_CURRENCY]
     : [primary, ORIGINAL_CURRENCY];
-  const savedCurrency = saved ?? ORIGINAL_CURRENCY;
-  const activeCurrency =
-    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
+  const activeCurrency = resolveCurrencySelection(saved, displayCurrencies, primary);
   return activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
 }
 
