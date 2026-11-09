@@ -121,24 +121,25 @@ class TestFrankfurterLatestIsDatedByTheECBBusinessDay:
 
 
 class TestFrankfurterRange:
-    # The recorded range was asked for 2026-09-20..2026-09-30 (from a Sunday): the API answers with the
-    # Friday before it too, 2026-09-18, which lies outside the range asked for and is dropped.
+    # The recorded range was asked for 2026-09-20..2026-10-01 (from a Sunday): the API answers with the
+    # Friday before it too, 2026-09-18. Parsed for 09-20..09-30, both that Friday and 10-01 lie outside
+    # and are dropped.
     def test_keeps_each_business_day_inside_the_range_only(self):
         quotes = providers.parse_frankfurter_range(_fixture("frankfurter_range.json"), date(2026, 9, 20), date(2026, 9, 30))
 
         dates = sorted({q.quote_date for q in quotes})
-        assert dates[0] == date(2026, 9, 21)
-        assert date(2026, 9, 18) not in dates
+        assert dates[0] == date(2026, 9, 21) and dates[-1] == date(2026, 9, 30)
+        assert date(2026, 9, 18) not in dates and date(2026, 10, 1) not in dates
         assert len(dates) == 8 and len(quotes) == 24
         assert ExchangeRateQuote(ExchangeRatePair.USD_EUR, Decimal("0.87635"), date(2026, 9, 23)) in quotes
 
     @pytest.mark.asyncio
     async def test_the_fetch_asks_for_the_range_and_only_the_pairs_wanted(self, monkeypatch):
         requested: list[str] = []
-        url = "https://api.frankfurter.dev/v1/2026-09-20..2026-09-30?base=USD&symbols=EUR"
+        url = "https://api.frankfurter.dev/v1/2026-09-20..2026-10-01?base=USD&symbols=EUR"
         monkeypatch.setattr(providers.httpx, "AsyncClient", _fake_client({url: _fixture("frankfurter_range.json")}, requested))
 
-        quotes = await providers.fetch_frankfurter_history(date(2026, 9, 20), date(2026, 9, 30), (ExchangeRatePair.USD_EUR,))
+        quotes = await providers.fetch_frankfurter_history(date(2026, 9, 20), date(2026, 10, 1), (ExchangeRatePair.USD_EUR,))
 
         assert requested == [url]
         # The fake answers with all three symbols; the parser keeps what the body carries.
@@ -186,11 +187,47 @@ class TestArgentinaDatosSeries:
         assert {q.quote_date for q in quotes} == {date(2026, 11, d) for d in range(2, 7)}
 
     @pytest.mark.asyncio
-    async def test_a_failed_series_raises(self, monkeypatch):
+    async def test_when_every_series_fails_it_raises(self, monkeypatch):
         monkeypatch.setattr(providers.httpx, "AsyncClient", _fake_client({}, []))
 
         with pytest.raises(ExchangeRateHistoryUnavailable):
-            await providers.fetch_argentinadatos_history(date(2026, 11, 2), date(2026, 11, 6), (_BLUE,))
+            await providers.fetch_argentinadatos_history(date(2026, 11, 2), date(2026, 11, 6), (_BLUE, _MEP))
+
+    # One series failing costs only its own pair: the others are still returned (the failed pair stays
+    # missing and the next gap fill asks for it again).
+    @pytest.mark.asyncio
+    async def test_one_failed_series_skips_only_its_pair(self, monkeypatch):
+        base = "https://api.argentinadatos.com/v1/cotizaciones/dolares"
+        monkeypatch.setattr(providers.httpx, "AsyncClient", _fake_client({f"{base}/bolsa": _fixture("argentinadatos_bolsa.json")}, []))
+
+        quotes = await providers.fetch_argentinadatos_history(date(2026, 11, 2), date(2026, 11, 6), (_BLUE, _MEP))
+
+        assert {q.pair for q in quotes} == {_MEP}
+
+
+class TestAMalformedValueSkipsOnlyItsQuote:
+    # A value that is not a finite number used to raise InvalidOperation out of the parser, losing every
+    # pair of the response (and, in the scheduled job, the run).
+    @pytest.mark.parametrize("bad", ["n/a", "NaN", "Infinity", True, {"x": 1}])
+    def test_dolarapi(self, bad):
+        body = [
+            {"casa": "oficial", "compra": bad, "venta": 20, "fechaActualizacion": "2026-11-06T15:00:00.000Z"},
+            {"casa": "blue", "compra": 10, "venta": 20, "fechaActualizacion": "2026-11-06T15:00:00.000Z"},
+        ]
+
+        assert providers.parse_dolarapi(body, _RECORDED_ON) == [ExchangeRateQuote(_BLUE, Decimal("15"), date(2026, 11, 6))]
+
+    def test_argentinadatos(self):
+        body = [{"compra": "x", "venta": 2, "fecha": "2026-11-05"}, {"compra": 1, "venta": 3, "fecha": "2026-11-06"}]
+
+        assert providers.parse_argentinadatos(_BLUE, body, date(2026, 11, 1), _RECORDED_ON) == [
+            ExchangeRateQuote(_BLUE, Decimal("2"), date(2026, 11, 6))
+        ]
+
+    def test_frankfurter(self):
+        quotes = providers.parse_frankfurter_latest({"date": "2026-11-06", "rates": {"BRL": "bad", "EUR": 0.9}}, _RECORDED_ON)
+
+        assert quotes == [ExchangeRateQuote(ExchangeRatePair.USD_EUR, Decimal("0.9"), date(2026, 11, 6))]
 
 
 class TestHistoryRegistry:

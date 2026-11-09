@@ -11,7 +11,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta, timezone
 from datetime import date as date_type
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import NamedTuple
 
 import httpx
@@ -61,9 +61,25 @@ class ExchangeRateHistoryProviderInfo(NamedTuple):
 _ARGENTINA_TZ = timezone(timedelta(hours=-3))
 
 
-# The midpoint of a buy/sell quote, the figure stored for every ARS pair.
-def _midpoint(compra: object, venta: object) -> Decimal:
-    return (Decimal(str(compra)) + Decimal(str(venta))) / 2
+# The midpoint of a buy/sell quote, the figure stored for every ARS pair. None when either side is not a
+# number (a malformed value skips that quote rather than failing the whole response).
+def _midpoint(compra: object, venta: object) -> Decimal | None:
+    buy = _decimal(compra)
+    sell = _decimal(venta)
+    if buy is None or sell is None:
+        return None
+    return (buy + sell) / 2
+
+
+# A provider's number as a finite Decimal, or None when it is missing or not a finite number.
+def _decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return number if number.is_finite() else None
 
 
 # --- DolarApi provider (USD/ARS oficial, MEP, blue; latest) ---
@@ -100,15 +116,15 @@ def parse_dolarapi(data: list[dict], fallback_date: date_type) -> ExchangeRateRe
         pair = _CASA_TO_PAIR.get(item.get("casa"))
         if pair is None:
             continue
-        compra = item.get("compra")
-        venta = item.get("venta")
-        if compra is None or venta is None:
+        rate = _midpoint(item.get("compra"), item.get("venta"))
+        if rate is None:
+            logger.warning("DolarApi quote for %s has no usable compra/venta; skipped.", pair)
             continue
         quote_date = _dolarapi_quote_date(item.get("fechaActualizacion"))
         if quote_date is None:
             logger.warning("DolarApi quote for %s has no readable fechaActualizacion; dating it %s.", pair, fallback_date)
             quote_date = fallback_date
-        results.append(ExchangeRateQuote(pair, _midpoint(compra, venta), quote_date))
+        results.append(ExchangeRateQuote(pair, rate, quote_date))
     return results
 
 
@@ -153,16 +169,15 @@ def parse_argentinadatos(
 ) -> ExchangeRateResult:
     by_date: dict[date_type, Decimal] = {}
     for item in data:
-        compra = item.get("compra")
-        venta = item.get("venta")
+        rate = _midpoint(item.get("compra"), item.get("venta"))
         raw_date = item.get("fecha")
-        if compra is None or venta is None or not isinstance(raw_date, str):
+        if rate is None or not isinstance(raw_date, str):
             continue
         try:
             quote_date = date_type.fromisoformat(raw_date)
         except ValueError:
             continue
-        by_date[quote_date] = _midpoint(compra, venta)
+        by_date[quote_date] = rate
 
     results: ExchangeRateResult = []
     for quote_date in sorted(by_date):
@@ -190,7 +205,9 @@ async def _fetch_argentinadatos_casa(client: httpx.AsyncClient, casa: str) -> li
 
 
 # Fetches the daily USD/ARS quotes for the given pairs in [start, end] from ArgentinaDatos.
-# Oficial and blue start 2011-01-03, MEP ("bolsa") 2018-10-29. Raises ExchangeRateHistoryUnavailable.
+# Oficial and blue start 2011-01-03, MEP ("bolsa") 2018-10-29. One series that fails is logged and its
+# pair skipped (it stays missing and is asked for again); raises ExchangeRateHistoryUnavailable only when
+# every series failed.
 async def fetch_argentinadatos_history(
     start: date_type,
     end: date_type,
@@ -198,10 +215,20 @@ async def fetch_argentinadatos_history(
 ) -> ExchangeRateResult:
     wanted = [pair for pair in pairs if pair in _PAIR_TO_CASA]
     async with httpx.AsyncClient(timeout=30.0) as client:
-        series = await asyncio.gather(*[_fetch_argentinadatos_casa(client, _PAIR_TO_CASA[pair]) for pair in wanted])
+        series = await asyncio.gather(
+            *[_fetch_argentinadatos_casa(client, _PAIR_TO_CASA[pair]) for pair in wanted],
+            return_exceptions=True,
+        )
     results: ExchangeRateResult = []
+    failures: list[BaseException] = []
     for pair, data in zip(wanted, series):
+        if isinstance(data, BaseException):
+            logger.warning("ArgentinaDatos: no series for %s (%s); skipped.", pair, data)
+            failures.append(data)
+            continue
         results.extend(parse_argentinadatos(pair, data, start, end))
+    if wanted and len(failures) == len(wanted):
+        raise ExchangeRateHistoryUnavailable(f"ArgentinaDatos: every series failed ({failures[0]})")
     return results
 
 
@@ -221,10 +248,10 @@ _FRANKFURTER_PAIRS = {
 def _parse_frankfurter_day(rates: dict, quote_date: date_type) -> ExchangeRateResult:
     results: ExchangeRateResult = []
     for symbol, pair in _FRANKFURTER_PAIRS.items():
-        value = rates.get(symbol)
+        value = _decimal(rates.get(symbol))
         if value is None:
             continue
-        results.append(ExchangeRateQuote(pair, Decimal(str(value)), quote_date))
+        results.append(ExchangeRateQuote(pair, value, quote_date))
     return results
 
 

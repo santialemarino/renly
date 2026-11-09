@@ -10,6 +10,7 @@
 
 import argparse
 import asyncio
+import logging
 import sys
 from datetime import date as date_type
 from datetime import timedelta
@@ -52,9 +53,12 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"--since {args.since} is after --until {until}; nothing to do.", file=sys.stderr)
         return 2
     try:
+        # One session per step, so no transaction stays open while the sources are fetched.
         async with AdminSessionLocal() as session:
             before = await exchange_rate_service.get_coverage_by_pair(session)
+        async with AdminSessionLocal() as session:
             counts = await exchange_rate_service.backfill_history(session, args.since, until, dry_run=args.dry_run)
+        async with AdminSessionLocal() as session:
             after = await exchange_rate_service.get_coverage_by_pair(session)
     except ExchangeRateHistoryUnavailable as exc:
         print(f"A history source did not answer ({exc}); nothing was written. Re-run later.", file=sys.stderr)
@@ -74,4 +78,6 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 if __name__ == "__main__":
+    # Prints the providers' warnings (a series that failed and was skipped) next to the report.
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
     sys.exit(asyncio.run(_run(_parse_args(sys.argv[1:]))))
