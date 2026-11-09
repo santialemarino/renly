@@ -2242,7 +2242,7 @@
           "labelIn": "Into your account",
           "placeholder": "Select one of your accounts",
           "empty": "You have no accounts yet",
-          "hint": "Optional, and worth naming: with an account on both sides Renly sees the money actually move, so the value here changes with it. Leave it blank only if the money moved somewhere Renly does not track."
+          "hint": "Optional. Naming it moves the money in your own account too, so your balance there stays right; the value here moves with the shared account. Leave it blank if the money came from or went somewhere Renly does not track."
         },
         "potLeg": {
           "labelIn": "Into the shared account",
