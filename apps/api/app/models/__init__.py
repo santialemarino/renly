@@ -9,7 +9,7 @@ from app.models.card_reconciliation import CardReconciliation
 from app.models.card_settlement import CardSettlement
 from app.models.cedear_ratio import CedearRatio
 from app.models.credit_card import CreditCard
-from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
+from app.models.exchange_rate import DollarRate, ExchangeRate, ExchangeRatePair
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.feedback import Feedback, FeedbackCategory
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
@@ -51,6 +51,7 @@ __all__ = [
     "CedearRatio",
     "CreditCard",
     "Currency",
+    "DollarRate",
     "ExchangeRate",
     "ExchangeRatePair",
     "ExpenseCategory",

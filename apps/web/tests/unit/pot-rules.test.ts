@@ -56,6 +56,7 @@ function pot(over: Partial<Pot> = {}): Pot {
     baseCurrency: 'USD',
     snapshotCadence: 'monthly',
     visibility: 'members',
+    dollarRate: 'mep',
     isDefault: true,
     nav: '110.00',
     valuedAsOf: '2026-08-01',

@@ -7,6 +7,7 @@ from sqlalchemy import Column
 from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
+from app.models.exchange_rate import DollarRate
 from app.models.utils import utcnow
 
 
@@ -50,6 +51,13 @@ class Pot(SQLModel, table=True):
     visibility: PotVisibility = Field(
         default=PotVisibility.members,
         sa_column=Column(SAEnum(PotVisibility, name="pot_visibility"), nullable=False, server_default="members"),
+    )
+    # The dollar rate every figure about the pot converts at, whoever is reading: its value, unit price,
+    # contributions, buy-outs and take-outs. Only the last step out of the base currency into a reader's
+    # own display currency follows that reader's preference.
+    dollar_rate: DollarRate = Field(
+        default=DollarRate.mep,
+        sa_column=Column(SAEnum(DollarRate, name="dollar_rate"), nullable=False, server_default="mep"),
     )
     is_default: bool = Field(default=False, description="The group's first pot, created with it.")
     created_at: datetime = Field(default_factory=utcnow)

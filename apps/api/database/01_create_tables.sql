@@ -173,6 +173,15 @@ CREATE TYPE pot_cadence AS ENUM (
   'ad_hoc'
 );
 
+-- Which USD/ARS quote stands for "the dollar" in a pot's maths: 'oficial', 'mep' (financial) or
+-- 'blue' (parallel). The same three a person picks from for their own figures, where it lives in
+-- user_settings as a string.
+CREATE TYPE dollar_rate AS ENUM (
+  'oficial',
+  'mep',
+  'blue'
+);
+
 -- What an entry in a pot's ownership ledger records. 'opening' sets the division baseline,
 -- 'contribution' issues units for money moved in, 'withdrawal' redeems them for money moved out,
 -- and 'reagreement' moves units between two members with no money at all.
@@ -1101,6 +1110,8 @@ CREATE INDEX idx_group_invites_group_id ON group_invites(group_id);
 -- snapshot_cadence declares how often the pot is expected to be re-valued. It is an expectation, not
 -- a schedule: nothing writes snapshots on its account, and the only thing it changes is what counts
 -- as an overdue valuation and how the value series is bucketed.
+-- dollar_rate is the USD/ARS quote every figure about the pot converts at — its value, unit price and
+-- every movement priced against it — so all members see the same figures in its base currency.
 CREATE TABLE pots (
   id               BIGSERIAL PRIMARY KEY,
   group_id         BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -1108,6 +1119,7 @@ CREATE TABLE pots (
   base_currency    VARCHAR(3) NOT NULL,
   snapshot_cadence pot_cadence NOT NULL DEFAULT 'monthly',
   visibility       pot_visibility NOT NULL DEFAULT 'members',
+  dollar_rate      dollar_rate NOT NULL DEFAULT 'mep',
   is_default       BOOLEAN NOT NULL DEFAULT FALSE,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()

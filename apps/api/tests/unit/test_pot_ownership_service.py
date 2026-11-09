@@ -89,7 +89,7 @@ def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
     rows = events if events is not None else [_event()]
     monkeypatch.setattr(svc.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=rows))
     monkeypatch.setattr(svc.pot_ownership_repository, "list_page_by_pot", AsyncMock(return_value=(rows, len(rows))))
-    monkeypatch.setattr(svc.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=AsyncMock()))
+    monkeypatch.setattr(svc.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=AsyncMock()))
     monkeypatch.setattr(svc.pot_service, "get_nav", AsyncMock(return_value=nav))
 
     # The real repository flushes to get an id; the stub does the same, or every response build

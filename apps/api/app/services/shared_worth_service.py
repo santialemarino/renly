@@ -81,12 +81,13 @@ class SharedWorth:
 # they can see (with each pot's ledger), and how the groups' positions moved. Loading them once and
 # passing the context down is what keeps a dashboard load from reading the same rows twice.
 #
-# `lookup` is the RateLookup the pot valuations convert with, resolved ONCE here for the same reason. A
-# pot's holdings convert into its own base currency before anything else, so valuing pots needs a lookup
-# even in Original mode, where the caller asked for no display currency and built none; both questions
-# above value the same pots, and each resolving its own would cost the request a second lookup and a
-# second settings read. It is the caller's own lookup whenever the caller built one, and None only when
-# there are no pots to value.
+# `lookup` is the RateLookup the pot valuations read their rates from, resolved ONCE here for the same
+# reason. A pot's holdings convert into its own base currency before anything else, so valuing pots needs
+# a lookup even in Original mode, where the caller asked for no display currency and built none; both
+# questions above value the same pots, and each resolving its own would cost the request a second load.
+# Only its loaded rates are used there: pot_service converts every pot at the POT's own dollar rate, so
+# whose preference this lookup carries never changes a pot's value. It is the caller's own lookup
+# whenever the caller built one, and None only when there are no pots to value.
 @dataclass(frozen=True)
 class SharedContext:
     seats: list[GroupMember]
@@ -108,13 +109,14 @@ class SharedContext:
 
 
 # Loads the context, reusing the caller's per-request RateLookup when it built one (any display
-# currency) and resolving one only when there are pots to value and the caller built none.
+# currency) and loading the rates only when there are pots to value and the caller built none — with no
+# preference, which the pot valuations never read (see SharedContext).
 async def load_context(session: AsyncSession, user_id: int, *, lookup: RateLookup | None = None) -> SharedContext:
     seats = await group_repository.list_active_members(session, user_id)
     pots = await pot_service.list_visible_seats(session, user_id)
     positions = await group_settlement_service.get_positions_by_month(session, sorted({seat.group_id for seat in seats}))
     if pots and lookup is None:
-        lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+        lookup = await exchange_rate_service.build_rate_lookup(session)
     return SharedContext(seats=seats, pots=pots, positions=positions, lookup=lookup if pots else None)
 
 
@@ -152,8 +154,10 @@ async def get_shared_worth(
     buckets: dict[str, Decimal] = {}
     undivided: list[UndividedPot] = []
 
-    # The valuations convert with the context's lookup, which load_context resolved once for the whole
-    # request — see SharedContext. `lookup` below is the DISPLAY conversion alone, None in Original mode.
+    # The valuations convert at each pot's own dollar rate, from the rates load_context resolved once for
+    # the whole request — see SharedContext. `lookup` below is the DISPLAY conversion alone, at the
+    # VIEWER's own preference: the one step that follows the reader rather than the pot. None in Original
+    # mode.
     if context.pots:
         shares = await pot_service.get_member_shares(session, context.pots, as_of_date=as_of_date, lookup=context.lookup)
         for seat, share in zip(context.pots, shares, strict=True):

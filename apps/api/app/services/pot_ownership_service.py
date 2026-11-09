@@ -186,9 +186,11 @@ async def _require_seat(session: AsyncSession, pot: Pot, member_id: int) -> Grou
 # errors that describe them: no units outstanding (the pot has no baseline) and no usable valuation.
 # `lookup` is optional so a caller that needs the rates for something else too builds exactly one per
 # request, which is the layering rule for rate lookups. Left unset it builds its own, which is what the
-# two paths that need nothing else do.
+# two paths that need nothing else do. Either way the NAV converts at the POT's dollar rate, never the
+# caller's: a buy-out or take-out priced at whoever happened to record it would move value between
+# owners on a preference nobody agreed to.
 async def _require_price(
-    session: AsyncSession, pot: Pot, user: User, as_of_date: date_type, *, lookup: RateLookup | None = None
+    session: AsyncSession, pot: Pot, as_of_date: date_type, *, lookup: RateLookup | None = None
 ) -> tuple[Decimal, dict[int, Decimal]]:
     events = await pot_ownership_repository.list_by_pot(session, pot.id, as_of_date=as_of_date)
     balances = replay_units(_as_entries(events))
@@ -196,7 +198,7 @@ async def _require_price(
     if outstanding <= 0:
         raise PotNotOpenedError()
     if lookup is None:
-        lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+        lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     nav = await pot_service.get_nav(session, pot, as_of_date=as_of_date, lookup=lookup)
     if nav is None:
         raise PotValuationRequiredError(as_of_date)
@@ -460,7 +462,7 @@ async def record_movement(
     # them redeem more units than exist.
     await pot_repository.lock(session, pot.id)
     member = await _require_seat(session, pot, member_id)
-    price, balances = await _require_price(session, pot, user, date)
+    price, balances = await _require_price(session, pot, date)
 
     is_contribution = type == OwnershipEventType.contribution
     # Both amounts are stored and no rate ever is, matching transfers and card_settlements: a
@@ -614,10 +616,11 @@ async def contribute_holding(
 
     # One lookup for the whole request, shared by the pot's price and the holding's conversion — the
     # two figures are divided by each other, so a second lookup would be a second set of rates on
-    # opposite sides of the same division.
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    # opposite sides of the same division. At the POT's dollar rate: units are issued at one rate
+    # whatever the contributor prefers.
+    lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     today = date_type.today()
-    price, _ = await _require_price(session, pot, user, today, lookup=lookup)
+    price, _ = await _require_price(session, pot, today, lookup=lookup)
     valued = await pot_service.value_contributed_holding(session, pot, holding, as_of_date=today, lookup=lookup, price=price)
 
     credited = valued.base_value
@@ -717,7 +720,7 @@ async def record_reagreement(
     receiver = await _require_seat(session, pot, to_member_id)
     if giver.id == receiver.id:
         raise PotReagreementSameMemberError()
-    price, balances = await _require_price(session, pot, user, date)
+    price, balances = await _require_price(session, pot, date)
 
     held = balances.get(giver.id, ZERO)
     if percentage is None:

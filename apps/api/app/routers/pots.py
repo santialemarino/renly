@@ -86,11 +86,12 @@ async def create_pot(
         name=body.name,
         snapshot_cadence=body.snapshot_cadence,
         visibility=body.visibility,
+        dollar_rate=body.dollar_rate,
     )
 
 
-# Updates a pot's name, snapshot cadence or visibility. Group admin only (403 otherwise). Only
-# provided fields change. Cadence is administration rather than money movement, which is why it is
+# Updates a pot's name, snapshot cadence, visibility or dollar rate. Group admin only (403 otherwise).
+# Only provided fields change. Cadence is administration rather than money movement, which is why it is
 # gated the way name and visibility are: it sets the standard the group holds its custodian to.
 @router.put("/{pot_id}", response_model=PotResponse)
 async def update_pot(
@@ -100,7 +101,13 @@ async def update_pot(
     session: SessionDep,
 ) -> PotResponse:
     return await pot_service.update_pot(
-        session, pot_id, current_user, name=body.name, snapshot_cadence=body.snapshot_cadence, visibility=body.visibility
+        session,
+        pot_id,
+        current_user,
+        name=body.name,
+        snapshot_cadence=body.snapshot_cadence,
+        visibility=body.visibility,
+        dollar_rate=body.dollar_rate,
     )
 
 

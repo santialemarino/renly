@@ -174,6 +174,7 @@ class TestAPrivateEntryCannotBeFundedFromSharedMoney:
     @pytest.mark.asyncio
     async def test_no_link_at_all_stays_a_no_op(self, monkeypatch):
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         monkeypatch.setattr(account_service.account_repository, "get_by_id_any_scope", lookup)
         assert await account_service.load_linked_account(AsyncMock(), USER, None) is None
         lookup.assert_not_awaited()

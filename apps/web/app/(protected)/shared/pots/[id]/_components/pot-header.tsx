@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Clock, DollarSign, Eye, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -178,6 +178,14 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
         columns={4}
         className="p-4 bg-muted/30 border border-border rounded-1.5xl"
       />
+
+      {/* Under the figures it explains: every member sees the same value because the pot, not the
+          reader, decides which dollar rate converts its holdings. One whole sentence per rate rather
+          than a label interpolated into one, so each language can phrase it its own way. */}
+      <p className="flex items-center gap-x-2 text-paragraph-sm text-muted-foreground">
+        <DollarSign className="size-4 shrink-0" />
+        {t(`pots.dollarRate.notice.${pot.dollarRate}`)}
+      </p>
 
       <PotFormDialog
         open={editOpen}

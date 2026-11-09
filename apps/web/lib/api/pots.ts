@@ -22,6 +22,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type {
   OwnershipEventType,
   PotCadence,
+  PotDollarRate,
   PotSeriesInterval,
   PotVisibility,
 } from '@/lib/constants/pots';
@@ -51,6 +52,7 @@ export interface PotRaw {
   base_currency: string;
   snapshot_cadence: PotCadence;
   visibility: PotVisibility;
+  dollar_rate: PotDollarRate;
   is_default: boolean;
   nav: string | null;
   valued_as_of: string | null;
@@ -145,6 +147,8 @@ export interface Pot {
   // counts as an overdue valuation and how far apart the value series' points sit, nothing else.
   snapshotCadence: PotCadence;
   visibility: PotVisibility;
+  // The USD/ARS rate every figure here converts at, the same for every member.
+  dollarRate: PotDollarRate;
   isDefault: boolean;
   nav: string | null;
   /*
@@ -263,6 +267,7 @@ export function mapPot(raw: PotRaw): Pot {
     baseCurrency: raw.base_currency,
     snapshotCadence: raw.snapshot_cadence,
     visibility: raw.visibility,
+    dollarRate: raw.dollar_rate,
     isDefault: raw.is_default,
     nav: raw.nav,
     valuedAsOf: raw.valued_as_of,

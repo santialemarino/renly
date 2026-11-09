@@ -137,7 +137,7 @@ class TestTheLockComesFirst:
         monkeypatch.setattr(pot_ownership_service.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
         monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
         monkeypatch.setattr(pot_ownership_service.pot_service, "require_contributable_holding", AsyncMock(return_value=object()))
-        monkeypatch.setattr(pot_ownership_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock())
+        monkeypatch.setattr(pot_ownership_service.exchange_rate_service, "build_rate_lookup", AsyncMock())
         monkeypatch.setattr(pot_ownership_service, "_require_price", trace.stub("price", result=(Decimal("1.10"), {})))
         monkeypatch.setattr(
             pot_ownership_service.pot_service,

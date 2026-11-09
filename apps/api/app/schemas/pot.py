@@ -5,6 +5,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.pot_monitoring import PotSeriesInterval
+from app.models.exchange_rate import DollarRate
 from app.models.pot import OwnershipEventType, PotCadence, PotVisibility
 from app.schemas.base import RequestBase, validate_supported_currency
 from app.schemas.pagination import PaginatedResponse
@@ -21,6 +22,7 @@ class PotCreate(RequestBase):
     visibility: PotVisibility = Field(
         default=PotVisibility.members, description="Who sees it by default: every member, or only those granted access."
     )
+    dollar_rate: DollarRate = Field(default=DollarRate.mep, description="The USD/ARS rate every member values the pot at: oficial, mep or blue.")
 
     _validate_currency = field_validator("base_currency")(validate_supported_currency)
 
@@ -32,6 +34,9 @@ class PotUpdate(RequestBase):
     name: str | None = Field(default=None, description="Optional label.", max_length=255)
     snapshot_cadence: PotCadence | None = Field(default=None, description="How often the pot is expected to be re-valued.")
     visibility: PotVisibility | None = Field(default=None, description="Who sees it by default.")
+    dollar_rate: DollarRate | None = Field(
+        default=None, description="The USD/ARS rate every member values the pot at; applies to future figures only."
+    )
 
 
 # Body for PUT /pots/{pot_id}/permissions/{member_id}.
@@ -85,6 +90,7 @@ class PotResponse(BaseModel):
     base_currency: str = Field(description="Currency all ownership math runs in.")
     snapshot_cadence: PotCadence = Field(description="How often the pot is expected to be re-valued.")
     visibility: PotVisibility = Field(description="Who sees it by default.")
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate every member values the pot at.")
     is_default: bool = Field(description="Whether this is the group's first pot.")
     nav: Decimal | None = Field(default=None, description="Value of everything the pot holds, in its base currency.")
     valued_as_of: date_type | None = Field(default=None, description="Date the value is current to; null when nothing here has been valued.")

@@ -47,13 +47,15 @@ export async function createPot(
       base_currency: values.baseCurrency,
       snapshot_cadence: values.snapshotCadence,
       visibility: values.visibility,
+      dollar_rate: values.dollarRate,
     },
   });
   return toDataResult<PotRaw, Pot>(res, mapPot, 'Failed to create pot');
 }
 
 // base_currency is deliberately absent: it is the unit of every figure already in the ledger, and the
-// API's update body has no such field at all.
+// API's update body has no such field at all. The dollar rate may change: it reaches future figures
+// only, since every recorded movement keeps the amounts it was priced at.
 export async function updatePot(
   potId: number,
   values: PotFormValues,
@@ -64,6 +66,7 @@ export async function updatePot(
       name: values.name?.trim() || null,
       snapshot_cadence: values.snapshotCadence,
       visibility: values.visibility,
+      dollar_rate: values.dollarRate,
     },
   });
   return toResult(res, 'Failed to update pot');

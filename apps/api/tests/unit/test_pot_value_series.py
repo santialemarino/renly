@@ -108,9 +108,10 @@ def _wire(monkeypatch, *, pot=None, investments=(), accounts=(), snapshots=(), b
     series = AsyncMock(return_value=dict(balances or {}))
     monkeypatch.setattr(pot_service.account_service, "compute_account_balance_series", series)
     lookup = AsyncMock()
+    lookup.for_dollar_preference = lambda _rate: lookup
     # `rate_map_for` is the per-DATE variant, for the one property a single flat map cannot express.
     lookup.get_rate_map_at = rate_map_for or (lambda _d: {"USD": Decimal(1)} if rates is None else rates)
-    monkeypatch.setattr(pot_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=lookup))
+    monkeypatch.setattr(pot_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=lookup))
     return (listed, series)
 
 
@@ -145,6 +146,7 @@ class TestAgreementWithThePointInTimeValuation:
             monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=latest_at(point_date)))
             monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: balances[9][index]}))
             lookup = AsyncMock()
+            lookup.for_dollar_preference = lambda _rate: lookup
             lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
             expected = await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=point_date, lookup=lookup)
             assert series.points[index].nav == expected, point_date
@@ -171,6 +173,7 @@ class TestAgreementWithThePointInTimeValuation:
             monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=latest_at(point.date)))
             monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: balances[9][index]}))
             lookup = AsyncMock()
+            lookup.for_dollar_preference = lambda _rate: lookup
             lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
             expected = await pot_service.get_member_share(AsyncMock(), seat, as_of_date=point.date, lookup=lookup)
             assert point.my_value == expected.value, point.date

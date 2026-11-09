@@ -48,6 +48,7 @@ from app.domain import (
     units_for_amount,
 )
 from app.models.account import Account
+from app.models.exchange_rate import DollarRate
 from app.models.group import Group, GroupMember
 from app.models.investment import Investment
 from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
@@ -209,6 +210,17 @@ def _to_base_currency(value: Decimal, currency: str, base_currency: str, rate_ma
     if rate_map is None:
         return None
     return convert_value(value, currency, base_currency, rate_map)
+
+
+# The rates a pot's own figures convert at: the stored rates read under the POT's dollar rate, whoever
+# is asking. Every shared figure goes through here — the NAV, the unit price derived from it, a
+# contribution's value and the value series — so two members with different personal preferences see
+# the same pot in its base currency and units are issued at one rate whoever contributes. `lookup` is
+# any RateLookup the request already built; only its loaded rates are reused, never its preference.
+# The one conversion that follows the READER's preference is the step out of the base currency into
+# their own display currency, which happens in the caller (shared_worth_service) and never here.
+def _pot_rates(pot: Pot, lookup: RateLookup) -> RateLookup:
+    return lookup.for_dollar_preference(pot.dollar_rate)
 
 
 # Adds a set of holdings' figures to a running total in the pot's base currency, or answers None the
@@ -378,12 +390,13 @@ async def _value_holdings(
     # One entry per pot: a pot listed twice would reuse its started total and have its accounts summed
     # into it twice. No caller passes one (a caller holds one seat per pot), so this only keeps it so.
     held_by_pot = list({pot.id: (pot, held) for pot, held in held_by_pot}.values())
-    rate_map = lookup.get_rate_map_at(as_of_date)
+    # Per pot, because each pot converts at its own dollar rate.
+    rate_maps = {pot.id: _pot_rates(pot, lookup).get_rate_map_at(as_of_date) for pot, _ in held_by_pot}
     started: dict[int, tuple[Decimal, dict[str, Decimal]]] = {}
     for pot, held in held_by_pot:
         if not held.holds_anything:
             continue
-        added = _add_holdings(ZERO, _investment_figures(held), pot.base_currency, rate_map)
+        added = _add_holdings(ZERO, _investment_figures(held), pot.base_currency, rate_maps[pot.id])
         # Dropped here so an unconvertible investment never costs a BALANCE query — the expensive
         # read, eleven sums over every account it is handed.
         if added is not None:
@@ -401,7 +414,7 @@ async def _value_holdings(
         total, buckets = started[pot.id]
         if held.accounts:
             figures = [(CASH_BUCKET, (balances.get(a.id, ZERO), a.currency)) for a in held.accounts]
-            added = _add_holdings(total, figures, pot.base_currency, rate_map)
+            added = _add_holdings(total, figures, pot.base_currency, rate_maps[pot.id])
             if added is None:
                 valued[pot.id] = (None, {}, held)
                 continue
@@ -545,6 +558,7 @@ def _build_response(
         base_currency=pot.base_currency,
         snapshot_cadence=pot.snapshot_cadence,
         visibility=pot.visibility,
+        dollar_rate=pot.dollar_rate,
         is_default=pot.is_default,
         nav=nav,
         valued_as_of=valuation.valued_as_of,
@@ -593,7 +607,8 @@ async def list_pots(session: AsyncSession, user: User, *, group_id: int | None =
     permissions_by_pot = await pot_repository.list_permissions_by_pots(session, pot_ids)
     events_by_pot = await pot_ownership_repository.list_by_pots(session, pot_ids)
     members_by_group = await group_repository.list_members_by_groups(session, sorted({p.group_id for p in pots}))
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    # No preference of the caller's: each pot is valued at its own dollar rate (see _pot_rates).
+    lookup = await exchange_rate_service.build_rate_lookup(session)
     valuations = await get_valuations(session, pots, as_of_date=date_type.today(), lookup=lookup)
 
     responses = []
@@ -768,7 +783,7 @@ async def get_pot(session: AsyncSession, pot_id: int, user: User, *, as_of_date:
     members = await group_repository.list_members(session, pot.group_id)
     permissions = await pot_repository.list_permissions(session, pot.id)
     events = await pot_ownership_repository.list_by_pot(session, pot.id, as_of_date=as_of_date)
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     valuation = await get_valuation(session, pot, as_of_date=as_of_date or date_type.today(), lookup=lookup)
     return _build_response(
         pot,
@@ -846,9 +861,9 @@ def _account_holding(account: Account, balance: Decimal, *, pot: Pot, rate_map) 
 async def list_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHoldingsResponse:
     pot, _, _ = await require_visible(session, pot_id, user)
     investments, accounts = await pot_repository.list_holdings(session, pot.id)
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     today = date_type.today()
-    rate_map = lookup.get_rate_map_at(today)
+    rate_map = _pot_rates(pot, lookup).get_rate_map_at(today)
 
     # Both batched: one snapshot query for every investment and one balance query set for every
     # account, so a pot holding twenty things costs the same as one holding two.
@@ -882,9 +897,10 @@ async def list_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHo
 # Write access, not merely visibility: the whole surface behind this is a write.
 async def list_contributable_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHoldingsResponse:
     pot, _ = await require_writable(session, pot_id, user)
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    # The pot's rate, not the caller's: these figures are what the contribution would be credited.
+    lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     today = date_type.today()
-    rate_map = lookup.get_rate_map_at(today)
+    rate_map = _pot_rates(pot, lookup).get_rate_map_at(today)
 
     # The pot's own unit price, because the last of the shared rule's conditions is about it: a figure
     # small enough that dividing it by the price rounds to zero units buys nothing at all. With no
@@ -995,7 +1011,7 @@ async def get_value_series(session: AsyncSession, pot_id: int, user: User, *, pe
     events = await pot_ownership_repository.list_by_pot(session, pot.id)
     anchor = min(events[0].date, pot.created_at.date(), today) if events else min(pot.created_at.date(), today)
     dates = [d for d in period_ends(today, interval, periods) if d >= anchor]
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     points = await compute_share_series(session, pot, viewer.id, dates=dates, events=events, lookup=lookup)
     return PotValueSeriesResponse(interval=interval, points=points)
 
@@ -1108,6 +1124,7 @@ def _share_points(
     entries = _as_entries(events)
     event_cursor = 0
     replayed: list = []
+    pot_rates = _pot_rates(pot, lookup)
 
     points = []
     for index, point_date in enumerate(dates):
@@ -1122,7 +1139,7 @@ def _share_points(
             replayed.append(entries[event_cursor])
             event_cursor += 1
 
-        rate_map = lookup.get_rate_map_at(point_date)
+        rate_map = pot_rates.get_rate_map_at(point_date)
         nav: Decimal | None = None
         if holds_anything:
             figures: list[tuple[str, tuple[Decimal, str] | None]] = [
@@ -1193,6 +1210,7 @@ async def create_pot(
     name: str | None = None,
     snapshot_cadence: PotCadence = PotCadence.monthly,
     visibility: PotVisibility = PotVisibility.members,
+    dollar_rate: DollarRate = DollarRate.mep,
 ) -> PotResponse:
     from app.services import group_service
 
@@ -1204,6 +1222,7 @@ async def create_pot(
         base_currency=base_currency,
         snapshot_cadence=snapshot_cadence,
         visibility=visibility,
+        dollar_rate=dollar_rate,
         # The first pot in a group is its default and needs no name; a second one always does.
         is_default=not existing,
     )
@@ -1214,10 +1233,12 @@ async def create_pot(
     return await get_pot(admin_session, pot.id, user)
 
 
-# Renames a pot, or changes how often it is expected to be re-valued or who may see it by default.
-# Only provided fields are updated; base_currency is deliberately not among them, because it is the
-# unit of every figure already recorded in the ledger.
-# Group admin only — all three are configuration, not money movement, so they follow the membership
+# Renames a pot, or changes how often it is expected to be re-valued, who may see it by default, or the
+# dollar rate it is valued at. Only provided fields are updated; base_currency is deliberately not among
+# them, because it is the unit of every figure already recorded in the ledger.
+# A new dollar rate reaches FUTURE figures only: every ledger row already stores the base_amount and
+# units it was priced at, and none is ever recomputed.
+# Group admin only — all four are configuration, not money movement, so they follow the membership
 # rules rather than the pot's own write permission.
 async def update_pot(
     session: AsyncSession,
@@ -1227,6 +1248,7 @@ async def update_pot(
     name: str | None = None,
     snapshot_cadence: PotCadence | None = None,
     visibility: PotVisibility | None = None,
+    dollar_rate: DollarRate | None = None,
 ) -> PotResponse:
     from app.services import group_service
 
@@ -1238,6 +1260,8 @@ async def update_pot(
         pot.snapshot_cadence = snapshot_cadence
     if visibility is not None:
         pot.visibility = visibility
+    if dollar_rate is not None:
+        pot.dollar_rate = dollar_rate
     await pot_repository.save(session, pot)
     await _audit(session, pot, user, AuditAction.updated)
     await session.commit()
@@ -1471,7 +1495,7 @@ async def require_contributable_holding(
 async def value_contributed_holding(
     session: AsyncSession, pot: Pot, holding: Investment | Account, *, as_of_date: date_type, lookup: RateLookup, price: Decimal
 ) -> PotHoldingResponse:
-    rate_map = lookup.get_rate_map_at(as_of_date)
+    rate_map = _pot_rates(pot, lookup).get_rate_map_at(as_of_date)
     if isinstance(holding, Investment):
         snapshots = await snapshot_repository.get_latest_by_investments(session, [holding.id], as_of_date=as_of_date)
         row = _investment_holding(holding, snapshots.get(holding.id), pot=pot, rate_map=rate_map)
