@@ -4,10 +4,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.investment import Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 from app.services import metrics_service
+from app.utils.metrics import RateLookup
 
 # The portfolio endpoint's headline figures, driven through the service with the repositories answering
 # from a fixture — one dollar holding, so no conversion is involved and every figure is the arithmetic
@@ -30,8 +32,8 @@ def _wire(monkeypatch, snapshots: list[InvestmentSnapshot], transactions: list[T
     monkeypatch.setattr(metrics_service.settings_service, "get_user_today", AsyncMock(return_value=today))
 
 
-def _deposit(d: date, amount: str) -> Transaction:
-    return Transaction(investment_id=1, user_id=1, date=d, amount=Decimal(amount), currency="USD", type=TransactionType.deposit)
+def _deposit(d: date, amount: str, kind: TransactionType = TransactionType.deposit) -> Transaction:
+    return Transaction(investment_id=1, user_id=1, date=d, amount=Decimal(amount), currency="USD", type=kind)
 
 
 class TestTheWindowedTwrChainsOnlyThePeriodsInsideTheWindow:
@@ -100,3 +102,67 @@ class TestTheMonthChangeIsAGainNotAValueChange:
         assert portfolio.month_change_pct == Decimal("0.03")
         summary = await metrics_service.get_investments_summary(AsyncMock(), 1)
         assert summary.items[0].month_change_pct == Decimal("0.03")
+
+
+# Money moved in or out after a holding's last snapshot is held from the day it moves, though no
+# snapshot has valued it yet — nothing snapshots when a transaction is recorded, so until the next
+# snapshot it counts at cost. Leaving it out of the end of a gain read a buy as a loss and a sell as a
+# gain until then.
+class TestMoneyMovedSinceTheLastSnapshotIsHeldNow:
+    _SNAPS = [_snap(date(2026, 9, 2), "1000")]
+
+    @pytest.mark.asyncio
+    async def test_a_buy_after_the_last_snapshot_is_not_a_loss_this_month(self, monkeypatch):
+        _wire(monkeypatch, self._SNAPS, [_deposit(date(2026, 11, 5), "1000")], date(2026, 11, 9))
+        portfolio = await metrics_service.get_portfolio_metrics(AsyncMock(), 1)
+        assert portfolio.month_change == Decimal("0")
+        assert portfolio.month_change_pct == Decimal("0")
+        summary = await metrics_service.get_investments_summary(AsyncMock(), 1)
+        assert summary.items[0].month_change_pct == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_a_sell_after_the_last_snapshot_is_not_a_gain_this_month(self, monkeypatch):
+        _wire(monkeypatch, self._SNAPS, [_deposit(date(2026, 11, 5), "300", TransactionType.sell)], date(2026, 11, 9))
+        portfolio = await metrics_service.get_portfolio_metrics(AsyncMock(), 1)
+        assert portfolio.month_change == Decimal("0")
+        summary = await metrics_service.get_investments_summary(AsyncMock(), 1)
+        assert summary.items[0].month_change_pct == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_a_window_still_open_ends_with_the_money_moved_in_since(self, monkeypatch):
+        # 1,000 on Dec 15, 1,100 on Feb 1, 500 deposited Mar 5, today Mar 10. The year gained 100 (and
+        # its TWR is 10%), not the −400 an end that ignored the deposit read.
+        snaps = [_snap(date(2025, 12, 15), "1000"), _snap(date(2026, 2, 1), "1100")]
+        _wire(monkeypatch, snaps, [_deposit(date(2026, 3, 5), "500")], date(2026, 3, 10))
+        response = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, start_date=date(2026, 1, 1))
+        assert response.absolute_gain == Decimal("100")
+        assert response.twr == Decimal("0.1")
+        # The money-weighted return closes on the same value, so it is a gain too.
+        assert response.irr is not None and response.irr > 0
+
+
+# With no money moving in a window, the TWR and the window's simple return answer the same question —
+# how much did what was held at the start grow — so they must agree. It holds only when every point of
+# the TWR's chain values what was held at that point's own rate, and the chain closes on the same value
+# the gain ends at: a dollar holding viewed in pesos, carried across months whose rates move, with the
+# window still open today, a month after its last snapshot.
+class TestTheTwrAndThePeriodReturnAgreeWithoutFlows:
+    _RATES = {
+        ExchangeRatePair.USD_ARS_MEP: [
+            ExchangeRate(date=date(2025, 12, 1), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal("1000"), source="test"),
+            ExchangeRate(date=date(2026, 1, 20), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal("1100"), source="test"),
+            ExchangeRate(date=date(2026, 2, 20), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal("1250"), source="test"),
+            ExchangeRate(date=date(2026, 3, 25), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal("1400"), source="test"),
+        ],
+    }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("start", [date(2026, 1, 1), date(2026, 1, 10), date(2026, 2, 1)])
+    async def test_in_pesos_for_a_dollar_holding(self, monkeypatch, start):
+        snaps = [_snap(date(2025, 12, 10), "100"), _snap(date(2026, 1, 10), "104"), _snap(date(2026, 2, 10), "103"), _snap(date(2026, 3, 1), "110")]
+        _wire(monkeypatch, snaps, [], date(2026, 4, 5))
+        lookup = RateLookup(dollar_preference="mep", rates_by_pair=self._RATES)
+        monkeypatch.setattr(metrics_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=lookup))
+        response = await metrics_service.get_portfolio_metrics(AsyncMock(), 1, currency="ARS", start_date=start)
+        assert response.total_return_pct is not None and response.twr is not None
+        assert abs(response.twr - response.total_return_pct) < Decimal("1e-20")

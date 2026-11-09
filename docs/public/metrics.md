@@ -126,7 +126,11 @@ the headline cards switch from all-time to period metrics:
 
 The **start value** is what you held on the start date: each investment's last snapshot before it,
 plus any money you moved into it after that snapshot (no snapshot has seen it yet, so it counts at
-what you paid). Without it, a deposit made just before the period would read as the period's gain.
+what you paid). Without it, a deposit made just before the period would read as the period's gain. The
+end is valued the same way — a period still open ends today — so a purchase you recorded after your
+last snapshot is neither a loss nor a gain until a snapshot values it. Every point TWR and IRR measure
+between the two is valued the same way too, at that point's own exchange rate, so with no money moving
+in or out, the period's TWR equals its simple return.
 
 Without a date filter, the cards show all-time values: current value, total net invested, and
 current value minus invested.
@@ -136,7 +140,7 @@ current value minus invested.
 The small indicator under the gain card is what your portfolio **gained** since the end of the
 previous calendar month: its value today, minus what you held at the end of last month (valued at
 that day's rate, the same point the evolution chart shows), minus the money you moved in since — so a
-deposit is never read as gain. An investment you first recorded this month counts as money moved in.
+deposit is never read as gain, nor as a loss before a snapshot has valued it. An investment you first recorded this month counts as money moved in.
 The percentage is that gain over the capital at work (what you held plus what you added). The
 "Month" column of the investments table is the same figure for each holding. If you held nothing at
 the end of last month, there is nothing to compare against and the indicator is hidden.

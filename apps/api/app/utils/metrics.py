@@ -301,6 +301,7 @@ def windowed_twr(
     start_date: date_type | None,
     end_date: date_type | None,
     start_value: Decimal,
+    end_point: tuple[date_type, Decimal] | None = None,
 ) -> Decimal | None:
     points: list[tuple[date_type, Decimal]] = [(start_date, start_value)] if start_date else []
     for d, total in portfolio_totals:
@@ -309,6 +310,11 @@ def windowed_twr(
         if end_date and d > end_date:
             break
         points.append((d, total))
+    # The window closes at end_point (its end, or today for a window still open) when that is later
+    # than the last total inside it: the last stretch — the currency's move since the last snapshot, or
+    # money moved in since — belongs to the window too.
+    if end_point is not None and (not points or end_point[0] > points[-1][0]):
+        points.append(end_point)
     return twr([r for _, r in _chain_period_returns(points, inv_date_value, flows_by_inv) if r is not None])
 
 
@@ -389,9 +395,9 @@ def month_over_month(
 # outflows inside the window, and an inflow of the forward-filled value at the window end
 # (dated at the latest data or flow date inside the window). Zero boundary values are omitted.
 # Same argument shapes as portfolio_totals_and_returns. `start_value` is the portfolio valued ON the
-# window start, at that day's rate — the caller values it, because the totals series converts each
-# carried holding at its own snapshot's rate rather than at the start date's; omitted, the series'
-# forward-filled value stands in.
+# window start, at that day's rate, and `end_point` the caller's closing (date, value) — the window's
+# end, or today for a window still open — so the money-weighted return starts and ends at the same two
+# valuations the window's gain does; omitted, the series' own values stand in.
 def build_windowed_portfolio_cashflows(
     portfolio_totals: list[tuple[date_type, Decimal]],
     inv_date_value: dict[int, dict[date_type, Decimal]],
@@ -399,6 +405,7 @@ def build_windowed_portfolio_cashflows(
     start_date: date_type | None,
     end_date: date_type | None,
     start_value: Decimal | None = None,
+    end_point: tuple[date_type, Decimal] | None = None,
 ) -> list[tuple[date_type, float]]:
     if not portfolio_totals:
         return []
@@ -414,6 +421,10 @@ def build_windowed_portfolio_cashflows(
         end_value_date = d
     if end_value_date is None:
         return []
+    # The caller's closing valuation (the window's end, or today for a window still open) replaces the
+    # last total inside the window when it is later — the same point the window's gain ends at.
+    if end_point is not None and end_point[0] > end_value_date:
+        end_value_date, end_value = end_point
 
     # True when d falls inside the (start, end] window.
     def _in_window(d: date_type) -> bool:

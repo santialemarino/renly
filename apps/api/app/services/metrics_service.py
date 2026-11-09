@@ -211,14 +211,26 @@ async def get_portfolio_metrics(
                 flows.append((tx.date, -amount))
         flows_by_inv[inv_id] = flows
 
-    # Forward-filled portfolio totals plus portfolio-level period returns; a new investment's
-    # first snapshot counts as contributed capital in its period, not return.
-    portfolio_totals, _ = mh.portfolio_totals_and_returns(inv_date_value, flows_by_inv)
+    # What the portfolio was worth on a day, for the return maths: what it held then (each holding's
+    # last snapshot, carried forward however old) at THAT day's rate, plus the money moved in since each
+    # holding's last snapshot, which no valuation has seen yet and counts at cost. Every point of the
+    # series, both boundaries of a window and the month change are valued this one way, so the TWR, the
+    # IRR and the gain all measure the same thing.
+    def worth_on(day: date_type) -> Decimal:
+        return _portfolio_value_on(snap_by_inv, inv_currency, currency, lookup, day, min(day, today)) + mh.flows_since_last_valuation(
+            snap_by_inv, flows_by_inv, day
+        )
+
+    # The series the TWR chains and the windowed IRR closes on: one point per snapshot date.
+    portfolio_totals = [(day, worth_on(day)) for day in sorted({s.date for snaps in snap_by_inv.values() for s in snaps})]
 
     # What the portfolio holds NOW — each investment's latest snapshot — at TODAY's rate: a holding is
     # worth what it would fetch today, so the headline, the allocation donuts and every per-holding
-    # figure value it at the same rate the cash and card balances use.
+    # figure value it at the same rate the cash and card balances use. The gain maths end at `now_worth`,
+    # which adds the money moved in since the last snapshots: a buy recorded today is held today, and
+    # leaving it out read the deposit as a loss (and a sell as a gain) until the next snapshot.
     now_value = _sum_values(_convert_holdings(mh.holding_values_on(snap_by_inv, None), inv_currency, currency, lookup, today))
+    now_worth = now_value + mh.flows_since_last_valuation(snap_by_inv, flows_by_inv, today)
 
     # Headline value/invested/gain: all-time without a window, period metrics with one
     # (value at window end, net flows inside the window, gain = end - start - net flows). A boundary is
@@ -226,12 +238,13 @@ async def get_portfolio_metrics(
     # ends at the value now. The start also counts money moved in since the last snapshot before it:
     # that money was held on the start day, and leaving it out booked it as the window's gain and as
     # the first period's return.
-    window_start_value = ZERO
+    window_start_value = worth_on(start_date) if start_date else ZERO
+    # Where the window closes: its end, or today while it is still open.
+    if end_date and end_date < today:
+        close_date, close_worth = end_date, worth_on(end_date)
+    else:
+        close_date, close_worth = today, now_worth
     if start_date or end_date:
-        if start_date:
-            window_start_value = _portfolio_value_on(
-                snap_by_inv, inv_currency, currency, lookup, start_date, min(start_date, today)
-            ) + mh.flows_since_last_valuation(snap_by_inv, flows_by_inv, start_date)
         if end_date and end_date < today:
             window_end_value = _portfolio_value_on(snap_by_inv, inv_currency, currency, lookup, end_date, end_date)
         else:
@@ -239,7 +252,7 @@ async def get_portfolio_metrics(
         window_net_flows = _net_flows_between(flows_by_inv, inv_date_value, first_snap_dates, start_date, end_date)
         total_value = window_end_value
         total_invested = window_net_flows
-        absolute_gain = window_end_value - window_start_value - window_net_flows
+        absolute_gain = close_worth - window_start_value - window_net_flows
         # Period simple return over the capital at work (start value + contributed flows).
         denominator = window_start_value + window_net_flows
         total_return_pct = absolute_gain / denominator if denominator > ZERO else None
@@ -260,7 +273,9 @@ async def get_portfolio_metrics(
 
     # Portfolio TWR: chain only the periods inside the requested window (every period without one), the
     # first running from the window start at the value held that day.
-    portfolio_twr = mh.windowed_twr(portfolio_totals, inv_date_value, flows_by_inv, start_date, end_date, window_start_value)
+    portfolio_twr = mh.windowed_twr(
+        portfolio_totals, inv_date_value, flows_by_inv, start_date, end_date, window_start_value, end_point=(close_date, close_worth)
+    )
 
     # What the portfolio GAINED since the end of last month — the period gain of a window opening then
     # and still open today: the value now, less what was held at the end of last month (valued at that
@@ -273,10 +288,9 @@ async def get_portfolio_metrics(
     prev_end = mh.previous_month_end(today)
     prev_values = mh.holding_values_on(snap_by_inv, prev_end)
     if prev_values:
-        prev_total = _sum_values(_convert_holdings(prev_values, inv_currency, currency, lookup, prev_end))
-        prev_total += mh.flows_since_last_valuation(snap_by_inv, flows_by_inv, prev_end)
+        prev_total = worth_on(prev_end)
         month_flows = _net_flows_between(flows_by_inv, inv_date_value, first_snap_dates, prev_end, None)
-        month_change = now_value - prev_total - month_flows
+        month_change = now_worth - prev_total - month_flows
         capital = prev_total + month_flows
         if capital > ZERO:
             month_change_pct = month_change / capital
@@ -287,7 +301,13 @@ async def get_portfolio_metrics(
     all_cashflows: list[tuple[date_type, float]]
     if start_date or end_date:
         all_cashflows = mh.build_windowed_portfolio_cashflows(
-            portfolio_totals, inv_date_value, flows_by_inv, start_date, end_date, start_value=window_start_value if start_date else None
+            portfolio_totals,
+            inv_date_value,
+            flows_by_inv,
+            start_date,
+            end_date,
+            start_value=window_start_value if start_date else None,
+            end_point=(close_date, close_worth),
         )
     else:
         all_cashflows = []
@@ -575,14 +595,16 @@ async def get_investments_summary(
         absolute_gain = (current_value - cap) if current_value is not None else None
 
         # What the holding gained since the end of last month, consistent with the portfolio card: the
-        # value now, less what it was worth then (at that day's rate, plus money moved in since its last
-        # snapshot), less the money moved in since — over the capital at work. Null for a holding not
-        # yet valued by then.
+        # value now, less what it was worth then (at that day's rate), less the money moved in since —
+        # over the capital at work. Both ends count money moved in since the last snapshot before them,
+        # so a buy not yet snapshotted reads neither as a loss nor as a gain. Null for a holding not yet
+        # valued by then.
         month_change_pct = None
         prev_v = prev_values.get(inv.id)
         curr_v = now_values.get(inv.id)
         if prev_v is not None and curr_v is not None:
             prev_v += mh.flows_since_last_valuation({inv.id: snaps}, {inv.id: flows}, prev_end)
+            curr_v += mh.flows_since_last_valuation({inv.id: snaps}, {inv.id: flows}, today)
             month_flows = sum((amount for d, amount in flows if d > prev_end), ZERO)
             capital = prev_v + month_flows
             if capital > ZERO:

@@ -121,8 +121,10 @@ class TestHistoryAtItsOwnDateHoldingsAtTodaysRate:
         # this month (its first snapshot is contributed capital, not gain), over the 150 at work.
         assert response.month_change == Decimal("-37.50")
         assert response.month_change_pct == Decimal("-0.25")
-        # Returns walk the dated snapshots, each at its own date.
-        assert response.twr == Decimal("0")
+        # The TWR chains points that each value what was held then at that point's rate, and runs to
+        # today: the peso holding is 100 USD at both February points, then 62.50 once March's rate
+        # applies to it — a 37.5% fall the gain above shows too. (The dollar holding's 50 is capital.)
+        assert response.twr == Decimal("-0.375")
         assert response.irr is not None and abs(response.irr) < 1e-6
 
     @pytest.mark.asyncio
