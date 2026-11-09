@@ -1,9 +1,9 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -37,9 +37,12 @@ interface LocalizationFormProps {
 
 export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
   const t = useTranslations('localization');
+  const locale = useLocale();
   // Ties each field's `Label` to its control, so the control is named by what the label says.
   const fieldId = useId();
   const router = useRouter();
+  // The language a save's confirmation is waiting to be said in (see onSubmit).
+  const pendingSaveToast = useRef<string | null>(null);
 
   const initialTimezoneMode =
     initialSettings.timezoneMode === TIMEZONE_MODE_MANUAL
@@ -73,6 +76,13 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
 
   const currentTimezoneMode = watch('timezoneMode');
   const currentLanguageMode = watch('languageMode');
+
+  // The page has re-rendered in the language just saved: confirm the save in it.
+  useEffect(() => {
+    if (pendingSaveToast.current !== locale) return;
+    pendingSaveToast.current = null;
+    toast.success(t('form.saveSuccess'), { id: 'localization-save' });
+  }, [locale, t]);
 
   // Picking a timezone manually flips its mode to manual (the act of choosing IS a manual override).
   function handleTimezoneChange(tz: string) {
@@ -125,7 +135,16 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
       });
       reset(values);
       router.refresh();
-      toast.success(t('form.saveSuccess'), { id: 'localization-save' });
+      /*
+       * Said in the language just saved. When it changed, `t` here is still the old language's, and the
+       * confirmation came out in English on a page that had just turned Spanish; so it waits for the
+       * page to re-render in the new language, and the effect above says it there.
+       */
+      if (values.language === locale) {
+        toast.success(t('form.saveSuccess'), { id: 'localization-save' });
+      } else {
+        pendingSaveToast.current = values.language;
+      }
     } catch {
       toast.error(t('form.saveError'), { id: 'localization-save' });
     }

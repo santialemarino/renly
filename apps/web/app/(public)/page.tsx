@@ -14,7 +14,8 @@ export default async function LandingPage() {
   // The marketing page is public — viewable whether logged in or out (unlike the auth forms, which
   // redirect logged-in users to the app). When authenticated, the hero CTA points to the app and
   // the closing signup-conversion block is hidden; the public header swaps its CTAs the same way.
-  // The signup mode keeps the signup CTAs honest: in invite-only mode they read "Request access".
+  // The signup mode keeps the CTAs honest: in invite-only mode there is no signup to offer, so they
+  // are "Log in" and "Have an invite?" instead.
   const [session, { mode }] = await Promise.all([getSession(), getSignupContext()]);
   const isAuthenticated = isAuthenticatedSession(session);
 

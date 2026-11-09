@@ -126,7 +126,8 @@
       "empty": "No collections found."
     },
     "combobox": {
-      "empty": "No results found."
+      "empty": "No results found.",
+      "remove": "Remove {label}"
     },
     "period": {
       "monthSuffix": "M",
@@ -207,7 +208,6 @@
       },
       "rights": "All rights reserved."
     },
-    "requestAccess": "Request access",
     "learnMore": "Learn more",
     "export": {
       "label": "Export",
@@ -1374,7 +1374,7 @@
       "amount": "Amount",
       "dueDate": "Next due date",
       "recurrence": "Recurrence",
-      "category": "Category",
+      "label": "Label",
       "paymentMethod": "Payment method",
       "actions": "Actions",
       "empty": "No payment obligations found.",
@@ -2214,6 +2214,7 @@
           "label": "Who owned what",
           "hint": "Percentages, and they have to add up to 100. Leave someone blank if they owned none of it.",
           "placeholder": "0",
+          "inputLabel": "{name}'s share (%)",
           "total": "Total so far"
         },
         "totalError": "The percentages have to add up to {total}.",
@@ -3829,7 +3830,13 @@
     "cta": {
       "title": "Ready to see the whole picture?",
       "subtitle": "Create your free account and put your investments, cash, and debt in one place.",
-      "button": "Create your account"
+      "button": "Create your account",
+      "inviteSubtitle": "Renly is invite-only for now. Log in, or open the link in your invite email to create your account."
+    },
+    "invite": {
+      "trigger": "Have an invite?",
+      "title": "Joining by invite",
+      "body": "Renly is invite-only for now. Open the link in the invite email you received: it takes you straight to creating your account. Links expire, so if yours has, ask whoever invited you for a new one."
     }
   },
   "adminFeedback": {

@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
 import { useLocale } from 'next-intl';
@@ -49,6 +49,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
     ref,
   ) => {
     const locale = useLocale();
+    const [open, setOpen] = useState(false);
     const dateFnsLocale = getDateFnsLocale(locale);
     const date = value ? parse(value, DATE_FORMAT_VALUE, new Date()) : undefined;
     const isValidDate = date && !isNaN(date.getTime());
@@ -63,14 +64,21 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
     if (minDate) disabledDays.push({ before: parse(minDate, DATE_FORMAT_VALUE, new Date()) });
     if (maxDate) disabledDays.push({ after: parse(maxDate, DATE_FORMAT_VALUE, new Date()) });
 
+    /*
+     * Picking a day is the whole job, so the calendar closes on it and focus goes back to the trigger.
+     * Left open, it covered the next field and swallowed the click meant for it. A click on the day
+     * already chosen deselects it in react-day-picker (`undefined`), which keeps the value and closes
+     * too: the reader confirmed the date they had.
+     */
     function handleSelect(selected: Date | undefined) {
       if (selected) {
         onChange?.(format(selected, DATE_FORMAT_VALUE));
       }
+      setOpen(false);
     }
 
     return (
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             ref={ref}

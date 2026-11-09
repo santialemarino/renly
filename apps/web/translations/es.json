@@ -7,7 +7,7 @@
       "banner": "Estos son datos de ejemplo para mostrarte cómo funciona. Agregá los tuyos para reemplazarlos.",
       "clear": "Limpiar",
       "clearError": "No se pudieron limpiar los datos de ejemplo. Probá de nuevo.",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "view": "Ver",
       "detailNotice": "Datos de ejemplo — agregá los tuyos para reemplazarlos."
     },
@@ -126,7 +126,8 @@
       "empty": "No se encontraron colecciones."
     },
     "combobox": {
-      "empty": "No se encontraron resultados."
+      "empty": "No se encontraron resultados.",
+      "remove": "Quitar {label}"
     },
     "period": {
       "monthSuffix": "M",
@@ -207,7 +208,6 @@
       },
       "rights": "Todos los derechos reservados."
     },
-    "requestAccess": "Solicitar acceso",
     "learnMore": "Más información",
     "export": {
       "label": "Exportar",
@@ -609,7 +609,7 @@
       "currency": "Moneda",
       "category": "Categoría",
       "notes": "Notas",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron ingresos.",
       "emptyTitle": "Registrá tus ingresos",
       "emptyDescription": "Agregá tus fuentes de ingreso para ver tu flujo de dinero y tu tasa de ahorro.",
@@ -687,7 +687,7 @@
       "category": "Categoría",
       "paymentMethod": "Método",
       "notes": "Notas",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron gastos.",
       "emptyTitle": "Seguí tus gastos",
       "emptyDescription": "Registrá cada gasto para ver en qué se va tu dinero y cómo evoluciona en el tiempo.",
@@ -825,7 +825,7 @@
       "dueDay": "Vencimiento",
       "currency": "Moneda",
       "balance": "Saldo",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron tarjetas de crédito.",
       "emptyTitle": "Seguí tus tarjetas de crédito",
       "emptyDescription": "Agregá una tarjeta para registrar sus gastos, ver su saldo y conciliar resúmenes con el tiempo."
@@ -963,7 +963,7 @@
         "computedBalance": "Saldo app",
         "computedBalanceTooltip": "Saldo acumulado a la fecha de cierre del resumen. Incluye el arrastre de resúmenes anteriores sin pagar — igual que el resumen del banco.",
         "status": "Estado",
-        "actions": "Acciones"
+        "actions": "Opciones"
       },
       "form": {
         "title": "Conciliar resumen",
@@ -1019,7 +1019,7 @@
       "openingDate": "Fecha de apertura",
       "lastReconciled": "Última conciliación",
       "neverReconciled": "Nunca",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron cuentas.",
       "emptyTitle": "Agregá tu primera cuenta",
       "emptyDescription": "Seguí tus saldos de efectivo, banco y billeteras para que tu patrimonio refleje el dinero que realmente tenés.",
@@ -1103,7 +1103,7 @@
         "computedBalance": "Saldo de Renly",
         "adjustment": "Ajuste",
         "reconciledBy": "Conciliada por",
-        "actions": "Acciones",
+        "actions": "Opciones",
         "noAdjustment": "Sin ajuste necesario",
         "addedAsIncome": "Se agregó {amount} como ingreso",
         "addedAsExpense": "Se agregó {amount} como gasto",
@@ -1160,7 +1160,7 @@
         "direction": "Movimiento",
         "amount": "Monto",
         "notes": "Notas",
-        "actions": "Acciones",
+        "actions": "Opciones",
         "sentTo": "Enviado a {account}",
         "receivedFrom": "Recibido de {account}",
         "crossCurrency": "{from} → {to}",
@@ -1281,7 +1281,7 @@
       "billingCycle": "Ciclo",
       "nextBillingDate": "Próximo cobro",
       "paymentMethod": "Forma de pago",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron suscripciones.",
       "emptyTitle": "Controlá tus suscripciones",
       "emptyDescription": "Agregá tus suscripciones recurrentes para ver qué se viene en tu calendario de pagos.",
@@ -1374,9 +1374,9 @@
       "amount": "Monto",
       "dueDate": "Próximo vencimiento",
       "recurrence": "Frecuencia",
-      "category": "Categoría",
+      "label": "Etiqueta",
       "paymentMethod": "Método de pago",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron obligaciones de pago.",
       "emptyTitle": "Planificá tus próximos pagos",
       "emptyDescription": "Registrá obligaciones únicas o recurrentes para ver todo lo que debés en tu calendario de pagos.",
@@ -1517,7 +1517,7 @@
       "progress": "Progreso",
       "nextCuotaDate": "Próxima cuota",
       "paymentMethod": "Forma de pago",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron planes de cuotas.",
       "emptyTitle": "Gestioná tus planes de cuotas",
       "emptyDescription": "Agregá un plan para seguir cada pago y sus próximos vencimientos.",
@@ -1704,7 +1704,7 @@
       "currency": "Moneda",
       "ticker": "Ticker",
       "broker": "Broker",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "No se encontraron inversiones.",
       "emptyTitle": "Empezá a armar tu cartera de inversiones",
       "emptyDescription": "Agregá una inversión — acciones, cripto, fondos, inmuebles — para seguir su valor, rendimiento y asignación en el tiempo.",
@@ -1801,7 +1801,7 @@
       "investments": "Inversiones",
       "target": "Objetivo",
       "noTarget": "—",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "noInvestments": "—",
       "empty": "No se encontraron colecciones.",
       "emptyTitle": "Organizá tus inversiones en colecciones",
@@ -1878,7 +1878,7 @@
       "emptyTitle": "Seguí el valor de tu cartera en el tiempo",
       "emptyDescription": "Los snapshots son valores de tus inversiones en un momento dado. Agregá una inversión primero y después registrá snapshots para ver su evolución.",
       "addSnapshot": "Agregar snapshot",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "sectionCount": "{count, plural, one {# inversión} other {# inversiones}}",
       "overdue": "Falta actualizar",
       "overdueHint": "Esto está valuado hasta el {date}, y el fondo espera una cifra nueva {cadence}.",
@@ -1963,7 +1963,7 @@
       "kind": "Tipo",
       "members": "Miembros",
       "yourRole": "Tu rol",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "openHub": "Abrir grupo",
       "memberOnly": "Solo un administrador puede renombrar o eliminar este grupo.",
       "empty": "Todavía no hay grupos.",
@@ -2031,7 +2031,7 @@
         "name": "Nombre",
         "role": "Rol",
         "status": "Estado",
-        "actions": "Acciones"
+        "actions": "Opciones"
       },
       "status": {
         "joined": "En Renly",
@@ -2138,7 +2138,7 @@
         "name": "Nombre",
         "value": "Valor",
         "myShare": "Tu parte",
-        "actions": "Acciones"
+        "actions": "Opciones"
       },
       "form": {
         "titleCreate": "Nuevo dinero compartido",
@@ -2214,6 +2214,7 @@
           "label": "Qué parte era de cada uno",
           "hint": "Porcentajes, y tienen que sumar 100. Dejá en blanco a quien no tenía ninguna parte.",
           "placeholder": "0",
+          "inputLabel": "Parte de {name} (%)",
           "total": "Total hasta ahora"
         },
         "totalError": "Los porcentajes tienen que sumar {total}.",
@@ -2533,7 +2534,7 @@
           "type": "Qué",
           "who": "Quién",
           "amount": "Monto",
-          "actions": "Acciones",
+          "actions": "Opciones",
           "total": "{total, plural, one {# movimiento} other {# movimientos}}"
         },
         "deleteBaselineTitle": "Eliminar el punto de partida",
@@ -2562,7 +2563,7 @@
           "view": "Puede ver",
           "write": "Puede modificar",
           "source": "Origen",
-          "actions": "Acciones"
+          "actions": "Opciones"
         }
       },
       "updatedThrough": "actualizado hasta el {date}",
@@ -2631,7 +2632,7 @@
         "category": "Categoría",
         "paidBy": "Pagado por",
         "notes": "Notas",
-        "actions": "Acciones",
+        "actions": "Opciones",
         "total": "{total, plural, one {# gasto compartido} other {# gastos compartidos}}",
         "yourShare": "Tu parte: {amount}",
         "joint": "Dinero conjunto",
@@ -2723,7 +2724,7 @@
         "source": "De",
         "wentTo": "Fue a",
         "notes": "Notas",
-        "actions": "Acciones",
+        "actions": "Opciones",
         "total": "{total, plural, one {# ingreso compartido} other {# ingresos compartidos}}",
         "yourShare": "Tu parte: {amount}",
         "joint": "Quedó en común",
@@ -2852,7 +2853,7 @@
         "amount": "Monto",
         "status": "Estado",
         "notes": "Notas",
-        "actions": "Acciones",
+        "actions": "Opciones",
         "pair": "{from} → {to}",
         "leg": "{amount} {currency} a través de {account}",
         "total": "{total, plural, one {# liquidación} other {# liquidaciones}}"
@@ -3829,7 +3830,13 @@
     "cta": {
       "title": "¿Listo para ver el panorama completo?",
       "subtitle": "Creá tu cuenta gratis y poné tus inversiones, tu efectivo y tu deuda en un solo lugar.",
-      "button": "Crear mi cuenta"
+      "button": "Crear mi cuenta",
+      "inviteSubtitle": "Por ahora Renly es solo por invitación. Iniciá sesión, o abrí el enlace de tu correo de invitación para crear tu cuenta."
+    },
+    "invite": {
+      "trigger": "¿Tenés una invitación?",
+      "title": "Unirse con una invitación",
+      "body": "Por ahora Renly es solo por invitación. Abrí el enlace del correo de invitación que recibiste: te lleva directo a crear tu cuenta. Los enlaces vencen; si el tuyo venció, pedile uno nuevo a quien te invitó."
     }
   },
   "adminFeedback": {
@@ -4157,7 +4164,7 @@
       "status": "Estado",
       "sent": "Enviada",
       "accepted": "Aceptada",
-      "actions": "Acciones",
+      "actions": "Opciones",
       "empty": "Todavía no hay invitaciones. Invitá a alguien arriba para empezar.",
       "never": "—",
       "total": "{total, plural, one {# invitación} other {# invitaciones}}"
