@@ -1,4 +1,4 @@
-import { ALL_ROUTE_PATHS } from '@/config/routes';
+import { ALL_ROUTE_PATHS, PROTECTED_ROUTES } from '@/config/routes';
 
 // A host that can never resolve (`.invalid` is reserved), used only to make a relative path parseable.
 // Its origin is never returned, and an input naming it explicitly fails the leading-slash check.
@@ -15,8 +15,9 @@ const PARSE_BASE = 'https://renly.invalid';
  *   2. Resolved against a constant base, its origin must still be that base. This is what rejects the
  *      host-borrowing forms that DO start with a slash: `//evil.example`, and `/\evil.example`, which
  *      the URL parser normalises to the same thing.
- *   3. Its pathname must be a route this app declares. An allowlist, so a plausible-looking path does
- *      not qualify and widening what is accepted means adding a real route.
+ *   3. Its pathname must be a route this app declares, or a page under a protected one (`/shared/12`,
+ *      a deep link the login bounced). An allowlist, so a plausible-looking path does not qualify and
+ *      widening what is accepted means adding a real route.
  *
  * What comes back is the PARSED `pathname + search`, never the input string: the path is normalised
  * (so `/a/../dashboard` cannot smuggle a non-route segment past check 3) and a fragment is dropped.
@@ -34,6 +35,8 @@ export function safeNextPath(next: string | undefined): string | null {
   if (url.origin !== PARSE_BASE) return null;
   // Widened to string[] because ROUTES is `as const`, so ALL_ROUTE_PATHS is a literal union and
   // `.includes` would reject any runtime string. Same cast PROTECTED_ROUTES uses in config/routes.ts.
-  if (!(ALL_ROUTE_PATHS as readonly string[]).includes(url.pathname)) return null;
+  const declared = (ALL_ROUTE_PATHS as readonly string[]).includes(url.pathname);
+  const underProtected = PROTECTED_ROUTES.some((route) => url.pathname.startsWith(`${route}/`));
+  if (!declared && !underProtected) return null;
   return `${url.pathname}${url.search}`;
 }

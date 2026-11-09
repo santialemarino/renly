@@ -132,9 +132,13 @@ export const authConfig: NextAuthConfig = {
       // through so Next renders not-found (404) instead of bouncing a mistyped URL to /login. This
       // is the optimistic edge check; the (protected) layout's getSession() is the authoritative
       // guard, so a protected route missing from PROTECTED_ROUTES still can't leak.
+      // The page asked for rides along as `?next=`, so signing in lands on it rather than on the
+      // dashboard; /login re-validates it with safeNextPath before following it.
       const isProtectedPage = PROTECTED_ROUTES.some(matchesRoute);
       if (isProtectedPage && (!isLoggedIn || hasError)) {
-        return Response.redirect(new URL(LOGIN_ROUTE, nextUrl));
+        const login = new URL(LOGIN_ROUTE, nextUrl);
+        login.searchParams.set('next', `${pathname}${nextUrl.search}`);
+        return Response.redirect(login);
       }
 
       return true;

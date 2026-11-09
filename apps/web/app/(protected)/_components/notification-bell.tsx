@@ -31,6 +31,8 @@ import type { AppNotification } from '@/lib/api/notifications';
 const POPOVER_GAP_PX = 8;
 const POPOVER_COLLISION_PADDING_PX = 16;
 const SIDEBAR_SELECTOR = '[data-slot="sidebar-container"]';
+// The `readAt` of a row read from here before the server's answer arrives.
+const READ_HERE = 'pending';
 
 const TRIGGER_CLASS =
   'group/bell relative grid size-8 shrink-0 place-items-center rounded-lg outline-none hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:ring-3 focus-visible:ring-ring transition-colors';
@@ -47,6 +49,18 @@ function offsetPastSidebar(trigger: HTMLElement): number {
   return (
     sidebar.getBoundingClientRect().right - trigger.getBoundingClientRect().right + POPOVER_GAP_PX
   );
+}
+
+// The reads made from this bell that its props may not show yet, and the props they were made against.
+interface ReadOverlay {
+  basis: AppNotification[];
+  // Only rows that were unread when opened, so each one is exactly one fewer unread.
+  readIds: number[];
+  allRead: boolean;
+}
+
+function emptyOverlay(basis: AppNotification[]): ReadOverlay {
+  return { basis, readIds: [], allRead: false };
 }
 
 interface NotificationBellProps {
@@ -69,7 +83,11 @@ interface NotificationBellProps {
  * to work in.
  *
  * Its data comes from the protected LAYOUT, which is a server component: the count is correct on every
- * navigation and there is no polling. `router.refresh()` after a read is what re-asks for it.
+ * navigation and there is no polling. `router.refresh()` after a read is what re-asks for it, so the
+ * rows and the count are DERIVED from those props on every render, never copied into state: a copy
+ * taken once would ignore every refresh after it, and the bell kept a stale count after a read in the
+ * inbox. What the bell does hold is an optimistic overlay of the reads made here, tied to the props it
+ * was made against — new props from a refresh are the server's answer, and the overlay steps aside.
  *
  * The unread marker is a DOT, not a number. A count implies a queue you are meant to empty, which is
  * the wrong relationship with a feed of things that already happened; the dot says "something is
@@ -81,11 +99,20 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
   const router = useRouter();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState(notifications);
-  const [count, setCount] = useState(unread);
+  const [overlay, setOverlay] = useState<ReadOverlay>(() => emptyOverlay(notifications));
   const [sideOffset, setSideOffset] = useState(POPOVER_GAP_PX);
   const [isRefreshing, startTransition] = useTransition();
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // The overlay counts only while the props it was made against are the current ones. A row it marks
+  // read only needs a non-null `readAt` (nothing shows the time), so it carries the overlay's marker.
+  const pending = overlay.basis === notifications ? overlay : emptyOverlay(notifications);
+  const rows = notifications.map((item) =>
+    item.readAt === null && (pending.allRead || pending.readIds.includes(item.id))
+      ? { ...item, readAt: READ_HERE }
+      : item,
+  );
+  const count = pending.allRead ? 0 : Math.max(0, unread - pending.readIds.length);
 
   /*
    * Re-measured while it is open, whenever the window or the sidebar's own geometry changes: a resize,
@@ -114,20 +141,26 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
     setOpen(next);
   }
 
-  // Un-awaited on purpose: it runs alongside the row's own navigation, which would cancel an awaited
-  // Server Action before it settled. The catch is still required — an un-caught rejection is an error
-  // nobody sees — and swallowing is the right recovery: losing one costs an unread dot, not data.
+  /*
+   * Un-awaited on purpose: it runs alongside the row's own navigation, which would cancel an awaited
+   * Server Action before it settled. Once the write has landed, a refresh re-reads the count from the
+   * server, so it holds even where this bell remounts (below `md` it lives in a Sheet that unmounts
+   * when it closes, and the overlay goes with it). The catch is still required — an un-caught
+   * rejection is an error nobody sees — and swallowing is the right recovery: losing one costs an
+   * unread dot, not data.
+   */
   function handleOpen(id: number) {
-    setRows((current) =>
-      current.map((item) =>
-        item.id === id && item.readAt === null
-          ? { ...item, readAt: new Date().toISOString() }
-          : item,
-      ),
-    );
-    setCount((current) => Math.max(0, current - 1));
+    const target = notifications.find((item) => item.id === id);
+    if (target?.readAt === null) {
+      setOverlay((current) => {
+        const base = current.basis === notifications ? current : emptyOverlay(notifications);
+        return base.readIds.includes(id) ? base : { ...base, readIds: [...base.readIds, id] };
+      });
+    }
     setOpen(false);
-    void markNotificationRead(id).catch(() => undefined);
+    void markNotificationRead(id)
+      .then(() => router.refresh())
+      .catch(() => undefined);
   }
 
   /*
@@ -142,10 +175,7 @@ export function NotificationBell({ notifications, unread }: NotificationBellProp
    * "mark all read" is the one that toasts.
    */
   async function handleMarkAll() {
-    setRows((current) =>
-      current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })),
-    );
-    setCount(0);
+    setOverlay({ ...emptyOverlay(notifications), allRead: true });
     try {
       await markAllNotificationsRead();
     } catch {

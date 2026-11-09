@@ -18,11 +18,14 @@ test.describe('auth routing (logged out)', () => {
     expect(new URL(page.url()).pathname).toBe(UNKNOWN_PATH);
   });
 
-  test('a protected path redirects to login', async ({ page }) => {
-    await page.goto(PROTECTED_PATH);
+  test('a protected path redirects to login, remembering where it was going', async ({ page }) => {
+    await page.goto(`${PROTECTED_PATH}?page=2`);
 
     await page.waitForURL((url) => url.pathname === LOGIN);
-    expect(new URL(page.url()).pathname).toBe(LOGIN);
+    const url = new URL(page.url());
+    expect(url.pathname).toBe(LOGIN);
+    // Signing in follows it back (safeNextPath validates it on /login).
+    expect(url.searchParams.get('next')).toBe(`${PROTECTED_PATH}?page=2`);
   });
 
   test('the 404 call-to-action returns to the landing page', async ({ page }) => {

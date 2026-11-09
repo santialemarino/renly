@@ -15,11 +15,11 @@ interface LoginPageProps {
 }
 
 /*
- * `?next=` exists for one flow: a group-invite link opened without a session sends the recipient here
- * and needs them back on the invite afterwards, token intact. It is run through safeNextPath, which
- * allowlists it against the app's own routes — so it cannot be turned into an off-site redirect — and
- * an already-logged-in visitor is sent there too rather than to the dashboard, which is what makes
- * clicking the link twice work.
+ * `?next=` is where to go after signing in: the page a logged-out visitor asked for (the edge check in
+ * auth.config sets it), or a group-invite link opened without a session, token intact. It is run
+ * through safeNextPath, which allowlists it against the app's own routes — so it cannot be turned into
+ * an off-site redirect — and an already-logged-in visitor is sent there too rather than to the
+ * dashboard, which is what makes clicking the link twice work.
  */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const [session, { next }] = await Promise.all([getSession(), searchParams]);
