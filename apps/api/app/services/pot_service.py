@@ -29,7 +29,13 @@ from app.domain import (
     AccountHasLinkedEntriesError,
     ExchangeRateUnavailableError,
     NotFoundError,
+    NotificationDispatch,
     PotAlreadyDividedError,
+    PotDollarRateAlreadyAgreedError,
+    PotDollarRateNotYoursError,
+    PotDollarRateOwnerRequiredError,
+    PotDollarRateProposalPendingError,
+    PotDollarRateUnchangedError,
     PotHasHoldingsError,
     PotHoldingAddDividedError,
     PotHoldingInactiveError,
@@ -49,8 +55,9 @@ from app.domain import (
 )
 from app.models.account import Account
 from app.models.exchange_rate import DollarRate
-from app.models.group import Group, GroupMember
+from app.models.group import Group, GroupMember, GroupMemberRole
 from app.models.investment import Investment
+from app.models.notification import NotificationEvent
 from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
 from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.snapshot import InvestmentSnapshot
@@ -72,6 +79,7 @@ from app.repositories import (
     transfer_repository,
 )
 from app.schemas.pot import (
+    PotDollarRateProposalResponse,
     PotHoldingResponse,
     PotHoldingsResponse,
     PotMemberShareResponse,
@@ -80,7 +88,7 @@ from app.schemas.pot import (
     PotValueSeriesPoint,
     PotValueSeriesResponse,
 )
-from app.services import account_service, exchange_rate_service, shared_audit_service
+from app.services import account_service, exchange_rate_service, notification_service, shared_audit_service
 from app.utils.metrics import RateLookup, convert_value
 from app.utils.pagination import MAX_LIST_ROWS
 
@@ -559,6 +567,8 @@ def _build_response(
         snapshot_cadence=pot.snapshot_cadence,
         visibility=pot.visibility,
         dollar_rate=pot.dollar_rate,
+        dollar_rate_proposal=_proposal_response(pot, balances, members_by_id, viewer_member_id),
+        can_change_dollar_rate=_may_propose_rate(balances, members_by_id, viewer_member_id) and pot.dollar_rate_proposal is None,
         is_default=pot.is_default,
         nav=nav,
         valued_as_of=valuation.valued_as_of,
@@ -1233,12 +1243,11 @@ async def create_pot(
     return await get_pot(admin_session, pot.id, user)
 
 
-# Renames a pot, or changes how often it is expected to be re-valued, who may see it by default, or the
-# dollar rate it is valued at. Only provided fields are updated; base_currency is deliberately not among
-# them, because it is the unit of every figure already recorded in the ledger.
-# A new dollar rate reaches FUTURE figures only: every ledger row already stores the base_amount and
-# units it was priced at, and none is ever recomputed.
-# Group admin only — all four are configuration, not money movement, so they follow the membership
+# Renames a pot, or changes how often it is expected to be re-valued or who may see it by default.
+# Only provided fields are updated; base_currency is deliberately not among them, because it is the
+# unit of every figure already recorded in the ledger, and neither is the dollar rate, which takes every
+# owner's agreement (propose_dollar_rate).
+# Group admin only — all three are configuration, not money movement, so they follow the membership
 # rules rather than the pot's own write permission.
 async def update_pot(
     session: AsyncSession,
@@ -1248,7 +1257,6 @@ async def update_pot(
     name: str | None = None,
     snapshot_cadence: PotCadence | None = None,
     visibility: PotVisibility | None = None,
-    dollar_rate: DollarRate | None = None,
 ) -> PotResponse:
     from app.services import group_service
 
@@ -1260,13 +1268,227 @@ async def update_pot(
         pot.snapshot_cadence = snapshot_cadence
     if visibility is not None:
         pot.visibility = visibility
-    if dollar_rate is not None:
-        pot.dollar_rate = dollar_rate
     await pot_repository.save(session, pot)
     await _audit(session, pot, user, AuditAction.updated)
     await session.commit()
     await session.refresh(pot)
     return await get_pot(session, pot.id, user)
+
+
+# --- The dollar rate, changed by the owners' agreement ---
+#
+# A pot's dollar rate decides what every owner's share is worth and what units are issued at, so it
+# changes the way the split does: by the OWNERS, not by whoever administers the group or holds write
+# access. One owner proposes, every other owner agrees, and nothing changes until all of them have; the
+# proposer may withdraw it meanwhile. With a single owner there is nobody to wait for and it applies at
+# once, and before anybody owns anything a group admin sets it, as they did when they created the pot.
+#
+# Who the owners are is asked of the ledger every time, never stored with the proposal: a buy-out or a
+# contribution while one is pending changes who has a stake, and the agreement that counts is that of
+# whoever owns the pot when it would apply.
+
+
+# The seats a dollar-rate change waits for: every member holding units who can answer.
+#
+# A seat that cannot act — a name-only seat with no account, or one that has left the group — is not
+# waited for, the same posture a change of split takes: such a seat can never confirm one, and the
+# change of split stays open to the seats that can rather than locked forever. Waiting on a seat that
+# can never answer would make the pot's rate unchangeable for good.
+def _rate_agreers(balances: dict[int, Decimal], members_by_id: dict[int, GroupMember]) -> set[int]:
+    return {
+        member_id
+        for member_id, units in balances.items()
+        if units > ZERO and member_id in members_by_id and members_by_id[member_id].is_active and members_by_id[member_id].user_id is not None
+    }
+
+
+# The proposal as the reader sees it, or None when nothing is pending. Resolved from the same
+# _rate_agreers the writes ask, so a button offered is an act accepted.
+def _proposal_response(
+    pot: Pot, balances: dict[int, Decimal], members_by_id: dict[int, GroupMember], viewer_member_id: int
+) -> PotDollarRateProposalResponse | None:
+    if pot.dollar_rate_proposal is None:
+        return None
+    agreers = _rate_agreers(balances, members_by_id)
+    agreed = set(pot.dollar_rate_agreed_by)
+    proposer = members_by_id.get(pot.dollar_rate_proposed_by)
+    return PotDollarRateProposalResponse(
+        dollar_rate=pot.dollar_rate_proposal,
+        proposed_by=proposer.display_name if proposer is not None else "",
+        waiting_on=sorted(members_by_id[member_id].display_name for member_id in agreers - agreed),
+        can_agree=viewer_member_id in agreers and (viewer_member_id not in agreed or agreers <= agreed),
+        can_withdraw=_may_withdraw_rate(pot, viewer_member_id, agreers, members_by_id),
+    )
+
+
+# Whether the reader may propose a new rate: an owner, or a group admin while nobody owns anything.
+def _may_propose_rate(balances: dict[int, Decimal], members_by_id: dict[int, GroupMember], viewer_member_id: int) -> bool:
+    if balances.get(viewer_member_id, ZERO) > ZERO:
+        return True
+    viewer = members_by_id.get(viewer_member_id)
+    return total_units(balances) <= ZERO and viewer is not None and viewer.role == GroupMemberRole.admin
+
+
+# Whether a seat may withdraw the pending proposal: its proposer — or, once the proposer has left the
+# group and so can never withdraw it, any owner it waits for, so a stale proposal cannot block the pot.
+def _may_withdraw_rate(pot: Pot, member_id: int, agreers: set[int], members_by_id: dict[int, GroupMember]) -> bool:
+    if member_id == pot.dollar_rate_proposed_by:
+        return True
+    proposer = members_by_id.get(pot.dollar_rate_proposed_by)
+    return (proposer is None or not proposer.is_active) and member_id in agreers
+
+
+# The pot's members and current balances, read under the pot's lock so nothing moves between the read
+# and the decision taken on it.
+async def _rate_context(session: AsyncSession, pot: Pot) -> tuple[dict[int, GroupMember], dict[int, Decimal]]:
+    members_by_id = {member.id: member for member in await group_repository.list_members(session, pot.group_id)}
+    balances = replay_units(_as_entries(await pot_ownership_repository.list_by_pot(session, pot.id)))
+    return (members_by_id, balances)
+
+
+# Proposes a new dollar rate, or sets it outright when there is nobody else to ask.
+#
+# Applies at once when the caller is the only owner whose agreement counts, or when nobody owns anything
+# yet and the caller is a group admin; otherwise it waits, with the caller's own agreement already given,
+# and every other owner is told it needs theirs.
+async def propose_dollar_rate(session: AsyncSession, pot_id: int, user: User, *, dollar_rate: DollarRate) -> PotResponse:
+    from app.services import group_service
+
+    pot, member, _ = await require_visible(session, pot_id, user)
+    await pot_repository.lock(session, pot.id)
+    if pot.dollar_rate_proposal is not None:
+        raise PotDollarRateProposalPendingError()
+    if dollar_rate == pot.dollar_rate:
+        raise PotDollarRateUnchangedError()
+    members_by_id, balances = await _rate_context(session, pot)
+    if balances.get(member.id, ZERO) <= ZERO:
+        if total_units(balances) > ZERO:
+            raise PotDollarRateOwnerRequiredError()
+        await group_service.require_admin(session, pot.group_id, user)
+
+    agreers = _rate_agreers(balances, members_by_id)
+    if agreers <= {member.id}:
+        await _apply_dollar_rate(session, pot, user, rate=dollar_rate, proposer=member, agreers=agreers)
+    else:
+        pot.dollar_rate_proposal = dollar_rate
+        pot.dollar_rate_proposed_by = member.id
+        pot.dollar_rate_agreed_by = [member.id]
+        await pot_repository.save(session, pot)
+        await _audit(session, pot, user, AuditAction.updated, variant=_RATE_PROPOSED, from_rate=pot.dollar_rate.value, to_rate=dollar_rate.value)
+        recipients = await _rate_audience(session, pot, agreers, exclude_user_id=user.id)
+        group = await group_repository.get_by_id(session, pot.group_id)
+        await session.commit()
+        await notification_service.dispatch(
+            NotificationEvent.ownership_changed,
+            recipients,
+            notification_payload(pot, group, {"variant": "dollar_rate_proposed_to_you", "actor": member.display_name}),
+        )
+        await session.refresh(pot)
+    return await get_pot(session, pot.id, user)
+
+
+# Gives the caller's agreement to the pending change, and applies it once every owner has.
+#
+# An owner who already agreed may still call this when nobody is left to wait for — an owner who had not
+# agreed can stop owning anything meanwhile, and without this the change would wait for nobody, forever.
+async def agree_dollar_rate(session: AsyncSession, pot_id: int, user: User) -> PotResponse:
+    pot, member, _ = await require_visible(session, pot_id, user)
+    await pot_repository.lock(session, pot.id)
+    if pot.dollar_rate_proposal is None:
+        raise NotFoundError("Dollar rate proposal not found")
+    members_by_id, balances = await _rate_context(session, pot)
+    agreers = _rate_agreers(balances, members_by_id)
+    if member.id not in agreers:
+        raise PotDollarRateOwnerRequiredError()
+    agreed = set(pot.dollar_rate_agreed_by)
+    if member.id in agreed and not agreers <= agreed:
+        raise PotDollarRateAlreadyAgreedError()
+    if member.id not in agreed:
+        pot.dollar_rate_agreed_by = [*pot.dollar_rate_agreed_by, member.id]
+        agreed.add(member.id)
+        await _audit(
+            session,
+            pot,
+            user,
+            AuditAction.confirmed,
+            from_rate=pot.dollar_rate.value,
+            to_rate=pot.dollar_rate_proposal.value,
+        )
+    if agreers <= agreed:
+        proposer = members_by_id.get(pot.dollar_rate_proposed_by)
+        await _apply_dollar_rate(session, pot, user, rate=pot.dollar_rate_proposal, proposer=proposer, agreers=agreers)
+    else:
+        await pot_repository.save(session, pot)
+        await session.commit()
+    await session.refresh(pot)
+    return await get_pot(session, pot.id, user)
+
+
+# Withdraws the pending change. Nothing had changed, so nothing is undone; the owners asked to agree
+# simply have nothing left to agree to.
+async def withdraw_dollar_rate(session: AsyncSession, pot_id: int, user: User) -> PotResponse:
+    pot, member, _ = await require_visible(session, pot_id, user)
+    await pot_repository.lock(session, pot.id)
+    if pot.dollar_rate_proposal is None:
+        raise NotFoundError("Dollar rate proposal not found")
+    members_by_id, balances = await _rate_context(session, pot)
+    if not _may_withdraw_rate(pot, member.id, _rate_agreers(balances, members_by_id), members_by_id):
+        raise PotDollarRateNotYoursError()
+    proposed = pot.dollar_rate_proposal
+    _clear_rate_proposal(pot)
+    await pot_repository.save(session, pot)
+    await _audit(session, pot, user, AuditAction.updated, variant=_RATE_WITHDRAWN, from_rate=pot.dollar_rate.value, to_rate=proposed.value)
+    await session.commit()
+    await session.refresh(pot)
+    return await get_pot(session, pot.id, user)
+
+
+# How an audit entry names each step of a dollar-rate change. Translation keys on the other side, like
+# the access levels above.
+_RATE_PROPOSED = "dollar_rate_proposed"
+_RATE_WITHDRAWN = "dollar_rate_withdrawn"
+_RATE_APPLIED = "dollar_rate"
+
+
+# Forgets the pending proposal, whole: the CHECK on the table refuses a rate without its proposer.
+def _clear_rate_proposal(pot: Pot) -> None:
+    pot.dollar_rate_proposal = None
+    pot.dollar_rate_proposed_by = None
+    pot.dollar_rate_agreed_by = []
+
+
+# Applies a new dollar rate: records the change from the old rate to the new one, clears any proposal,
+# commits, and tells the owners — the proposer that everyone agreed to theirs, the others that the pot
+# now uses it. FUTURE figures only: every ledger row keeps the base_amount and units it was priced at.
+async def _apply_dollar_rate(
+    session: AsyncSession, pot: Pot, user: User, *, rate: DollarRate, proposer: GroupMember | None, agreers: set[int]
+) -> None:
+    previous = pot.dollar_rate
+    pot.dollar_rate = rate
+    _clear_rate_proposal(pot)
+    await pot_repository.save(session, pot)
+    await _audit(session, pot, user, AuditAction.updated, variant=_RATE_APPLIED, from_rate=previous.value, to_rate=rate.value)
+    recipients = await _rate_audience(session, pot, agreers, exclude_user_id=user.id)
+    group = await group_repository.get_by_id(session, pot.group_id)
+    await session.commit()
+
+    proposer_user_id = proposer.user_id if proposer is not None else None
+    payload = notification_payload(pot, group, {"actor": proposer.display_name if proposer is not None else None})
+    await notification_service.dispatch_many(
+        NotificationEvent.ownership_changed,
+        [
+            NotificationDispatch([u for u in recipients if u == proposer_user_id], {**payload, "variant": "dollar_rate_applied_from_you"}),
+            NotificationDispatch([u for u in recipients if u != proposer_user_id], {**payload, "variant": "dollar_rate_applied_to_you"}),
+        ],
+    )
+
+
+# The accounts of the owners a dollar-rate change concerns, among those who may see the pot, minus
+# whoever acted. Owners rather than every viewer: it is their agreement the change is about.
+async def _rate_audience(session: AsyncSession, pot: Pot, agreers: set[int], *, exclude_user_id: int) -> list[int]:
+    members = await group_repository.list_members(session, pot.group_id)
+    owners = {member.user_id for member in members if member.id in agreers and member.user_id is not None}
+    return [user_id for user_id in await list_notifiable_user_ids(session, pot, exclude_user_id=exclude_user_id) if user_id in owners]
 
 
 # Deletes a pot. Refused while it still holds anything: the database refuses it too (every pot_id

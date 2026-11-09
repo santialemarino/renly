@@ -45,6 +45,14 @@ interface PotPermissionRaw {
   can_write: boolean;
 }
 
+interface PotDollarRateProposalRaw {
+  dollar_rate: PotDollarRate;
+  proposed_by: string;
+  waiting_on: string[];
+  can_agree: boolean;
+  can_withdraw: boolean;
+}
+
 export interface PotRaw {
   id: number;
   group_id: number;
@@ -53,6 +61,8 @@ export interface PotRaw {
   snapshot_cadence: PotCadence;
   visibility: PotVisibility;
   dollar_rate: PotDollarRate;
+  dollar_rate_proposal: PotDollarRateProposalRaw | null;
+  can_change_dollar_rate: boolean;
   is_default: boolean;
   nav: string | null;
   valued_as_of: string | null;
@@ -136,6 +146,20 @@ export interface PotPermission {
   canWrite: boolean;
 }
 
+/*
+ * A change of the pot's dollar rate waiting for its owners: it applies only once every one of them has
+ * agreed. The two permissions are resolved by the API, so the buttons offered and the answer the write
+ * gives cannot disagree.
+ */
+export interface PotDollarRateProposal {
+  dollarRate: PotDollarRate;
+  proposedBy: string;
+  // The owners who have not agreed yet; empty once everyone has.
+  waitingOn: string[];
+  canAgree: boolean;
+  canWithdraw: boolean;
+}
+
 export interface Pot {
   id: number;
   groupId: number;
@@ -149,6 +173,9 @@ export interface Pot {
   visibility: PotVisibility;
   // The USD/ARS rate every figure here converts at, the same for every member.
   dollarRate: PotDollarRate;
+  dollarRateProposal: PotDollarRateProposal | null;
+  // Whether the reader may propose a new rate: an owner, or an admin while nobody owns any.
+  canChangeDollarRate: boolean;
   isDefault: boolean;
   nav: string | null;
   /*
@@ -268,6 +295,14 @@ export function mapPot(raw: PotRaw): Pot {
     snapshotCadence: raw.snapshot_cadence,
     visibility: raw.visibility,
     dollarRate: raw.dollar_rate,
+    dollarRateProposal: raw.dollar_rate_proposal && {
+      dollarRate: raw.dollar_rate_proposal.dollar_rate,
+      proposedBy: raw.dollar_rate_proposal.proposed_by,
+      waitingOn: raw.dollar_rate_proposal.waiting_on,
+      canAgree: raw.dollar_rate_proposal.can_agree,
+      canWithdraw: raw.dollar_rate_proposal.can_withdraw,
+    },
+    canChangeDollarRate: raw.can_change_dollar_rate,
     isDefault: raw.is_default,
     nav: raw.nav,
     valuedAsOf: raw.valued_as_of,

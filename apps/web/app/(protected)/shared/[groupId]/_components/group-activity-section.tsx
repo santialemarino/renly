@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
 import type { ActivityEntry } from '@/lib/api/group-activity';
+import { isPotDollarRate } from '@/lib/constants/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { activityRow } from '@/lib/shared-activity';
 
@@ -68,6 +69,8 @@ function ActivityLine({ entry, groupId }: ActivityLineProps) {
     formatAmount: (amount, currency) => `${fmt.amount(amount, currency)} ${currency}`.trim(),
     potFallback: tCommon('potDefaultLabel'),
     unknownActor: t('activity.unknownActor'),
+    dollarRateLabel: (rate) =>
+      isPotDollarRate(rate) ? t(`pots.dollarRate.options.${rate}`) : rate,
   });
 
   /*

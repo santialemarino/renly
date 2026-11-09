@@ -92,6 +92,33 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} removed an ownership entry from {pot}",
         },
+        "ownership_changed.dollar_rate_proposed_to_you": {
+            "subject": "{actor} proposed a new dollar rate for {pot}",
+            "body": (
+                '{actor} proposed valuing dollars at a different rate in "{pot}", in the group "{group}". '
+                "Nothing changes until every owner agrees, and yours is one of the agreements it waits for.\n\n"
+                "See it and agree here:\n{link}"
+            ),
+            "push": "{actor} proposed a new dollar rate for {pot}",
+        },
+        "ownership_changed.dollar_rate_applied_from_you": {
+            "subject": "Everyone agreed to your new dollar rate for {pot}",
+            "body": (
+                'Every owner of "{pot}", in the group "{group}", agreed to the dollar rate you proposed. '
+                "Its figures use it from now on; what was already recorded stays as it was.\n\n"
+                "See the pot here:\n{link}"
+            ),
+            "push": "Everyone agreed to your new dollar rate for {pot}",
+        },
+        "ownership_changed.dollar_rate_applied_to_you": {
+            "subject": "{pot} now uses the dollar rate {actor} proposed",
+            "body": (
+                'Every owner of "{pot}", in the group "{group}", agreed to the dollar rate {actor} proposed. '
+                "Its figures use it from now on; what was already recorded stays as it was.\n\n"
+                "See the pot here:\n{link}"
+            ),
+            "push": "{pot} now uses the dollar rate {actor} proposed",
+        },
         "pot_movement.contribution": {
             "subject": "{member} added money to {pot}",
             "body": ('{member} added {amount} {currency} to "{pot}", in the group "{group}".\n\nSee the pot and its movements here:\n{link}'),
@@ -294,6 +321,33 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "Podés ver el fondo y su reparto acá:\n{link}"
             ),
             "push": "{actor} eliminó una entrada de titularidad de {pot}",
+        },
+        "ownership_changed.dollar_rate_proposed_to_you": {
+            "subject": "{actor} propuso un nuevo tipo de dólar para {pot}",
+            "body": (
+                '{actor} propuso valuar el dólar a otro tipo en "{pot}", en el grupo "{group}". '
+                "No cambia nada hasta que todos los dueños lo acepten, y tu aceptación es una de las que espera.\n\n"
+                "Podés verlo y aceptarlo acá:\n{link}"
+            ),
+            "push": "{actor} propuso un nuevo tipo de dólar para {pot}",
+        },
+        "ownership_changed.dollar_rate_applied_from_you": {
+            "subject": "Todos aceptaron tu nuevo tipo de dólar para {pot}",
+            "body": (
+                'Todos los dueños de "{pot}", en el grupo "{group}", aceptaron el tipo de dólar que propusiste. '
+                "Sus cifras lo usan de ahora en más; lo ya registrado queda como está.\n\n"
+                "Podés ver el fondo acá:\n{link}"
+            ),
+            "push": "Todos aceptaron tu nuevo tipo de dólar para {pot}",
+        },
+        "ownership_changed.dollar_rate_applied_to_you": {
+            "subject": "{pot} ahora usa el tipo de dólar que propuso {actor}",
+            "body": (
+                'Todos los dueños de "{pot}", en el grupo "{group}", aceptaron el tipo de dólar que propuso {actor}. '
+                "Sus cifras lo usan de ahora en más; lo ya registrado queda como está.\n\n"
+                "Podés ver el fondo acá:\n{link}"
+            ),
+            "push": "{pot} ahora usa el tipo de dólar que propuso {actor}",
         },
         "pot_movement.contribution": {
             "subject": "{member} puso dinero en {pot}",

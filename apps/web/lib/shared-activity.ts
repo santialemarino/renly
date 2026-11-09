@@ -83,10 +83,13 @@ export function activityRow(
     formatAmount,
     potFallback,
     unknownActor,
+    dollarRateLabel,
   }: {
     formatAmount: (amount: string, currency: string) => string;
     potFallback: string;
     unknownActor: string;
+    // A pot's dollar rate (`mep`) as the reader's language names it.
+    dollarRateLabel: (rate: string) => string;
   },
 ): ActivityRow {
   const { payload } = entry;
@@ -104,6 +107,8 @@ export function activityRow(
       counterparty: text(payload, 'counterparty'),
       from_member: text(payload, 'from_member'),
       to_member: text(payload, 'to_member'),
+      from_rate: dollarRateLabel(text(payload, 'from_rate')),
+      to_rate: dollarRateLabel(text(payload, 'to_rate')),
       // No "is there an amount" guard: formatAmount passes a blank straight through, so the guard
       // could not change an answer — and a mutation sweep proved exactly that by deleting it.
       amount: formatAmount(text(payload, 'amount'), text(payload, 'currency')),

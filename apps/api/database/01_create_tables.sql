@@ -1112,6 +1112,8 @@ CREATE INDEX idx_group_invites_group_id ON group_invites(group_id);
 -- as an overdue valuation and how the value series is bucketed.
 -- dollar_rate is the USD/ARS quote every figure about the pot converts at — its value, unit price and
 -- every movement priced against it — so all members see the same figures in its base currency.
+-- Changing it takes every owner's agreement: dollar_rate_proposal is the one pending change, with the
+-- seat that proposed it and the seats that have agreed so far; nothing changes until all owners have.
 CREATE TABLE pots (
   id               BIGSERIAL PRIMARY KEY,
   group_id         BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -1120,9 +1122,13 @@ CREATE TABLE pots (
   snapshot_cadence pot_cadence NOT NULL DEFAULT 'monthly',
   visibility       pot_visibility NOT NULL DEFAULT 'members',
   dollar_rate      dollar_rate NOT NULL DEFAULT 'mep',
+  dollar_rate_proposal    dollar_rate,
+  dollar_rate_proposed_by BIGINT REFERENCES group_members(id),
+  dollar_rate_agreed_by   BIGINT[] NOT NULL DEFAULT '{}',
   is_default       BOOLEAN NOT NULL DEFAULT FALSE,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT pots_dollar_rate_proposal_whole CHECK ((dollar_rate_proposal IS NULL) = (dollar_rate_proposed_by IS NULL))
 );
 
 CREATE INDEX idx_pots_group_id ON pots(group_id);

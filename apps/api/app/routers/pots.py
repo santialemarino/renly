@@ -7,6 +7,7 @@ from app.deps.db import AdminSessionDep, SessionDep
 from app.deps.pagination import PageQuery
 from app.schemas.pot import (
     PotCreate,
+    PotDollarRateProposalCreate,
     PotHoldingContribute,
     PotHoldingsMove,
     PotHoldingsResponse,
@@ -90,8 +91,8 @@ async def create_pot(
     )
 
 
-# Updates a pot's name, snapshot cadence, visibility or dollar rate. Group admin only (403 otherwise).
-# Only provided fields change. Cadence is administration rather than money movement, which is why it is
+# Updates a pot's name, snapshot cadence or visibility. Group admin only (403 otherwise). Only
+# provided fields change. Cadence is administration rather than money movement, which is why it is
 # gated the way name and visibility are: it sets the standard the group holds its custodian to.
 @router.put("/{pot_id}", response_model=PotResponse)
 async def update_pot(
@@ -107,7 +108,6 @@ async def update_pot(
         name=body.name,
         snapshot_cadence=body.snapshot_cadence,
         visibility=body.visibility,
-        dollar_rate=body.dollar_rate,
     )
 
 
@@ -140,6 +140,31 @@ async def clear_permission(
     session: SessionDep,
 ) -> PotResponse:
     return await pot_service.clear_permission(session, pot_id, member_id, current_user)
+
+
+# Proposes a new dollar rate for the pot. An owner only (403 pot_dollar_rate_owner_required), or a group
+# admin while nobody owns anything. Applies at once when there is nobody else to ask; otherwise it waits
+# for every other owner to agree (409 pot_dollar_rate_proposal_pending while one already does).
+@router.post("/{pot_id}/dollar-rate", response_model=PotResponse)
+async def propose_dollar_rate(
+    pot_id: int,
+    body: PotDollarRateProposalCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> PotResponse:
+    return await pot_service.propose_dollar_rate(session, pot_id, current_user, dollar_rate=body.dollar_rate)
+
+
+# Agrees to the pending dollar-rate change; it applies once every owner has. 404 when none is pending.
+@router.post("/{pot_id}/dollar-rate/agree", response_model=PotResponse)
+async def agree_dollar_rate(pot_id: int, current_user: CurrentUser, session: SessionDep) -> PotResponse:
+    return await pot_service.agree_dollar_rate(session, pot_id, current_user)
+
+
+# Withdraws the pending dollar-rate change. Its proposer only (403 pot_dollar_rate_not_yours).
+@router.delete("/{pot_id}/dollar-rate", response_model=PotResponse)
+async def withdraw_dollar_rate(pot_id: int, current_user: CurrentUser, session: SessionDep) -> PotResponse:
+    return await pot_service.withdraw_dollar_rate(session, pot_id, current_user)
 
 
 # Lists everything the pot holds, each with its own figure and the same figure in the pot's base

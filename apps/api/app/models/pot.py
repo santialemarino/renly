@@ -3,8 +3,9 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Column
+from sqlalchemy import BigInteger, Column
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, SQLModel
 
 from app.models.exchange_rate import DollarRate
@@ -59,6 +60,13 @@ class Pot(SQLModel, table=True):
         default=DollarRate.mep,
         sa_column=Column(SAEnum(DollarRate, name="dollar_rate"), nullable=False, server_default="mep"),
     )
+    # The one pending change of that rate: it takes every owner's agreement, and nothing changes until all
+    # of them have given it. `dollar_rate_agreed_by` holds the seats that have agreed, the proposer first.
+    dollar_rate_proposal: DollarRate | None = Field(
+        default=None, sa_column=Column(SAEnum(DollarRate, name="dollar_rate", create_type=False), nullable=True)
+    )
+    dollar_rate_proposed_by: int | None = Field(default=None, foreign_key="group_members.id", description="Seat that proposed the pending rate.")
+    dollar_rate_agreed_by: list[int] = Field(default_factory=list, sa_column=Column(ARRAY(BigInteger), nullable=False, server_default="{}"))
     is_default: bool = Field(default=False, description="The group's first pot, created with it.")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

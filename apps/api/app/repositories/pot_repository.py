@@ -85,15 +85,17 @@ async def delete(session: AsyncSession, pot: Pot) -> None:
 # member hold enough to withdraw, has anything been divided — takes this first, so they serialise per
 # pot and nowhere wider.
 #
-# It reads `id` alone rather than the row, so the lock is not confused for a fetch: the caller already
-# has the pot, and a second copy of it here would be a stale one after the lock waited.
+# It also RE-READS the row into the pot the caller already holds (`populate_existing`), because the
+# caller loaded it before the lock and the lock may have waited: a writer that committed meanwhile can
+# have changed the pot itself — its dollar rate, which every unit price is converted at — and a price
+# derived from the copy loaded earlier would be issued at a rate that no longer applies.
 #
 # RLS applies, and it is the WRITE policy that governs a locking read, not the read policy — so this is
 # takeable by anyone the pot is visible AND whose group they belong to (`pots_scope_write`'s USING),
 # which deliberately includes a read-only seat: the widened re-agreement delete has no write access and
 # still has to serialise against the writer who recorded it.
 async def lock(session: AsyncSession, pot_id: int) -> None:
-    await session.execute(select(Pot.id).where(Pot.id == pot_id).with_for_update())
+    await session.execute(select(Pot).where(Pot.id == pot_id).with_for_update().execution_options(populate_existing=True))
 
 
 # How many investments and accounts a pot holds. One query per table rather than a union: the two are

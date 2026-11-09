@@ -60,7 +60,16 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
  */
 export const NOTIFICATION_VARIANTS = {
   plan_charged: ['subscription', 'installment'],
-  ownership_changed: ['opening', 'reagreement', 'deleted', 'confirmed', 'unconfirmed'],
+  ownership_changed: [
+    'opening',
+    'reagreement',
+    'deleted',
+    'confirmed',
+    'unconfirmed',
+    'dollar_rate_proposed_to_you',
+    'dollar_rate_applied_from_you',
+    'dollar_rate_applied_to_you',
+  ],
   pot_movement: [
     'contribution',
     'withdrawal',

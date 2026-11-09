@@ -31,6 +31,8 @@ _POT_JSON = {
     "snapshot_cadence": "monthly",
     "visibility": "members",
     "dollar_rate": "mep",
+    "dollar_rate_proposal": None,
+    "can_change_dollar_rate": True,
     "is_default": True,
     "nav": None,
     "valued_as_of": None,
@@ -100,6 +102,11 @@ class TestSessionWiring:
             ("get", "/pots/5/holdings/contributable", None),
             ("post", "/pots/5/holdings", {"investment_ids": [1]}),
             ("post", "/pots/5/holdings/remove", {"investment_ids": [1]}),
+            # The dollar rate is the OWNERS' agreement, and an owner is usually not an admin: the pot's
+            # own write policy is what lets them change its row, which only the request session applies.
+            ("post", "/pots/5/dollar-rate", {"dollar_rate": "blue"}),
+            ("post", "/pots/5/dollar-rate/agree", None),
+            ("delete", "/pots/5/dollar-rate", None),
         ],
     )
     @pytest.mark.asyncio
@@ -117,6 +124,9 @@ class TestSessionWiring:
             "set_permission",
             "clear_permission",
             "move_holdings",
+            "propose_dollar_rate",
+            "agree_dollar_rate",
+            "withdraw_dollar_rate",
         ):
             monkeypatch.setattr(pot_service, name, AsyncMock(return_value=_STUB_RETURNS.get(name, _POT_JSON)))
         response = getattr(_client(sessions), method)(path, **({"json": body} if body is not None else {}))
@@ -244,15 +254,16 @@ class TestRequestContract:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_the_dollar_rate_is_one_of_the_three_and_reaches_the_service(self, monkeypatch):
-        # Unlike the base currency it may change later — it reaches future figures only — so the
-        # update body carries it, and only a known rate is accepted.
-        update = AsyncMock(return_value=_POT_JSON)
-        monkeypatch.setattr(pot_service, "update_pot", update)
-        assert _client({}).put("/pots/5", json={"dollar_rate": "tarjeta"}).status_code == 422
-        response = _client({}).put("/pots/5", json={"dollar_rate": "blue"})
+    async def test_the_dollar_rate_changes_only_by_proposal(self, monkeypatch):
+        # Changing it takes every owner's agreement, so the settings update cannot carry it — the field
+        # does not exist there, and a proposal accepts only one of the three rates.
+        assert "dollar_rate" not in PotUpdate.model_fields
+        propose = AsyncMock(return_value=_POT_JSON)
+        monkeypatch.setattr(pot_service, "propose_dollar_rate", propose)
+        assert _client({}).post("/pots/5/dollar-rate", json={"dollar_rate": "tarjeta"}).status_code == 422
+        response = _client({}).post("/pots/5/dollar-rate", json={"dollar_rate": "blue"})
         assert response.status_code == 200
-        assert update.await_args.kwargs["dollar_rate"] == "blue"
+        assert propose.await_args.kwargs["dollar_rate"] == "blue"
 
     def test_a_new_pot_is_valued_at_mep_unless_told_otherwise(self):
         # The same default the column has, so an API client that never names a rate and a row that

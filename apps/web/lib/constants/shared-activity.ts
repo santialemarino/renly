@@ -47,6 +47,7 @@ export const ACTIVITY_ACTIONS = {
   pot: [
     'created',
     'updated',
+    'confirmed',
     'deleted',
     'holdings_added',
     'holdings_removed',
@@ -82,6 +83,7 @@ export const ACTIVITY_VARIANTS = {
   'ownership_event.created': ['opening', 'contribution', 'withdrawal', 'reagreement'],
   'ownership_event.deleted': ['opening', 'contribution', 'withdrawal', 'reagreement'],
   'pot.permission_set': ['write', 'view', 'none'],
+  'pot.updated': ['dollar_rate', 'dollar_rate_proposed', 'dollar_rate_withdrawn'],
   'settlement.created': ['payment', 'write_off'],
   'settlement.deleted': ['payment', 'write_off'],
   'settlement.leg_set': ['attached', 'cleared'],

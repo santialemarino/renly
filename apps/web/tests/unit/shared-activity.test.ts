@@ -58,6 +58,7 @@ const RENDER = {
   formatAmount: (amount: string, currency: string) => `${amount} ${currency}`.trim(),
   potFallback: 'Shared money',
   unknownActor: 'Someone',
+  dollarRateLabel: (rate: string) => rate,
 };
 
 // A payload carrying every value any sentence interpolates, so one render exercises them all.
@@ -70,6 +71,8 @@ const RENDER_PARAMS = {
   counterparty: 'Nico',
   from_member: 'Santi',
   to_member: 'Ana',
+  from_rate: 'MEP',
+  to_rate: 'Blue',
   amount: '90.000 ARS',
 };
 
@@ -284,6 +287,25 @@ describe('resolving one entry', () => {
       RENDER,
     );
     expect(row.params.pot).toBe('Shared money');
+  });
+
+  it("names a dollar-rate change from the old rate to the new one, in the reader's words", () => {
+    // The entry stores the rates as codes; the reader's language names them.
+    const labels: Record<string, string> = { mep: 'MEP (financial)', blue: 'Blue (parallel)' };
+    const row = activityRow(
+      entry({
+        entityType: 'pot',
+        action: 'updated',
+        payload: { variant: 'dollar_rate', from_rate: 'mep', to_rate: 'blue' },
+      }),
+      GROUP_ID,
+      { ...RENDER, dollarRateLabel: (rate: string) => labels[rate] ?? rate },
+    );
+    expect(row.textKey).toBe('pot.updated.dollar_rate');
+    expect([row.params.from_rate, row.params.to_rate]).toEqual([
+      'MEP (financial)',
+      'Blue (parallel)',
+    ]);
   });
 
   it('formats the amount with its currency code', () => {

@@ -53,6 +53,11 @@ export const POT_DOLLAR_RATES = ['oficial', 'mep', 'blue'] as const;
 
 export type PotDollarRate = (typeof POT_DOLLAR_RATES)[number];
 
+// Whether a string from a stored payload names one of the three, so it can be labelled.
+export function isPotDollarRate(value: string): value is PotDollarRate {
+  return (POT_DOLLAR_RATES as readonly string[]).includes(value);
+}
+
 // What a pot is valued at when nobody has chosen. Mirrors the API's own default and the column's.
 export const DEFAULT_POT_DOLLAR_RATE: PotDollarRate = 'mep';
 
