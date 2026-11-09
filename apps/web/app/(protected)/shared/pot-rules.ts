@@ -201,6 +201,15 @@ export function potLegAccounts(holdings: PotHoldings, baseCurrency: string): Pot
   return holdings.accounts.filter((a) => a.isActive && a.currency === baseCurrency);
 }
 
+/*
+ * Whether money taken out of a pot also moves its value. The pot is worth what its accounts hold, so it
+ * is the SHARED account the money leaves that makes the value fall with it; the private account it
+ * arrives in only records where it went, and it cannot be named at all for someone else's share.
+ */
+export function takeOutMovesValue(potAccountId: string): boolean {
+  return potAccountId !== '';
+}
+
 // --- The guided flows ---
 
 /*

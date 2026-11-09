@@ -2,7 +2,7 @@ import base64
 import binascii
 from email.utils import parseaddr
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # app sends nothing — so local dev, tests, and CI are unaffected. Set it (even on localhost) to
     # start capturing errors; the environment tag is taken from the environment setting above.
     sentry_dsn: str | None = None
+    # Level of the app's own log lines (the `app.*` loggers), case-insensitive. INFO (default) shows the
+    # scheduler runs and the console provider's emails; DEBUG adds detail; WARNING keeps only problems.
+    # Uvicorn's own loggers and third-party libraries are configured separately and stay as they were.
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     # Transactional email (SHELL-3). Provider selector + credentials; console (default) logs the
     # message for local dev, resend sends via the Resend API (api key + verified sender required).
     email_provider: EmailProvider = EmailProvider.console
@@ -146,6 +150,14 @@ class Settings(BaseSettings):
             raise ValueError(f"internal_api_secret must be at least {MIN_INTERNAL_API_SECRET_LENGTH} characters.")
         return value
 
+    # Accepts the log level in any case (LOG_LEVEL=debug), so a lowercase value doesn't refuse to boot.
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _normalize_log_level(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().upper()
+        return value
+
     # Splits the comma-separated CORS origins env string into a list (no-op when already a list default).
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -172,8 +184,18 @@ class Settings(BaseSettings):
     # default). Resend delivers from that domain only to the account owner's own address, so every
     # verification, reset and invite email to a real user would be refused while the app looks healthy.
     # Development keeps the default, which is how a fresh checkout sends its first email.
+    #
+    # And production refuses the console provider outright. It sends nothing — nobody would receive a
+    # verification, reset or invite link, so nobody could finish signing up — and it prints every email,
+    # links and tokens included, into the logs. It is the default, so a deployment that never sets
+    # EMAIL_PROVIDER is refused here rather than starting with no email at all.
     @model_validator(mode="after")
     def _validate_email_provider(self) -> "Settings":
+        if self.email_provider == EmailProvider.console and self.is_production:
+            raise ValueError(
+                "email_provider must be 'resend' in production (EMAIL_PROVIDER); 'console', the default, "
+                "sends nothing and writes every email, its links included, to the logs."
+            )
         if self.email_provider != EmailProvider.resend:
             return self
         if not self.email_api_key:

@@ -50,6 +50,7 @@ from app.domain import (
     units_for_amount,
 )
 from app.domain.errors import AccountCurrencyMismatchError
+from app.domain.notification import NotificationDispatch
 from app.domain.pot import ONE_HUNDRED, OPENING_UNIT_PRICE, UNIT_PLACES, OwnershipEntry, quantize
 from app.models.account import Account
 from app.models.group import GroupMember
@@ -301,6 +302,16 @@ async def _pot_audience(session: AsyncSession, pot: Pot, user: User) -> list[int
     return await pot_service.list_notifiable_user_ids(session, pot, exclude_user_id=user.id)
 
 
+# An announcement's audience split by reader: everyone else first, then, for each user id named, a list
+# holding that user alone if they are in the audience. A pot event naming a seat reads to that seat's own
+# user as "you" rather than as their own name in the third person, so it goes to them as a fan-out of its
+# own. A seat with no account (None) or outside the audience gets an empty list, so the audience rule
+# alone still decides who is told.
+def _split_audience(recipients: list[int], *user_ids: int | None) -> tuple[list[int], ...]:
+    named = tuple([user_id] if user_id is not None and user_id in recipients else [] for user_id in user_ids)
+    return ([user_id for user_id in recipients if user_id not in user_ids], *named)
+
+
 # One ledger audit entry. `variant` is the event's own type, so the four movements share one action and
 # one sentence with four readings rather than four actions — the split the notification layer already
 # made between an event and its variant.
@@ -544,20 +555,28 @@ async def record_movement(
     # The figure notified is `credited` in the POT's base currency, not the source `amount`: what
     # changed for every reader is what the pot took in or paid out, and a cross-currency movement's two
     # figures are different numbers in different currencies. The member NAMED is whose units moved,
-    # which is not necessarily the person who recorded it.
-    await notification_service.dispatch(
+    # which is not necessarily the person who recorded it — so a movement recorded for somebody else
+    # names who recorded it too, and reaches that somebody as "you".
+    own = member.id == actor.id
+    variant = type.value if own else f"{type.value}_for_member"
+    payload = pot_service.notification_payload(
+        pot,
+        group,
+        {
+            "variant": variant,
+            "actor": actor.display_name,
+            "member": member.display_name,
+            "amount": str(credited),
+            "currency": pot.base_currency,
+        },
+    )
+    others, member_reader = _split_audience(recipients, None if own else member.user_id)
+    await notification_service.dispatch_many(
         NotificationEvent.pot_movement,
-        recipients,
-        pot_service.notification_payload(
-            pot,
-            group,
-            {
-                "variant": type.value,
-                "member": member.display_name,
-                "amount": str(credited),
-                "currency": pot.base_currency,
-            },
-        ),
+        [
+            NotificationDispatch(others, payload),
+            NotificationDispatch(member_reader, {**payload, "variant": f"{type.value}_for_you"}),
+        ],
     )
     return _build_response(event, {member.id: member}, viewer_member_id=actor.id, may_write=True)
 
@@ -766,19 +785,24 @@ async def record_reagreement(
     # percentage it corresponds to is not stored on the event, so any figure here would have to be
     # re-derived from the ledger and would then be a second answer to a question the pot page already
     # answers. It says who gave to whom, and the pot page says how much.
-    await notification_service.dispatch(
+    payload = pot_service.notification_payload(
+        pot,
+        group,
+        {
+            "variant": "reagreement",
+            "actor": actor.display_name,
+            "from_member": giver.display_name,
+            "to_member": receiver.display_name,
+        },
+    )
+    others, giver_reader, receiver_reader = _split_audience(recipients, giver.user_id, receiver.user_id)
+    await notification_service.dispatch_many(
         NotificationEvent.ownership_changed,
-        recipients,
-        pot_service.notification_payload(
-            pot,
-            group,
-            {
-                "variant": "reagreement",
-                "actor": actor.display_name,
-                "from_member": giver.display_name,
-                "to_member": receiver.display_name,
-            },
-        ),
+        [
+            NotificationDispatch(others, payload),
+            NotificationDispatch(giver_reader, {**payload, "variant": "reagreement_from_you"}),
+            NotificationDispatch(receiver_reader, {**payload, "variant": "reagreement_to_you"}),
+        ],
     )
     return _build_response(event, {giver.id: giver, receiver.id: receiver}, viewer_member_id=actor.id, may_write=True)
 
@@ -841,19 +865,27 @@ async def _announce_confirmation(
     recipients = await pot_service.list_notifiable_user_ids(session, pot, exclude_user_id=user.id)
     group = await group_repository.get_by_id(session, pot.group_id)
     from_member, to_member = _seat_names(event, members_by_id)
-    await notification_service.dispatch(
+    payload = pot_service.notification_payload(
+        pot,
+        group,
+        {
+            "variant": variant,
+            "actor": actor.display_name,
+            "from_member": from_member,
+            "to_member": to_member,
+        },
+    )
+    giver, receiver = members_by_id.get(event.member_id), members_by_id.get(event.counterparty_member_id)
+    others, giver_reader, receiver_reader = _split_audience(
+        recipients, giver.user_id if giver is not None else None, receiver.user_id if receiver is not None else None
+    )
+    await notification_service.dispatch_many(
         NotificationEvent.ownership_changed,
-        recipients,
-        pot_service.notification_payload(
-            pot,
-            group,
-            {
-                "variant": variant,
-                "actor": actor.display_name,
-                "from_member": from_member,
-                "to_member": to_member,
-            },
-        ),
+        [
+            NotificationDispatch(others, payload),
+            NotificationDispatch(giver_reader, {**payload, "variant": f"{variant}_from_you"}),
+            NotificationDispatch(receiver_reader, {**payload, "variant": f"{variant}_to_you"}),
+        ],
     )
 
 

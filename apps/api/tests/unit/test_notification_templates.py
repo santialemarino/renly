@@ -201,6 +201,60 @@ class TestRendering:
         took = templates.push_body(NotificationEvent.pot_movement, {**_PAYLOAD, "variant": "withdrawal"}, "en")
         assert added != took and "added" in added and "took" in took
 
+    @pytest.mark.parametrize("locale", _LOCALES)
+    def test_a_movement_recorded_for_someone_else_names_who_recorded_it_and_says_you_to_them(self, locale):
+        # The reader whose share moved reads "you", never their own name; everybody else reads both names.
+        # Asserted on every channel the template feeds: the email subject (also the digest line), its body
+        # and the lock-screen push.
+        for variant in ("contribution", "withdrawal"):
+            for suffix, names_member in (("_for_member", True), ("_for_you", False)):
+                payload = {**_PAYLOAD, "variant": f"{variant}{suffix}"}
+                message = templates.notification_email(
+                    "a@test.local",
+                    NotificationEvent.pot_movement,
+                    payload,
+                    link="https://renly.test/x",
+                    settings_link="https://renly.test/n",
+                    locale=locale,
+                )
+                digest = templates.digest_email(
+                    "a@test.local", [(NotificationEvent.pot_movement, payload)], link="l", settings_link="s", locale=locale
+                )
+                push = templates.push_body(NotificationEvent.pot_movement, payload, locale)
+                for text in (message.subject, message.text, push, digest.text):
+                    assert _PAYLOAD["actor"] in text, f"{variant}{suffix}: {text!r}"
+                    assert (_PAYLOAD["member"] in text) is names_member, f"{variant}{suffix}: {text!r}"
+
+    @pytest.mark.parametrize("locale", _LOCALES)
+    def test_a_change_of_split_read_by_one_of_its_seats_says_you_in_place_of_that_seat(self, locale):
+        you = {"en": "you", "es": "vos"}[locale]
+        for variant in ("reagreement", "confirmed", "unconfirmed"):
+            for side, hidden, kept in (("from_you", "from_member", "to_member"), ("to_you", "to_member", "from_member")):
+                payload = {**_PAYLOAD, "from_member": "Quique", "to_member": "Wanda", "actor": "Nico", "variant": f"{variant}_{side}"}
+                body = templates.notification_email(
+                    "a@test.local",
+                    NotificationEvent.ownership_changed,
+                    payload,
+                    link="https://renly.test/x",
+                    settings_link="https://renly.test/n",
+                    locale=locale,
+                ).text
+                assert payload[hidden] not in body, f"{variant}_{side}: {body!r}"
+                assert payload[kept] in body and re.search(rf"\b{you}\b", body), f"{variant}_{side}: {body!r}"
+
+    def test_every_variant_the_api_writes_is_one_the_feed_can_render(self):
+        # The feed renders the same stored payload on the web, and a variant missing from its
+        # NOTIFICATION_VARIANTS falls back to the event's generic sentence — a reader who should have read
+        # "you" would read the generic line instead. Read from the web's source rather than restated.
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[3] / "web" / "lib" / "constants" / "notifications.ts").read_text()
+        block = re.search(r"NOTIFICATION_VARIANTS = \{(.*?)\} as const", source, re.S).group(1)
+        web = {f"{event}.{variant}" for event, body in re.findall(r"(\w+): \[(.*?)\]", block, re.S) for variant in re.findall(r"'(\w+)'", body)}
+        api = {key for key in _template_keys() if "." in key}
+        assert web, "parsed no variants out of the web's NOTIFICATION_VARIANTS"
+        assert api - web == set()
+
 
 class TestDateFormatting:
     # The other value the backend renders for a person to read, and it exists because `obligation_due`

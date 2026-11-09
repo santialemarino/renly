@@ -29,6 +29,10 @@ class TestEnvironmentRequired:
     @pytest.mark.parametrize("value", list(Environment))
     def test_each_environment_is_accepted_from_the_process_env(self, monkeypatch, value):
         monkeypatch.setenv("ENVIRONMENT", value.value)
+        # Production refuses the console email provider, so it is given a real one.
+        monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+        monkeypatch.setenv("EMAIL_API_KEY", "re_key")
+        monkeypatch.setenv("EMAIL_FROM", "Renly <noreply@renly.app>")
         settings = Settings(_env_file=None, database_url=_DB_URL, jwt_secret="x" * MIN_JWT_SECRET_LENGTH)
         assert settings.environment == value
 
@@ -148,7 +152,18 @@ class TestEmailProviderValidation:
         settings = _email_settings(Environment.development, email_provider=EmailProvider.resend, email_api_key="re_key")
         assert "@resend.dev" in settings.email_from
 
-    # The console provider sends nothing, so its sender is never checked, in production either.
-    def test_production_console_ignores_the_sender(self):
-        settings = _email_settings(Environment.production, email_provider=EmailProvider.console)
-        assert "@resend.dev" in settings.email_from
+    # The console provider sends nothing and logs every email, links and tokens included, so production
+    # refuses it — named explicitly, and as the default a deployment gets by never setting EMAIL_PROVIDER.
+    def test_production_refuses_the_console_provider(self):
+        with pytest.raises(ValidationError, match="email_provider must be 'resend' in production"):
+            _email_settings(Environment.production, email_provider=EmailProvider.console)
+
+    def test_production_refuses_the_console_provider_by_default(self, monkeypatch):
+        monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+        assert Settings.model_fields["email_provider"].default == EmailProvider.console
+        with pytest.raises(ValidationError, match="email_provider must be 'resend' in production"):
+            _email_settings(Environment.production)
+
+    # Development keeps it: it is how a fresh checkout reads its verification and reset links.
+    def test_development_allows_the_console_provider(self):
+        assert _email_settings(Environment.development, email_provider=EmailProvider.console).email_provider == EmailProvider.console

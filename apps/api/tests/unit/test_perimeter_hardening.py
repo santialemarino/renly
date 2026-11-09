@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app.config import Environment, Settings, SignupMode
+from app.config import EmailProvider, Environment, Settings, SignupMode
 from app.db import get_admin_session, get_auth_session, get_session
 from app.deps.auth import get_current_user
 from app.main import create_app
@@ -21,13 +21,16 @@ from app.rate_limit import CLIENT_IP_HEADER, EXPORT_LIMIT, INTERNAL_SECRET_HEADE
 
 _DB_URL = "postgresql+asyncpg://user:pass@localhost:5432/renly"
 _SECRET = "x" * 32
+# A production configuration has to name a real email provider (the console one is refused there), so
+# every settings object built here carries one; nothing in this file sends an email.
+_EMAIL = {"email_provider": EmailProvider.resend, "email_api_key": "re_key", "email_from": "Renly <noreply@renly.app>"}
 _PASSWORD = "correct horse battery staple"
 # hash_password is async (bcrypt runs in a worker thread); precompute the fixture hash directly.
 _PASSWORD_HASH = bcrypt.hashpw(_PASSWORD.encode(), bcrypt.gensalt()).decode()
 
 
 def _settings(**overrides) -> Settings:
-    return Settings(database_url=_DB_URL, jwt_secret=_SECRET, **overrides)
+    return Settings(database_url=_DB_URL, jwt_secret=_SECRET, **{**_EMAIL, **overrides})
 
 
 # Stub HIBP breach check (no network) — treats every password as clean.

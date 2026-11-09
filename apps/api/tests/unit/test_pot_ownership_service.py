@@ -49,6 +49,26 @@ READER = PotMemberPermission(pot_id=5, member_id=100, can_view=True, can_write=F
 # One shared dispatch mock, reset per arrangement, so TestWhatIsAnnounced can read it without every
 # other test having to thread a second return value through _arrange.
 _DISPATCHED = AsyncMock()
+# The split fan-out: an announcement that reads differently to a seat it names goes out per reader.
+_DISPATCHED_MANY = AsyncMock()
+
+# A third member of the group, holding no seat in what is being announced: the plain bystander reader.
+BYSTANDER_USER_ID = 3
+
+
+# Every announcement made to somebody, as (event, recipients, payload), whichever of the two seams carried
+# it. A batched fan-out with nobody in it tells nobody, so it is left out.
+def _announced() -> list[tuple]:
+    calls = [call.args for call in _DISPATCHED.await_args_list]
+    for call in _DISPATCHED_MANY.await_args_list:
+        event, items = call.args
+        calls.extend((event, item.user_ids, item.payload) for item in items if item.user_ids)
+    return calls
+
+
+# What each recipient was told: user id → (event, payload).
+def _told() -> dict[int, tuple]:
+    return {user_id: (event, payload) for event, user_ids, payload in _announced() for user_id in user_ids}
 
 
 def _event(**kwargs) -> PotOwnershipEvent:
@@ -116,7 +136,9 @@ def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
     monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[OTHER_SEAT.user_id]))
     monkeypatch.setattr(svc.group_repository, "get_by_id", AsyncMock(return_value=GROUP))
     monkeypatch.setattr(svc.notification_service, "dispatch", _DISPATCHED)
+    monkeypatch.setattr(svc.notification_service, "dispatch_many", _DISPATCHED_MANY)
     _DISPATCHED.reset_mock()
+    _DISPATCHED_MANY.reset_mock()
     return created
 
 
@@ -150,9 +172,8 @@ class TestWhatIsAnnounced:
             amount_currency="ARS",
             base_amount=Decimal("11"),
         )
-        event, _recipients, payload = _DISPATCHED.await_args.args
+        event, _recipients, payload = _announced()[-1]
         assert event == NotificationEvent.pot_movement
-        assert payload["variant"] == "contribution"
         assert payload["member"] == OTHER_SEAT.display_name
         assert (payload["amount"], payload["currency"]) == ("11", "USD")
 
@@ -162,7 +183,8 @@ class TestWhatIsAnnounced:
         await svc.record_movement(
             AsyncMock(), 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=100, amount=Decimal("11")
         )
-        assert _DISPATCHED.await_args.args[2]["variant"] == "withdrawal"
+        # Recorded by the member themselves, so the plain sentence: who acted is who is named.
+        assert [payload["variant"] for _, _, payload in _announced()] == ["withdrawal"]
 
     @pytest.mark.asyncio
     async def test_a_re_agreement_names_both_sides_and_carries_no_figure(self, monkeypatch):
@@ -170,12 +192,57 @@ class TestWhatIsAnnounced:
         # percentages out) — and the percentage is not on the event, so any figure here would be a
         # second answer to a question the pot page already answers.
         _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[BYSTANDER_USER_ID]))
         await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 2, 1), from_member_id=100, to_member_id=101, percentage=Decimal("10"))
-        event, _recipients, payload = _DISPATCHED.await_args.args
+        event, _recipients, payload = _announced()[-1]
         assert event == NotificationEvent.ownership_changed
         assert payload["variant"] == "reagreement"
         assert (payload["from_member"], payload["to_member"]) == (SEAT.display_name, OTHER_SEAT.display_name)
         assert "amount" not in payload
+
+    @pytest.mark.asyncio
+    async def test_a_take_out_recorded_for_someone_else_names_who_recorded_it_and_reaches_them_as_you(self, monkeypatch):
+        # Santi records Ana's take-out. Ana must not read "Ana took 400 out" — her own name in the third
+        # person, with whoever recorded it hidden — and a bystander must learn who recorded it too.
+        _arrange(monkeypatch, events=[_event(member_id=100), _event(id=2, member_id=101)])
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[OTHER_SEAT.user_id, BYSTANDER_USER_ID]))
+        await svc.record_movement(
+            AsyncMock(), 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=OTHER_SEAT.id, amount=Decimal("11")
+        )
+        told = _told()
+        assert set(told) == {OTHER_SEAT.user_id, BYSTANDER_USER_ID}
+        assert told[OTHER_SEAT.user_id][1]["variant"] == "withdrawal_for_you"
+        assert told[BYSTANDER_USER_ID][1]["variant"] == "withdrawal_for_member"
+        for event, payload in told.values():
+            assert event == NotificationEvent.pot_movement
+            assert (payload["actor"], payload["member"]) == (SEAT.display_name, OTHER_SEAT.display_name)
+
+    @pytest.mark.asyncio
+    async def test_a_movement_recorded_by_its_own_member_keeps_the_plain_sentence_for_everyone(self, monkeypatch):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[OTHER_SEAT.user_id, BYSTANDER_USER_ID]))
+        await svc.record_movement(
+            AsyncMock(), 5, USER, type=OwnershipEventType.contribution, date=date(2026, 2, 1), member_id=SEAT.id, amount=Decimal("11")
+        )
+        assert {user_id: payload["variant"] for user_id, (_, payload) in _told().items()} == {
+            OTHER_SEAT.user_id: "contribution",
+            BYSTANDER_USER_ID: "contribution",
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("from_member_id", "to_member_id", "yours"),
+        [(SEAT.id, OTHER_SEAT.id, "reagreement_to_you"), (OTHER_SEAT.id, SEAT.id, "reagreement_from_you")],
+    )
+    async def test_a_re_agreement_reaches_the_other_seat_it_names_as_you(self, monkeypatch, from_member_id, to_member_id, yours):
+        _arrange(monkeypatch, events=[_event(member_id=100), _event(id=2, member_id=101)])
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[OTHER_SEAT.user_id, BYSTANDER_USER_ID]))
+        await svc.record_reagreement(
+            AsyncMock(), 5, USER, date=date(2026, 2, 1), from_member_id=from_member_id, to_member_id=to_member_id, percentage=Decimal("10")
+        )
+        told = _told()
+        assert told[OTHER_SEAT.user_id][1]["variant"] == yours
+        assert told[BYSTANDER_USER_ID][1]["variant"] == "reagreement"
 
     @pytest.mark.asyncio
     async def test_DELETING_an_event_announces_it_like_any_other_ownership_change(self, monkeypatch):
@@ -782,7 +849,7 @@ class TestHoldingContribution:
         _arrange(monkeypatch)
         self._wire(monkeypatch, valued=self._valued(value="66000", currency="ARS", base_value="55"))
         await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
-        event, _recipients, payload = _DISPATCHED.await_args.args
+        event, _recipients, payload = _announced()[-1]
         assert event == NotificationEvent.pot_movement
         assert payload["variant"] == "contribution"
         assert (payload["amount"], payload["currency"]) == ("55", "USD")
@@ -1131,15 +1198,15 @@ class TestConfirmation:
         # pot-ownership news off stays switched off for the confirmation too — and `notification_event`
         # is a Postgres enum, so a new value would be a migration for a sentence.
         self._as_affected_seat(monkeypatch, self._swap())
-        audience = AsyncMock(return_value=[OTHER_SEAT.user_id])
+        audience = AsyncMock(return_value=[BYSTANDER_USER_ID])
         monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", audience)
         await svc.confirm_event(AsyncMock(), 5, 1, USER)
-        event, recipients, payload = _DISPATCHED.await_args.args
+        event, recipients, payload = _announced()[-1]
         assert event == NotificationEvent.ownership_changed
         assert payload["variant"] == "confirmed"
         assert (payload["from_member"], payload["to_member"]) == (SEAT.display_name, OTHER_SEAT.display_name)
         assert payload["actor"] == OTHER_SEAT.display_name
-        assert recipients == [OTHER_SEAT.user_id]
+        assert recipients == [BYSTANDER_USER_ID]
         # Asserted on the ARGUMENT, not on the returned list: the audience read is mocked, so it hands
         # back the same recipients whatever it is asked — and a mutation dropping the exclusion survived
         # every outcome assertion here. Nobody is told about their own act; the pot's audience rule is
@@ -1148,13 +1215,23 @@ class TestConfirmation:
         assert audience.await_args.kwargs["exclude_user_id"] == USER.id
 
     @pytest.mark.asyncio
+    async def test_the_seat_that_RECORDED_it_hears_the_confirmation_as_you(self, monkeypatch):
+        # OTHER_SEAT agrees to a change of split from SEAT to them; SEAT reads "from you", not their own name.
+        self._as_affected_seat(monkeypatch, self._swap())
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[SEAT.user_id, BYSTANDER_USER_ID]))
+        await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        told = _told()
+        assert told[SEAT.user_id][1]["variant"] == "confirmed_from_you"
+        assert told[BYSTANDER_USER_ID][1]["variant"] == "confirmed"
+
+    @pytest.mark.asyncio
     async def test_no_figure_is_announced(self, monkeypatch):
         # What was agreed is a change of UNITS, a quantity no surface shows a person (U2), and the
         # percentage it corresponds to is not stored on the event. Any figure here would be a second
         # answer to a question the pot page already answers.
         self._as_affected_seat(monkeypatch, self._swap())
         await svc.confirm_event(AsyncMock(), 5, 1, USER)
-        payload = _DISPATCHED.await_args.args[2]
+        payload = _announced()[-1][2]
         assert "amount" not in payload and "currency" not in payload
 
     @pytest.mark.asyncio
@@ -1251,11 +1328,12 @@ class TestWithdrawingAConfirmation:
         standing genuinely changes — and they cannot see it happen on a page they are not looking at.
         """
         self._as_affected_seat(monkeypatch, self._confirmed())
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[BYSTANDER_USER_ID]))
         recorded = AsyncMock()
         monkeypatch.setattr(svc.shared_audit_service, "record", recorded)
         await svc.unconfirm_event(AsyncMock(), 5, 1, USER)
         assert recorded.await_args.kwargs["action"] == AuditAction.unconfirmed
-        event, _, payload = _DISPATCHED.await_args.args
+        event, _, payload = _announced()[-1]
         assert event == NotificationEvent.ownership_changed
         assert payload["variant"] == "unconfirmed"
 

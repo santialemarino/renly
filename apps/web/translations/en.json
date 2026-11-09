@@ -2243,7 +2243,7 @@
           "labelIn": "Into your account",
           "placeholder": "Select one of your accounts",
           "empty": "You have no accounts yet",
-          "hint": "Optional, and worth naming: with an account on both sides Renly sees the money actually move, so the value here changes with it. Leave it blank only if the money moved somewhere Renly does not track."
+          "hint": "Optional. Naming it moves the money in your own account too, so your balance there stays right; the value here moves with the shared account. Leave it blank if the money came from or went somewhere Renly does not track."
         },
         "potLeg": {
           "labelIn": "Into the shared account",
@@ -2373,7 +2373,7 @@
         },
         "where": {
           "title": "Where does the money go?",
-          "description": "Naming an account on both sides is what makes the value here move with the money.",
+          "description": "Naming the shared account the money leaves is what makes the value here move with it.",
           "otherSeat": "This is recorded for someone else, so it cannot name one of your accounts — Renly only moves money into and out of your own.",
           "amountLabel": "Money coming out, in {currency}",
           "amountHint": "Filled in from what the share is worth. Change it if a different amount actually moved.",
@@ -2388,13 +2388,13 @@
           "nobodyLeft": "Nobody will own a share of this afterwards.",
           "oneHolderLeft": "After this, all of it is {name}'s.",
           "severalHoldersLeft": "The rest of you keep the same proportions to each other, and nobody else's share loses value.",
-          "valueWaits": "No account is named on one of the sides, so the value here will not move with the money: the shares change now and the value waits for its next update.",
+          "valueWaits": "No shared account is named, so the value here will not move with the money: the shares change now and the value waits for its next update.",
           "cta": "Take it out"
         },
         "done": {
           "title": "The share is out",
           "took": "{name} took out {amount} and no longer owns a share.",
-          "valueWaits": "The value here has not moved, because no account was named on one of the sides — so the shares that remain read higher than they are until it is updated.",
+          "valueWaits": "The value here has not moved, because no shared account was named — so the shares that remain read higher than they are until it is updated.",
           "nobodyLeft": "Nobody owns a share of this right now."
         }
       },
@@ -3277,13 +3277,33 @@
           "title": "{actor} recorded a change of split in {pot}",
           "detail": "From {from_member} to {to_member}"
         },
+        "reagreement_from_you": {
+          "title": "{actor} recorded a change of split in {pot}",
+          "detail": "From you to {to_member}"
+        },
+        "reagreement_to_you": {
+          "title": "{actor} recorded a change of split in {pot}",
+          "detail": "From {from_member} to you"
+        },
         "deleted": {
           "title": "{actor} removed an entry from {pot}'s ownership history"
         },
         "confirmed": {
           "title": "{actor} agreed to the change of split in {pot}"
         },
+        "confirmed_from_you": {
+          "title": "{actor} agreed to the change of split in {pot}"
+        },
+        "confirmed_to_you": {
+          "title": "{actor} agreed to the change of split in {pot}"
+        },
         "unconfirmed": {
+          "title": "{actor} withdrew their agreement in {pot}"
+        },
+        "unconfirmed_from_you": {
+          "title": "{actor} withdrew their agreement in {pot}"
+        },
+        "unconfirmed_to_you": {
           "title": "{actor} withdrew their agreement in {pot}"
         }
       },
@@ -3293,8 +3313,20 @@
         "contribution": {
           "title": "{member} added {amount} {currency} to {pot}"
         },
+        "contribution_for_member": {
+          "title": "{actor} recorded that {member} added {amount} {currency} to {pot}"
+        },
+        "contribution_for_you": {
+          "title": "{actor} recorded that you added {amount} {currency} to {pot}"
+        },
         "withdrawal": {
           "title": "{member} took {amount} {currency} out of {pot}"
+        },
+        "withdrawal_for_member": {
+          "title": "{actor} recorded that {member} took {amount} {currency} out of {pot}"
+        },
+        "withdrawal_for_you": {
+          "title": "{actor} recorded that you took {amount} {currency} out of {pot}"
         },
         "reconciliation_surplus": {
           "title": "{actor} reconciled {account} — {amount} {currency} more than {pot} had recorded"

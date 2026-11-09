@@ -2243,7 +2243,7 @@
           "labelIn": "Hacia tu cuenta",
           "placeholder": "Seleccioná una de tus cuentas",
           "empty": "Todavía no tenés cuentas",
-          "hint": "Opcional, y conviene indicarla: con una cuenta de cada lado Renly ve el dinero moverse de verdad, así que el valor de acá cambia con él. Dejala en blanco solo si el dinero se movió a algún lugar que Renly no registra."
+          "hint": "Opcional. Indicarla mueve el dinero también en tu propia cuenta, así su saldo queda bien; el valor de acá se mueve con la cuenta compartida. Dejala en blanco si el dinero vino de o fue a algún lugar que Renly no registra."
         },
         "potLeg": {
           "labelIn": "Hacia la cuenta compartida",
@@ -2373,7 +2373,7 @@
         },
         "where": {
           "title": "¿A dónde va el dinero?",
-          "description": "Indicar una cuenta de cada lado es lo que hace que el valor de acá se mueva con el dinero.",
+          "description": "Indicar la cuenta compartida de la que sale el dinero es lo que hace que el valor de acá se mueva con él.",
           "otherSeat": "Esto se registra para otra persona, así que no puede indicar una de tus cuentas — Renly solo mueve dinero desde y hacia las tuyas.",
           "amountLabel": "Dinero que sale, en {currency}",
           "amountHint": "Calculado con lo que vale la parte. Cambialo si en realidad se movió otro monto.",
@@ -2388,13 +2388,13 @@
           "nobodyLeft": "Después de esto, nadie va a tener una parte.",
           "oneHolderLeft": "Después de esto, todo queda en manos de {name}.",
           "severalHoldersLeft": "Entre el resto, las proporciones no cambian, y nadie más pierde valor en su parte.",
-          "valueWaits": "Falta indicar la cuenta de uno de los lados, así que el valor de acá no se va a mover con el dinero: las partes cambian ahora y el valor espera su próxima actualización.",
+          "valueWaits": "No se indicó ninguna cuenta compartida, así que el valor de acá no se va a mover con el dinero: las partes cambian ahora y el valor espera su próxima actualización.",
           "cta": "Sacarla"
         },
         "done": {
           "title": "La parte ya salió",
           "took": "{name} sacó {amount} y ya no tiene una parte.",
-          "valueWaits": "El valor de acá no se movió, porque faltó indicar la cuenta de uno de los lados — así que las partes que quedan se leen más altas de lo que son hasta que se actualice.",
+          "valueWaits": "El valor de acá no se movió, porque no se indicó ninguna cuenta compartida — así que las partes que quedan se leen más altas de lo que son hasta que se actualice.",
           "nobodyLeft": "Ahora mismo nadie tiene una parte de esto."
         }
       },
@@ -3277,13 +3277,33 @@
           "title": "{actor} registró un cambio de reparto en {pot}",
           "detail": "De {from_member} a {to_member}"
         },
+        "reagreement_from_you": {
+          "title": "{actor} registró un cambio de reparto en {pot}",
+          "detail": "De vos a {to_member}"
+        },
+        "reagreement_to_you": {
+          "title": "{actor} registró un cambio de reparto en {pot}",
+          "detail": "De {from_member} a vos"
+        },
         "deleted": {
           "title": "{actor} eliminó una entrada del historial de titularidad de {pot}"
         },
         "confirmed": {
           "title": "{actor} aceptó el cambio de reparto en {pot}"
         },
+        "confirmed_from_you": {
+          "title": "{actor} aceptó el cambio de reparto en {pot}"
+        },
+        "confirmed_to_you": {
+          "title": "{actor} aceptó el cambio de reparto en {pot}"
+        },
         "unconfirmed": {
+          "title": "{actor} retiró su aceptación en {pot}"
+        },
+        "unconfirmed_from_you": {
+          "title": "{actor} retiró su aceptación en {pot}"
+        },
+        "unconfirmed_to_you": {
           "title": "{actor} retiró su aceptación en {pot}"
         }
       },
@@ -3293,8 +3313,20 @@
         "contribution": {
           "title": "{member} puso {amount} {currency} en {pot}"
         },
+        "contribution_for_member": {
+          "title": "{actor} registró que {member} puso {amount} {currency} en {pot}"
+        },
+        "contribution_for_you": {
+          "title": "{actor} registró que pusiste {amount} {currency} en {pot}"
+        },
         "withdrawal": {
           "title": "{member} sacó {amount} {currency} de {pot}"
+        },
+        "withdrawal_for_member": {
+          "title": "{actor} registró que {member} sacó {amount} {currency} de {pot}"
+        },
+        "withdrawal_for_you": {
+          "title": "{actor} registró que sacaste {amount} {currency} de {pot}"
         },
         "reconciliation_surplus": {
           "title": "{actor} concilió {account}: {amount} {currency} más de lo que {pot} tenía registrado"
