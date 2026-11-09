@@ -52,6 +52,26 @@ class TestRateLookupGetRateMapAt:
         lookup = RateLookup(dollar_preference="mep", rates_by_pair=rates)
         assert lookup.get_rate_map_at(date(2020, 1, 1))["ARS"] == Decimal("1100")
 
+    # The pre-history fallback keeps the page rendering, but the figure is an estimate and the lookup
+    # says so — per date and per currency, and once for the whole request — so a response can mark it.
+    def test_flags_a_pre_history_rate_as_an_estimate(self):
+        rates = {
+            ExchangeRatePair.USD_ARS_MEP: [_rate(ExchangeRatePair.USD_ARS_MEP, date(2026, 1, 15), "1100")],
+            ExchangeRatePair.USD_EUR: [_rate(ExchangeRatePair.USD_EUR, date(2025, 1, 2), "0.9")],
+        }
+        lookup = RateLookup(dollar_preference="mep", rates_by_pair=rates)
+
+        assert lookup.is_estimate_at(date(2026, 1, 15)) is False
+        assert lookup.used_estimate is False
+
+        # 2025-06-01: EUR has history, ARS does not yet.
+        assert lookup.is_estimate_at(date(2025, 6, 1)) is True
+        assert lookup.is_estimate_at(date(2025, 6, 1), "ARS") is True
+        assert lookup.is_estimate_at(date(2025, 6, 1), "EUR", "USD") is False
+        assert lookup.used_estimate is True
+        # The estimated rate is still the earliest one.
+        assert lookup.get_rate_map_at(date(2025, 6, 1))["ARS"] == Decimal("1100")
+
     def test_respects_dollar_preference(self):
         rates = {
             ExchangeRatePair.USD_ARS_OFICIAL: [_rate(ExchangeRatePair.USD_ARS_OFICIAL, date(2026, 1, 1), "900")],

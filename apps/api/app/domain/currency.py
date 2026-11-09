@@ -2,6 +2,10 @@
 # All rates are stored against USD; any pair converts via USD as pivot.
 # The dollar rate preference (oficial/mep/blue) determines which USD/ARS rate to use.
 
+from datetime import date as date_type
+from decimal import Decimal
+from typing import NamedTuple
+
 from app.models.exchange_rate import ExchangeRatePair
 from app.models.investment import Currency
 
@@ -17,6 +21,14 @@ _DOLLAR_RATE_PAIRS: dict[str, ExchangeRatePair] = {
 }
 
 DOLLAR_RATE_DEFAULT = "mep"
+
+
+# One stored rate as conversion reads it: its date and its value. The rates cache holds these rather than
+# ORM rows: with the history backfilled there is one per pair per quoted day since 2011 (~23k), which as
+# ORM rows held ~40 MB per process.
+class RatePoint(NamedTuple):
+    date: date_type
+    rate: Decimal
 
 
 # Returns the ExchangeRatePair for USD/ARS based on the dollar preference. A falsy or unknown
