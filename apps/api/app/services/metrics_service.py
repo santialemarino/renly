@@ -236,25 +236,7 @@ async def get_portfolio_metrics(
             window_end_value = _portfolio_value_on(snap_by_inv, inv_currency, currency, lookup, end_date, end_date)
         else:
             window_end_value = now_value
-        # Net flows inside the window: real transactions after each investment's first snapshot,
-        # plus the first snapshot itself when the investment was born inside the window.
-        window_net_flows = ZERO
-        for inv_id, flows in flows_by_inv.items():
-            first_date = first_snap_dates.get(inv_id)
-            for flow_date, amount in flows:
-                if first_date is not None and flow_date <= first_date:
-                    continue
-                if start_date and flow_date <= start_date:
-                    continue
-                if end_date and flow_date > end_date:
-                    continue
-                window_net_flows += amount
-        for inv_id, first_date in first_snap_dates.items():
-            if start_date and first_date <= start_date:
-                continue
-            if end_date and first_date > end_date:
-                continue
-            window_net_flows += inv_date_value[inv_id][first_date]
+        window_net_flows = _net_flows_between(flows_by_inv, inv_date_value, first_snap_dates, start_date, end_date)
         total_value = window_end_value
         total_invested = window_net_flows
         absolute_gain = window_end_value - window_start_value - window_net_flows
@@ -274,18 +256,24 @@ async def get_portfolio_metrics(
     # first running from the window start at the value held that day.
     portfolio_twr = mh.windowed_twr(portfolio_totals, inv_date_value, flows_by_inv, start_date, end_date, window_start_value)
 
-    # The change into today: the value now against the portfolio held at the end of last month, valued
-    # at that day's rate — the same two points the net-worth chart's last two months are. Null when
-    # nothing was held by then (there is nothing to compare against).
+    # What the portfolio GAINED since the end of last month — the period gain of a window opening then
+    # and still open today: the value now, less what was held at the end of last month (valued at that
+    # day's rate, plus money moved in since its last snapshot), less the money moved in since. Not the
+    # change in value, which reads a deposit as gain. The percentage is over the capital at work (what
+    # was held plus what came in), as a window's is. Null when nothing was held by then (there is
+    # nothing to compare against).
     month_change = None
     month_change_pct = None
     prev_end = mh.previous_month_end(today)
     prev_values = mh.holding_values_on(snap_by_inv, prev_end)
     if prev_values:
         prev_total = _sum_values(_convert_holdings(prev_values, inv_currency, currency, lookup, prev_end))
-        month_change = now_value - prev_total
-        if prev_total != ZERO:
-            month_change_pct = month_change / prev_total
+        prev_total += mh.flows_since_last_valuation(snap_by_inv, flows_by_inv, prev_end)
+        month_flows = _net_flows_between(flows_by_inv, inv_date_value, first_snap_dates, prev_end, None)
+        month_change = now_value - prev_total - month_flows
+        capital = prev_total + month_flows
+        if capital > ZERO:
+            month_change_pct = month_change / capital
 
     # Portfolio IRR: combined cashflow series across all investments, each cashflow converted at
     # its own date. With a window, boundary valuations from the totals series replace the raw
@@ -571,31 +559,29 @@ async def get_investments_summary(
         current_value = latest_snap.value if latest_snap else None
         cap = mh.invested_capital(txs)
         absolute_gain = (current_value - cap) if current_value is not None else None
+        # Signed flows, each converted at its own date (positive = money in).
+        flows = _signed_flows(txs, base, currency, lookup)
 
-        # The change into today, consistent with the portfolio card: the value now against what the
-        # holding was worth at the end of last month, at that day's rate.
+        # What the holding gained since the end of last month, consistent with the portfolio card: the
+        # value now, less what it was worth then (at that day's rate, plus money moved in since its last
+        # snapshot), less the money moved in since — over the capital at work. Null for a holding not
+        # yet valued by then.
         month_change_pct = None
         prev_v = prev_values.get(inv.id)
         curr_v = now_values.get(inv.id)
-        if prev_v is not None and curr_v is not None and prev_v != ZERO:
-            month_change_pct = (curr_v - prev_v) / prev_v
+        if prev_v is not None and curr_v is not None:
+            prev_v += mh.flows_since_last_valuation({inv.id: snaps}, {inv.id: flows}, prev_end)
+            month_flows = sum((amount for d, amount in flows if d > prev_end), ZERO)
+            capital = prev_v + month_flows
+            if capital > ZERO:
+                month_change_pct = (curr_v - capital) / capital
 
         # Convert absolute values — current_value at today's rate (what it is worth now), cap as a sum
         # of per-transaction conversions at each tx's own date.
         if currency and lookup:
             if current_value is not None:
                 current_value = now_values.get(inv.id)
-            converted_cap = ZERO
-            for tx in txs:
-                rate_map = lookup.get_rate_map_at(tx.date)
-                amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else None
-                if amount is None:
-                    continue
-                if tx.type in (TransactionType.deposit, TransactionType.buy):
-                    converted_cap += amount
-                else:
-                    converted_cap -= amount
-            cap = converted_cap
+            cap = sum((amount for _, amount in flows), ZERO)
             absolute_gain = (current_value - cap) if current_value is not None else None
 
         items.append(
@@ -667,6 +653,58 @@ def _rate_map_at(lookup: mh.RateLookup | None, as_of_date: date_type) -> dict[st
     if lookup is None:
         return None
     return lookup.get_rate_map_at(as_of_date)
+
+
+# An investment's transactions as signed flows (positive = money in), each converted into the display
+# currency at its own date. A transaction that cannot convert is left out — the investment itself is
+# only reached once its currency is known to convert. Unconverted without a display currency.
+def _signed_flows(
+    transactions: list[Transaction],
+    base: str,
+    currency: str | None,
+    lookup: mh.RateLookup | None,
+) -> list[tuple[date_type, Decimal]]:
+    flows: list[tuple[date_type, Decimal]] = []
+    for tx in transactions:
+        amount: Decimal | None = tx.amount
+        if currency and lookup:
+            rate_map = lookup.get_rate_map_at(tx.date)
+            amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else None
+            if amount is None:
+                continue
+        flows.append((tx.date, amount if tx.type in (TransactionType.deposit, TransactionType.buy) else -amount))
+    return flows
+
+
+# The net money that entered the portfolio inside the window (after, until] — either bound may be None:
+# real flows after each investment's first snapshot (one on or before it is embodied in that value),
+# plus the first snapshot itself of an investment born inside the window (contributed capital).
+# flows_by_inv and inv_date_value are already in the display currency, each at its own date.
+def _net_flows_between(
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    first_snap_dates: dict[int, date_type],
+    after: date_type | None,
+    until: date_type | None,
+) -> Decimal:
+    total = ZERO
+    for inv_id, flows in flows_by_inv.items():
+        first_date = first_snap_dates.get(inv_id)
+        for flow_date, amount in flows:
+            if first_date is not None and flow_date <= first_date:
+                continue
+            if after and flow_date <= after:
+                continue
+            if until and flow_date > until:
+                continue
+            total += amount
+    for inv_id, first_date in first_snap_dates.items():
+        if after and first_date <= after:
+            continue
+        if until and first_date > until:
+            continue
+        total += inv_date_value[inv_id][first_date]
+    return total
 
 
 # Converts each investment's base-currency value into the display currency at the rate of rate_date —

@@ -14,14 +14,17 @@ from app.services import metrics_service
 # under test.
 
 
-def _snap(d: date, value: str) -> InvestmentSnapshot:
-    return InvestmentSnapshot(investment_id=1, user_id=1, date=d, value=Decimal(value), currency="USD")
+def _snap(d: date, value: str, investment_id: int = 1) -> InvestmentSnapshot:
+    return InvestmentSnapshot(investment_id=investment_id, user_id=1, date=d, value=Decimal(value), currency="USD")
 
 
 def _wire(monkeypatch, snapshots: list[InvestmentSnapshot], transactions: list[Transaction], today: date) -> None:
     repo = metrics_service.metrics_repository
-    holding = Investment(id=1, user_id=1, name="SPY", category=InvestmentCategory.cedears, base_currency="USD")
-    monkeypatch.setattr(repo, "list_active_investments", AsyncMock(return_value=[holding]))
+    holdings = [
+        Investment(id=inv_id, user_id=1, name=f"Holding {inv_id}", category=InvestmentCategory.cedears, base_currency="USD")
+        for inv_id in sorted({s.investment_id for s in snapshots})
+    ]
+    monkeypatch.setattr(repo, "list_active_investments", AsyncMock(return_value=holdings))
     monkeypatch.setattr(repo, "list_snapshots_by_investments", AsyncMock(return_value=snapshots))
     monkeypatch.setattr(repo, "list_transactions_by_investments", AsyncMock(return_value=transactions))
     monkeypatch.setattr(metrics_service.settings_service, "get_user_today", AsyncMock(return_value=today))
@@ -52,3 +55,48 @@ class TestTheWindowedTwrChainsOnlyThePeriodsInsideTheWindow:
         assert response.twr == Decimal("0.12")
         assert response.total_invested == Decimal("0")
         assert response.absolute_gain == Decimal("18")
+
+
+# "vs last month" under the gain card is what the portfolio GAINED since the end of last month — the
+# value change less the money moved in — not the change in value, which reads a deposit as gain.
+class TestTheMonthChangeIsAGainNotAValueChange:
+    @pytest.mark.asyncio
+    async def test_a_deposit_this_month_is_not_gain(self, monkeypatch):
+        # 1,000 at the end of October, 500 deposited on Nov 3, 1,530 on Nov 5: the month gained 30 on
+        # 1,500 at work (2%), not the 530 (53%) the value moved.
+        _wire(
+            monkeypatch,
+            [_snap(date(2026, 10, 20), "1000"), _snap(date(2026, 11, 5), "1530")],
+            [_deposit(date(2026, 11, 3), "500")],
+            date(2026, 11, 9),
+        )
+        portfolio = await metrics_service.get_portfolio_metrics(AsyncMock(), 1)
+        assert portfolio.month_change == Decimal("30")
+        assert portfolio.month_change_pct == Decimal("0.02")
+        summary = await metrics_service.get_investments_summary(AsyncMock(), 1)
+        assert summary.items[0].month_change_pct == Decimal("0.02")
+
+    @pytest.mark.asyncio
+    async def test_a_holding_first_valued_this_month_is_capital_not_gain(self, monkeypatch):
+        # The 200 holding first valued on Nov 4 entered the portfolio this month: contributed capital.
+        snaps = [_snap(date(2026, 10, 20), "1000"), _snap(date(2026, 11, 5), "1010"), _snap(date(2026, 11, 4), "200", investment_id=2)]
+        _wire(monkeypatch, snaps, [], date(2026, 11, 9))
+        portfolio = await metrics_service.get_portfolio_metrics(AsyncMock(), 1)
+        assert portfolio.month_change == Decimal("10")
+        assert portfolio.month_change_pct == Decimal("10") / Decimal("1200")
+
+    @pytest.mark.asyncio
+    async def test_money_moved_in_before_the_month_end_belongs_to_the_starting_value(self, monkeypatch):
+        # 1,000 valued Oct 10, 200 deposited Oct 20 (no snapshot has seen it by Oct 31), 1,236 on Nov 5:
+        # 1,200 was at work when November began, so the month gained 36 (3%).
+        _wire(
+            monkeypatch,
+            [_snap(date(2026, 10, 10), "1000"), _snap(date(2026, 11, 5), "1236")],
+            [_deposit(date(2026, 10, 20), "200")],
+            date(2026, 11, 9),
+        )
+        portfolio = await metrics_service.get_portfolio_metrics(AsyncMock(), 1)
+        assert portfolio.month_change == Decimal("36")
+        assert portfolio.month_change_pct == Decimal("0.03")
+        summary = await metrics_service.get_investments_summary(AsyncMock(), 1)
+        assert summary.items[0].month_change_pct == Decimal("0.03")

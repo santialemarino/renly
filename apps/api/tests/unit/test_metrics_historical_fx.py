@@ -116,10 +116,11 @@ class TestHistoryAtItsOwnDateHoldingsAtTodaysRate:
         assert response.total_invested == Decimal("150.00")
         assert response.absolute_gain == Decimal("-37.50")
         assert response.total_return_pct == Decimal("-0.25")
-        # The change into today: 112.50 now against the end of February, when only the peso holding was
-        # held — 125,000 ARS at February's 1,250, so 100.
-        assert response.month_change == Decimal("12.50")
-        assert response.month_change_pct == Decimal("0.125")
+        # The gain into today: 112.50 now against the end of February, when only the peso holding was
+        # held — 125,000 ARS at February's 1,250, so 100 — less the 50 the dollar holding brought in
+        # this month (its first snapshot is contributed capital, not gain), over the 150 at work.
+        assert response.month_change == Decimal("-37.50")
+        assert response.month_change_pct == Decimal("-0.25")
         # Returns walk the dated snapshots, each at its own date.
         assert response.twr == Decimal("0")
         assert response.irr is not None and abs(response.irr) < 1e-6

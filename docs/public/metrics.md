@@ -127,10 +127,13 @@ current value minus invested.
 
 ## "vs last month"
 
-The small change indicator under the gain card compares your latest portfolio value against its
-value at the end of the previous calendar month (in your display currency), drawn from the same
-underlying portfolio values that feed the evolution chart. If all your data is within a single
-month, there is no previous month to compare against and the indicator is hidden.
+The small indicator under the gain card is what your portfolio **gained** since the end of the
+previous calendar month: its value today, minus what you held at the end of last month (valued at
+that day's rate, the same point the evolution chart shows), minus the money you moved in since — so a
+deposit is never read as gain. An investment you first recorded this month counts as money moved in.
+The percentage is that gain over the capital at work (what you held plus what you added). The
+"Month" column of the investments table is the same figure for each holding. If you held nothing at
+the end of last month, there is nothing to compare against and the indicator is hidden.
 
 ## Distribution and allocation
 

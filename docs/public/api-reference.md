@@ -680,7 +680,7 @@ Aggregated endpoints combining investment portfolio and finance data for the hom
 
 **Query parameters (composition + liquidity):** `currency` only (no date filtering — shows current snapshot).
 
-**Overview response:** `net_worth`, `private_net_worth`, `shared_net_worth`, `shared_pot_value`, `shared_receivable`, `shared_payable`, `has_shared`, `undivided_pots[]`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses), `has_holdings`, `skipped_currencies`. `net_worth_change` covers investments, cash, card debt and the shared side together; `investment_month_change` stays investment-only. `has_holdings` reports whether the user holds anything at all — investment, account, card, or a shared side — i.e. whether the net-worth figure is derived from anything; it stays `true` when the figures happen to net to zero, so it is not a `net_worth != 0` test.
+**Overview response:** `net_worth`, `private_net_worth`, `shared_net_worth`, `shared_pot_value`, `shared_receivable`, `shared_payable`, `has_shared`, `undivided_pots[]`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses), `has_holdings`, `skipped_currencies`. `net_worth_change` covers investments, cash, card debt and the shared side together; `investment_month_change` is the portfolio's gain since the end of last month (its value change less the money moved in), the same figure as `/metrics/portfolio`'s `month_change`. `has_holdings` reports whether the user holds anything at all — investment, account, card, or a shared side — i.e. whether the net-worth figure is derived from anything; it stays `true` when the figures happen to net to zero, so it is not a `net_worth != 0` test.
 
 **What "shared" counts, and what it never counts.** `net_worth` is everything you are worth: your private holdings plus your share of everything you share. `private_net_worth` and `shared_net_worth` split it and always sum to it exactly. The shared half is your share of every pot you can see, plus what your groups owe you, less what you owe them — a receivable is an asset and a payable a liability, each on its own line and never blended into cash.
 
@@ -1194,14 +1194,14 @@ Most endpoints also accept these common filters:
 | `start_date`     | date   | Start of date range (YYYY-MM-DD).          |
 | `end_date`       | date   | End of date range (YYYY-MM-DD).            |
 
-| Method | Path                                | Description                                                                                           | Supports date range       |
-| ------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------- |
-| `GET`  | `/metrics/portfolio`                | Portfolio-level metrics: total value, invested capital, gain/loss, TWR, IRR, month-over-month change. | Yes                       |
-| `GET`  | `/metrics/portfolio/evolution`      | Monthly portfolio value series for the evolution chart.                                               | Yes                       |
-| `GET`  | `/metrics/investment/{id}`          | Detailed metrics for a single investment: TWR, IRR, period returns.                                   | No (uses `currency` only) |
-| `GET`  | `/metrics/allocation`               | Portfolio allocation by investment category (percentage breakdown).                                   | No                        |
-| `GET`  | `/metrics/allocation/by-collection` | Portfolio allocation by collection (percentage breakdown).                                            | No                        |
-| `GET`  | `/metrics/investments/summary`      | Compact per-investment metrics for the dashboard table: value, return, change.                        | Yes                       |
+| Method | Path                                | Description                                                                                         | Supports date range       |
+| ------ | ----------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------- |
+| `GET`  | `/metrics/portfolio`                | Portfolio-level metrics: total value, invested capital, gain/loss, TWR, IRR, gain since last month. | Yes                       |
+| `GET`  | `/metrics/portfolio/evolution`      | Monthly portfolio value series for the evolution chart.                                             | Yes                       |
+| `GET`  | `/metrics/investment/{id}`          | Detailed metrics for a single investment: TWR, IRR, period returns.                                 | No (uses `currency` only) |
+| `GET`  | `/metrics/allocation`               | Portfolio allocation by investment category (percentage breakdown).                                 | No                        |
+| `GET`  | `/metrics/allocation/by-collection` | Portfolio allocation by collection (percentage breakdown).                                          | No                        |
+| `GET`  | `/metrics/investments/summary`      | Compact per-investment metrics for the dashboard table: value, return, change.                      | Yes                       |
 
 ---
 
