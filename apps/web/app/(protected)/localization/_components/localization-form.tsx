@@ -126,6 +126,15 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
   }
 
   async function onSubmit(values: LocalizationFormValues) {
+    /*
+     * Said in the language just saved. When it changes, `t` here is still the old language's, and the
+     * confirmation came out in English on a page that had just turned Spanish; so it waits for the
+     * page to re-render in the new language, and the effect above says it there. Armed BEFORE the save:
+     * the save revalidates the layout, and the re-render in the new language may land before the await
+     * below returns.
+     */
+    const changesLanguage = values.language !== locale;
+    if (changesLanguage) pendingSaveToast.current = values.language;
     try {
       await saveLocalization({
         timezone: values.timezone,
@@ -135,17 +144,9 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
       });
       reset(values);
       router.refresh();
-      /*
-       * Said in the language just saved. When it changed, `t` here is still the old language's, and the
-       * confirmation came out in English on a page that had just turned Spanish; so it waits for the
-       * page to re-render in the new language, and the effect above says it there.
-       */
-      if (values.language === locale) {
-        toast.success(t('form.saveSuccess'), { id: 'localization-save' });
-      } else {
-        pendingSaveToast.current = values.language;
-      }
+      if (!changesLanguage) toast.success(t('form.saveSuccess'), { id: 'localization-save' });
     } catch {
+      pendingSaveToast.current = null;
       toast.error(t('form.saveError'), { id: 'localization-save' });
     }
   }

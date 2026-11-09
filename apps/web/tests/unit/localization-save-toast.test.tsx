@@ -20,8 +20,10 @@ import es from '../../translations/es.json';
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// What happens while the save is in flight; by default nothing.
+const during = vi.hoisted(() => ({ save: () => {} }));
 vi.mock('@/app/(protected)/localization/localization-actions', () => ({
-  saveLocalization: vi.fn().mockResolvedValue(undefined),
+  saveLocalization: vi.fn(async () => during.save()),
 }));
 
 // The pickers are Radix, which this suite cannot mount; the save path does not touch them.
@@ -61,6 +63,7 @@ async function save() {
 
 beforeEach(() => {
   toast.success.mockReset();
+  during.save = () => {};
 });
 
 describe('the localization save confirmation', () => {
@@ -74,6 +77,17 @@ describe('the localization save confirmation', () => {
 
     // The page re-renders in Spanish.
     rerender(form('es', 'es'));
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledWith(es.localization.form.saveSuccess, {
+      id: 'localization-save',
+    });
+  });
+
+  it('is said in the new language when the page turns before the save returns', async () => {
+    // The save revalidates the layout, which can re-render the page in Spanish while it is awaited.
+    const { rerender } = render(form('en', 'es'));
+    during.save = () => rerender(form('es', 'es'));
+    await save();
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledWith(es.localization.form.saveSuccess, {
       id: 'localization-save',
