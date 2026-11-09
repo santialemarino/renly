@@ -345,7 +345,7 @@ class TestTheBalanceAggregation:
 # of two of these tests came to assert the wrong figure.
 def _by_currency(rows) -> dict[str, Decimal]:
     totals: dict[str, Decimal] = {}
-    for _year, _month, currency, total in rows:
+    for _day, _category, currency, total in rows:
         totals[currency] = totals.get(currency, Decimal(0)) + total
     return totals
 
@@ -425,29 +425,40 @@ class TestTheDashboardsSpendingAndEarningUnions:
     # equals the list — which is exactly what a mocked session cannot check, because the aggregate and
     # the list are different SQL over the same rows.
     @pytest.mark.asyncio
-    async def test_the_monthly_expense_total_equals_the_list_it_summarises(self, session, seeded):
+    async def test_the_daily_expense_total_equals_the_list_it_summarises(self, session, seeded):
         user, seat = seeded["users"][0], seeded["seats"][0]
         rows, _ = await expense_repository.list_by_user_filtered(session, user, [seat], page_size=200)
         listed: dict[str, Decimal] = {}
         for row in rows:
             listed[row.currency] = listed.get(row.currency, Decimal(0)) + row.amount
 
-        assert _by_currency(await expense_repository.sum_by_user_monthly(session, user, [seat])) == listed
+        assert _by_currency(await expense_repository.sum_by_user_daily(session, user, [seat])) == listed
         # The positive control: the shared branch really is in there, so the equality is not two
         # private-only reads agreeing with each other.
         assert any(row.scope == "shared" for row in rows)
 
     @pytest.mark.asyncio
-    async def test_the_monthly_totals_are_bucketed_by_MONTH(self, session, seeded):
-        # Every other assertion here sums across months and is therefore blind to the bucketing itself
-        # — a mutation swapping the month extraction for a second year extraction left them all green.
-        # The fixture spans May (private only), June (private + both shared buckets) and July (income),
-        # so a wrong bucket collapses three months into one.
+    async def test_the_totals_are_bucketed_by_DAY_and_category(self, session, seeded):
+        # Every other assertion here sums across days and is therefore blind to the bucketing itself.
+        # The bucket is what each conversion is applied to, so a bucket wider than a day would convert
+        # rows of different days at one day's rate: each (day, category, currency) bucket has to equal the
+        # list's rows on that day, of that category, in that currency — and nothing else. The fixture
+        # spans May (private only), June (private on the 1st, two shared buckets on the 1st and the 10th)
+        # and July (income), so a month-wide bucket collapses June's two dates into one.
         user, seat = seeded["users"][0], seeded["seats"][0]
-        expense = {(year, month, currency) for year, month, currency, _t in await expense_repository.sum_by_user_monthly(session, user, [seat])}
-        assert expense == {(2026, 5, "ARS"), (2026, 6, "ARS"), (2026, 6, "USD")}
-        income = {(year, month, currency) for year, month, currency, _t in await income_repository.sum_by_user_monthly(session, user, [seat])}
-        assert income == {(2026, 5, "ARS"), (2026, 6, "USD"), (2026, 7, "ARS")}
+        for repository in (expense_repository, income_repository):
+            rows, _ = await repository.list_by_user_filtered(session, user, [seat], page_size=200)
+            listed: dict[tuple[date, str, str], Decimal] = {}
+            for row in rows:
+                key = (row.date, "uncategorized" if row.category is None else str(row.category), row.currency)
+                listed[key] = listed.get(key, Decimal(0)) + row.amount
+            buckets = await repository.sum_by_user_daily(session, user, [seat])
+            summed = {(day, category, currency): total for day, category, currency, total in buckets}
+            assert summed == listed
+        expense_days = {day for day, _c, _cur, _t in await expense_repository.sum_by_user_daily(session, user, [seat])}
+        assert expense_days == {date(2026, 5, 1), date(2026, 6, 1), date(2026, 6, 10)}
+        income_days = {day for day, _c, _cur, _t in await income_repository.sum_by_user_daily(session, user, [seat])}
+        assert income_days == {date(2026, 5, 20), date(2026, 6, 12), date(2026, 7, 1)}
 
     @pytest.mark.asyncio
     async def test_the_category_breakdown_equals_the_same_list(self, session, seeded):
@@ -457,10 +468,9 @@ class TestTheDashboardsSpendingAndEarningUnions:
         for row in rows:
             key = ("uncategorized" if row.category is None else str(row.category), row.currency)
             listed[key] = listed.get(key, Decimal(0)) + row.amount
-        summed = {
-            (category, currency): total
-            for category, currency, total in await expense_repository.sum_by_user_grouped_by_category(session, user, [seat])
-        }
+        summed: dict[tuple[str, str], Decimal] = {}
+        for _day, category, currency, total in await expense_repository.sum_by_user_daily(session, user, [seat]):
+            summed[(category, currency)] = summed.get((category, currency), Decimal(0)) + total
         assert summed == listed
         # Both the private category and the shared one are represented, so a branch that vanished
         # would change the keyset rather than only a figure.
@@ -471,14 +481,14 @@ class TestTheDashboardsSpendingAndEarningUnions:
         # A payer who took no part spent nothing. The fixture's "not mine" expense is 400 ARS fronted
         # by seat A with a zero share, so it must not reach the ARS total.
         user, seat = seeded["users"][0], seeded["seats"][0]
-        summed = _by_currency(await expense_repository.sum_by_user_monthly(session, user, [seat]))
+        summed = _by_currency(await expense_repository.sum_by_user_daily(session, user, [seat]))
         # 1,000 + 2,000 private, plus a 3,000 share of the dinner. The 400 is absent.
         assert summed["ARS"] == Decimal("6000.00")
 
     @pytest.mark.asyncio
     async def test_a_user_in_no_group_gets_exactly_their_private_totals(self, session, seeded):
         user = seeded["users"][0]
-        summed = _by_currency(await expense_repository.sum_by_user_monthly(session, user, []))
+        summed = _by_currency(await expense_repository.sum_by_user_daily(session, user, []))
         assert summed == {"ARS": Decimal("3000.00")}
 
     @pytest.mark.asyncio
@@ -488,7 +498,7 @@ class TestTheDashboardsSpendingAndEarningUnions:
         listed: dict[str, Decimal] = {}
         for row in rows:
             listed[row.currency] = listed.get(row.currency, Decimal(0)) + row.amount
-        assert _by_currency(await income_repository.sum_by_user_monthly(session, user, [seat])) == listed
+        assert _by_currency(await income_repository.sum_by_user_daily(session, user, [seat])) == listed
         assert any(row.scope == "shared" for row in rows)
 
     @pytest.mark.asyncio
@@ -497,7 +507,7 @@ class TestTheDashboardsSpendingAndEarningUnions:
         # them, and the gap between the two is a BALANCE rather than earnings. Seat A is entitled to
         # 45 USD of the rent and received 90 of it, so their income is 45.
         user, seat = seeded["users"][0], seeded["seats"][0]
-        summed = _by_currency(await income_repository.sum_by_user_monthly(session, user, [seat]))
+        summed = _by_currency(await income_repository.sum_by_user_daily(session, user, [seat]))
         assert summed["USD"] == Decimal("45.00")
 
     @pytest.mark.asyncio

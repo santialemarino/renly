@@ -116,6 +116,111 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
     );
   });
 
+  test('the investor chart’s last point is the portfolio headline, valued at today’s rate', async ({
+    request,
+  }) => {
+    /*
+     * What the portfolio holds now converts at today's rate, and every point of the evolution chart at
+     * its own month's — a holding carried forward from an older snapshot included. The current month's
+     * point therefore lands on the headline's own figure, and the chart runs on to the current month
+     * even when the newest snapshot is older. Before, the carried holding kept its snapshot's rate and
+     * the chart stopped at the snapshot's month, so the two drifted apart by whatever the currency did.
+     */
+    const token = await apiToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    let anyHoldings = false;
+    for (const currency of await displayCurrencies(request, token)) {
+      const portfolio = await request.get(`${API_BASE}/metrics/portfolio?currency=${currency}`, {
+        headers,
+      });
+      const evolution = await request.get(
+        `${API_BASE}/metrics/portfolio/evolution?currency=${currency}`,
+        { headers },
+      );
+      expect(portfolio.ok()).toBe(true);
+      expect(evolution.ok()).toBe(true);
+      const points = (await evolution.json()).points as { date: string; total_value: string }[];
+      if (points.length === 0) continue;
+      anyHoldings = true;
+      const last = points[points.length - 1];
+      expect
+        .soft(last.total_value, `portfolio value in ${currency}`)
+        .toBe((await portfolio.json()).total_value);
+    }
+    test.skip(!anyHoldings, 'the harness account holds no valued investment to reconcile');
+  });
+
+  test('every finance aggregate adds up to the rows it summarises', async ({ request }) => {
+    /*
+     * Rows, period totals, monthly bars and the category donut all convert each day at its own rate,
+     * over the same daily buckets — so the three aggregates agree to the cent, and they equal the sum of
+     * the converted rows the /expenses and /income lists show. Before, the totals converted each MONTH
+     * at its last day and the donut the whole period at its end, so one account read three different
+     * all-time expense figures. Rows sharing a day, category and currency are converted once as a
+     * bucket, so the rows' own sum may sit up to half a cent per row away; the aggregates may not.
+     */
+    const token = await apiToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    const get = async (path: string) => {
+      const response = await request.get(`${API_BASE}${path}`, { headers });
+      expect(response.ok(), `GET ${path}: ${response.status()}`).toBe(true);
+      return response.json();
+    };
+    // Every converted row of a list, across all its pages.
+    const listedRows = async (path: string, currency: string) => {
+      const amounts: number[] = [];
+      for (let page = 1; ; page += 1) {
+        const body = await get(`${path}?currency=${currency}&scope=all&page_size=100&page=${page}`);
+        for (const item of body.items) {
+          if (item.converted_amount !== null) amounts.push(Number(item.converted_amount));
+        }
+        if (page * 100 >= body.total) return amounts;
+      }
+    };
+
+    let anyRows = false;
+    for (const currency of await displayCurrencies(request, token)) {
+      const overview = await get(`/finance-metrics/overview?currency=${currency}`);
+      const monthly = await get(`/finance-metrics/monthly?currency=${currency}`);
+      const expenseDonut = await get(`/finance-metrics/expense-breakdown?currency=${currency}`);
+      const incomeDonut = await get(`/finance-metrics/income-breakdown?currency=${currency}`);
+      const dashboard = await get(`/dashboard/overview?currency=${currency}`);
+      // Cents, so the sums compare exactly rather than through float drift.
+      const cents = (value: string | number) => Math.round(Number(value) * 100);
+      const monthlySum = (key: 'income' | 'expenses') =>
+        monthly.points.reduce((sum: number, p: Record<string, string>) => sum + cents(p[key]), 0);
+
+      expect
+        .soft(cents(expenseDonut.total_expenses), `expense donut in ${currency}`)
+        .toBe(cents(overview.total_expenses));
+      expect
+        .soft(cents(incomeDonut.total_income), `income donut in ${currency}`)
+        .toBe(cents(overview.total_income));
+      expect
+        .soft(monthlySum('expenses'), `monthly expenses in ${currency}`)
+        .toBe(cents(overview.total_expenses));
+      expect
+        .soft(monthlySum('income'), `monthly income in ${currency}`)
+        .toBe(cents(overview.total_income));
+      expect
+        .soft(dashboard.total_expenses, `dashboard expenses in ${currency}`)
+        .toBe(overview.total_expenses);
+
+      for (const [path, total] of [
+        ['/expenses', overview.total_expenses],
+        ['/income', overview.total_income],
+      ] as const) {
+        const rows = await listedRows(path, currency);
+        anyRows ||= rows.length > 0;
+        const rowSum = rows.reduce((sum, amount) => sum + Math.round(amount * 100), 0);
+        expect
+          .soft(Math.abs(rowSum - cents(total)), `${path} rows against the total in ${currency}`)
+          .toBeLessThanOrEqual(Math.ceil(rows.length / 2));
+      }
+    }
+    test.skip(!anyRows, 'the harness account has no expense or income rows to add up');
+  });
+
   test('the conversion hint is shown only while a display currency is active', async ({ page }) => {
     // A cold `.next` compiles `/dashboard` on first request, and the budget that expires first is the
     // test's rather than any one navigation's.
@@ -151,6 +256,6 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
     // and an element-only assertion would pass on the copy it was written to replace.
     await radios.first().click();
     await expect(hint).toBeVisible();
-    await expect(hint).toContainText('the exchange rate that was in force then');
+    await expect(hint).toContainText('uses the rate of that date');
   });
 });

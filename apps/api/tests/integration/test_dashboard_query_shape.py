@@ -300,8 +300,9 @@ class TestOriginalModeBuildsOneRateLookup:
         print(f"\n{read} currency={currency}: {len(builds)} lookups, {len(settings_reads)} settings reads, {len(statements)} statements")
         assert len(builds) == 1
         # One settings read per request, with one exception: the Original-mode overview reads no request
-        # settings of its own, so its finance half reads the timezone and the pot lookup reads the dollar
-        # preference — two reads of one row, down from three before the lookup was shared.
+        # settings of its own, so it reads the timezone once for its investment and finance halves and the
+        # pot lookup reads the dollar preference — two reads of one row, down from three before the lookup
+        # was shared.
         assert len(settings_reads) == (2 if (read, currency) == ("overview", None) else 1)
 
 

@@ -6,6 +6,7 @@ import bisect
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from app.domain.currency import RatePoint, get_ars_pair, is_supported
@@ -256,6 +257,28 @@ def portfolio_totals_and_returns(
     return totals, returns
 
 
+# Each investment's value in its own base currency on as_of_date: its last snapshot dated on or before
+# that day, carried forward however old it is — or its latest snapshot when as_of_date is None. An
+# investment with no snapshot that early is absent. snapshots_by_inv lists each investment's snapshots
+# oldest first, as group_snapshots_by_investment returns them.
+def holding_values_on(
+    snapshots_by_inv: Mapping[int, Sequence[InvestmentSnapshot]],
+    as_of_date: date_type | None,
+) -> dict[int, Decimal]:
+    values: dict[int, Decimal] = {}
+    for inv_id, snaps in snapshots_by_inv.items():
+        held = [s for s in snaps if as_of_date is None or s.date <= as_of_date]
+        if held:
+            values[inv_id] = held[-1].value
+    return values
+
+
+# The last day of the month before the one as_of_date falls in — the point a "vs last month" figure
+# compares today against.
+def previous_month_end(as_of_date: date_type) -> date_type:
+    return date_type(as_of_date.year, as_of_date.month, 1) - timedelta(days=1)
+
+
 # Forward-filled portfolio value at as_of_date: the last total dated on or before it.
 # Returns ZERO when the series has no entry that early.
 def portfolio_value_at(
@@ -290,18 +313,23 @@ def month_over_month(
 # the forward-filled portfolio value at the window start, real flows and first-snapshot
 # outflows inside the window, and an inflow of the forward-filled value at the window end
 # (dated at the latest data or flow date inside the window). Zero boundary values are omitted.
-# Same argument shapes as portfolio_totals_and_returns.
+# Same argument shapes as portfolio_totals_and_returns. `start_value` is the portfolio valued ON the
+# window start, at that day's rate — the caller values it, because the totals series converts each
+# carried holding at its own snapshot's rate rather than at the start date's; omitted, the series'
+# forward-filled value stands in.
 def build_windowed_portfolio_cashflows(
     portfolio_totals: list[tuple[date_type, Decimal]],
     inv_date_value: dict[int, dict[date_type, Decimal]],
     flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
     start_date: date_type | None,
     end_date: date_type | None,
+    start_value: Decimal | None = None,
 ) -> list[tuple[date_type, float]]:
     if not portfolio_totals:
         return []
 
-    start_value = portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
+    if start_value is None:
+        start_value = portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
     end_value = ZERO
     end_value_date: date_type | None = None
     for d, total in portfolio_totals:

@@ -8,7 +8,7 @@ This page explains every number you see on the Renly dashboard. Each metric is d
 
 **What it answers:** "How much is my portfolio worth right now?"
 
-The sum of the latest snapshot value for each of your investments, converted to your chosen display currency. If you have 3 investments worth $5,000, $3,000, and $2,000, your current value is $10,000.
+The sum of the latest snapshot value for each of your investments, converted to your chosen display currency at today's rate — the same rate your cash and card balances use, so a holding and the same amount of cash read the same. If you have 3 investments worth $5,000, $3,000, and $2,000, your current value is $10,000.
 
 ## Invested capital
 
@@ -192,11 +192,13 @@ The total income you logged over the last **90 days**, normalised to 30 days. Fo
 
 Which rate is used depends on what the figure is.
 
-**A current total uses today's rate** — your net worth, an account balance, a credit-card balance, a portfolio value. It answers "what is this worth to me today?"
+**What you hold now uses today's rate** — your net worth, an account balance, a credit-card balance, the current value of each investment and of your portfolio, and how it is split by category and collection. It answers "what is this worth to me today?"
 
-**A figure tied to a past date uses the rate that was in force then** — a row in your expenses or income, a snapshot's own value, a point on the net-worth evolution chart. Each of those has a date of its own, so the history stays put instead of moving every time the dollar does.
+**Anything with a date of its own uses the rate of that date** — a row in your expenses or income, a period's totals and their breakdown by category, the money you put into or took out of an investment, a snapshot's own value, every point on a chart. A point on a chart values what you held then at that point's rate, even a holding whose last snapshot is older. So the history stays put instead of moving every time the dollar does, and a total always equals the rows it adds up.
 
-The two meet at the present: as long as the chart runs up to today — which it does unless you pick a date range that ends earlier — its last point converts at today's rate and agrees with the net-worth headline above it.
+Because the money you put in converts at the date you put it in and the value converts at today's rate, an investment's gain in your display currency includes what the currency did in between.
+
+The two meet at the present: as long as a chart runs up to today — which it does unless you pick a date range that ends earlier — its last point converts at today's rate and agrees with the headline above it.
 
 ## Skipped investments
 
