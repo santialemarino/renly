@@ -34,13 +34,16 @@ _EUR = ExchangeRatePair.USD_EUR
 _TODAY = date(2026, 11, 9)
 
 
-# The table, in memory: (date, pair) -> ExchangeRate.
+# The table, in memory: (date, pair) -> ExchangeRate. A read marks the session as inside a transaction
+# (as SQLAlchemy's autobegin does) until the next commit, so a test can see one held across a fetch.
 class _FakeRepository:
     def __init__(self, rows: list[ExchangeRate] | None = None):
         self.rows: dict[tuple[date, ExchangeRatePair], ExchangeRate] = {(r.date, r.pair): r for r in rows or []}
         self.upserts: list[ExchangeRateRow] = []
 
     async def get_by_date_range(self, session, start, end):
+        if session is not None:
+            session.in_transaction = True
         return [r for (d, _p), r in sorted(self.rows.items()) if start <= d <= end]
 
     async def bulk_insert_missing(self, session, rows):
@@ -61,16 +64,21 @@ class _FakeRepository:
 class _Session:
     def __init__(self):
         self.commits = 0
+        self.in_transaction = False
 
     async def commit(self):
         self.commits += 1
+        self.in_transaction = False
 
 
 # A history provider answering from `quotes` (filtered to the range and pairs asked for) and recording
-# every call; `error` makes it fail instead.
-def _history_provider(source, pairs, quotes, calls, error: Exception | None = None) -> ExchangeRateHistoryProviderInfo:
+# every call; `error` makes it fail instead. With `session`, each call also records whether that session
+# was inside a transaction when the fetch ran.
+def _history_provider(source, pairs, quotes, calls, error: Exception | None = None, session=None, held=None) -> ExchangeRateHistoryProviderInfo:
     async def fetch(start, end, wanted):
         calls.append((source, start, end, wanted))
+        if session is not None:
+            held.append(session.in_transaction)
         if error is not None:
             raise error
         return [q for q in quotes if start <= q.quote_date <= end and q.pair in wanted]
@@ -121,6 +129,29 @@ class TestTheLatestFetchStoresTheQuoteDate:
                 ExchangeRateRow(date(2026, 11, 6), _MEP, Decimal("1574.05"), "dolarapi"),
                 ExchangeRateRow(date(2026, 11, 5), _EUR, Decimal("0.89566"), "frankfurter"),
             ]
+        )
+
+    # DolarApi re-stamps an unchanged blue/MEP quote on Saturdays and Sundays. A weekend quote equal to
+    # the rate in force before it is a repeat and is not stored; one that differs (a late close) is.
+    @pytest.mark.asyncio
+    async def test_a_weekend_repeat_is_not_stored(self, monkeypatch, repo):
+        repo.rows[(date(2026, 11, 6), _MEP)] = _row(_MEP, date(2026, 11, 6), "1574.05", "dolarapi")
+        repo.rows[(date(2026, 11, 6), ExchangeRatePair.USD_ARS_BLUE)] = _row(ExchangeRatePair.USD_ARS_BLUE, date(2026, 11, 6), "1540", "dolarapi")
+
+        async def fetch_ars():
+            return [
+                ExchangeRateQuote(_MEP, Decimal("1574.05"), date(2026, 11, 8)),
+                ExchangeRateQuote(ExchangeRatePair.USD_ARS_BLUE, Decimal("1545"), date(2026, 11, 8)),
+                ExchangeRateQuote(ExchangeRatePair.USD_ARS_OFICIAL, Decimal("1545"), date(2026, 11, 5)),
+            ]
+
+        monkeypatch.setattr(svc, "EXCHANGE_RATE_PROVIDERS", [ExchangeRateProviderInfo("dolarapi", fetch_ars)])
+
+        stored = await svc.fetch_and_store_latest(_Session())
+
+        assert stored == 2
+        assert sorted((r.date, r.pair) for r in repo.upserts) == sorted(
+            [(date(2026, 11, 8), ExchangeRatePair.USD_ARS_BLUE), (date(2026, 11, 5), ExchangeRatePair.USD_ARS_OFICIAL)]
         )
 
 
@@ -247,6 +278,25 @@ class TestFillRecentGaps:
         assert inserted == weekdays_missing == len(repo.rows) - before
         assert (_TODAY, _MEP) not in repo.rows
 
+    # The read that finds the gaps is committed before any source is asked, so its admin connection is
+    # back in the pool (2 + 3 connections) while the fetches run, for 30 s or more.
+    @pytest.mark.asyncio
+    async def test_no_transaction_is_held_while_the_sources_answer(self, monkeypatch, repo):
+        session = _Session()
+        calls: list = []
+        held: list = []
+        quotes = _weekday_quotes(_EUR, _TODAY - timedelta(days=20), _TODAY, "0.9")
+        monkeypatch.setattr(
+            svc,
+            "EXCHANGE_RATE_HISTORY_PROVIDERS",
+            [_history_provider("frankfurter", list(ExchangeRatePair), quotes, calls, session=session, held=held)],
+        )
+
+        inserted = await svc.fill_recent_gaps(session, today=_TODAY)
+
+        assert held == [False]
+        assert inserted > 0 and session.in_transaction is False
+
     # One provider failing must not cost the other its fill; the failed one is asked again next run.
     @pytest.mark.asyncio
     async def test_a_failing_provider_does_not_block_the_other(self, monkeypatch, repo):
@@ -310,6 +360,20 @@ class TestBackfillIsIdempotentAndNeverOverwrites:
         assert repo.rows[(intraday.date, _MEP)] is intraday
         assert repo.rows[(misdated.date, _MEP)].rate == Decimal("1510")
         assert counts[_MEP].repaired == 1 and counts[_EUR].repaired == 0
+
+    # Same for the backfill: sources first, then the database.
+    @pytest.mark.asyncio
+    async def test_no_transaction_is_held_while_the_sources_answer(self, monkeypatch, repo):
+        session = _Session()
+        held: list = []
+        quotes = _weekday_quotes(_EUR, self._START, self._END, "0.9")
+        monkeypatch.setattr(
+            svc, "EXCHANGE_RATE_HISTORY_PROVIDERS", [_history_provider("frankfurter", [_EUR], quotes, [], session=session, held=held)]
+        )
+
+        await svc.backfill_history(session, self._START, self._END)
+
+        assert held == [False]
 
     @pytest.mark.asyncio
     async def test_a_dry_run_writes_nothing(self, monkeypatch, repo):

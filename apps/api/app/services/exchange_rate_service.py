@@ -128,7 +128,10 @@ async def get_user_rate_lookup(session: AsyncSession, user_id: int) -> RateLooku
 
 # Fetches latest rates from all registered providers in parallel and stores each under the date its
 # source quotes it for (a Friday quote read on Sunday stays Friday's). A later quote for the same date
-# replaces the earlier one. Returns the number of quotes stored.
+# replaces the earlier one. A weekend quote equal to the rate already in force before it is not stored:
+# DolarApi re-stamps an unchanged quote on Saturdays and Sundays, and a copy would invent a row (the
+# history fill drops the same repeats). The database is read only after the network fetches, so no
+# admin connection sits idle while they run. Returns the number of quotes stored.
 async def fetch_and_store_latest(session: AsyncSession) -> int:
     # Fetch from all providers in parallel.
     fetch_results = await asyncio.gather(
@@ -144,7 +147,9 @@ async def fetch_and_store_latest(session: AsyncSession) -> int:
         for quote in results:
             rows.append(ExchangeRateRow(quote.quote_date, quote.pair, quote.rate, provider.source))
 
+    rows = await _drop_weekend_repeats(session, rows)
     if not rows:
+        await session.commit()
         return 0
 
     await exchange_rate_repository.bulk_upsert(session, rows)
@@ -155,6 +160,31 @@ async def fetch_and_store_latest(session: AsyncSession) -> int:
 
     logger.info("Stored %d exchange rates (quote dates %s).", len(rows), sorted({row.date.isoformat() for row in rows}))
     return len(rows)
+
+
+# Days read back from a weekend quote's date to find the rate in force before it (a long weekend plus
+# holidays fits inside it).
+_WEEKEND_LOOKBACK_DAYS = 7
+
+
+# Drops each weekend row whose rate equals the rate stored for the latest earlier date of its pair —
+# a repeat lookups already carry forward. A weekend row that differs (a late Friday close) is kept.
+async def _drop_weekend_repeats(session: AsyncSession, rows: list[ExchangeRateRow]) -> list[ExchangeRateRow]:
+    weekend_dates = [row.date for row in rows if row.date.weekday() >= 5]
+    if not weekend_dates:
+        return rows
+    stored = await exchange_rate_repository.get_by_date_range(
+        session, min(weekend_dates) - timedelta(days=_WEEKEND_LOOKBACK_DAYS), max(weekend_dates) - timedelta(days=1)
+    )
+    kept: list[ExchangeRateRow] = []
+    for row in rows:
+        if row.date.weekday() >= 5:
+            earlier = [r for r in stored if r.pair == row.pair and r.date < row.date]
+            previous = max(earlier, key=lambda r: r.date) if earlier else None
+            if previous is not None and quantize(Decimal(previous.rate), _RATE_QUANTUM) == quantize(row.rate, _RATE_QUANTUM):
+                continue
+        kept.append(row)
+    return kept
 
 
 # What a history run would write (or wrote) for one pair.
@@ -228,17 +258,15 @@ def plan_history_writes(
     return inserts, repairs
 
 
-# Fetches one history provider's quotes for `pairs` in [start, end] (plus the context days before it)
-# and plans the writes against `existing`. Raises ExchangeRateHistoryUnavailable.
-async def _plan_provider_history(
+# Fetches one history provider's quotes for `pairs` in [start, end], plus the context days before it.
+# Raises ExchangeRateHistoryUnavailable.
+async def _fetch_provider_history(
     provider: ExchangeRateHistoryProviderInfo,
     pairs: tuple[ExchangeRatePair, ...],
     start: date_type,
     end: date_type,
-    existing: dict[tuple[date_type, ExchangeRatePair], ExchangeRate],
-) -> tuple[list[ExchangeRateRow], list[ExchangeRateRow]]:
-    quotes = await provider.fetch(start - timedelta(days=HISTORY_CONTEXT_DAYS), end, pairs)
-    return plan_history_writes(quotes, provider.source, existing, start, end)
+) -> list[ExchangeRateQuote]:
+    return await provider.fetch(start - timedelta(days=HISTORY_CONTEXT_DAYS), end, pairs)
 
 
 # Writes planned history rows in one transaction: inserts never touch a stored row, repairs replace the
@@ -294,12 +322,15 @@ async def backfill_history(
     *,
     dry_run: bool = False,
 ) -> dict[ExchangeRatePair, PairBackfillCounts]:
+    # Network first, database after: no connection is held while the sources answer.
+    fetched = await asyncio.gather(*[_fetch_provider_history(provider, provider.pairs, start, end) for provider in EXCHANGE_RATE_HISTORY_PROVIDERS])
     existing = await _load_existing(session, start, end)
-    planned = await asyncio.gather(
-        *[_plan_provider_history(provider, provider.pairs, start, end, existing) for provider in EXCHANGE_RATE_HISTORY_PROVIDERS]
-    )
-    inserts = [row for provider_inserts, _ in planned for row in provider_inserts]
-    repairs = [row for _, provider_repairs in planned for row in provider_repairs]
+    inserts: list[ExchangeRateRow] = []
+    repairs: list[ExchangeRateRow] = []
+    for provider, quotes in zip(EXCHANGE_RATE_HISTORY_PROVIDERS, fetched):
+        provider_inserts, provider_repairs = plan_history_writes(quotes, provider.source, existing, start, end)
+        inserts.extend(provider_inserts)
+        repairs.extend(provider_repairs)
     if not dry_run:
         await _apply_history_writes(session, inserts, repairs)
     return _count_by_pair(inserts, repairs)
@@ -310,31 +341,41 @@ async def backfill_history(
 # Fetches only from a provider with a missing pair, only for those pairs, from the first missing day.
 # A provider that cannot answer is logged and skipped; the next run tries again. Weekdays the source
 # itself has no quote for (an ECB holiday) stay missing and are simply asked for again next run — one
-# small request, no row invented. Returns the number of rows inserted.
+# small request, no row invented. The read that finds the gaps is committed before any network call,
+# so its admin connection goes back to the pool while the sources answer; the rows are read again after
+# the fetch to plan against. Returns the number of rows inserted.
 async def fill_recent_gaps(session: AsyncSession, today: date_type | None = None) -> int:
     today = today or date_type.today()
     end = today - timedelta(days=1)
     start = today - timedelta(days=GAP_FILL_WINDOW_DAYS)
-    existing = await _load_existing(session, start, end)
     stored_dates: dict[ExchangeRatePair, set[date_type]] = {}
-    for rate_date, pair in existing:
+    for rate_date, pair in await _load_existing(session, start, end):
         stored_dates.setdefault(pair, set()).add(rate_date)
+    await session.commit()
     missing = find_missing_weekdays(stored_dates, list(ExchangeRatePair), start, end)
     if not missing:
         return 0
 
-    inserts: list[ExchangeRateRow] = []
-    repairs: list[ExchangeRateRow] = []
+    fetched: list[tuple[ExchangeRateHistoryProviderInfo, date_type, list[ExchangeRateQuote]]] = []
     for provider in EXCHANGE_RATE_HISTORY_PROVIDERS:
         gap_pairs = tuple(pair for pair in provider.pairs if pair in missing)
         if not gap_pairs:
             continue
         first_missing = min(missing[pair][0] for pair in gap_pairs)
         try:
-            provider_inserts, provider_repairs = await _plan_provider_history(provider, gap_pairs, first_missing, end, existing)
+            quotes = await _fetch_provider_history(provider, gap_pairs, first_missing, end)
         except ExchangeRateHistoryUnavailable as exc:
             logger.warning("Exchange-rate gap fill: %s did not answer (%s); retrying next run.", provider.source, exc)
             continue
+        fetched.append((provider, first_missing, quotes))
+    if not fetched:
+        return 0
+
+    existing = await _load_existing(session, min(first for _p, first, _q in fetched), end)
+    inserts: list[ExchangeRateRow] = []
+    repairs: list[ExchangeRateRow] = []
+    for provider, first_missing, quotes in fetched:
+        provider_inserts, provider_repairs = plan_history_writes(quotes, provider.source, existing, first_missing, end)
         inserts.extend(provider_inserts)
         repairs.extend(provider_repairs)
 

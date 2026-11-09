@@ -33,7 +33,11 @@ import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import {
+  ACTIVE_CURRENCY_COOKIE,
+  ORIGINAL_CURRENCY,
+  resolveCurrencySelection,
+} from '@/lib/stores/currency-store';
 import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
@@ -60,7 +64,7 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   const tCommon = await getTranslations('common');
   const params = await searchParams;
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value;
 
   /*
    * The two option lists — the smart search's investments and collections, which also name a
@@ -83,8 +87,7 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
     : [primary, ORIGINAL_CURRENCY];
 
   // Validate saved cookie against current settings — fall back to primary if stale.
-  const activeCurrency =
-    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
+  const activeCurrency = resolveCurrencySelection(savedCurrency, displayCurrencies, primary);
   const isOriginalSelected = activeCurrency === ORIGINAL_CURRENCY;
   const currency = isOriginalSelected ? primary : activeCurrency;
   const userPresets = buildPresets(settings?.periodPresets);

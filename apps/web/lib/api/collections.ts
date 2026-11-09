@@ -11,7 +11,8 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 interface InvestmentCollectionRaw {
   id: number;
   name: string;
-  target_percentage: number | null;
+  // A Decimal, which the API serialises as a string ("30.00").
+  target_percentage: string | null;
   investment_ids: number[];
 }
 
@@ -40,7 +41,7 @@ function mapCollection(raw: InvestmentCollectionRaw): InvestmentCollection {
   return {
     id: raw.id,
     name: raw.name,
-    targetPercentage: raw.target_percentage,
+    targetPercentage: raw.target_percentage != null ? Number(raw.target_percentage) : null,
     investmentIds: raw.investment_ids,
   };
 }

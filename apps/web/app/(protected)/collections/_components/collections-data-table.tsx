@@ -131,7 +131,7 @@ function CollectionRow({ collection, investmentMap, investments, onSuccess }: Co
         <TableCell className="text-paragraph-sm-medium">{collection.name}</TableCell>
         <TableCell className="text-paragraph-sm text-muted-foreground">
           {collection.targetPercentage != null
-            ? `${collection.targetPercentage}%`
+            ? `${fmt.pct(collection.targetPercentage)}%`
             : t('table.noTarget')}
         </TableCell>
         <TableCell className="text-paragraph-sm text-muted-foreground">

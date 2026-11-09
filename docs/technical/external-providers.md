@@ -108,7 +108,7 @@ NamedTuple. **`quote_date` is the date the source quotes the rate for**, never t
 parsing lives in pure `parse_*` functions so the unit suite reads recorded responses
 (`tests/unit/fixtures/exchange_rates/`) without the network. A latest provider logs and returns `[]` on failure,
 so one source never blocks the other; a history provider raises `ExchangeRateHistoryUnavailable`, because "no
-quotes in this range" and "the source did not answer" must not look alike.
+quotes in this range" and "the source did not answer" must not look alike. ArgentinaDatos fetches one series per pair: one that fails is logged and its pair skipped, and only all of them failing raises. A value that is not a finite number skips that one quote.
 
 **Registries** (in `exchange_rate_providers.py`):
 

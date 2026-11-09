@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 
 import { Button } from '@repo/ui/components';
+import { InviteHelp } from '@/app/(public)/_components/invite-help';
 import { RevealGroup, RevealItem } from '@/app/(public)/_components/reveal';
 import { Section } from '@/app/(public)/_components/section';
 import { ROUTES } from '@/config/routes';
@@ -12,9 +13,10 @@ interface LandingHeroProps {
 }
 
 // Above-the-fold marketing hero: headline, sub-headline, and the primary CTAs. Logged-out visitors
-// get signup / login; logged-in visitors get a single "go to the app" CTA instead. In invite-only
-// mode the primary CTA reads "Request access" (it routes to the invite-only signup screen).
-// Entrance staggers in on mount (the public surface's on-load animation).
+// get signup / login; logged-in visitors get a single "go to the app" CTA instead. While signup is
+// invite-only there is no signup to offer — an account starts from an invite email — so the CTAs are
+// "Log in" and "Have an invite?", which says where the way in is; they switch back by themselves when
+// the API opens signup. Entrance staggers in on mount (the public surface's on-load animation).
 export async function LandingHero({ isAuthenticated, signupMode }: LandingHeroProps) {
   const t = await getTranslations('landing.hero');
   const tCommon = await getTranslations('common');
@@ -33,12 +35,17 @@ export async function LandingHero({ isAuthenticated, signupMode }: LandingHeroPr
             <Button asChild blue size="lg">
               <a href={ROUTES.home}>{tCommon('goToDashboard')}</a>
             </Button>
+          ) : signupMode === 'invite' ? (
+            <>
+              <Button asChild blue size="lg">
+                <a href={ROUTES.auth.login}>{t('ctaSecondary')}</a>
+              </Button>
+              <InviteHelp size="lg" />
+            </>
           ) : (
             <>
               <Button asChild blue size="lg">
-                <a href={ROUTES.auth.signup}>
-                  {signupMode === 'invite' ? tCommon('requestAccess') : t('ctaPrimary')}
-                </a>
+                <a href={ROUTES.auth.signup}>{t('ctaPrimary')}</a>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <a href={ROUTES.auth.login}>{t('ctaSecondary')}</a>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -51,6 +52,7 @@ export function ComboboxMultiSelect({
   surface = false,
   className,
 }: ComboboxMultiSelectProps) {
+  const tCommon = useTranslations('common');
   const [open, setOpen] = useState(false);
 
   const itemMap = new Map(items.map((item) => [item.id, item.label]));
@@ -79,8 +81,12 @@ export function ComboboxMultiSelect({
                       className="inline-flex items-center gap-x-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-paragraph-xs"
                     >
                       {itemMap.get(id) ?? `#${id}`}
+                      {/* An icon-only button, so its name says which chip it removes. */}
                       <button
                         type="button"
+                        aria-label={tCommon('combobox.remove', {
+                          label: itemMap.get(id) ?? `#${id}`,
+                        })}
                         onClick={() => onToggle(id)}
                         className="group/chip-remove rounded-full p-0.5 text-muted-foreground transition-[opacity,transform,color] duration-150 hover:scale-110 hover:text-destructive focus-visible:outline-none"
                       >

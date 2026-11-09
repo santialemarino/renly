@@ -24,6 +24,7 @@ import { TablePagination } from '@/components/table-pagination';
 import type { AccountReconciliation } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { EXPANDED_PANEL_CLASS } from '@/lib/constants/tables';
 import { useExpandablePagedList } from '@/lib/hooks/use-expandable-paged-list';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -97,15 +98,15 @@ export function AccountReconciliationsSection({
     <AnimatePresence>
       {expanded && (
         <TableRow>
-          <TableCell colSpan={colSpan} className="p-0">
+          <TableCell colSpan={colSpan} className="p-0 whitespace-normal">
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
-              className="overflow-hidden"
+              className={EXPANDED_PANEL_CLASS}
             >
-              <div className="px-8 py-4 bg-muted/30">
+              <div className="px-4 md:px-8 py-4 bg-muted/30">
                 <div className="flex items-start justify-between gap-x-4">
                   <div className="flex flex-col gap-y-0.5">
                     <span className="text-paragraph-sm-medium">{t('title')}</span>

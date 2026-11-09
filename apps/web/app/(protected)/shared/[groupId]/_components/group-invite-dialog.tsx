@@ -67,6 +67,18 @@ export function GroupInviteDialog({
     defaultValues: { email: '' },
   });
   const [issued, setIssued] = useState<{ url: string; email: string | null; expiresAt: string }>();
+  /*
+   * Whether this is a first invite or a resend, fixed when the dialog OPENS. Read live, it flipped
+   * mid-flow: creating the link refreshes the page behind the dialog (so the seat reads "invited"),
+   * which sets `hasPendingInvite`, and a first-ever invite then announced it was replacing a link.
+   * Adjusted during render rather than in an effect, so the first open frame already has the right title.
+   */
+  const [openedFor, setOpenedFor] = useState(open);
+  const [resending, setResending] = useState(member.hasPendingInvite);
+  if (open !== openedFor) {
+    setOpenedFor(open);
+    if (open) setResending(member.hasPendingInvite);
+  }
 
   /*
    * Reset on OPEN rather than on close: the link has to survive the close animation (nulling it
@@ -100,12 +112,10 @@ export function GroupInviteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {member.hasPendingInvite ? t('invite.resendTitle') : t('invite.title')}
-          </DialogTitle>
+          <DialogTitle>{resending ? t('invite.resendTitle') : t('invite.title')}</DialogTitle>
         </DialogHeader>
         <DialogDescription>
-          {member.hasPendingInvite
+          {resending
             ? t('invite.resendDescription', { name: member.displayName })
             : t('invite.description', { name: member.displayName })}
         </DialogDescription>
@@ -125,7 +135,9 @@ export function GroupInviteDialog({
             <StyledHint variant="warning">
               {t('invite.shownOnce', { date: fmt.timestampDate(issued.expiresAt) })}
             </StyledHint>
-            {issued.email && <StyledHint>{t('invite.sentTo', { email: issued.email })}</StyledHint>}
+            {issued.email && (
+              <StyledHint variant="info">{t('invite.sentTo', { email: issued.email })}</StyledHint>
+            )}
           </div>
         ) : (
           <Form {...form}>
@@ -148,7 +160,7 @@ export function GroupInviteDialog({
                   </FormItem>
                 )}
               />
-              <StyledHint>{t('invite.emailHint')}</StyledHint>
+              <StyledHint variant="info">{t('invite.emailHint')}</StyledHint>
             </form>
           </Form>
         )}

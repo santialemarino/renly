@@ -29,7 +29,11 @@ import {
 } from '@/lib/constants/health-thresholds';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { hasNoCoreData } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import {
+  ACTIVE_CURRENCY_COOKIE,
+  ORIGINAL_CURRENCY,
+  resolveCurrencySelection,
+} from '@/lib/stores/currency-store';
 import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
@@ -53,7 +57,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const t = await getTranslations('dashboard');
   const params = await searchParams;
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value;
 
   // Always fetch settings — needed for currency fallback and period presets.
   const settings = await getSettings().catch(() => null);
@@ -65,8 +69,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     : [primary, ORIGINAL_CURRENCY];
 
   // Validate saved cookie against current settings — fall back to primary if stale.
-  const activeCurrency =
-    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
+  const activeCurrency = resolveCurrencySelection(savedCurrency, displayCurrencies, primary);
   const isOriginalSelected = activeCurrency === ORIGINAL_CURRENCY;
   const currency = isOriginalSelected ? primary : activeCurrency;
   const userPresets = buildPresets(settings?.periodPresets);

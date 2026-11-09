@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 
 import { Button } from '@repo/ui/components';
+import { InviteHelp } from '@/app/(public)/_components/invite-help';
 import { RevealGroup, RevealItem } from '@/app/(public)/_components/reveal';
 import { Section } from '@/app/(public)/_components/section';
 import { ROUTES } from '@/config/routes';
@@ -10,11 +11,13 @@ interface LandingCtaProps {
   signupMode: SignupMode;
 }
 
-// Closing call-to-action that nudges the visitor to create an account; staggers in on scroll. In
-// invite-only mode the button reads "Request access" (routes to the invite-only signup screen).
+// Closing call-to-action that nudges the visitor to create an account; staggers in on scroll. While
+// signup is invite-only it offers what the hero does instead — "Log in" and "Have an invite?" — with
+// copy that does not promise an account anyone can create.
 export async function LandingCta({ signupMode }: LandingCtaProps) {
   const t = await getTranslations('landing.cta');
-  const tCommon = await getTranslations('common');
+  const tHero = await getTranslations('landing.hero');
+  const inviteOnly = signupMode === 'invite';
 
   return (
     <Section width="narrow" className="pt-16 pb-24">
@@ -23,15 +26,24 @@ export async function LandingCta({ signupMode }: LandingCtaProps) {
           <h2 className="text-heading-2 text-neutral-950">{t('title')}</h2>
         </RevealItem>
         <RevealItem>
-          <p className="text-paragraph text-muted-foreground">{t('subtitle')}</p>
+          <p className="text-paragraph text-muted-foreground">
+            {inviteOnly ? t('inviteSubtitle') : t('subtitle')}
+          </p>
         </RevealItem>
-        <RevealItem>
-          <Button asChild blue size="lg">
-            <a href={ROUTES.auth.signup}>
-              {signupMode === 'invite' ? tCommon('requestAccess') : t('button')}
-            </a>
-          </Button>
-        </RevealItem>
+        {inviteOnly ? (
+          <RevealItem className="flex flex-wrap items-center justify-center gap-x-3 gap-y-3">
+            <Button asChild blue size="lg">
+              <a href={ROUTES.auth.login}>{tHero('ctaSecondary')}</a>
+            </Button>
+            <InviteHelp size="lg" />
+          </RevealItem>
+        ) : (
+          <RevealItem>
+            <Button asChild blue size="lg">
+              <a href={ROUTES.auth.signup}>{t('button')}</a>
+            </Button>
+          </RevealItem>
+        )}
       </RevealGroup>
     </Section>
   );
