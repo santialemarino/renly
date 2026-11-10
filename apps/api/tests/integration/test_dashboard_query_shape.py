@@ -302,7 +302,7 @@ class TestOriginalModeBuildsOneRateLookup:
         # One settings read per request when a display currency is asked for (the request settings).
         # Original mode reads no request settings of its own, and the pot lookup reads no preference —
         # each pot converts at its own dollar rate — so only the overview reads the row, once, for the
-        # timezone; evolution and composition do not read it at all.
+        # timezone its investment and finance halves share; evolution and composition do not read it.
         expected = 1 if currency is not None or read == "overview" else 0
         assert len(settings_reads) == expected
 

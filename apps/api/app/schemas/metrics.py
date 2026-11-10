@@ -56,8 +56,8 @@ class PortfolioMetricsResponse(BaseModel):
     irr: Decimal | None = Field(
         default=None, description="Portfolio money-weighted return (annualised XIRR). Null when the cashflow span is under 30 days."
     )
-    month_change: Decimal | None = Field(default=None, description="Absolute change vs the previous month-end of the portfolio value series.")
-    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs the previous month-end of the portfolio value series.")
+    month_change: Decimal | None = Field(default=None, description="Gain since the end of last month: value change less the money moved in since.")
+    month_change_pct: Decimal | None = Field(default=None, description="That gain as a share of the capital at work.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested and currencies are mixed).")
     skipped_investments: list[SkippedInvestment] = Field(
         default_factory=list, description="Investments excluded because their currency can't be converted."
@@ -121,7 +121,7 @@ class InvestmentSummaryItem(BaseModel):
     current_value: Decimal | None = Field(default=None, description="Latest snapshot value.")
     invested_capital: Decimal = Field(description="Net capital invested.")
     absolute_gain: Decimal | None = Field(default=None, description="Current value minus invested capital.")
-    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs the previous month-end value.")
+    month_change_pct: Decimal | None = Field(default=None, description="Gain since the end of last month as a share of the capital at work.")
     has_snapshots_in_period: bool = Field(default=True, description="Whether this investment has snapshots within the selected date range.")
     currency: str = Field(description="Currency of the monetary values.")
 

@@ -580,6 +580,8 @@ class TestTheYoursSharedSplit:
         monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=accounts))
         monkeypatch.setattr(dashboard_service.account_service, "get_account_balances", AsyncMock(return_value={1: Decimal(cash)}))
         monkeypatch.setattr(dashboard_service, "compute_net_worth_evolution", AsyncMock(return_value=([], [])))
+        # Original mode reads the user's day once for both halves; the halves themselves are stubbed.
+        monkeypatch.setattr(dashboard_service.settings_service, "get_user_today", AsyncMock(return_value=date_type(2026, 6, 15)))
         monkeypatch.setattr(
             dashboard_service.shared_worth_service,
             "load_context",
@@ -866,6 +868,8 @@ class TestHasHoldings:
         monkeypatch.setattr(dashboard_service.investment_repository, "exists_active_by_user", AsyncMock(return_value=investments))
         monkeypatch.setattr(dashboard_service.credit_card_repository, "exists_by_user", AsyncMock(return_value=cards))
         monkeypatch.setattr(dashboard_service, "compute_net_worth_evolution", AsyncMock(return_value=([], [])))
+        # Original mode reads the user's day once for both halves; the halves themselves are stubbed.
+        monkeypatch.setattr(dashboard_service.settings_service, "get_user_today", AsyncMock(return_value=date_type(2026, 6, 15)))
         _no_shared(monkeypatch)
 
     @pytest.mark.asyncio

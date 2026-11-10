@@ -6,6 +6,7 @@ import bisect
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from app.domain.currency import RatePoint, get_ars_pair, is_supported
@@ -50,6 +51,23 @@ def invested_capital(transactions: list[Transaction]) -> Decimal:
         else:
             total -= tx.amount
     return total
+
+
+# The first snapshot of an investment whose opening no recorded flow explains — none of its transactions
+# is dated on or before that snapshot — or None. Its value is capital the holding came in with, exactly
+# as the TWR and the IRR already treat a first snapshot, so invested capital counts it too: without it a
+# holding recorded only through snapshots reads its whole value as gain. When a transaction does sit on
+# or before the first snapshot, that transaction is the opening capital and nothing is added.
+def unexplained_opening(
+    snapshots: Sequence[InvestmentSnapshot],
+    transactions: Sequence[Transaction],
+) -> InvestmentSnapshot | None:
+    if not snapshots:
+        return None
+    first = snapshots[0]
+    if any(tx.date <= first.date for tx in transactions):
+        return None
+    return first
 
 
 # Computes net cash flow between two dates (exclusive start, inclusive end).
@@ -225,7 +243,6 @@ def portfolio_totals_and_returns(
     all_dates = sorted({d for dv in inv_date_value.values() for d in dv})
     if not all_dates:
         return [], []
-    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
 
     last_known: dict[int, Decimal] = {}
     totals: list[tuple[date_type, Decimal]] = []
@@ -237,10 +254,23 @@ def portfolio_totals_and_returns(
             total += last_known.get(inv_id, ZERO)
         totals.append((d, total))
 
+    return totals, _chain_period_returns(totals, inv_date_value, flows_by_inv)
+
+
+# The period return between each pair of consecutive (date, value) points. A period's net cash flow is
+# every real flow dated inside (prev, curr] after its investment's first snapshot, plus the first
+# snapshot itself of an investment born inside it (contributed capital, not return).
+# Returns [(date, period return or None)], one per point after the first.
+def _chain_period_returns(
+    points: list[tuple[date_type, Decimal]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+) -> list[tuple[date_type, Decimal | None]]:
+    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
     returns: list[tuple[date_type, Decimal | None]] = []
-    for i in range(1, len(totals)):
-        prev_date, prev_val = totals[i - 1]
-        curr_date, curr_val = totals[i]
+    for i in range(1, len(points)):
+        prev_date, prev_val = points[i - 1]
+        curr_date, curr_val = points[i]
         period_ncf = ZERO
         for inv_id, flows in flows_by_inv.items():
             first_date = first_snap_date.get(inv_id)
@@ -253,7 +283,81 @@ def portfolio_totals_and_returns(
             if prev_date < first_date <= curr_date:
                 period_ncf += inv_date_value[inv_id][first_date]
         returns.append((curr_date, period_return(prev_val, curr_val, period_ncf)))
-    return totals, returns
+    return returns
+
+
+# Time-weighted return over a window, chaining ONLY the periods that lie inside it. With a start, the
+# first period runs from the window start itself — valued at start_value, the portfolio held that day —
+# to the first total dated after it; every later total dated on or before the window end closes one
+# more period. A period that merely ENDS on the start, or straddles it, belongs to the time before the
+# window and is not counted: chaining it imported the return of whatever happened before the window
+# began (a year-to-date figure that included December). Without a start, every period ending on or
+# before the end counts. Same argument shapes as portfolio_totals_and_returns. Returns None when the
+# window holds no period with a return.
+def windowed_twr(
+    portfolio_totals: list[tuple[date_type, Decimal]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+    start_date: date_type | None,
+    end_date: date_type | None,
+    start_value: Decimal,
+    end_point: tuple[date_type, Decimal] | None = None,
+) -> Decimal | None:
+    points: list[tuple[date_type, Decimal]] = [(start_date, start_value)] if start_date else []
+    for d, total in portfolio_totals:
+        if start_date and d <= start_date:
+            continue
+        if end_date and d > end_date:
+            break
+        points.append((d, total))
+    # The window closes at end_point (its end, or today for a window still open) when that is later
+    # than the last total inside it: the last stretch — the currency's move since the last snapshot, or
+    # money moved in since — belongs to the window too.
+    if end_point is not None and (not points or end_point[0] > points[-1][0]):
+        points.append(end_point)
+    return twr([r for _, r in _chain_period_returns(points, inv_date_value, flows_by_inv) if r is not None])
+
+
+# Each investment's value in its own base currency on as_of_date: its last snapshot dated on or before
+# that day, carried forward however old it is — or its latest snapshot when as_of_date is None. An
+# investment with no snapshot that early is absent. snapshots_by_inv lists each investment's snapshots
+# oldest first, as group_snapshots_by_investment returns them.
+def holding_values_on(
+    snapshots_by_inv: Mapping[int, Sequence[InvestmentSnapshot]],
+    as_of_date: date_type | None,
+) -> dict[int, Decimal]:
+    values: dict[int, Decimal] = {}
+    for inv_id, snaps in snapshots_by_inv.items():
+        held = [s for s in snaps if as_of_date is None or s.date <= as_of_date]
+        if held:
+            values[inv_id] = held[-1].value
+    return values
+
+
+# Net money moved into the portfolio after each investment's last snapshot on or before as_of_date, up
+# to and including that day — money a boundary valued from snapshots alone would miss, since no snapshot
+# has seen it yet. It counts at cost, the only figure there is for it until the next valuation. An
+# investment with no snapshot by then is left out: its flows are embodied in the first snapshot it gets.
+# flows_by_inv carries signed amounts (positive = money in), as portfolio_totals_and_returns takes them.
+def flows_since_last_valuation(
+    snapshots_by_inv: Mapping[int, Sequence[InvestmentSnapshot]],
+    flows_by_inv: Mapping[int, Sequence[tuple[date_type, Decimal]]],
+    as_of_date: date_type,
+) -> Decimal:
+    total = ZERO
+    for inv_id, snaps in snapshots_by_inv.items():
+        valued = [s.date for s in snaps if s.date <= as_of_date]
+        if not valued:
+            continue
+        last_valued = valued[-1]
+        total += sum((amount for d, amount in flows_by_inv.get(inv_id, []) if last_valued < d <= as_of_date), ZERO)
+    return total
+
+
+# The last day of the month before the one as_of_date falls in — the point a "vs last month" figure
+# compares today against.
+def previous_month_end(as_of_date: date_type) -> date_type:
+    return date_type(as_of_date.year, as_of_date.month, 1) - timedelta(days=1)
 
 
 # Forward-filled portfolio value at as_of_date: the last total dated on or before it.
@@ -290,18 +394,24 @@ def month_over_month(
 # the forward-filled portfolio value at the window start, real flows and first-snapshot
 # outflows inside the window, and an inflow of the forward-filled value at the window end
 # (dated at the latest data or flow date inside the window). Zero boundary values are omitted.
-# Same argument shapes as portfolio_totals_and_returns.
+# Same argument shapes as portfolio_totals_and_returns. `start_value` is the portfolio valued ON the
+# window start, at that day's rate, and `end_point` the caller's closing (date, value) — the window's
+# end, or today for a window still open — so the money-weighted return starts and ends at the same two
+# valuations the window's gain does; omitted, the series' own values stand in.
 def build_windowed_portfolio_cashflows(
     portfolio_totals: list[tuple[date_type, Decimal]],
     inv_date_value: dict[int, dict[date_type, Decimal]],
     flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
     start_date: date_type | None,
     end_date: date_type | None,
+    start_value: Decimal | None = None,
+    end_point: tuple[date_type, Decimal] | None = None,
 ) -> list[tuple[date_type, float]]:
     if not portfolio_totals:
         return []
 
-    start_value = portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
+    if start_value is None:
+        start_value = portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
     end_value = ZERO
     end_value_date: date_type | None = None
     for d, total in portfolio_totals:
@@ -311,6 +421,10 @@ def build_windowed_portfolio_cashflows(
         end_value_date = d
     if end_value_date is None:
         return []
+    # The caller's closing valuation (the window's end, or today for a window still open) replaces the
+    # last total inside the window when it is later — the same point the window's gain ends at.
+    if end_point is not None and end_point[0] > end_value_date:
+        end_value_date, end_value = end_point
 
     # True when d falls inside the (start, end] window.
     def _in_window(d: date_type) -> bool:
@@ -446,7 +560,11 @@ _NON_ARS_PAIRS = {
 # stored rate for a pair, we fall back to the earliest available rate so the page never breaks —
 # a deliberate trade-off: degraded historical accuracy for ancient dates beats a 503 page. Such a
 # rate is an ESTIMATE, and the lookup says so (`is_estimate_at`, `used_estimate`) so a response can
-# mark the figure instead of presenting it as the rate of its day.
+# mark the figure instead of presenting it as the rate of its day. One exception for the MEP preference:
+# MEP has no quotes before 2018-10-29, so a date before its history takes the BLUE rate OF THAT DATE —
+# the closest market rate that existed then — rather than MEP's first quote, years later. It is still
+# not the MEP rate, so it stays flagged as an estimate; only when blue has no rate that day either does
+# the earliest-MEP fallback apply.
 # Per-date rate maps are memoised so repeated lookups for the same date are O(1).
 class RateLookup:
     def __init__(
@@ -484,6 +602,11 @@ class RateLookup:
             # Fall back to MEP when the preferred pair has no stored rate (rather than
             # relying on `or`, which would also short-circuit on a hypothetical Decimal(0)).
             ars = self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
+        if ars is not None and ars[1] and ars_pair == ExchangeRatePair.USD_ARS_MEP:
+            # Before MEP's history: blue's rate of that date, still flagged as an estimate.
+            blue = self._lookup_pair(ExchangeRatePair.USD_ARS_BLUE, as_of_date)
+            if blue is not None and not blue[1]:
+                ars = (blue[0], True)
         if ars is not None:
             rate_map["ARS"] = ars[0]
             if ars[1]:

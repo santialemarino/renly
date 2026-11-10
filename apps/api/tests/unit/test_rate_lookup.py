@@ -192,3 +192,40 @@ class TestConvertValueHistorical:
         rate_map = lookup.get_rate_map_at(date(2026, 1, 1))
         # ARS rate is missing -> fail loud, return None.
         assert convert_value(Decimal("1.234"), "ARS", "BRL", rate_map) is None
+
+
+# MEP has no quotes before 2018-10-29. A date before that takes the BLUE rate of THAT date — the closest
+# market rate that existed then — not MEP's first quote years later, and stays flagged as an estimate,
+# since it is not the MEP rate. Without a blue rate that day either, the earliest-MEP fallback stands.
+class TestMepBeforeItsHistoryFallsBackToBlue:
+    _MEP = ExchangeRatePair.USD_ARS_MEP
+    _BLUE = ExchangeRatePair.USD_ARS_BLUE
+    RATES = {
+        _MEP: [_rate(_MEP, date(2018, 10, 29), "37.5"), _rate(_MEP, date(2019, 1, 2), "38.9")],
+        _BLUE: [_rate(_BLUE, date(2015, 6, 1), "13.2"), _rate(_BLUE, date(2017, 3, 1), "16.1"), _rate(_BLUE, date(2019, 1, 2), "39.2")],
+    }
+
+    def test_a_date_before_mep_takes_that_days_blue_rate_flagged_as_an_estimate(self):
+        lookup = RateLookup("mep", self.RATES)
+        assert lookup.get_rate_map_at(date(2017, 5, 10))["ARS"] == Decimal("16.1")
+        assert lookup.is_estimate_at(date(2017, 5, 10), "ARS") is True
+        assert lookup.used_estimate is True
+
+    def test_inside_mep_history_mep_is_used_and_not_an_estimate(self):
+        lookup = RateLookup("mep", self.RATES)
+        assert lookup.get_rate_map_at(date(2019, 1, 10))["ARS"] == Decimal("38.9")
+        assert lookup.is_estimate_at(date(2019, 1, 10), "ARS") is False
+
+    def test_before_blue_too_the_earliest_mep_rate_stands(self):
+        lookup = RateLookup("mep", self.RATES)
+        assert lookup.get_rate_map_at(date(2014, 1, 1))["ARS"] == Decimal("37.5")
+        assert lookup.is_estimate_at(date(2014, 1, 1), "ARS") is True
+
+    def test_without_blue_rates_the_earliest_mep_rate_stands(self):
+        lookup = RateLookup("mep", {self._MEP: self.RATES[self._MEP]})
+        assert lookup.get_rate_map_at(date(2017, 5, 10))["ARS"] == Decimal("37.5")
+
+    def test_another_preference_keeps_its_own_fallback(self):
+        # A blue user before blue's history keeps blue's earliest rate; the rule is MEP's alone.
+        lookup = RateLookup("blue", self.RATES)
+        assert lookup.get_rate_map_at(date(2014, 1, 1))["ARS"] == Decimal("13.2")

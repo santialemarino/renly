@@ -259,6 +259,11 @@ async def get_overview(
     rs = await settings_service.get_request_settings(session, user_id) if currency else None
     lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if rs else None
     today = settings_service.today_for_timezone(rs.timezone) if rs else None
+    # The investment and finance halves both need the user's own day even in Original mode — what the
+    # portfolio holds now and its change since last month, the card balance's anchor — so it is read once
+    # here for both. The net-worth series keeps `today` as is: in Original mode its grid ends at the
+    # last month a term has (see _evolution_grid).
+    user_today = today or await settings_service.get_user_today(session, user_id)
     # Loaded up front because the finance half needs the caller's group seats to union each member's
     # own share into their spending and earnings, and the shared half of net worth needs the same
     # seats plus the pots — one read set for the whole request rather than two that could disagree
@@ -270,6 +275,7 @@ async def get_overview(
         user_id,
         currency=currency,
         lookup=lookup,
+        today=user_today,
     )
     finance = await finance_metrics_service.get_overview(
         session,
@@ -277,7 +283,7 @@ async def get_overview(
         currency=currency,
         lookup=lookup,
         member_ids=[seat.id for seat in context.seats],
-        today=today,
+        today=user_today,
         date_from=date_from,
         date_to=date_to,
     )
@@ -421,6 +427,7 @@ async def compute_net_worth_evolution(
         lookup=lookup,
         start_date=date_from,
         end_date=date_to,
+        today=today,
     )
     skipped: set[str] = set()
 
@@ -557,17 +564,19 @@ async def get_composition(
     # preference builds the lookup and the timezone anchors the card-liability conversion to today.
     rs = await settings_service.get_request_settings(session, user_id) if currency else None
     lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if rs else None
+    today = settings_service.today_for_timezone(rs.timezone) if rs else None
     allocation = await metrics_service.get_allocation(
         session,
         user_id,
         currency=currency,
         lookup=lookup,
+        today=today,
     )
 
     # Compute total card liability, converting each bucket's balance to display currency at TODAY's
     # rate (the composition view is a snapshot of the current state, not a historical one).
     # Includes archived cards — their outstanding balance stays a liability (UI filter only).
-    rate_map = lookup.get_rate_map_at(settings_service.today_for_timezone(rs.timezone)) if lookup else None
+    rate_map = lookup.get_rate_map_at(today) if (lookup and today) else None
     cards = await credit_card_repository.list_by_user(session, user_id, active_only=False)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
@@ -604,7 +613,7 @@ async def get_composition(
         context,
         currency=currency,
         lookup=lookup,
-        as_of_date=settings_service.today_for_timezone(rs.timezone) if rs else date_type.today(),
+        as_of_date=today or date_type.today(),
     )
     by_label: dict[str, Decimal] = {item.category: item.value for item in allocation.items}
     for label, value in shared.buckets.items():
