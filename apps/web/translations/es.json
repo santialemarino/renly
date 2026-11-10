@@ -2148,7 +2148,8 @@
           "description": "Todos valúan el dólar a este tipo. Si tiene otros dueños, el cambio espera a que todos lo acepten; lo ya registrado queda como está.",
           "submit": "Proponer",
           "loading": "Guardando..."
-        }
+        },
+        "hiddenOwner": "Tenés una parte de esto, aunque no podés ver el resto. Sus dueños deciden juntos el tipo de dólar, así que tu aceptación cuenta acá."
       },
       "eventTypes": {
         "opening": "Punto de partida",
@@ -3358,6 +3359,9 @@
         },
         "dollar_rate_applied_to_you": {
           "title": "{pot} ahora usa el tipo de dólar que propuso {actor}"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} retiró el nuevo tipo de dólar para {pot}"
         }
       },
       "pot_movement": {

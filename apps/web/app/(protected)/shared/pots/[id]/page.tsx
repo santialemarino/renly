@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
+import { PotDollarRateOnly } from '@/app/(protected)/shared/pots/[id]/_components/pot-dollar-rate-only';
 import { PotHeader } from '@/app/(protected)/shared/pots/[id]/_components/pot-header';
 import { PotHoldingsSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-holdings-section';
 import { PotLedgerSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-ledger-section';
@@ -13,7 +14,13 @@ import { sharedGroupPath } from '@/config/routes';
 import { getAccounts } from '@/lib/api/accounts';
 import { getGroup } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
-import { getPot, getPotHoldings, getPotOwnershipEvents, getPotSeries } from '@/lib/api/pots';
+import {
+  getPot,
+  getPotDollarRate,
+  getPotHoldings,
+  getPotOwnershipEvents,
+  getPotSeries,
+} from '@/lib/api/pots';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { resolvePageParam } from '@/lib/list-scope';
@@ -76,7 +83,13 @@ export default async function PotPage({ params, searchParams }: PotPageProps) {
   );
 
   const pot = await potRead;
-  if (!pot) notFound();
+  if (!pot) {
+    // An owner the pot is hidden from still has a say on its dollar rate, and reads that alone. Anybody
+    // else gets the same 404 as a pot that does not exist.
+    const rate = await getPotDollarRate(potId);
+    if (!rate) notFound();
+    return <PotDollarRateOnly state={rate} />;
+  }
   const [group, holdings, events, series, accounts, investments, settings] = await reads;
   if (!group || !holdings || !events || !series) notFound();
 

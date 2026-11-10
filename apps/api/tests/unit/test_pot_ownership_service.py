@@ -1593,3 +1593,51 @@ class TestReading:
             await svc.delete_event(AsyncMock(), 5, 999, USER)
         assert get_by_id.await_args.args[1:] == (POT.id, 999)
         delete.assert_not_awaited()
+
+
+class TestTheDollarRateFollowsTheLedger:
+    # Every write that can change who owns the pot hands the ledger as it stood BEFORE the write to
+    # pot_service.after_ledger_change, which applies a pending dollar-rate change nobody is left to wait
+    # for and asks a member who just became an owner. A write that forgot to would leave the proposal
+    # waiting on somebody who sold out, or never ask the newcomer.
+
+    @staticmethod
+    def _hook(monkeypatch) -> AsyncMock:
+        hook = AsyncMock()
+        monkeypatch.setattr(svc.pot_service, "after_ledger_change", hook)
+        return hook
+
+    @pytest.mark.asyncio
+    async def test_a_movement_hands_over_the_units_before_it(self, monkeypatch):
+        _arrange(monkeypatch)
+        hook = self._hook(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(), 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=SEAT.id, amount=Decimal("11")
+        )
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_contributed_holding_hands_over_the_units_before_it(self, monkeypatch):
+        _arrange(monkeypatch)
+        TestHoldingContribution._wire(monkeypatch)
+        hook = self._hook(monkeypatch)
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_re_agreement_hands_over_the_units_before_it(self, monkeypatch):
+        _arrange(monkeypatch)
+        hook = self._hook(monkeypatch)
+        await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 2, 1), from_member_id=100, to_member_id=101, percentage=Decimal("10"))
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_deletion_reads_the_units_before_it_while_a_change_is_pending(self, monkeypatch):
+        _arrange(monkeypatch)
+        pending = POT.model_copy(update={"dollar_rate_proposal": "blue", "dollar_rate_proposed_by": SEAT.id, "dollar_rate_agreed_by": [SEAT.id]})
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(pending, SEAT, WRITER)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.contribution)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", AsyncMock())
+        hook = self._hook(monkeypatch)
+        await svc.delete_event(AsyncMock(), 5, 1, USER)
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}

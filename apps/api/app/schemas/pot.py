@@ -86,6 +86,21 @@ class PotDollarRateProposalResponse(BaseModel):
     can_withdraw: bool = Field(description="Whether the reader may withdraw it: its proposer.")
 
 
+# Response for GET /pots/{pot_id}/dollar-rate and the three writes beside it: the pot's dollar rate and
+# any pending change of it, and nothing else about the pot. Readable by a member who may see the pot OR
+# owns part of it — an owner hidden from the pot still has a say on its rate, and reads exactly this.
+class PotDollarRateResponse(BaseModel):
+    pot_id: int = Field(description="Pot id.")
+    name: str | None = Field(default=None, description="Label; null for a group's default pot.")
+    group_id: int = Field(description="Group the pot belongs to.")
+    group_name: str = Field(description="How the group is named.")
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate every member values the pot at.")
+    dollar_rate_proposal: PotDollarRateProposalResponse | None = Field(
+        default=None, description="A change of that rate waiting for the owners to agree; null when none is."
+    )
+    can_change_dollar_rate: bool = Field(description="Whether the reader may propose a new dollar rate.")
+
+
 # Response for GET list and GET one, POST and PUT.
 # nav and unit_price are null when the pot has no valuation — a pot with no holdings, or one whose
 # currency cannot be converted. Null rather than zero: "we do not know" and "it is worth nothing" are
@@ -110,7 +125,9 @@ class PotResponse(BaseModel):
     dollar_rate_proposal: PotDollarRateProposalResponse | None = Field(
         default=None, description="A change of that rate waiting for the owners to agree; null when none is."
     )
-    can_change_dollar_rate: bool = Field(description="Whether the reader may propose a new dollar rate: an owner, or an admin while nobody owns any.")
+    can_change_dollar_rate: bool = Field(
+        description="Whether the reader may propose a new dollar rate: an owner, or an admin while no owner can answer."
+    )
     is_default: bool = Field(description="Whether this is the group's first pot.")
     nav: Decimal | None = Field(default=None, description="Value of everything the pot holds, in its base currency.")
     valued_as_of: date_type | None = Field(default=None, description="Date the value is current to; null when nothing here has been valued.")

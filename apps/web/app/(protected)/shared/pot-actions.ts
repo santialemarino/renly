@@ -16,7 +16,14 @@ import type {
   PotTakeOutFormValues,
 } from '@/app/(protected)/shared/pot-form-schema';
 import { parseHoldingKey } from '@/app/(protected)/shared/pot-rules';
-import { mapPot, type Pot, type PotRaw } from '@/lib/api/pots';
+import {
+  mapPot,
+  mapPotDollarRateState,
+  type Pot,
+  type PotDollarRateState,
+  type PotDollarRateStateRaw,
+  type PotRaw,
+} from '@/lib/api/pots';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { PotDollarRate } from '@/lib/constants/pots';
 
@@ -80,12 +87,16 @@ export async function updatePot(
 export async function proposePotDollarRate(
   potId: number,
   dollarRate: PotDollarRate,
-): Promise<SharedDataResult<Pot>> {
+): Promise<SharedDataResult<PotDollarRateState>> {
   const res = await authenticatedFetch(`/pots/${potId}/dollar-rate`, {
     method: 'POST',
     body: { dollar_rate: dollarRate },
   });
-  return toDataResult<PotRaw, Pot>(res, mapPot, 'Failed to propose a dollar rate');
+  return toDataResult<PotDollarRateStateRaw, PotDollarRateState>(
+    res,
+    mapPotDollarRateState,
+    'Failed to propose a dollar rate',
+  );
 }
 
 // Agrees to the pending change; it applies once every owner has.

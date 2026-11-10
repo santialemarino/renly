@@ -48,6 +48,18 @@ _POT_JSON = {
 }
 
 
+# What the dollar-rate routes answer: the rate surface alone.
+_RATE_JSON = {
+    "pot_id": 5,
+    "name": None,
+    "group_id": 10,
+    "group_name": "Casa",
+    "dollar_rate": "mep",
+    "dollar_rate_proposal": None,
+    "can_change_dollar_rate": True,
+}
+
+
 # What each stubbed service returns, for the endpoints whose response model is not a single pot.
 _STUB_RETURNS = {
     "list_pots": [],
@@ -88,6 +100,27 @@ class TestSessionWiring:
         assert response.status_code == 201
         assert sessions["kind"] == "privileged"
 
+    # The dollar rate is the owners' say, and an owner can be hidden from the pot they own — exactly who
+    # the pot's row policies refuse. So its four routes take the privileged session and the service
+    # states the rule itself: a member who may see the pot or owns part of it.
+    @pytest.mark.parametrize(
+        ("method", "path", "body"),
+        [
+            ("get", "/pots/5/dollar-rate", None),
+            ("post", "/pots/5/dollar-rate", {"dollar_rate": "blue"}),
+            ("post", "/pots/5/dollar-rate/agree", None),
+            ("delete", "/pots/5/dollar-rate", None),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_the_dollar_rate_routes_take_the_privileged_session(self, monkeypatch, method, path, body):
+        sessions: dict = {}
+        for name in ("get_dollar_rate", "propose_dollar_rate", "agree_dollar_rate", "withdraw_dollar_rate"):
+            monkeypatch.setattr(pot_service, name, AsyncMock(return_value=_RATE_JSON))
+        response = getattr(_client(sessions), method)(path, **({"json": body} if body is not None else {}))
+        assert response.status_code == 200
+        assert sessions["kind"] == "privileged"
+
     @pytest.mark.parametrize(
         ("method", "path", "body"),
         [
@@ -102,11 +135,6 @@ class TestSessionWiring:
             ("get", "/pots/5/holdings/contributable", None),
             ("post", "/pots/5/holdings", {"investment_ids": [1]}),
             ("post", "/pots/5/holdings/remove", {"investment_ids": [1]}),
-            # The dollar rate is the OWNERS' agreement, and an owner is usually not an admin: the pot's
-            # own write policy is what lets them change its row, which only the request session applies.
-            ("post", "/pots/5/dollar-rate", {"dollar_rate": "blue"}),
-            ("post", "/pots/5/dollar-rate/agree", None),
-            ("delete", "/pots/5/dollar-rate", None),
         ],
     )
     @pytest.mark.asyncio
@@ -124,9 +152,6 @@ class TestSessionWiring:
             "set_permission",
             "clear_permission",
             "move_holdings",
-            "propose_dollar_rate",
-            "agree_dollar_rate",
-            "withdraw_dollar_rate",
         ):
             monkeypatch.setattr(pot_service, name, AsyncMock(return_value=_STUB_RETURNS.get(name, _POT_JSON)))
         response = getattr(_client(sessions), method)(path, **({"json": body} if body is not None else {}))
@@ -258,7 +283,7 @@ class TestRequestContract:
         # Changing it takes every owner's agreement, so the settings update cannot carry it — the field
         # does not exist there, and a proposal accepts only one of the three rates.
         assert "dollar_rate" not in PotUpdate.model_fields
-        propose = AsyncMock(return_value=_POT_JSON)
+        propose = AsyncMock(return_value=_RATE_JSON)
         monkeypatch.setattr(pot_service, "propose_dollar_rate", propose)
         assert _client({}).post("/pots/5/dollar-rate", json={"dollar_rate": "tarjeta"}).status_code == 422
         response = _client({}).post("/pots/5/dollar-rate", json={"dollar_rate": "blue"})

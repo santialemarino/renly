@@ -22,11 +22,14 @@ import {
   withdrawPotDollarRate,
 } from '@/app/(protected)/shared/pot-actions';
 import { FormCombobox } from '@/components/form-combobox';
-import type { Pot } from '@/lib/api/pots';
+import type { PotDollarRateProposal } from '@/lib/api/pots';
 import { POT_DOLLAR_RATES, type PotDollarRate } from '@/lib/constants/pots';
 
 interface PotDollarRateSectionProps {
-  pot: Pot;
+  potId: number;
+  dollarRate: PotDollarRate;
+  proposal: PotDollarRateProposal | null;
+  canChange: boolean;
 }
 
 /*
@@ -36,17 +39,22 @@ interface PotDollarRateSectionProps {
  * the API says they may do about it.
  *
  * Every sentence is whole per rate rather than a label interpolated into one, so each language can
- * phrase it its own way.
+ * phrase it its own way. Takes the rate's own fields rather than the pot, because an owner the pot is
+ * hidden from sees this section and nothing else of it.
  */
-export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
+export function PotDollarRateSection({
+  potId,
+  dollarRate,
+  proposal,
+  canChange,
+}: PotDollarRateSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [rate, setRate] = useState<PotDollarRate>(pot.dollarRate);
+  const [rate, setRate] = useState<PotDollarRate>(dollarRate);
   const [pending, setPending] = useState(false);
 
-  const proposal = pot.dollarRateProposal;
-  const options = POT_DOLLAR_RATES.filter((option) => option !== pot.dollarRate).map((option) => ({
+  const options = POT_DOLLAR_RATES.filter((option) => option !== dollarRate).map((option) => ({
     value: option,
     label: t(`pots.dollarRate.options.${option}`),
   }));
@@ -77,7 +85,7 @@ export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
   async function onPropose() {
     setPending(true);
     try {
-      const result = await proposePotDollarRate(pot.id, rate);
+      const result = await proposePotDollarRate(potId, rate);
       if (!result.ok) {
         toast.error(result.conflictDetail);
         return;
@@ -97,7 +105,7 @@ export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
   }
 
   function onOpen() {
-    setRate(options[0]?.value ?? pot.dollarRate);
+    setRate(options[0]?.value ?? dollarRate);
     setOpen(true);
   }
 
@@ -106,9 +114,9 @@ export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="flex items-center gap-x-2 text-paragraph-sm text-muted-foreground">
           <DollarSign className="size-4 shrink-0" />
-          {t(`pots.dollarRate.notice.${pot.dollarRate}`)}
+          {t(`pots.dollarRate.notice.${dollarRate}`)}
         </p>
-        {pot.canChangeDollarRate && (
+        {canChange && (
           <Button variant="outline" size="sm" onClick={onOpen}>
             {t('pots.dollarRate.change')}
           </Button>
@@ -138,7 +146,7 @@ export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
                 variant="outline"
                 disabled={pending}
                 onClick={() =>
-                  run(() => withdrawPotDollarRate(pot.id), t('pots.dollarRate.withdrawSuccess'))
+                  run(() => withdrawPotDollarRate(potId), t('pots.dollarRate.withdrawSuccess'))
                 }
               >
                 {t('pots.dollarRate.withdraw')}
@@ -149,7 +157,7 @@ export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
                 blue
                 disabled={pending}
                 onClick={() =>
-                  run(() => agreePotDollarRate(pot.id), t('pots.dollarRate.agreeSuccess'))
+                  run(() => agreePotDollarRate(potId), t('pots.dollarRate.agreeSuccess'))
                 }
               >
                 {t('pots.dollarRate.agree')}
@@ -166,11 +174,11 @@ export function PotDollarRateSection({ pot }: PotDollarRateSectionProps) {
           </DialogHeader>
           <DialogDescription>{t('pots.dollarRate.dialog.description')}</DialogDescription>
           <div className="flex flex-col gap-y-2">
-            <Label required htmlFor={`pot-${pot.id}-dollar-rate`}>
+            <Label required htmlFor={`pot-${potId}-dollar-rate`}>
               {t('pots.form.dollarRate.label')}
             </Label>
             <FormCombobox
-              id={`pot-${pot.id}-dollar-rate`}
+              id={`pot-${potId}-dollar-rate`}
               value={rate}
               onValueChange={(value) => setRate(value as PotDollarRate)}
               options={options}

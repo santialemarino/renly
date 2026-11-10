@@ -53,6 +53,16 @@ interface PotDollarRateProposalRaw {
   can_withdraw: boolean;
 }
 
+export interface PotDollarRateStateRaw {
+  pot_id: number;
+  name: string | null;
+  group_id: number;
+  group_name: string;
+  dollar_rate: PotDollarRate;
+  dollar_rate_proposal: PotDollarRateProposalRaw | null;
+  can_change_dollar_rate: boolean;
+}
+
 export interface PotRaw {
   id: number;
   group_id: number;
@@ -158,6 +168,20 @@ export interface PotDollarRateProposal {
   waitingOn: string[];
   canAgree: boolean;
   canWithdraw: boolean;
+}
+
+/*
+ * A pot's dollar rate and any pending change of it, and nothing else about the pot: what an owner the
+ * pot is hidden from can read. Their say on the rate does not depend on seeing the pot.
+ */
+export interface PotDollarRateState {
+  potId: number;
+  name: string | null;
+  groupId: number;
+  groupName: string;
+  dollarRate: PotDollarRate;
+  dollarRateProposal: PotDollarRateProposal | null;
+  canChangeDollarRate: boolean;
 }
 
 export interface Pot {
@@ -286,6 +310,30 @@ function mapPermission(raw: PotPermissionRaw): PotPermission {
   };
 }
 
+function mapProposal(raw: PotDollarRateProposalRaw | null): PotDollarRateProposal | null {
+  return (
+    raw && {
+      dollarRate: raw.dollar_rate,
+      proposedBy: raw.proposed_by,
+      waitingOn: raw.waiting_on,
+      canAgree: raw.can_agree,
+      canWithdraw: raw.can_withdraw,
+    }
+  );
+}
+
+export function mapPotDollarRateState(raw: PotDollarRateStateRaw): PotDollarRateState {
+  return {
+    potId: raw.pot_id,
+    name: raw.name,
+    groupId: raw.group_id,
+    groupName: raw.group_name,
+    dollarRate: raw.dollar_rate,
+    dollarRateProposal: mapProposal(raw.dollar_rate_proposal),
+    canChangeDollarRate: raw.can_change_dollar_rate,
+  };
+}
+
 export function mapPot(raw: PotRaw): Pot {
   return {
     id: raw.id,
@@ -295,13 +343,7 @@ export function mapPot(raw: PotRaw): Pot {
     snapshotCadence: raw.snapshot_cadence,
     visibility: raw.visibility,
     dollarRate: raw.dollar_rate,
-    dollarRateProposal: raw.dollar_rate_proposal && {
-      dollarRate: raw.dollar_rate_proposal.dollar_rate,
-      proposedBy: raw.dollar_rate_proposal.proposed_by,
-      waitingOn: raw.dollar_rate_proposal.waiting_on,
-      canAgree: raw.dollar_rate_proposal.can_agree,
-      canWithdraw: raw.dollar_rate_proposal.can_withdraw,
-    },
+    dollarRateProposal: mapProposal(raw.dollar_rate_proposal),
     canChangeDollarRate: raw.can_change_dollar_rate,
     isDefault: raw.is_default,
     nav: raw.nav,
@@ -394,6 +436,15 @@ export async function getPot(potId: number, asOfDate?: string): Promise<Pot | nu
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch pot');
   return mapPot(await res.json());
+}
+
+// The pot's dollar rate and any pending change of it. Readable by a member who may see the pot or owns
+// part of it, so the pot page can still ask a HIDDEN owner for their agreement; null for anybody else.
+export async function getPotDollarRate(potId: number): Promise<PotDollarRateState | null> {
+  const res = await authenticatedFetch(`/pots/${potId}/dollar-rate`, { method: 'GET' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch pot dollar rate');
+  return mapPotDollarRateState(await res.json());
 }
 
 // Everything the pot holds, archived holdings included and flagged. Null for the same two reasons

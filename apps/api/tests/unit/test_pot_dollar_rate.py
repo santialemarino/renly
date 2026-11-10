@@ -13,6 +13,7 @@ import pytest
 
 from app.domain import (
     GroupAdminRequiredError,
+    NotFoundError,
     PotDollarRateAlreadyAgreedError,
     PotDollarRateNotYoursError,
     PotDollarRateOwnerRequiredError,
@@ -24,7 +25,7 @@ from app.models.asset_price import AssetPrice
 from app.models.exchange_rate import DollarRate, ExchangeRatePair
 from app.models.group import GroupMember, GroupMemberRole
 from app.models.investment import Investment, InvestmentCategory
-from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
+from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
 from app.services import asset_price_service, exchange_rate_service, pot_ownership_service, pot_service, shared_worth_service
@@ -251,8 +252,10 @@ class TestChangingTheRateReachesFutureFiguresOnly:
             monkeypatch.setattr(pot_service.pot_ownership_repository, method, writes, raising=False)
 
         before = await pot_service.get_pot(AsyncMock(), 5, ANA)
-        pending = await pot_service.propose_dollar_rate(AsyncMock(), 5, ANA, dollar_rate=DollarRate.blue)
-        after = await pot_service.agree_dollar_rate(AsyncMock(), 5, BRUNO)
+        await pot_service.propose_dollar_rate(AsyncMock(), 5, ANA, dollar_rate=DollarRate.blue)
+        pending = await pot_service.get_pot(AsyncMock(), 5, ANA)
+        await pot_service.agree_dollar_rate(AsyncMock(), 5, BRUNO)
+        after = await pot_service.get_pot(AsyncMock(), 5, ANA)
 
         # 1,800,000 ARS: 1,500 USD at MEP, 1,200 at blue — over the same 150 units. Nothing moved while
         # the change waited for Bruno.
@@ -337,11 +340,14 @@ class TestTheOwnersAgree:
     # by the OWNERS' agreement: one proposes, the others agree, and nothing changes until all have.
 
     @staticmethod
-    def _wire(monkeypatch, pot: Pot, events: list[PotOwnershipEvent], seats: list[GroupMember]) -> tuple[AsyncMock, AsyncMock, AsyncMock]:
+    def _wire(
+        monkeypatch, pot: Pot, events: list[PotOwnershipEvent], seats: list[GroupMember], permissions: dict[int, PotMemberPermission] | None = None
+    ) -> tuple[AsyncMock, AsyncMock, AsyncMock]:
         by_user = {seat.user_id: seat for seat in seats if seat.user_id is not None}
+        rows = permissions or {}
         monkeypatch.setattr(pot_service.pot_repository, "get_by_id", AsyncMock(return_value=pot))
         monkeypatch.setattr(pot_service.group_repository, "get_member_by_user", AsyncMock(side_effect=lambda _s, _g, user_id: by_user[user_id]))
-        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=None))
+        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(side_effect=lambda _s, _p, member_id: rows.get(member_id)))
         monkeypatch.setattr(pot_service.group_repository, "list_members", AsyncMock(return_value=seats))
         monkeypatch.setattr(pot_service.pot_repository, "list_permissions", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=events))
@@ -477,6 +483,90 @@ class TestTheOwnersAgree:
         )
         await pot_service.agree_dollar_rate(AsyncMock(), 5, ANA)
         assert pot.dollar_rate == DollarRate.blue
+
+    # An owner's say on the rate does not depend on seeing the pot. Hidden either way — an explicit row
+    # with can_view false, or an 'owners' pot with no row of their own — Bruno still holds half of it: he
+    # is asked, reads the proposal, and his agreement is what applies it. Nothing else about the pot
+    # reaches him through this surface.
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("visibility", "permissions"),
+        [
+            (PotVisibility.members, {101: PotMemberPermission(pot_id=5, member_id=101, can_view=False)}),
+            (PotVisibility.owners, {100: PotMemberPermission(pot_id=5, member_id=100, can_view=True, can_write=True)}),
+        ],
+        ids=["can_view_false", "owners_pot_without_a_row"],
+    )
+    async def test_an_owner_hidden_from_the_pot_is_asked_and_can_agree(self, monkeypatch, visibility, permissions):
+        pot = _pot()
+        pot.visibility = visibility
+        _, dispatch, _ = self._wire(monkeypatch, pot, _units((100, "50"), (101, "50")), [ANA_SEAT, BRUNO_SEAT], permissions)
+        assert not pot_service._may_view(pot, permissions.get(BRUNO_SEAT.id))
+
+        await pot_service.propose_dollar_rate(AsyncMock(), 5, ANA, dollar_rate=DollarRate.blue)
+        assert dispatch.await_args.args[1] == [BRUNO.id]
+        seen = await pot_service.get_dollar_rate(AsyncMock(), 5, BRUNO)
+        assert (seen.dollar_rate_proposal.waiting_on, seen.dollar_rate_proposal.can_agree) == (["Bruno"], True)
+        await pot_service.agree_dollar_rate(AsyncMock(), 5, BRUNO)
+        assert pot.dollar_rate == DollarRate.blue
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_member_who_owns_nothing_learns_nothing(self, monkeypatch):
+        pot = _pot()
+        hidden = {102: PotMemberPermission(pot_id=5, member_id=102, can_view=False)}
+        self._wire(monkeypatch, pot, _units((100, "50"), (101, "50")), [ANA_SEAT, BRUNO_SEAT, CARLA_SEAT], hidden)
+        pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, ANA_SEAT.id, [ANA_SEAT.id]
+        with pytest.raises(NotFoundError):
+            await pot_service.get_dollar_rate(AsyncMock(), 5, CARLA)
+        with pytest.raises(NotFoundError):
+            await pot_service.agree_dollar_rate(AsyncMock(), 5, CARLA)
+
+    @pytest.mark.asyncio
+    async def test_when_every_unit_sits_with_seats_that_cannot_answer_an_admin_sets_it(self, monkeypatch):
+        # Nobody could ever propose otherwise: the owners left, or never had an account.
+        pot = _pot()
+        audit, _, _ = self._wire(monkeypatch, pot, _units((103, "50"), (104, "50")), [ANA_SEAT, BRUNO_SEAT, NAME_ONLY_SEAT, LEFT_SEAT])
+
+        async def require_admin(_s, _g, user):
+            if user.id != ANA.id:
+                raise GroupAdminRequiredError()
+
+        monkeypatch.setattr("app.services.group_service.require_admin", require_admin)
+        with pytest.raises(GroupAdminRequiredError):
+            await pot_service.propose_dollar_rate(AsyncMock(), 5, BRUNO, dollar_rate=DollarRate.blue)
+        await pot_service.propose_dollar_rate(AsyncMock(), 5, ANA, dollar_rate=DollarRate.blue)
+        assert pot.dollar_rate == DollarRate.blue
+        assert self._payloads(audit)[-1] == ("updated", {"pot": None, "variant": "dollar_rate", "from_rate": "mep", "to_rate": "blue"})
+
+    @pytest.mark.asyncio
+    async def test_a_proposal_applies_once_the_last_owner_it_waited_for_sells_out(self, monkeypatch):
+        pot = _pot()
+        pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, ANA_SEAT.id, [ANA_SEAT.id]
+        # The ledger as it stands after Bruno's buy-out: Ana owns it all.
+        _, _, dispatch_many = self._wire(monkeypatch, pot, _units((100, "100")), [ANA_SEAT, BRUNO_SEAT])
+        await pot_service.after_ledger_change(AsyncMock(), pot, BRUNO, units_before={100: Decimal("50"), 101: Decimal("50")})
+        assert (pot.dollar_rate, pot.dollar_rate_proposal) == (DollarRate.blue, None)
+        assert self._readers(dispatch_many)["dollar_rate_applied_from_you"] == [ANA.id]
+
+    @pytest.mark.asyncio
+    async def test_a_member_who_becomes_an_owner_while_it_waits_is_asked(self, monkeypatch):
+        pot = _pot()
+        pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, ANA_SEAT.id, [ANA_SEAT.id]
+        _, dispatch, _ = self._wire(monkeypatch, pot, _units((100, "40"), (101, "40"), (102, "20")), [ANA_SEAT, BRUNO_SEAT, CARLA_SEAT])
+        await pot_service.after_ledger_change(AsyncMock(), pot, CARLA, units_before={100: Decimal("50"), 101: Decimal("50")})
+        assert pot.dollar_rate == DollarRate.mep
+        # Carla is new and asked; Bruno was asked when it was proposed and is not asked twice.
+        assert dispatch.await_args.args[1] == [CARLA.id]
+        assert (dispatch.await_args.args[2]["variant"], dispatch.await_args.args[2]["actor"]) == ("dollar_rate_proposed_to_you", "Ana")
+
+    @pytest.mark.asyncio
+    async def test_the_owners_hear_when_a_proposal_is_withdrawn(self, monkeypatch):
+        pot = _pot()
+        _, dispatch, _ = self._wire(monkeypatch, pot, _units((100, "40"), (101, "40"), (102, "20")), [ANA_SEAT, BRUNO_SEAT, CARLA_SEAT])
+        await pot_service.propose_dollar_rate(AsyncMock(), 5, ANA, dollar_rate=DollarRate.blue)
+        await pot_service.withdraw_dollar_rate(AsyncMock(), 5, ANA)
+        assert dispatch.await_args.args[1] == [BRUNO.id, CARLA.id]
+        assert dispatch.await_args.args[2]["variant"] == "dollar_rate_withdrawn_to_you"
 
     @pytest.mark.asyncio
     async def test_the_response_says_who_it_waits_on_and_what_each_reader_may_do(self, monkeypatch):

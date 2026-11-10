@@ -180,6 +180,15 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{pot} now uses the dollar rate {actor} proposed",
         },
+        "ownership_changed.dollar_rate_withdrawn_to_you": {
+            "subject": "{actor} withdrew the new dollar rate for {pot}",
+            "body": (
+                '{actor} withdrew the proposed change of dollar rate for "{pot}", in the group "{group}". '
+                "There is nothing left to agree to, and the pot keeps the rate it had.\n\n"
+                "See the pot here:\n{link}"
+            ),
+            "push": "{actor} withdrew the new dollar rate for {pot}",
+        },
         "pot_movement.contribution": {
             "subject": "{member} added money to {pot}",
             "body": ('{member} added {amount} {currency} to "{pot}", in the group "{group}".\n\nSee the pot and its movements here:\n{link}'),
@@ -501,6 +510,15 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "Podés ver el fondo acá:\n{link}"
             ),
             "push": "{pot} ahora usa el tipo de dólar que propuso {actor}",
+        },
+        "ownership_changed.dollar_rate_withdrawn_to_you": {
+            "subject": "{actor} retiró el nuevo tipo de dólar para {pot}",
+            "body": (
+                '{actor} retiró el cambio de tipo de dólar propuesto para "{pot}", en el grupo "{group}". '
+                "No queda nada por aceptar, y el fondo conserva el tipo que tenía.\n\n"
+                "Podés ver el fondo acá:\n{link}"
+            ),
+            "push": "{actor} retiró el nuevo tipo de dólar para {pot}",
         },
         "pot_movement.contribution": {
             "subject": "{member} puso dinero en {pot}",

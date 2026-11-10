@@ -2148,7 +2148,8 @@
           "description": "Everyone in it values dollars at this rate. When it has other owners, the change waits until all of them agree; what is already recorded stays as it was.",
           "submit": "Propose",
           "loading": "Saving..."
-        }
+        },
+        "hiddenOwner": "You own part of this, though you cannot see the rest of it. Its owners decide its dollar rate together, so your agreement counts here."
       },
       "eventTypes": {
         "opening": "Baseline",
@@ -3358,6 +3359,9 @@
         },
         "dollar_rate_applied_to_you": {
           "title": "{pot} now uses the dollar rate {actor} proposed"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} withdrew the new dollar rate for {pot}"
         }
       },
       "pot_movement": {

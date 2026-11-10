@@ -182,7 +182,12 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
 
       {/* Under the figures it explains: every member sees the same value because the pot, not the
           reader, decides which dollar rate converts its holdings. */}
-      <PotDollarRateSection pot={pot} />
+      <PotDollarRateSection
+        potId={pot.id}
+        dollarRate={pot.dollarRate}
+        proposal={pot.dollarRateProposal}
+        canChange={pot.canChangeDollarRate}
+      />
 
       <PotFormDialog
         open={editOpen}

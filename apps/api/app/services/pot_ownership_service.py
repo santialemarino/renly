@@ -580,6 +580,8 @@ async def record_movement(
             NotificationDispatch(member_reader, {**payload, "variant": f"{type.value}_for_you"}),
         ],
     )
+    # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    await pot_service.after_ledger_change(session, pot, user, units_before=balances)
     return _build_response(event, {member.id: member}, viewer_member_id=actor.id, may_write=True)
 
 
@@ -639,7 +641,7 @@ async def contribute_holding(
     # whatever the contributor prefers.
     lookup = await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
     today = date_type.today()
-    price, _ = await _require_price(session, pot, today, lookup=lookup)
+    price, balances = await _require_price(session, pot, today, lookup=lookup)
     valued = await pot_service.value_contributed_holding(session, pot, holding, as_of_date=today, lookup=lookup, price=price)
 
     credited = valued.base_value
@@ -700,6 +702,8 @@ async def contribute_holding(
             },
         ),
     )
+    # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    await pot_service.after_ledger_change(session, pot, user, units_before=balances)
     return _build_response(event, {member.id: member}, viewer_member_id=member.id, may_write=True)
 
 
@@ -807,6 +811,8 @@ async def record_reagreement(
             NotificationDispatch(receiver_reader, {**payload, "variant": "reagreement_to_you"}),
         ],
     )
+    # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    await pot_service.after_ledger_change(session, pot, user, units_before=balances)
     return _build_response(event, {giver.id: giver, receiver.id: receiver}, viewer_member_id=actor.id, may_write=True)
 
 
@@ -988,6 +994,10 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
     entry_id, entry_type = event.id, event.type
     members_by_id = {member.id: member for member in await group_repository.list_members(session, pot.group_id)}
     subject_name, counterparty_name = _seat_names(event, members_by_id)
+    # Read only while a dollar-rate change is pending, the one thing it is needed for.
+    units_before = {}
+    if pot.dollar_rate_proposal is not None:
+        units_before = replay_units(_as_entries(await pot_ownership_repository.list_by_pot(session, pot.id)))
     if entry_type == OwnershipEventType.opening:
         deleted = await pot_ownership_repository.delete_openings(session, pot.id)
     else:
@@ -1026,4 +1036,6 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
         recipients,
         pot_service.notification_payload(pot, group, {"variant": "deleted", "actor": viewer.display_name}),
     )
+    # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    await pot_service.after_ledger_change(session, pot, user, units_before=units_before)
     return deleted

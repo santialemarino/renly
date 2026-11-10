@@ -141,6 +141,9 @@ const NOT_CALLED_ONCE_ONBOARDED: Record<string, Record<string, string>> = {
 // Reads a page calls only on a branch neither run takes, and why.
 const NOT_CALLED: Record<string, Record<string, string>> = {
   'investor-dashboard': { getInvestmentMetrics: 'only when filtered to one investment' },
+  'shared/pots/[id]': {
+    getPotDollarRate: 'only when the pot is hidden from the reader, who may still own part of it',
+  },
   'shared/[groupId]/share': {
     getPot: 'only when filling an existing pot (`?pot=`)',
     getPotHoldings: 'only when filling an existing pot (`?pot=`)',
