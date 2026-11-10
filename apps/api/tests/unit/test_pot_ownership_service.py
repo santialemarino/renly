@@ -1641,3 +1641,17 @@ class TestTheDollarRateFollowsTheLedger:
         hook = self._hook(monkeypatch)
         await svc.delete_event(AsyncMock(), 5, 1, USER)
         assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_movement_still_succeeds_when_settling_the_rate_fails(self, monkeypatch, caplog):
+        # The movement has committed by the time the hook runs, so a failure there must not answer a
+        # 500: a client told the write failed retries it, and the same money is recorded twice.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "_after_ledger_change", AsyncMock(side_effect=RuntimeError("boom")))
+        session = AsyncMock()
+        response = await svc.record_movement(
+            session, 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=SEAT.id, amount=Decimal("11")
+        )
+        assert response.id == 900
+        session.rollback.assert_awaited_once()
+        assert "dollar-rate proposal of pot 5" in caplog.text

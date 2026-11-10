@@ -55,6 +55,10 @@ issuing queries on the same session after a failed write.
   notify, account cleanup. Reaching for it on ordinary request work silently switches off every policy,
   and no test fails, so take it in ADDITION to `SessionDep` and use it only for the cross-user read or
   write that needs it (as `routers/feedback.py` does).
+  **One exception takes it alone:** the pot dollar-rate routes (`/pots/{id}/dollar-rate`). An owner's
+  say on the rate does not depend on seeing the pot, and an owner hidden from it is exactly who the
+  pot's policies refuse — on every read and write the flow makes — so the service states the rule
+  instead (a member who may see the pot OR owns part of it) and returns the rate surface alone.
 - **`AuthSessionDep`** — also `renly_admin`, on its own small pool, reserved for the pre-auth paths
   (login, register, refresh, verification, password reset, invite preview, API-key verification) so a
   scheduler job holding the admin pool can never queue a login. `tests/unit/test_auth_pool_routing.py`

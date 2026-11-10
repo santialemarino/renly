@@ -581,8 +581,10 @@ async def record_movement(
         ],
     )
     # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    # Built before the hook: a hook that fails rolls its own work back, which expires what the session holds.
+    response = _build_response(event, {member.id: member}, viewer_member_id=actor.id, may_write=True)
     await pot_service.after_ledger_change(session, pot, user, units_before=balances)
-    return _build_response(event, {member.id: member}, viewer_member_id=actor.id, may_write=True)
+    return response
 
 
 # Records a HOLDING contributed to a divided pot: an investment or a cash account moving out of the
@@ -703,8 +705,10 @@ async def contribute_holding(
         ),
     )
     # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    # Built before the hook: a hook that fails rolls its own work back, which expires what the session holds.
+    response = _build_response(event, {member.id: member}, viewer_member_id=member.id, may_write=True)
     await pot_service.after_ledger_change(session, pot, user, units_before=balances)
-    return _build_response(event, {member.id: member}, viewer_member_id=member.id, may_write=True)
+    return response
 
 
 # Records a re-agreement: units moving from one member to another with no money at all. Net-zero in
@@ -812,8 +816,10 @@ async def record_reagreement(
         ],
     )
     # A pending change of the pot's dollar rate follows who owns the pot now — see after_ledger_change.
+    # Built before the hook: a hook that fails rolls its own work back, which expires what the session holds.
+    response = _build_response(event, {giver.id: giver, receiver.id: receiver}, viewer_member_id=actor.id, may_write=True)
     await pot_service.after_ledger_change(session, pot, user, units_before=balances)
-    return _build_response(event, {giver.id: giver, receiver.id: receiver}, viewer_member_id=actor.id, may_write=True)
+    return response
 
 
 # The two seats an event names, as display names, for an audit payload. Three callers read the same

@@ -520,6 +520,8 @@ class TestTheOwnersAgree:
             await pot_service.get_dollar_rate(AsyncMock(), 5, CARLA)
         with pytest.raises(NotFoundError):
             await pot_service.agree_dollar_rate(AsyncMock(), 5, CARLA)
+        # Refused before the pot's row lock: a member who gets the 404 never holds it, even briefly.
+        pot_service.pot_repository.lock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_when_every_unit_sits_with_seats_that_cannot_answer_an_admin_sets_it(self, monkeypatch):
@@ -547,6 +549,21 @@ class TestTheOwnersAgree:
         await pot_service.after_ledger_change(AsyncMock(), pot, BRUNO, units_before={100: Decimal("50"), 101: Decimal("50")})
         assert (pot.dollar_rate, pot.dollar_rate_proposal) == (DollarRate.blue, None)
         assert self._readers(dispatch_many)["dollar_rate_applied_from_you"] == [ANA.id]
+
+    @pytest.mark.asyncio
+    async def test_a_settlement_that_fails_part_way_leaves_nothing_half_applied_and_raises_nothing(self, monkeypatch):
+        # The audit write fails after the pot row was changed in memory but before the commit: the hook
+        # rolls back rather than leave the rate changed and the proposal cleared without a record, and it
+        # does not raise into the ledger write that already committed.
+        pot = _pot()
+        pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, ANA_SEAT.id, [ANA_SEAT.id]
+        audit, _, dispatch_many = self._wire(monkeypatch, pot, _units((100, "100")), [ANA_SEAT, BRUNO_SEAT])
+        audit.side_effect = RuntimeError("audit down")
+        session = AsyncMock()
+        await pot_service.after_ledger_change(session, pot, BRUNO, units_before={100: Decimal("50"), 101: Decimal("50")})
+        session.rollback.assert_awaited_once()
+        session.commit.assert_not_awaited()
+        dispatch_many.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_member_who_becomes_an_owner_while_it_waits_is_asked(self, monkeypatch):

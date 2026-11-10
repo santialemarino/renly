@@ -19,6 +19,7 @@
 # satisfy its own predicate. Widening the policy with an author escape hatch would outlive the
 # author's own membership, so the bootstrap runs on the admin session (renly_admin) instead.
 
+import logging
 from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
@@ -92,6 +93,8 @@ from app.schemas.pot import (
 from app.services import account_service, exchange_rate_service, notification_service, shared_audit_service
 from app.utils.metrics import RateLookup, convert_value
 from app.utils.pagination import MAX_LIST_ROWS
+
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal(0)
 
@@ -1373,8 +1376,10 @@ class _RateParty:
 # neither sees nor owns the pot learns nothing about it here.
 #
 # On the privileged session, because a hidden owner is exactly who the row policies would refuse; the
-# visibility rule is asked through `_may_view`, the same function require_visible uses. `lock` takes the
-# pot's row lock first, for the writes, which read the ledger and act on it.
+# visibility rule is asked through `_may_view`, the same function require_visible uses. Access is decided
+# BEFORE `lock` takes the pot's row lock for the writes, so a member who would get the 404 never holds
+# the lock at all; the members and the ledger are then read again under it, because the writes act on
+# them and the lock may have waited.
 async def _require_rate_party(admin_session: AsyncSession, pot_id: int, user: User, *, lock: bool) -> _RateParty:
     pot = await pot_repository.get_by_id(admin_session, pot_id)
     if pot is None:
@@ -1382,11 +1387,12 @@ async def _require_rate_party(admin_session: AsyncSession, pot_id: int, user: Us
     member = await group_repository.get_member_by_user(admin_session, pot.group_id, user.id)
     if member is None or not member.is_active:
         raise NotFoundError("Pot not found")
-    if lock:
-        await pot_repository.lock(admin_session, pot.id)
     members_by_id, balances = await _rate_context(admin_session, pot)
     if balances.get(member.id, ZERO) <= ZERO and not _may_view(pot, await pot_repository.get_permission(admin_session, pot.id, member.id)):
         raise NotFoundError("Pot not found")
+    if lock:
+        await pot_repository.lock(admin_session, pot.id)
+        members_by_id, balances = await _rate_context(admin_session, pot)
     return _RateParty(pot=pot, member=member, members_by_id=members_by_id, balances=balances)
 
 
@@ -1519,9 +1525,21 @@ async def withdraw_dollar_rate(admin_session: AsyncSession, pot_id: int, user: U
 #     they are asked, exactly as the owners were when it was proposed.
 #
 # `units_before` is the ledger replayed BEFORE the write, which the writer already holds. A separate
-# transaction from the write itself, so a failure here can never undo the movement; agree_dollar_rate is
-# the backstop that applies a proposal nobody is left to wait for.
+# transaction from the write itself, so a failure here can never undo the movement — and it never
+# RAISES either: the movement has committed, and a 500 for it would invite a retry that records it twice.
+# A failure is logged (an ERROR log reaches Sentry through its logging integration) and rolled back, so
+# no proposal is left half-applied; agree_dollar_rate is the backstop that applies one nobody is left to
+# wait for.
 async def after_ledger_change(session: AsyncSession, pot: Pot, user: User, *, units_before: dict[int, Decimal]) -> None:
+    try:
+        await _after_ledger_change(session, pot, user, units_before=units_before)
+    except Exception:
+        logger.exception("Settling the dollar-rate proposal of pot %s after a ledger write failed.", pot.id)
+        await session.rollback()
+
+
+# after_ledger_change's work, unguarded.
+async def _after_ledger_change(session: AsyncSession, pot: Pot, user: User, *, units_before: dict[int, Decimal]) -> None:
     if pot.dollar_rate_proposal is None:
         return
     await pot_repository.lock(session, pot.id)
