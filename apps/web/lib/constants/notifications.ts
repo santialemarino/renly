@@ -74,6 +74,10 @@ export const NOTIFICATION_VARIANTS = {
     'unconfirmed',
     'unconfirmed_from_you',
     'unconfirmed_to_you',
+    'dollar_rate_proposed_to_you',
+    'dollar_rate_applied_from_you',
+    'dollar_rate_applied_to_you',
+    'dollar_rate_withdrawn_to_you',
   ],
   pot_movement: [
     'contribution',

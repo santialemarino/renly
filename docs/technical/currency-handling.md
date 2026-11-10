@@ -26,6 +26,8 @@ The app stores three USD/ARS exchange rates (oficial, MEP, blue). A single user 
 | `mep`      | `USD_ARS_MEP`     | Financial market rate (default) |
 | `blue`     | `USD_ARS_BLUE`    | Informal/parallel market rate   |
 
+**A shared pot carries its own dollar rate** (`pots.dollar_rate`, the `dollar_rate` enum, default `mep`), chosen with its base currency at creation. Changing it later takes every owner's agreement, like a change of split: an owner proposes, every other owner (a member holding units who can answer — not a name-only seat or one who has left) agrees, and nothing changes until all have; the proposer may withdraw it. A single owner changes it at once, and while no owner can answer a group admin sets it. An owner hidden from the pot still has that say: the four `/pots/{id}/dollar-rate` routes run on the privileged session and admit a member who may see the pot OR owns part of it, returning the rate surface alone. A pending change follows the ledger (`pot_service.after_ledger_change`, called after every ledger write): it applies once nobody it waits for still owns anything, and a new owner is asked. The pending proposal lives on the pot row (`dollar_rate_proposal`, `dollar_rate_proposed_by`, `dollar_rate_agreed_by`), and `pot_repository.lock` re-reads the pot it locks, so a contribution, buy-out or take-out never prices at a rate loaded before a change committed. A snapshot's price prefill for a pot's investment converts at the pot's rate too. Every shared figure converts at it, whoever is reading: the pot's value (NAV), its unit price, a contribution's valuation and the units it issues, buy-outs and take-outs, the holdings list and the value series. So two members with different personal preferences see the same figures in the pot's base currency, and units are issued at one rate whoever contributes. The mechanism is `pot_service._pot_rates(pot, lookup)`, which derives `lookup.for_dollar_preference(pot.dollar_rate)` — the same loaded rates read under the pot's preference — so the valuation engine applies the pot's rate whatever lookup a caller hands it. Only the last step, converting a member's share out of the base currency into the viewer's display currency (the dashboard's shared half), uses the viewer's own preference. Changing the rate reaches future figures only: every ledger row already stores its `base_amount`, `units` and `unit_price`, and none is recomputed.
+
 ## Architecture
 
 ### 1. Currency selection (frontend)
@@ -330,7 +332,8 @@ merely rounds below one unit is lifted to one, taken off the largest part.
 ### 15. The dashboard's shared half, and the two frames its figures live in
 
 The net-worth headline converts every term at TODAY's rate: a pot's NAV from the pot's base currency,
-and each balance bucket from its own. A bucket with no rate is dropped and named in
+and each balance bucket from its own. The NAV itself is computed at the POT's dollar rate (§ Dollar rate
+preference); the conversion out of the base currency is the viewer's, at their own preference. A bucket with no rate is dropped and named in
 `skipped_currencies`, which the dashboard renders as a warning — a headline quietly
 missing a whole account is the figure a person acts on.
 
@@ -396,6 +399,7 @@ transactions.currency          -- same as investment.base_currency
 -- the unit of every figure already recorded in its ledger. Changing a DISPLAY currency re-converts
 -- what you see and never moves ownership.
 pots.base_currency             -- e.g. 'USD'
+pots.dollar_rate               -- oficial | mep | blue: the USD/ARS rate every member values it at
 pot_ownership_events.amount    -- what left, in the source account's currency
 pot_ownership_events.amount_currency  -- NULL when it equals the pot's base currency
 pot_ownership_events.base_amount      -- what was credited, in the pot's base currency

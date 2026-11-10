@@ -15,6 +15,7 @@ import {
   potFreshnessNotice,
   potValueDisplay,
 } from '@/app/(protected)/shared/pot-rules';
+import { PotDollarRateSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-dollar-rate-section';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { MoneyFigure } from '@/components/money-figure';
 import { StatList } from '@/components/stat-list';
@@ -177,6 +178,15 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
         stats={stats}
         columns={4}
         className="p-4 bg-muted/30 border border-border rounded-1.5xl"
+      />
+
+      {/* Under the figures it explains: every member sees the same value because the pot, not the
+          reader, decides which dollar rate converts its holdings. */}
+      <PotDollarRateSection
+        potId={pot.id}
+        dollarRate={pot.dollarRate}
+        proposal={pot.dollarRateProposal}
+        canChange={pot.canChangeDollarRate}
       />
 
       <PotFormDialog

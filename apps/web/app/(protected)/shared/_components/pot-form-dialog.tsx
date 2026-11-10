@@ -21,7 +21,13 @@ import { buildPotFormSchema, type PotFormValues } from '@/app/(protected)/shared
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import type { Pot } from '@/lib/api/pots';
-import { DEFAULT_POT_CADENCE, POT_CADENCES, POT_VISIBILITIES } from '@/lib/constants/pots';
+import {
+  DEFAULT_POT_CADENCE,
+  DEFAULT_POT_DOLLAR_RATE,
+  POT_CADENCES,
+  POT_DOLLAR_RATES,
+  POT_VISIBILITIES,
+} from '@/lib/constants/pots';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface PotFormDialogProps {
@@ -40,7 +46,8 @@ interface PotFormDialogProps {
  *
  * The base currency is asked for on create and absent on edit, because it is the unit of every figure
  * already recorded in the ledger — the API's update body has no such field, so offering it would be a
- * control whose value is silently discarded.
+ * control whose value is silently discarded. The dollar rate is asked for on create only too: changing
+ * it later takes every owner's agreement, which the pot page proposes and collects.
  */
 export function PotFormDialog({
   open,
@@ -63,6 +70,7 @@ export function PotFormDialog({
       baseCurrency: '',
       snapshotCadence: DEFAULT_POT_CADENCE,
       visibility: 'members',
+      dollarRate: DEFAULT_POT_DOLLAR_RATE,
     },
   });
 
@@ -78,6 +86,7 @@ export function PotFormDialog({
       baseCurrency: p?.baseCurrency ?? '',
       snapshotCadence: p?.snapshotCadence ?? DEFAULT_POT_CADENCE,
       visibility: p?.visibility ?? 'members',
+      dollarRate: p?.dollarRate ?? DEFAULT_POT_DOLLAR_RATE,
     }),
     onSuccess,
   });
@@ -92,6 +101,11 @@ export function PotFormDialog({
   const visibilityOptions = POT_VISIBILITIES.map((visibility) => ({
     value: visibility,
     label: t(`pots.visibility.${visibility}`),
+  }));
+
+  const dollarRateOptions = POT_DOLLAR_RATES.map((rate) => ({
+    value: rate,
+    label: t(`pots.dollarRate.options.${rate}`),
   }));
 
   async function onSubmit(values: PotFormValues) {
@@ -161,6 +175,32 @@ export function PotFormDialog({
                     </FormControl>
                     <p className="text-paragraph-xs text-muted-foreground">
                       {t('pots.form.baseCurrency.hint')}
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Create only: afterwards it changes by the owners' agreement, on the pot page. */}
+            {!isEdit && (
+              <FormField
+                control={form.control}
+                name="dollarRate"
+                render={({ field }) => (
+                  <FormItem required>
+                    <FormLabel>{t('pots.form.dollarRate.label')}</FormLabel>
+                    <FormControl>
+                      <FormCombobox
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                        options={dollarRateOptions}
+                        placeholder={t('pots.form.dollarRate.placeholder')}
+                        className="w-full"
+                      />
+                    </FormControl>
+                    <p className="text-paragraph-xs text-muted-foreground">
+                      {t('pots.form.dollarRate.hint')}
                     </p>
                     <FormMessage />
                   </FormItem>

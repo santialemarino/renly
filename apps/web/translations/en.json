@@ -2117,6 +2117,40 @@
         "members": "Everyone in the group",
         "owners": "Only who is given access"
       },
+      "dollarRate": {
+        "options": {
+          "oficial": "Official",
+          "mep": "MEP (financial)",
+          "blue": "Blue (parallel)"
+        },
+        "notice": {
+          "oficial": "Everyone in it values dollars at the official rate.",
+          "mep": "Everyone in it values dollars at the MEP (financial) rate.",
+          "blue": "Everyone in it values dollars at the blue (parallel) rate."
+        },
+        "change": "Change",
+        "proposal": {
+          "oficial": "{proposer} proposed valuing dollars at the official rate instead.",
+          "mep": "{proposer} proposed valuing dollars at the MEP (financial) rate instead.",
+          "blue": "{proposer} proposed valuing dollars at the blue (parallel) rate instead."
+        },
+        "waitingOn": "It changes once {count, plural, one {{names} agrees} other {{names} agree}}.",
+        "nobodyLeft": "Every owner has agreed; agree to apply it.",
+        "agree": "Agree",
+        "withdraw": "Withdraw",
+        "agreeSuccess": "Agreed.",
+        "withdrawSuccess": "Proposal withdrawn.",
+        "changedSuccess": "Dollar rate changed.",
+        "proposedSuccess": "Proposed. It changes once every owner agrees.",
+        "error": "Failed to save.",
+        "dialog": {
+          "title": "Change the dollar rate",
+          "description": "Everyone in it values dollars at this rate. When it has other owners, the change waits until all of them agree; what is already recorded stays as it was.",
+          "submit": "Propose",
+          "loading": "Saving..."
+        },
+        "hiddenOwner": "You own part of this, though you cannot see the rest of it. Its owners decide its dollar rate together, so your agreement counts here."
+      },
       "eventTypes": {
         "opening": "Baseline",
         "contribution": "Contribution",
@@ -2162,6 +2196,11 @@
           "label": "Who can see it",
           "placeholder": "Select who can see it",
           "hint": "You can still give or remove access per person afterwards."
+        },
+        "dollarRate": {
+          "label": "Dollar rate",
+          "placeholder": "Select a dollar rate",
+          "hint": "Everyone in it values dollars at this rate, whatever they use for their own figures."
         },
         "createSuccess": "Shared money created.",
         "updateSuccess": "Changes saved.",
@@ -3042,7 +3081,13 @@
         },
         "pot": {
           "created": "{actor} created {pot}",
-          "updated": "{actor} changed {pot}'s settings",
+          "updated": {
+            "base": "{actor} changed {pot}'s settings",
+            "dollar_rate": "{actor} changed {pot}'s dollar rate from {from_rate} to {to_rate}",
+            "dollar_rate_proposed": "{actor} proposed changing {pot}'s dollar rate from {from_rate} to {to_rate}",
+            "dollar_rate_withdrawn": "{actor} withdrew the proposal to change {pot}'s dollar rate to {to_rate}"
+          },
+          "confirmed": "{actor} agreed to change {pot}'s dollar rate from {from_rate} to {to_rate}",
           "deleted": "{actor} deleted {pot}",
           "holdings_added": "{actor} moved things into {pot}",
           "holdings_removed": "{actor} took things out of {pot}",
@@ -3305,6 +3350,18 @@
         },
         "unconfirmed_to_you": {
           "title": "{actor} withdrew their agreement in {pot}"
+        },
+        "dollar_rate_proposed_to_you": {
+          "title": "{actor} proposed a new dollar rate for {pot}"
+        },
+        "dollar_rate_applied_from_you": {
+          "title": "Everyone agreed to your new dollar rate for {pot}"
+        },
+        "dollar_rate_applied_to_you": {
+          "title": "{pot} now uses the dollar rate {actor} proposed"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} withdrew the new dollar rate for {pot}"
         }
       },
       "pot_movement": {
@@ -4001,6 +4058,7 @@
           "Some money is not only yours. A portfolio you built with a partner, a flat you own with a sibling, the everyday costs of a household — Renly holds all of that in a group. You create a group, invite the people in it, and from then on each of you sees the shared side of the picture alongside your own.",
           "Things a group owns together live in a pot. A pot holds investments and accounts the same way your private side does, except nobody owns it outright: each member owns a share of it. The single most important thing to understand about a share is that it is a percentage of the whole, not a fixed amount of money. If two of you own a pot 60/40 and the pot is worth 100,000, your side is 60,000 — and when the pot rises to 110,000, your side becomes 66,000 with nothing to enter. Every share moves with the value, always, because that is what owning a proportion means.",
           "Shares change only when somebody actually puts something in or takes it out, and each of those is recorded as its own dated event: the opening that first divides a pot, a contribution — money, or a holding you already own, valued as it stands — a withdrawal, or a re-agreement when the owners simply decide the split should be different from now on. Renly keeps the whole chain, so a percentage on screen is always the result of events you can point at rather than a number somebody typed over the last one. A re-agreement is the one of those that moves value between two people, so it is the one you agree to: whoever is giving up part of their share confirms it — or, when they are the person who wrote it down, whoever is receiving it does. Until then either of you can simply remove it; once it is agreed, nobody can, until whoever agreed takes that back.",
+          "Each pot also has its own dollar rate — official, MEP or blue — chosen when it is created. Changing it later takes every owner's agreement, like a change of split: one owner proposes, and nothing changes until all the others agree. Everyone in the pot values dollars at that rate, so all of you see the same value and the same shares, and a contribution or a withdrawal is worth the same whoever records it. Only the very last step uses your own dollar rate: turning your share into the currency you view your dashboard in. Changing a pot's rate affects its figures from then on; what is already recorded keeps the amounts it was recorded with.",
           "Your own screens stay about you. Your net worth counts your share of a pot and not the whole pot, your lists label which rows are shared, and a pot you own nothing of contributes nothing. A group can also decide who sees which pot, so a member may hold a seat in the group and still not see a particular pot at all. Every change anyone makes to a shared thing is recorded in the group's activity, with who did it and when."
         ]
       },
@@ -4324,6 +4382,11 @@
     "transfer_before_account_opened": "A transfer has to be dated on or after both accounts' opening dates — the later one is {opening_date}.",
     "transfer_cross_scope": "A transfer has to stay on one side. Money moving into or out of shared money is a contribution or a withdrawal, because it changes what each person owns.",
     "transfer_same_account": "A transfer must move money between two different accounts.",
-    "account_reconciliation_pot_not_divided": "Nobody has agreed who owns this shared account's money yet, so there's no way to record who the difference belongs to. Divide the pot first."
+    "account_reconciliation_pot_not_divided": "Nobody has agreed who owns this shared account's money yet, so there's no way to record who the difference belongs to. Divide the pot first.",
+    "pot_dollar_rate_owner_required": "Only the owners of this pot can change its dollar rate.",
+    "pot_dollar_rate_proposal_pending": "A change of dollar rate is already waiting for the owners to agree. Agree to it or withdraw it first.",
+    "pot_dollar_rate_unchanged": "This pot already uses that dollar rate.",
+    "pot_dollar_rate_already_agreed": "You have already agreed to this change of dollar rate.",
+    "pot_dollar_rate_not_yours": "Only the owner who proposed this change of dollar rate can withdraw it."
   }
 }

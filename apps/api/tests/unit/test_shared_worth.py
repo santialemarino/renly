@@ -242,7 +242,7 @@ class TestTheValuationLookup:
         monkeypatch.setattr(pot_service, "list_visible_seats", AsyncMock(return_value=list(pots)))
         monkeypatch.setattr(shared_worth_service.group_settlement_service, "get_positions_by_month", AsyncMock(return_value=[]))
         rates = AsyncMock(return_value=_FixedLookup())
-        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "get_user_rate_lookup", rates)
+        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "build_rate_lookup", rates)
         return rates
 
     @pytest.mark.asyncio

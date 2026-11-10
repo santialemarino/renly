@@ -112,6 +112,7 @@ const PRIMARY: Record<string, Record<string, string>> = {
   'shared/pots/[id]': {
     getGroup: NOT_FOUND,
     getPot: NOT_FOUND,
+    getPotDollarRate: NOT_FOUND,
     getPotHoldings: NOT_FOUND,
     getPotOwnershipEvents: NOT_FOUND,
     getPotSeries: NOT_FOUND,

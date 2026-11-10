@@ -581,6 +581,8 @@ class RateLookup:
         self._estimated: dict[date_type, frozenset[str]] = {}
         # True once any rate map this lookup served used a pre-history fallback.
         self.used_estimate = False
+        # The lookups for_dollar_preference derived from this one, by preference.
+        self._derived: dict[str | None, RateLookup] = {}
 
     # Returns the rate map for as_of_date (latest rate where rate.date <= as_of_date per pair,
     # with earliest-available fallback). Returns None when no rates exist at all.
@@ -622,6 +624,16 @@ class RateLookup:
         if estimated:
             self.used_estimate = True
         return rate_map
+
+    # The same stored rates read under another dollar-rate preference, without loading them again. A
+    # pot's maths convert at the pot's own dollar rate whoever is asking, so they derive one of these
+    # from whatever lookup the request built. Memoised, so every pot on one rate shares a per-date cache.
+    def for_dollar_preference(self, dollar_preference: str | None) -> "RateLookup":
+        if dollar_preference == self._dollar_preference:
+            return self
+        if dollar_preference not in self._derived:
+            self._derived[dollar_preference] = RateLookup(dollar_preference, self._rates_by_pair)
+        return self._derived[dollar_preference]
 
     # True when the rate map for as_of_date stands in the earliest stored rate for a date before that
     # pair's history begins — for any of `currencies`, or for any currency when none are named.

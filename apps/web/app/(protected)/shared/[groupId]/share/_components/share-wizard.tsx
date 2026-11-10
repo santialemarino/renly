@@ -37,8 +37,11 @@ import type { Investment } from '@/lib/api/investments';
 import type { Pot } from '@/lib/api/pots';
 import {
   DEFAULT_POT_CADENCE,
+  DEFAULT_POT_DOLLAR_RATE,
+  POT_DOLLAR_RATES,
   POT_PERCENTAGE_TOTAL,
   POT_VISIBILITIES,
+  type PotDollarRate,
   type PotVisibility,
 } from '@/lib/constants/pots';
 import { usePendingRouter } from '@/lib/hooks/use-pending-router';
@@ -111,6 +114,7 @@ export function ShareWizard({
   const [name, setName] = useState('');
   const [baseCurrency, setBaseCurrency] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PotVisibility>('members');
+  const [dollarRate, setDollarRate] = useState<PotDollarRate>(DEFAULT_POT_DOLLAR_RATE);
   const [pending, setPending] = useState(false);
   const [sharesAttempted, setSharesAttempted] = useState(false);
   const [valuePrefilled, setValuePrefilled] = useState(pot?.nav !== null && pot?.nav !== undefined);
@@ -243,10 +247,12 @@ export function ShareWizard({
         const result = await createPot(group.id, {
           name,
           baseCurrency: chosenCurrency,
-          // Not asked for here on purpose: a fourth field on the first step of a guided flow, for a
+          // Not asked for here on purpose: one more field on the first step of a guided flow, for a
           // setting with a sane default that the pot page can change afterwards.
           snapshotCadence: DEFAULT_POT_CADENCE,
           visibility,
+          // Asked for here, unlike the cadence: the value agreed on two steps later is stated at it.
+          dollarRate,
         });
         if (!result.ok) {
           toast.error(result.conflictDetail);
@@ -469,6 +475,26 @@ export function ShareWizard({
                   {suggestedCurrency !== null && baseCurrency === null
                     ? t('pots.share.pick.currencyHint')
                     : t('pots.form.baseCurrency.hint')}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-y-2">
+                <Label required htmlFor={`${fieldId}-dollar-rate`}>
+                  {t('pots.form.dollarRate.label')}
+                </Label>
+                <FormCombobox
+                  id={`${fieldId}-dollar-rate`}
+                  value={dollarRate}
+                  onValueChange={(value) => setDollarRate(value as PotDollarRate)}
+                  options={POT_DOLLAR_RATES.map((option) => ({
+                    value: option,
+                    label: t(`pots.dollarRate.options.${option}`),
+                  }))}
+                  placeholder={t('pots.form.dollarRate.placeholder')}
+                  className="w-full"
+                />
+                <p className="text-paragraph-xs text-muted-foreground">
+                  {t('pots.form.dollarRate.hint')}
                 </p>
               </div>
 

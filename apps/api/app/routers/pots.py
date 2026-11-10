@@ -7,6 +7,8 @@ from app.deps.db import AdminSessionDep, SessionDep
 from app.deps.pagination import PageQuery
 from app.schemas.pot import (
     PotCreate,
+    PotDollarRateProposalCreate,
+    PotDollarRateResponse,
     PotHoldingContribute,
     PotHoldingsMove,
     PotHoldingsResponse,
@@ -86,6 +88,7 @@ async def create_pot(
         name=body.name,
         snapshot_cadence=body.snapshot_cadence,
         visibility=body.visibility,
+        dollar_rate=body.dollar_rate,
     )
 
 
@@ -100,7 +103,12 @@ async def update_pot(
     session: SessionDep,
 ) -> PotResponse:
     return await pot_service.update_pot(
-        session, pot_id, current_user, name=body.name, snapshot_cadence=body.snapshot_cadence, visibility=body.visibility
+        session,
+        pot_id,
+        current_user,
+        name=body.name,
+        snapshot_cadence=body.snapshot_cadence,
+        visibility=body.visibility,
     )
 
 
@@ -133,6 +141,42 @@ async def clear_permission(
     session: SessionDep,
 ) -> PotResponse:
     return await pot_service.clear_permission(session, pot_id, member_id, current_user)
+
+
+# The pot's dollar rate and any pending change of it. Readable by a member who may see the pot or owns
+# part of it; 404 for anybody else, the same as a pot that does not exist.
+#
+# All four dollar-rate routes take the PRIVILEGED session: an owner's say on the rate does not depend on
+# seeing the pot, and a hidden owner is exactly who the pot's row policies refuse. The service states the
+# rule instead (see pot_service's dollar-rate section) and hands back the rate surface alone.
+@router.get("/{pot_id}/dollar-rate", response_model=PotDollarRateResponse)
+async def get_dollar_rate(pot_id: int, current_user: CurrentUser, admin_session: AdminSessionDep) -> PotDollarRateResponse:
+    return await pot_service.get_dollar_rate(admin_session, pot_id, current_user)
+
+
+# Proposes a new dollar rate for the pot. An owner only (403 pot_dollar_rate_owner_required), or a group
+# admin while no owner can answer. Applies at once when there is nobody else to ask; otherwise it waits
+# for every other owner to agree (409 pot_dollar_rate_proposal_pending while one already does).
+@router.post("/{pot_id}/dollar-rate", response_model=PotDollarRateResponse)
+async def propose_dollar_rate(
+    pot_id: int,
+    body: PotDollarRateProposalCreate,
+    current_user: CurrentUser,
+    admin_session: AdminSessionDep,
+) -> PotDollarRateResponse:
+    return await pot_service.propose_dollar_rate(admin_session, pot_id, current_user, dollar_rate=body.dollar_rate)
+
+
+# Agrees to the pending dollar-rate change; it applies once every owner has. 404 when none is pending.
+@router.post("/{pot_id}/dollar-rate/agree", response_model=PotDollarRateResponse)
+async def agree_dollar_rate(pot_id: int, current_user: CurrentUser, admin_session: AdminSessionDep) -> PotDollarRateResponse:
+    return await pot_service.agree_dollar_rate(admin_session, pot_id, current_user)
+
+
+# Withdraws the pending dollar-rate change. Its proposer only (403 pot_dollar_rate_not_yours).
+@router.delete("/{pot_id}/dollar-rate", response_model=PotDollarRateResponse)
+async def withdraw_dollar_rate(pot_id: int, current_user: CurrentUser, admin_session: AdminSessionDep) -> PotDollarRateResponse:
+    return await pot_service.withdraw_dollar_rate(admin_session, pot_id, current_user)
 
 
 # Lists everything the pot holds, each with its own figure and the same figure in the pot's base

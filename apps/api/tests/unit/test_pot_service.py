@@ -643,7 +643,7 @@ class TestTheContributionPicker:
     @staticmethod
     def _wire(monkeypatch, *, investments, snapshots, accounts=(), balances=None, linked=frozenset(), nav=Decimal("110")):
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
-        monkeypatch.setattr(pot_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=_LOOKUP))
+        monkeypatch.setattr(pot_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=_LOOKUP))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[_opening_event()]))
         monkeypatch.setattr(pot_service, "get_valuation", AsyncMock(return_value=PotValuation(nav=nav, valued_as_of=None, is_stale=False)))
         monkeypatch.setattr(pot_service.metrics_repository, "list_active_investments", AsyncMock(return_value=list(investments)))
@@ -793,6 +793,7 @@ class TestOneMembersShare:
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=list(accounts)))
         monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value=dict(balances or {})))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         return lookup
 
@@ -860,6 +861,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
 
@@ -875,6 +877,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", latest)
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup)
         assert latest.await_args.kwargs == {"as_of_date": date(2026, 6, 1)}
@@ -887,6 +890,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
 
@@ -904,6 +908,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
 
@@ -914,6 +919,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
 
@@ -930,6 +936,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=snapshots))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) == Decimal("110.50")
 
@@ -942,6 +949,7 @@ class TestNav:
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[account]))
         monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: Decimal("42.00")}))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) == Decimal("42.00")
 
@@ -972,8 +980,9 @@ class TestHoldings:
         compute = AsyncMock(return_value=balances or {})
         monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", compute)
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)} if rates is None else rates
-        monkeypatch.setattr(pot_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=lookup))
+        monkeypatch.setattr(pot_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=lookup))
         return (latest, compute)
 
     @pytest.mark.asyncio
@@ -1101,6 +1110,7 @@ class TestValuationFreshness:
 
     def _lookup(self, rates=None):
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)} if rates is None else rates
         return lookup
 

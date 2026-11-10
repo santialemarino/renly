@@ -299,11 +299,12 @@ class TestOriginalModeBuildsOneRateLookup:
         settings_reads = [sql for sql in statements if "FROM user_settings" in sql]
         print(f"\n{read} currency={currency}: {len(builds)} lookups, {len(settings_reads)} settings reads, {len(statements)} statements")
         assert len(builds) == 1
-        # One settings read per request, with one exception: the Original-mode overview reads no request
-        # settings of its own, so it reads the timezone once for its investment and finance halves and the
-        # pot lookup reads the dollar preference — two reads of one row, down from three before the lookup
-        # was shared.
-        assert len(settings_reads) == (2 if (read, currency) == ("overview", None) else 1)
+        # One settings read per request when a display currency is asked for (the request settings).
+        # Original mode reads no request settings of its own, and the pot lookup reads no preference —
+        # each pot converts at its own dollar rate — so only the overview reads the row, once, for the
+        # timezone its investment and finance halves share; evolution and composition do not read it.
+        expected = 1 if currency is not None or read == "overview" else 0
+        assert len(settings_reads) == expected
 
 
 # Every card shares one closing and one due day, so the cards fall into ONE closing date and ONE due date

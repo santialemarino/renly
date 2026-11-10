@@ -176,6 +176,7 @@ class TestFreshnessSharesOneRule:
         _holds(monkeypatch, [_pot_investment(1)])
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         return lookup
 
@@ -193,6 +194,7 @@ class TestFreshnessSharesOneRule:
     async def test_they_agree_about_a_pot_holding_nothing(self, monkeypatch):
         _holds(monkeypatch, [])
         lookup = AsyncMock()
+        lookup.for_dollar_preference = lambda _rate: lookup
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         today = date(2026, 7, 15)
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=today, lookup=lookup)
@@ -209,6 +211,7 @@ class TestFreshnessSharesOneRule:
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         # An unconvertible holding: the NAV is unknown, and the freshness is still a real date.
         unconvertible = AsyncMock()
+        unconvertible.for_dollar_preference = lambda _rate: unconvertible
         unconvertible.get_rate_map_at = lambda _d: {}
         today = date(2026, 7, 15)
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=today, lookup=unconvertible)

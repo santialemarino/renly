@@ -5,6 +5,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.pot_monitoring import PotSeriesInterval
+from app.models.exchange_rate import DollarRate
 from app.models.pot import OwnershipEventType, PotCadence, PotVisibility
 from app.schemas.base import RequestBase, validate_supported_currency
 from app.schemas.pagination import PaginatedResponse
@@ -21,17 +22,26 @@ class PotCreate(RequestBase):
     visibility: PotVisibility = Field(
         default=PotVisibility.members, description="Who sees it by default: every member, or only those granted access."
     )
+    dollar_rate: DollarRate = Field(default=DollarRate.mep, description="The USD/ARS rate every member values the pot at: oficial, mep or blue.")
 
     _validate_currency = field_validator("base_currency")(validate_supported_currency)
 
 
 # Body for PUT /pots/{pot_id}. Partial update; only provided fields are updated.
 # base_currency is deliberately absent: it is the unit of every figure already recorded in the
-# ledger, so changing it would silently restate every past event at a rate nobody chose.
+# ledger, so changing it would silently restate every past event at a rate nobody chose. dollar_rate
+# is absent too: changing it takes every owner's agreement (POST /pots/{pot_id}/dollar-rate).
 class PotUpdate(RequestBase):
     name: str | None = Field(default=None, description="Optional label.", max_length=255)
     snapshot_cadence: PotCadence | None = Field(default=None, description="How often the pot is expected to be re-valued.")
     visibility: PotVisibility | None = Field(default=None, description="Who sees it by default.")
+
+
+# Body for POST /pots/{pot_id}/dollar-rate. Changing a pot's dollar rate takes every owner's agreement,
+# so this proposes the change rather than making it — unless the caller is the only owner, or nobody
+# owns anything yet, in which case it applies at once.
+class PotDollarRateProposalCreate(RequestBase):
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate to value the pot at from now on: oficial, mep or blue.")
 
 
 # Body for PUT /pots/{pot_id}/permissions/{member_id}.
@@ -65,6 +75,32 @@ class PotPermissionResponse(BaseModel):
     can_write: bool = Field(description="Whether this seat may record movements.")
 
 
+# A pending change of a pot's dollar rate, resolved for the reader: who proposed it, whose agreement it
+# still waits for, and what the reader may do about it — resolved here so the button offered and the
+# answer the write gives cannot disagree.
+class PotDollarRateProposalResponse(BaseModel):
+    dollar_rate: DollarRate = Field(description="The rate proposed.")
+    proposed_by: str = Field(description="How the proposer is shown in the group.")
+    waiting_on: list[str] = Field(description="The owners who have not agreed yet; empty once everyone has.")
+    can_agree: bool = Field(description="Whether the reader is an owner whose agreement it waits for.")
+    can_withdraw: bool = Field(description="Whether the reader may withdraw it: its proposer.")
+
+
+# Response for GET /pots/{pot_id}/dollar-rate and the three writes beside it: the pot's dollar rate and
+# any pending change of it, and nothing else about the pot. Readable by a member who may see the pot OR
+# owns part of it — an owner hidden from the pot still has a say on its rate, and reads exactly this.
+class PotDollarRateResponse(BaseModel):
+    pot_id: int = Field(description="Pot id.")
+    name: str | None = Field(default=None, description="Label; null for a group's default pot.")
+    group_id: int = Field(description="Group the pot belongs to.")
+    group_name: str = Field(description="How the group is named.")
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate every member values the pot at.")
+    dollar_rate_proposal: PotDollarRateProposalResponse | None = Field(
+        default=None, description="A change of that rate waiting for the owners to agree; null when none is."
+    )
+    can_change_dollar_rate: bool = Field(description="Whether the reader may propose a new dollar rate.")
+
+
 # Response for GET list and GET one, POST and PUT.
 # nav and unit_price are null when the pot has no valuation — a pot with no holdings, or one whose
 # currency cannot be converted. Null rather than zero: "we do not know" and "it is worth nothing" are
@@ -85,6 +121,13 @@ class PotResponse(BaseModel):
     base_currency: str = Field(description="Currency all ownership math runs in.")
     snapshot_cadence: PotCadence = Field(description="How often the pot is expected to be re-valued.")
     visibility: PotVisibility = Field(description="Who sees it by default.")
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate every member values the pot at.")
+    dollar_rate_proposal: PotDollarRateProposalResponse | None = Field(
+        default=None, description="A change of that rate waiting for the owners to agree; null when none is."
+    )
+    can_change_dollar_rate: bool = Field(
+        description="Whether the reader may propose a new dollar rate: an owner, or an admin while no owner can answer."
+    )
     is_default: bool = Field(description="Whether this is the group's first pot.")
     nav: Decimal | None = Field(default=None, description="Value of everything the pot holds, in its base currency.")
     valued_as_of: date_type | None = Field(default=None, description="Date the value is current to; null when nothing here has been valued.")

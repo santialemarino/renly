@@ -109,7 +109,7 @@ def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
     rows = events if events is not None else [_event()]
     monkeypatch.setattr(svc.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=rows))
     monkeypatch.setattr(svc.pot_ownership_repository, "list_page_by_pot", AsyncMock(return_value=(rows, len(rows))))
-    monkeypatch.setattr(svc.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=AsyncMock()))
+    monkeypatch.setattr(svc.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=AsyncMock()))
     monkeypatch.setattr(svc.pot_service, "get_nav", AsyncMock(return_value=nav))
 
     # The real repository flushes to get an id; the stub does the same, or every response build
@@ -1593,3 +1593,65 @@ class TestReading:
             await svc.delete_event(AsyncMock(), 5, 999, USER)
         assert get_by_id.await_args.args[1:] == (POT.id, 999)
         delete.assert_not_awaited()
+
+
+class TestTheDollarRateFollowsTheLedger:
+    # Every write that can change who owns the pot hands the ledger as it stood BEFORE the write to
+    # pot_service.after_ledger_change, which applies a pending dollar-rate change nobody is left to wait
+    # for and asks a member who just became an owner. A write that forgot to would leave the proposal
+    # waiting on somebody who sold out, or never ask the newcomer.
+
+    @staticmethod
+    def _hook(monkeypatch) -> AsyncMock:
+        hook = AsyncMock()
+        monkeypatch.setattr(svc.pot_service, "after_ledger_change", hook)
+        return hook
+
+    @pytest.mark.asyncio
+    async def test_a_movement_hands_over_the_units_before_it(self, monkeypatch):
+        _arrange(monkeypatch)
+        hook = self._hook(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(), 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=SEAT.id, amount=Decimal("11")
+        )
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_contributed_holding_hands_over_the_units_before_it(self, monkeypatch):
+        _arrange(monkeypatch)
+        TestHoldingContribution._wire(monkeypatch)
+        hook = self._hook(monkeypatch)
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_re_agreement_hands_over_the_units_before_it(self, monkeypatch):
+        _arrange(monkeypatch)
+        hook = self._hook(monkeypatch)
+        await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 2, 1), from_member_id=100, to_member_id=101, percentage=Decimal("10"))
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_deletion_reads_the_units_before_it_while_a_change_is_pending(self, monkeypatch):
+        _arrange(monkeypatch)
+        pending = POT.model_copy(update={"dollar_rate_proposal": "blue", "dollar_rate_proposed_by": SEAT.id, "dollar_rate_agreed_by": [SEAT.id]})
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(pending, SEAT, WRITER)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.contribution)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", AsyncMock())
+        hook = self._hook(monkeypatch)
+        await svc.delete_event(AsyncMock(), 5, 1, USER)
+        assert hook.await_args.kwargs["units_before"] == {SEAT.id: Decimal("100")}
+
+    @pytest.mark.asyncio
+    async def test_a_movement_still_succeeds_when_settling_the_rate_fails(self, monkeypatch, caplog):
+        # The movement has committed by the time the hook runs, so a failure there must not answer a
+        # 500: a client told the write failed retries it, and the same money is recorded twice.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "_after_ledger_change", AsyncMock(side_effect=RuntimeError("boom")))
+        session = AsyncMock()
+        response = await svc.record_movement(
+            session, 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=SEAT.id, amount=Decimal("11")
+        )
+        assert response.id == 900
+        session.rollback.assert_awaited_once()
+        assert "dollar-rate proposal of pot 5" in caplog.text

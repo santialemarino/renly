@@ -44,6 +44,24 @@ export const POT_VISIBILITIES = ['members', 'owners'] as const;
 export type PotVisibility = (typeof POT_VISIBILITIES)[number];
 
 /*
+ * Which USD/ARS rate a pot's figures convert at, in the order the personal setting offers the same three.
+ * One rate per pot rather than each reader's own, so every member sees the same value, unit price and
+ * share in the pot's currency; only converting that into a reader's own display currency follows their
+ * own preference.
+ */
+export const POT_DOLLAR_RATES = ['oficial', 'mep', 'blue'] as const;
+
+export type PotDollarRate = (typeof POT_DOLLAR_RATES)[number];
+
+// Whether a string from a stored payload names one of the three, so it can be labelled.
+export function isPotDollarRate(value: string): value is PotDollarRate {
+  return (POT_DOLLAR_RATES as readonly string[]).includes(value);
+}
+
+// What a pot is valued at when nobody has chosen. Mirrors the API's own default and the column's.
+export const DEFAULT_POT_DOLLAR_RATE: PotDollarRate = 'mep';
+
+/*
  * Every kind of entry the ownership ledger holds, in the order they can first occur. The opening is
  * the division every later percentage derives from; a re-agreement is the only one that moves no
  * money at all.

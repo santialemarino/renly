@@ -956,6 +956,65 @@ class PotReagreementNotYoursError(DomainError):
         super().__init__(self.message)
 
 
+# Somebody who owns none of a pot asked to change its dollar rate, or to agree to a change of it. The
+# rate decides what every owner's share is worth and what units are issued at, so changing it is the
+# OWNERS' agreement, the way a change of split is — and, like there, write access is not the answer:
+# a custodian with write access who owns nothing has no stake for the rate to move. Before anybody owns
+# anything a group admin sets it instead, as they did when they created the pot. Mapped to 403.
+class PotDollarRateOwnerRequiredError(DomainError):
+    code = "pot_dollar_rate_owner_required"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only the owners of this pot can change its dollar rate."
+        super().__init__(self.message)
+
+
+# A dollar-rate change was proposed while another is still waiting for agreement. One at a time, so
+# every owner is agreeing to the same thing: two open proposals would leave an owner's agreement
+# ambiguous about which one it was for. Mapped to 409.
+class PotDollarRateProposalPendingError(DomainError):
+    code = "pot_dollar_rate_proposal_pending"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A change of dollar rate is already waiting for the owners to agree. Agree to it or withdraw it first."
+        super().__init__(self.message)
+
+
+# A dollar-rate change named the rate the pot already uses. Refused rather than recorded, so nobody is
+# asked to agree to a change that changes nothing. Mapped to 400.
+class PotDollarRateUnchangedError(DomainError):
+    code = "pot_dollar_rate_unchanged"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "This pot already uses that dollar rate."
+        super().__init__(self.message)
+
+
+# An owner agreed twice to the same dollar-rate change. Mapped to 409.
+class PotDollarRateAlreadyAgreedError(DomainError):
+    code = "pot_dollar_rate_already_agreed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "You have already agreed to this change of dollar rate."
+        super().__init__(self.message)
+
+
+# Somebody other than its proposer tried to withdraw a dollar-rate change. It is the proposer's word
+# being taken back, the way only the seat that confirmed a change of split may withdraw that. Mapped
+# to 403.
+class PotDollarRateNotYoursError(DomainError):
+    code = "pot_dollar_rate_not_yours"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only the owner who proposed this change of dollar rate can withdraw it."
+        super().__init__(self.message)
+
+
 # A pot still holds investments or accounts, so it cannot be deleted. The database refuses it too
 # (every pot_id foreign key is ON DELETE RESTRICT); this exists so the refusal arrives as a real
 # message instead of an integrity error. Mapped to 409.

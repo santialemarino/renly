@@ -146,7 +146,7 @@ export function SnapshotFormDialog({
       setPriceFetched(false);
       const startTime = Date.now();
       try {
-        const result = await fetchPriceForDate(ticker, date, category, baseCurrency);
+        const result = await fetchPriceForDate(ticker, date, category, baseCurrency, investmentId);
         const elapsed = Date.now() - startTime;
         if (elapsed < PRICE_DISPLAY_DELAY_MS) {
           await new Promise((r) => setTimeout(r, PRICE_DISPLAY_DELAY_MS - elapsed));
@@ -182,7 +182,7 @@ export function SnapshotFormDialog({
         setPriceFetched(true);
       }
     },
-    [ticker, category, baseCurrency],
+    [ticker, category, baseCurrency, investmentId],
   );
 
   // Trigger price fetch on date change.

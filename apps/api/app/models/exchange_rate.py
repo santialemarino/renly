@@ -20,6 +20,15 @@ class ExchangeRatePair(StrEnum):
     USD_GBP = "USD_GBP"
 
 
+# Which USD/ARS quote stands for "the dollar": the official rate, the financial (MEP) one, or the
+# parallel (blue) one. A person picks one for their own figures (a string in their settings, read through
+# app.domain.currency); a pot stores one as a column, because every member must value it alike.
+class DollarRate(StrEnum):
+    blue = "blue"
+    mep = "mep"
+    oficial = "oficial"
+
+
 # Daily exchange rate for a pair (one row per date per pair).
 class ExchangeRate(SQLModel, table=True):
     __tablename__ = "exchange_rates"

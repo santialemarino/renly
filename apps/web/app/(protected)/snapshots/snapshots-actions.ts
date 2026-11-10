@@ -77,12 +77,15 @@ export async function deleteTransaction(
 }
 
 // Fetches the price for a ticker on a specific date (get from DB or fetch from provider).
-// When convertTo is provided, the backend converts the price to the target currency.
+// When convertTo is provided, the backend converts the price to the target currency — at the pot's
+// dollar rate when `investmentId` names an investment a pot holds, so the figure every owner's share is
+// valued from does not depend on who typed it.
 export async function fetchPriceForDate(
   ticker: string,
   date: string,
   category: string,
   convertTo?: string,
+  investmentId?: number,
 ): Promise<{
   price: number;
   currency: string;
@@ -91,6 +94,7 @@ export async function fetchPriceForDate(
 } | null> {
   const qs = new URLSearchParams({ date, category });
   if (convertTo) qs.append('convert_to', convertTo);
+  if (investmentId !== undefined) qs.append('investment_id', String(investmentId));
   const res = await authenticatedFetch(`/asset-prices/${ticker}/lookup?${qs}`, { method: 'GET' });
   if (!res.ok) return null;
   const raw = await res.json();

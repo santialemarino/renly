@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset_price import AssetPrice
 from app.models.investment import Investment, InvestmentCategory
+from app.repositories import investment_repository, pot_repository
 from app.repositories.asset_price_repository import asset_price_repository
 from app.schemas.asset_price import AssetPriceListResponse, AssetPriceResponse, PriceLookupResponse
 from app.services import exchange_rate_service, price_providers
@@ -131,6 +132,8 @@ async def get_or_fetch_price(
 # Returns the price for a ticker on a date as the lookup response, converting to convert_to
 # when requested. Conversion uses the rate at the price's own historical date (Phase 3,
 # Step C): a January price displayed in USD uses January's rate, not today's.
+# `investment_id` names the investment the price is for, when there is one: a pot's investment converts
+# at the POT's dollar rate, because the figure becomes a snapshot every owner's share is valued from.
 # Returns None when no price could be found or fetched.
 async def lookup_price(
     session: AsyncSession,
@@ -139,6 +142,7 @@ async def lookup_price(
     category: InvestmentCategory,
     price_date: date_type,
     convert_to: str | None,
+    investment_id: int | None = None,
 ) -> PriceLookupResponse | None:
     price = await get_or_fetch_price(session, ticker, category, price_date)
     if price is None:
@@ -147,7 +151,7 @@ async def lookup_price(
     converted_price = None
     converted_currency = None
     if convert_to and convert_to != price.currency:
-        lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+        lookup = await _conversion_lookup(session, user_id, investment_id)
         rate_map = lookup.get_rate_map_at(price.date)
         if rate_map and mh.can_convert(price.currency, convert_to):
             converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
@@ -163,6 +167,18 @@ async def lookup_price(
         converted_currency=converted_currency,
         source=price.source,
     )
+
+
+# The rates a looked-up price converts at: the pot's own dollar rate when the price is for an investment a
+# pot holds, the caller's preference otherwise. The investment is read through RLS, so naming one the
+# caller cannot see falls back to their own preference rather than revealing anything about it.
+async def _conversion_lookup(session: AsyncSession, user_id: int, investment_id: int | None) -> mh.RateLookup:
+    investment = await investment_repository.get_by_id_any_scope(session, investment_id) if investment_id is not None else None
+    if investment is not None and investment.pot_id is not None:
+        pot = await pot_repository.get_by_id(session, investment.pot_id)
+        if pot is not None:
+            return await exchange_rate_service.build_rate_lookup(session, pot.dollar_rate)
+    return await exchange_rate_service.get_user_rate_lookup(session, user_id)
 
 
 # The prices for a ticker and the source that actually served them, or None when no provider could.

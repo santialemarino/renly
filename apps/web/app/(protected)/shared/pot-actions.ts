@@ -16,8 +16,16 @@ import type {
   PotTakeOutFormValues,
 } from '@/app/(protected)/shared/pot-form-schema';
 import { parseHoldingKey } from '@/app/(protected)/shared/pot-rules';
-import { mapPot, type Pot, type PotRaw } from '@/lib/api/pots';
+import {
+  mapPot,
+  mapPotDollarRateState,
+  type Pot,
+  type PotDollarRateState,
+  type PotDollarRateStateRaw,
+  type PotRaw,
+} from '@/lib/api/pots';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import type { PotDollarRate } from '@/lib/constants/pots';
 
 /*
  * Mutations on a pot and its ownership ledger. Every one returns its refusal as data through
@@ -47,13 +55,15 @@ export async function createPot(
       base_currency: values.baseCurrency,
       snapshot_cadence: values.snapshotCadence,
       visibility: values.visibility,
+      dollar_rate: values.dollarRate,
     },
   });
   return toDataResult<PotRaw, Pot>(res, mapPot, 'Failed to create pot');
 }
 
 // base_currency is deliberately absent: it is the unit of every figure already in the ledger, and the
-// API's update body has no such field at all.
+// API's update body has no such field at all. Nor is the dollar rate: changing it takes every owner's
+// agreement, through the three actions below.
 export async function updatePot(
   potId: number,
   values: PotFormValues,
@@ -67,6 +77,38 @@ export async function updatePot(
     },
   });
   return toResult(res, 'Failed to update pot');
+}
+
+/*
+ * Proposes a new dollar rate. It applies at once when nobody else's agreement is needed (a single owner,
+ * or nobody owns anything yet); otherwise it waits for every other owner to agree.
+ */
+// The pot comes back so the caller can tell the two outcomes apart: applied, or waiting.
+export async function proposePotDollarRate(
+  potId: number,
+  dollarRate: PotDollarRate,
+): Promise<SharedDataResult<PotDollarRateState>> {
+  const res = await authenticatedFetch(`/pots/${potId}/dollar-rate`, {
+    method: 'POST',
+    body: { dollar_rate: dollarRate },
+  });
+  return toDataResult<PotDollarRateStateRaw, PotDollarRateState>(
+    res,
+    mapPotDollarRateState,
+    'Failed to propose a dollar rate',
+  );
+}
+
+// Agrees to the pending change; it applies once every owner has.
+export async function agreePotDollarRate(potId: number): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/pots/${potId}/dollar-rate/agree`, { method: 'POST' });
+  return toResult(res, 'Failed to agree to the dollar rate');
+}
+
+// Withdraws the pending change. Its proposer only.
+export async function withdrawPotDollarRate(potId: number): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/pots/${potId}/dollar-rate`, { method: 'DELETE' });
+  return toResult(res, 'Failed to withdraw the dollar rate');
 }
 
 export async function deletePot(potId: number): Promise<SharedMutationResult> {
