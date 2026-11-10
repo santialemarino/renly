@@ -417,44 +417,30 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
     return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
 
 
-# Monthly income totals for a user grouped by currency.
-# Returns a list of (year, month, currency, total) tuples.
-async def sum_by_user_monthly(
+# Daily income totals for a user, one bucket per (date, category, currency) — the one grain every
+# finance aggregate is built from. Each bucket converts at the rate of its own day, which is what makes
+# a period total equal the sum of the converted rows the list shows (each list row converts at its own
+# date), and because the overview, the monthly bars and the category donut all sum the SAME buckets,
+# the three agree with each other exactly rather than to a rounding. NULL categories are coalesced into
+# the synthetic key 'uncategorized' so the breakdown covers every row (the column is a native PG enum,
+# so the coalesce happens in the row mapper, not SQL).
+# Returns a list of (date, category, currency, total) tuples, oldest first.
+async def sum_by_user_daily(
     session: AsyncSession,
     user_id: int,
     member_ids: list[int],
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> list[tuple[int, int, str, Decimal]]:
+) -> list[tuple[date_type, str, str, Decimal]]:
     rows = _earning_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
-    year_col = func.extract("year", rows.c.date).label("year")
-    month_col = func.extract("month", rows.c.date).label("month")
     stmt = (
-        select(year_col, month_col, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0))
-        .group_by(year_col, month_col, rows.c.currency)
-        .order_by(year_col, month_col)
+        select(rows.c.date, rows.c.category, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0))
+        .group_by(rows.c.date, rows.c.category, rows.c.currency)
+        .order_by(rows.c.date, rows.c.category, rows.c.currency)
     )
     result = await session.execute(stmt)
-    return [(int(row[0]), int(row[1]), row[2], row[3]) for row in result.all()]
-
-
-# Income totals grouped by category for a user within a date range. NULL categories are
-# coalesced into the synthetic key 'uncategorized' so the breakdown covers every row
-# (the column is a native PG enum, so the coalesce happens in the row mapper, not SQL).
-# Returns a list of (category, currency, total) tuples.
-async def sum_by_user_grouped_by_category(
-    session: AsyncSession,
-    user_id: int,
-    member_ids: list[int],
-    *,
-    date_from: date_type | None = None,
-    date_to: date_type | None = None,
-) -> list[tuple[str, str, Decimal]]:
-    rows = _earning_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
-    stmt = select(rows.c.category, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0)).group_by(rows.c.category, rows.c.currency)
-    result = await session.execute(stmt)
-    return [("uncategorized" if row[0] is None else str(row[0]), row[1], row[2]) for row in result.all()]
+    return [(row[0], "uncategorized" if row[1] is None else str(row[1]), row[2], row[3]) for row in result.all()]
 
 
 # Every row that counts as this person's income in a window: their own entries, plus what they are
@@ -529,8 +515,7 @@ class IncomeRepository:
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_scope = staticmethod(sum_by_scope)
     sum_by_user = staticmethod(sum_by_user)
-    sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
-    sum_by_user_monthly = staticmethod(sum_by_user_monthly)
+    sum_by_user_daily = staticmethod(sum_by_user_daily)
 
 
 # Singleton used by services to access income persistence.
