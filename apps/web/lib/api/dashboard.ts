@@ -32,6 +32,7 @@ interface DashboardOverviewRaw {
   total_income: string;
   total_expenses: string;
   savings_rate: string | null;
+  savings_rate_off_scale?: boolean;
   income_expense_ratio: string | null;
   currency: string | null;
   has_holdings: boolean;
@@ -123,6 +124,8 @@ export interface DashboardOverview {
   totalIncome: number;
   totalExpenses: number;
   savingsRate: number | null;
+  // True when expenses are more than ten times the income: `savingsRate` is then withheld (null).
+  savingsRateOffScale: boolean;
   incomeExpenseRatio: number | null;
   currency: string | null;
   // Whether the user holds any investment, account, or card — true even when the figures net to zero.
@@ -212,6 +215,7 @@ function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
     totalIncome: Number(raw.total_income),
     totalExpenses: Number(raw.total_expenses),
     savingsRate: raw.savings_rate !== null ? Number(raw.savings_rate) : null,
+    savingsRateOffScale: raw.savings_rate_off_scale === true,
     incomeExpenseRatio: raw.income_expense_ratio !== null ? Number(raw.income_expense_ratio) : null,
     currency: raw.currency,
     hasHoldings: raw.has_holdings === true,

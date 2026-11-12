@@ -919,3 +919,19 @@ class TestHasHoldings:
         await dashboard_service.get_overview(AsyncMock(), 1)
         dashboard_service.investment_repository.exists_active_by_user.assert_not_called()
         dashboard_service.credit_card_repository.exists_by_user.assert_not_called()
+
+
+# The savings rate: the plain ratio while it means something, withheld past ten times the income.
+@pytest.mark.parametrize(
+    ("income", "expenses", "expected"),
+    [
+        (Decimal("1000"), Decimal("800"), (Decimal("0.2"), False)),
+        (Decimal("1000"), Decimal("10000"), (Decimal("-9"), False)),
+        (Decimal("1000"), Decimal("10000.01"), (None, True)),
+        # The case that showed -3,923,637%: a sliver of income against ordinary spending.
+        (Decimal("0.05"), Decimal("1961.87"), (None, True)),
+        (ZERO, Decimal("500"), (None, False)),
+    ],
+)
+def test_compute_savings_rate(income: Decimal, expenses: Decimal, expected: tuple[Decimal | None, bool]) -> None:
+    assert dashboard_service.compute_savings_rate(income, expenses) == expected

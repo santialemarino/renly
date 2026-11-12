@@ -528,6 +528,7 @@
     "health": {
       "savingsRate": "Tasa de Ahorro",
       "savingsRateHint": "Ingreso ahorrado después de gastos",
+      "savingsRateOffScale": "Los gastos superan por mucho a los ingresos, así que una tasa de ahorro no diría nada.",
       "incomeExpenseRatio": "Ingreso / Gasto",
       "incomeExpenseRatioHint": "Cuánto ganás por cada unidad gastada",
       "liquidity": "Liquidez",

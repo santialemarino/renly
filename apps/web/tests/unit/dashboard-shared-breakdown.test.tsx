@@ -44,6 +44,7 @@ function overview(over: Partial<DashboardOverview> = {}): DashboardOverview {
     totalIncome: 0,
     totalExpenses: 0,
     savingsRate: null,
+    savingsRateOffScale: false,
     incomeExpenseRatio: null,
     currency: 'ARS',
     hasHoldings: true,

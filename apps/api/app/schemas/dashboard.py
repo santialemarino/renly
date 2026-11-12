@@ -59,7 +59,12 @@ class DashboardOverviewResponse(BaseModel):
     credit_card_balance: Decimal = Field(description="Total outstanding credit card balance.")
     total_income: Decimal = Field(description="Total income in the selected period.")
     total_expenses: Decimal = Field(description="Total expenses in the selected period.")
-    savings_rate: Decimal | None = Field(default=None, description="(income - expenses) / income. Null when income is zero.")
+    savings_rate: Decimal | None = Field(
+        default=None, description="(income - expenses) / income. Null when income is zero or the rate is off the scale."
+    )
+    savings_rate_off_scale: bool = Field(
+        default=False, description="True when expenses are more than 10 times the income, so the savings rate is withheld as meaningless."
+    )
     income_expense_ratio: Decimal | None = Field(default=None, description="income / expenses. Null when expenses are zero.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
     has_holdings: bool = Field(

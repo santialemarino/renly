@@ -48,6 +48,21 @@ from app.utils.metrics import RateLookup, convert_value, month_over_month
 
 ZERO = Decimal("0")
 
+# Past this many times the income, a savings rate stops describing anything: a month with a little
+# income and ordinary spending read as -3,923,637%. The rate is withheld instead (`savings_rate_off_scale`).
+SAVINGS_RATE_MAX_EXPENSE_MULTIPLE = Decimal("10")
+
+
+# The savings rate, (income - expenses) / income, and whether it was withheld as off the scale. None
+# with False when there is no income to divide by; None with True when expenses are more than
+# SAVINGS_RATE_MAX_EXPENSE_MULTIPLE times the income.
+def compute_savings_rate(total_income: Decimal, total_expenses: Decimal) -> tuple[Decimal | None, bool]:
+    if total_income == ZERO:
+        return None, False
+    if total_expenses > total_income * SAVINGS_RATE_MAX_EXPENSE_MULTIPLE:
+        return None, True
+    return (total_income - total_expenses) / total_income, False
+
 
 # Returns the last day of the given (year, month). Used to convert monthly aggregates at month-end.
 def _month_end(year: int, month: int) -> date_type:
@@ -340,9 +355,7 @@ async def get_overview(
         if prev_nw != ZERO:
             net_worth_change_pct = net_worth_change / prev_nw
 
-    savings_rate: Decimal | None = None
-    if finance.total_income != ZERO:
-        savings_rate = (finance.total_income - finance.total_expenses) / finance.total_income
+    savings_rate, savings_rate_off_scale = compute_savings_rate(finance.total_income, finance.total_expenses)
 
     income_expense_ratio: Decimal | None = None
     if finance.total_expenses != ZERO:
@@ -377,6 +390,7 @@ async def get_overview(
         total_income=finance.total_income,
         total_expenses=finance.total_expenses,
         savings_rate=savings_rate,
+        savings_rate_off_scale=savings_rate_off_scale,
         income_expense_ratio=income_expense_ratio,
         currency=currency,
         has_holdings=has_holdings,

@@ -528,6 +528,7 @@
     "health": {
       "savingsRate": "Savings Rate",
       "savingsRateHint": "Income saved after expenses",
+      "savingsRateOffScale": "Expenses are far above income, so a savings rate would mean nothing.",
       "incomeExpenseRatio": "Income / Expense",
       "incomeExpenseRatioHint": "How much you earn per unit spent",
       "liquidity": "Liquidity",
