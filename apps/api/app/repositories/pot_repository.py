@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from app.models.account import Account
-from app.models.group import Group
 from app.models.investment import Investment
 from app.models.pot import Pot, PotMemberPermission
 from app.repositories.utils import chunked
@@ -95,16 +94,7 @@ async def delete(session: AsyncSession, pot: Pot) -> None:
 # takeable by anyone the pot is visible AND whose group they belong to (`pots_scope_write`'s USING),
 # which deliberately includes a read-only seat: the widened re-agreement delete has no write access and
 # still has to serialise against the writer who recorded it.
-#
-# The pot's GROUP row is locked first, always, so every pot lock follows one order — group, then pot —
-# and nothing can deadlock against a path that holds the group. What needs it is the rule that a seat
-# going inactive (a member removed or leaving, group_service.remove_member) owns no units: that path
-# holds the group lock while it counts the seat's units, so a ledger write that could hand the seat new
-# units either finishes first and is counted, or waits and then finds the seat inactive. Locking the pots
-# from the removal instead would not do: the remover may not see every pot the seat owns part of.
 async def lock(session: AsyncSession, pot_id: int) -> None:
-    group_id = select(Pot.group_id).where(Pot.id == pot_id).scalar_subquery()
-    await session.execute(select(Group.id).where(Group.id == group_id).with_for_update())
     await session.execute(select(Pot).where(Pot.id == pot_id).with_for_update().execution_options(populate_existing=True))
 
 

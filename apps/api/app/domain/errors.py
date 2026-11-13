@@ -360,6 +360,25 @@ class ExpenseCyclesOutOfRangeError(DomainError):
         return {"max_cycles": self.max_cycles}
 
 
+# Somebody asked to delete their account while they still own part of a pot in a group that outlives
+# them, or a change of a pot's split naming them is still waiting to be confirmed. Deleting the account
+# would leave that share on a name-only seat nobody can act for. Names the groups, pre-joined into one
+# display-ready string for the message's scalar placeholder. Mapped to 409 by the API.
+class AccountOwnsPotError(DomainError):
+    code = "account_owns_pot"
+    status_code = 409
+
+    def __init__(self, group_names: list[str]) -> None:
+        self.group_names = sorted(group_names)
+        joined = ", ".join(self.group_names)
+        self.message = f"You still own part of a pot in {joined}. Settle your share first: buy it out or take it out, and confirm any pending change."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"groups": ", ".join(self.group_names)}
+
+
 # A group operation that only an admin may perform was attempted by a plain member. Group
 # administration is management, not access — this gates WRITES to membership, settings and invites, and
 # never widens what anyone can read. Mapped to 403 by the API.
@@ -461,6 +480,18 @@ class GroupMemberOwnsPotError(DomainError):
 
     def __init__(self) -> None:
         self.message = "This seat still owns part of a pot. Settle that share first with a buy-out or a take-out."
+        super().__init__(self.message)
+
+
+# A seat is named by a change of a pot's split that is still waiting to be confirmed, and the operation
+# would make it inactive. Until it is confirmed the change can still be deleted, which would hand the
+# units back to a seat that has gone. Confirm it or delete it first. Mapped to 409 by the API.
+class GroupMemberPotChangePendingError(DomainError):
+    code = "group_member_pot_change_pending"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A change of a pot's split naming this seat is still waiting to be confirmed. Confirm it or delete it first."
         super().__init__(self.message)
 
 
@@ -1010,6 +1041,19 @@ class PotReagreementNotYoursError(DomainError):
             "Only the member giving up part of their share can agree to this change of split "
             "— or, when they recorded it themselves, the member receiving it."
         )
+        super().__init__(self.message)
+
+
+# A ledger write would hand units to a seat that has gone — one that left the group, or whose account
+# was deleted — most often by deleting an entry that had taken that seat's share out of the pot. Every
+# agreement a pot asks for skips such a seat, so units on it are a share nobody can answer for. Mapped
+# to 409.
+class PotSeatDepartedError(DomainError):
+    code = "pot_seat_departed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This would give part of the pot to someone who has left the group or deleted their account."
         super().__init__(self.message)
 
 

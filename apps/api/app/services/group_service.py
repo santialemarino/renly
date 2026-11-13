@@ -331,12 +331,17 @@ async def remove_member(session: AsyncSession, admin_session: AsyncSession, grou
     if member.id != viewer.id and viewer.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     await _ensure_admin_remains(session, group, member)
+    # The seat itself is locked first, and it is what keeps the pot units counted below true until the
+    # seat goes: every ledger write that hands a seat units takes that seat's lock (shared) after its
+    # pot's, so none can land between the count and the deactivation (group_repository.lock_members).
+    # Before the group's lock, never after: a ledger write holding the seat goes on to insert rows that
+    # reference the group, which wait on the group's lock — so taking the group first would let the two
+    # wait on each other.
+    await group_repository.lock_members(session, [member.id])
     # Locked before the balances are read, because the answer is acted on: without it a shared expense
     # recorded at the same moment lands a balance on a seat that has just been deactivated, and the
     # membership policy is what makes that row readable — so the person on the other side of it loses
-    # the record of money they are owed. The same lock covers the pot units counted below: every ledger
-    # write takes its group's lock before its pot's (pot_repository.lock), so none can hand this seat new
-    # units between the count and the deactivation.
+    # the record of money they are owed.
     await group_repository.lock(session, group.id)
     # A seat with money still owed either way cannot simply be deactivated: the membership policy is
     # what makes the group's rows readable, so the moment the seat goes inactive the person on the
@@ -347,7 +352,7 @@ async def remove_member(session: AsyncSession, admin_session: AsyncSession, grou
     # A pot owner cannot go either: every agreement a pot asks for skips an inactive seat, so the other
     # owners could change the split or the pot's dollar rate around a share nobody is left to defend —
     # and an admin could deactivate an owner, push such a change through, and reactivate them. The share
-    # leaves the pot first, through a buy-out or a take-out.
+    # leaves the pot first, through a buy-out or a take-out, and a buy-out naming the seat is confirmed.
     from app.services import group_money_service, pot_service
 
     await pot_service.ensure_no_units(admin_session, [member])

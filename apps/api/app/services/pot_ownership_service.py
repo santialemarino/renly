@@ -38,6 +38,7 @@ from app.domain import (
     PotReagreementConfirmedError,
     PotReagreementNotYoursError,
     PotReagreementSameMemberError,
+    PotSeatDepartedError,
     PotUnsupportedMovementError,
     PotValuationRequiredError,
     PotWriteRequiredError,
@@ -181,6 +182,47 @@ async def _require_seat(session: AsyncSession, pot: Pot, member_id: int) -> Grou
     if member is None or not member.is_active:
         raise NotFoundError("Group member not found")
     return member
+
+
+# The seat whose balance RISES when an entry is deleted, if any: the one the entry took units from. A
+# negative entry took them from its own seat (a withdrawal, a giver's side of a re-agreement); a
+# re-agreement's counterparty received the negation, so a positive one took them from the counterparty.
+# Deleting an opening or a contribution only takes units away.
+def _regaining_seat(event: PotOwnershipEvent) -> int | None:
+    if event.type == OwnershipEventType.reagreement:
+        return event.member_id if event.units < 0 else event.counterparty_member_id
+    if event.type == OwnershipEventType.withdrawal:
+        return event.member_id
+    return None
+
+
+# Whether a seat has gone: it left the group, or the account behind it was deleted (a seat that once
+# had an account and now has none — a never-claimed placeholder has no `joined_at`). Every agreement a
+# pot asks for skips such a seat, so no ledger write may hand it units.
+def _has_left(seat: GroupMember) -> bool:
+    return not seat.is_active or (seat.user_id is None and seat.joined_at is not None)
+
+
+# Locks the seat a ledger write is about to hand units to, and refuses it if it has gone.
+#
+# Shared, after the pot's lock: a seat going inactive or account-less takes the same seat's lock
+# exclusively before it checks the seat owns nothing (group_service.remove_member,
+# user_account_service.delete_account), so whichever comes second waits, and a write that waited reads
+# the seat as it now is. Re-read under the lock for exactly that reason.
+#
+# A seat outside the pot's group is the NotFoundError _require_seat answers. A seat that has gone is a
+# PotSeatDepartedError — except, for a seat the request itself NAMED (a new movement's member), an
+# inactive one stays the NotFoundError it always was: a request body naming a former member is the same
+# mistake as one naming a stranger. A deletion names no seat, so for it every way of having gone reads
+# as gone.
+async def _lock_receiving_seat(session: AsyncSession, pot: Pot, member_id: int, *, named: bool = True) -> GroupMember:
+    await group_repository.lock_members(session, [member_id], shared=True)
+    seat = await group_repository.get_member(session, pot.group_id, member_id)
+    if seat is None or (named and not seat.is_active):
+        raise NotFoundError("Group member not found")
+    if _has_left(seat):
+        raise PotSeatDepartedError()
+    return seat
 
 
 # The pot's unit price on a date, or a refusal. Bundles the two ways it can be undefined into the two
@@ -396,11 +438,15 @@ async def record_opening(
 
     # The whole roster in ONE query, then validated in memory — an opening names every owner, so a
     # seat lookup per member is an N+1 that grows with the group.
+    # Every seat it hands units to is locked first (see _lock_receiving_seat), then the roster read once.
+    await group_repository.lock_members(session, list(shares), shared=True)
     members_by_id = {m.id: m for m in await group_repository.list_members(session, pot.group_id)}
     for member_id in shares:
         member = members_by_id.get(member_id)
         if member is None or not member.is_active:
             raise NotFoundError("Group member not found")
+        if _has_left(member):
+            raise PotSeatDepartedError()
 
     units_by_member = opening_units(value, shares)
     # Built in memory and written in one batch: an opening is one row per owner, and flushing per row
@@ -472,10 +518,12 @@ async def record_movement(
     # two withdrawals racing each other both measure a balance neither will still have, and between
     # them redeem more units than exist.
     await pot_repository.lock(session, pot.id)
-    member = await _require_seat(session, pot, member_id)
+    is_contribution = type == OwnershipEventType.contribution
+    # A contribution hands the seat units, so its seat is locked against going meanwhile; a withdrawal
+    # only takes them away.
+    member = await _lock_receiving_seat(session, pot, member_id) if is_contribution else await _require_seat(session, pot, member_id)
     price, balances = await _require_price(session, pot, date)
 
-    is_contribution = type == OwnershipEventType.contribution
     # Both amounts are stored and no rate ever is, matching transfers and card_settlements: a
     # cross-currency move records what left and what was credited, and which one a sum reads depends
     # on the sum's side.
@@ -635,6 +683,7 @@ async def contribute_holding(
     # moment apart would otherwise each price themselves against a pot that does not yet hold the
     # other's asset, and between them issue units at a price neither of them ends up at.
     await pot_repository.lock(session, pot.id)
+    await _lock_receiving_seat(session, pot, member.id)
     holding = await pot_service.require_contributable_holding(session, user, investment_id=investment_id, account_id=account_id)
 
     # One lookup for the whole request, shared by the pot's price and the holding's conversion — the
@@ -744,7 +793,7 @@ async def record_reagreement(
     # the giver owns.
     await pot_repository.lock(session, pot.id)
     giver = await _require_seat(session, pot, from_member_id)
-    receiver = await _require_seat(session, pot, to_member_id)
+    receiver = await _lock_receiving_seat(session, pot, to_member_id)
     if giver.id == receiver.id:
         raise PotReagreementSameMemberError()
     price, balances = await _require_price(session, pot, date)
@@ -995,6 +1044,12 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
         # Which refusal, from the row's own state: a confirmed re-agreement is locked against everybody
         # and says so with the one way out, while everything else is the plain write-access answer.
         raise PotReagreementConfirmedError() if event.confirmed_at is not None else PotWriteRequiredError()
+    # Deleting an entry that took units AWAY from a seat gives them back, and a seat that has gone may
+    # not get any: a take-out of a share whose owner then left, or a buy-out deleted after its seller
+    # deleted their account, would otherwise leave units on a seat nobody can answer for.
+    regaining = _regaining_seat(event)
+    if regaining is not None:
+        await _lock_receiving_seat(session, pot, regaining, named=False)
     # Everything the announcement and the audit entry need is read off the event BEFORE it goes, so
     # neither depends on an object whose row no longer exists.
     entry_id, entry_type = event.id, event.type

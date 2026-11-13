@@ -184,6 +184,7 @@ class TestUnitsAreIssuedAtThePotsRate:
         _holdings(monkeypatch, {5: [_investment(1, "USD")]}, {1: _snapshot(1, "1000", "USD"), 12: _snapshot(12, "600000", "ARS")})
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(pot, ANA_SEAT)))
         monkeypatch.setattr(pot_service.pot_repository, "lock", AsyncMock())
+        monkeypatch.setattr(pot_ownership_service.group_repository, "get_member", AsyncMock(return_value=ANA_SEAT))
         holding = _investment(12, "ARS", pot_id=None, user_id=ANA.id)
         monkeypatch.setattr(pot_service, "require_contributable_holding", AsyncMock(return_value=holding))
         monkeypatch.setattr(pot_service, "attach_holding", AsyncMock())

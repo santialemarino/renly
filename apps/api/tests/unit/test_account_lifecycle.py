@@ -472,8 +472,8 @@ class TestDeleteAccount:
                 calls.append(f"delete:{group_ids}")
                 self.sessions.append(session)
 
-            async def lock_many(self, session, group_ids):
-                pass
+            async def lock_members(self, session, member_ids, shared=False):
+                return []
 
         groups = FakeGroupRepo()
         monkeypatch.setattr(user_account_service, "group_repository", groups)

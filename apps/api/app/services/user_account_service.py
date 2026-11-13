@@ -104,18 +104,19 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     surviving_seats = [
         seat for seat in await group_repository.list_active_members(admin_session, user.id) if seat.group_id not in set(orphan_group_ids)
     ]
-    # The surviving groups are locked on the account's OWN session, and held until its deletion commits
-    # below: every ledger write takes its group's lock before its pot's (pot_repository.lock), so none
-    # can hand these seats new units between the check that follows and the moment they lose their
-    # account. Taken on that session because it is the one whose transaction ends with the deletion.
-    await group_repository.lock_many(session, sorted({seat.group_id for seat in surviving_seats}))
+    # The surviving seats are locked on the account's OWN session, and held until its deletion commits
+    # below: every ledger write that hands a seat units takes that seat's lock after its pot's
+    # (group_repository.lock_members), so none can hand these seats units between the check that
+    # follows and the moment they lose their account — and one that waited then finds them gone. Taken
+    # on that session because it is the one whose transaction ends with the deletion.
+    await group_repository.lock_members(session, [seat.id for seat in surviving_seats])
     await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
     # And no pot share left behind in a surviving group. Deleting the account turns the seat into a
     # name-only placeholder, which no change of split or of a pot's dollar rate waits for — so the other
     # owners could reshape a pot that is still partly this person's, and nobody could ever buy the share
     # out on their behalf. Settle it first, with a buy-out or a take-out. (An orphaned group's pots were
     # absorbed above, so they are not asked about.)
-    await pot_service.ensure_no_units(admin_session, surviving_seats)
+    await pot_service.ensure_no_units(admin_session, surviving_seats, for_account=True)
     await admin_session.commit()
     # Clear the invite first, on its own (privileged) transaction. The deletes span two connections so
     # they can't be atomic; ordering invite-first makes the only partial-failure state benign — an

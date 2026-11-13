@@ -28,8 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
     AccountHasLinkedEntriesError,
+    AccountOwnsPotError,
     ExchangeRateUnavailableError,
     GroupMemberOwnsPotError,
+    GroupMemberPotChangePendingError,
     NotFoundError,
     NotificationDispatch,
     PotAlreadyDividedError,
@@ -61,7 +63,7 @@ from app.models.exchange_rate import DollarRate
 from app.models.group import Group, GroupMember, GroupMemberRole
 from app.models.investment import Investment
 from app.models.notification import NotificationEvent
-from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
+from app.models.pot import OwnershipEventType, Pot, PotCadence, PotMemberPermission, PotVisibility
 from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
@@ -1277,6 +1279,10 @@ async def update_pot(
 
     pot, _, _ = await require_visible(session, pot_id, user)
     await group_service.require_admin(session, pot.group_id, user)
+    # The pot's own lock before its row changes, the order every ledger write takes it in: a write
+    # holding the pot then inserts rows that reference the pot and its group, so an edit that changed the
+    # row without it would hold the pot's row while it waited on theirs.
+    await pot_repository.lock(session, pot.id)
     if name is not None:
         pot.name = name
     if snapshot_cadence is not None:
@@ -1966,18 +1972,40 @@ def _ensure_all_present(found: list, requested: list[int], pot: Pot, user: User,
 # on one would let the remaining owners reshape a pot that is still partly that person's, with no way
 # for them to object. The share leaves first, through a buy-out or a take-out.
 #
+# A change of split naming the seat that is still waiting to be confirmed refuses it too: until it is
+# confirmed it can be deleted, which would hand the units straight back to the seat that has gone. (A
+# take-out has no confirmation, so it can always be deleted; delete_event refuses that one instead.)
+#
+# `for_account` is the account-deletion wording: that person is told which of their groups still hold
+# a share, where a removal names no pot, since the remover may be an admin the pot is hidden from.
+#
 # On the PRIVILEGED session: the caller may be an admin removing somebody, and a pot hidden from the
-# admin still holds the removed member's units. Two queries for any number of seats and pots.
-async def ensure_no_units(admin_session: AsyncSession, members: list[GroupMember]) -> None:
+# admin still holds the removed member's units. The callers hold each seat's lock while this reads
+# (group_repository.lock_members), which is what keeps a ledger write from landing in between. Two
+# queries for any number of seats and pots, three when it names groups.
+async def ensure_no_units(admin_session: AsyncSession, members: list[GroupMember], *, for_account: bool = False) -> None:
     if not members:
         return
     pot_ids = await pot_repository.list_ids_by_groups(admin_session, sorted({member.group_id for member in members}))
     events_by_pot = await pot_ownership_repository.list_by_pots(admin_session, pot_ids)
     seat_ids = {member.id for member in members}
+    owning: set[int] = set()
+    pending: set[int] = set()
     for events in events_by_pot.values():
         balances = replay_units(_as_entries(events))
-        if any(balances.get(seat_id, ZERO) > ZERO for seat_id in seat_ids):
-            raise GroupMemberOwnsPotError()
+        owning |= {seat_id for seat_id in seat_ids if balances.get(seat_id, ZERO) > ZERO}
+        for event in events:
+            if event.type == OwnershipEventType.reagreement and event.confirmed_at is None:
+                pending |= {event.member_id, event.counterparty_member_id} & seat_ids
+    if for_account:
+        group_ids = sorted({member.group_id for member in members if member.id in owning | pending})
+        if group_ids:
+            raise AccountOwnsPotError([group.name for group in await group_repository.get_by_ids(admin_session, group_ids)])
+        return
+    if owning:
+        raise GroupMemberOwnsPotError()
+    if pending:
+        raise GroupMemberPotChangePendingError()
 
 
 # Re-points every holding in a group's pots to one user as private. Called only from account deletion,

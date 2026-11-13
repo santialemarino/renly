@@ -91,6 +91,7 @@ class TestTheLockComesFirst:
         monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
         monkeypatch.setattr(pot_ownership_service, "_require_price", trace.stub("price", result=(Decimal("1"), {SEAT.id: Decimal("100")})))
         monkeypatch.setattr(pot_ownership_service, "_require_seat", AsyncMock(return_value=SEAT))
+        monkeypatch.setattr(pot_ownership_service, "_lock_receiving_seat", trace.stub("seat", result=SEAT))
         monkeypatch.setattr(pot_ownership_service, "_require_leg", AsyncMock(return_value=None))
         monkeypatch.setattr(pot_ownership_service.pot_ownership_repository, "create", AsyncMock(return_value=MagicMock(id=1)))
         monkeypatch.setattr(pot_ownership_service.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[]))
@@ -105,6 +106,7 @@ class TestTheLockComesFirst:
             AsyncMock(), 5, USER, type=OwnershipEventType.contribution, date=None, member_id=SEAT.id, amount=Decimal("10")
         )
         assert trace.index_of("lock") < trace.index_of("price")
+        assert trace.index_of("lock") < trace.index_of("seat")
 
     @pytest.mark.asyncio
     async def test_moving_holdings_locks_the_pot_before_reading_the_ledger(self, monkeypatch):
@@ -136,6 +138,7 @@ class TestTheLockComesFirst:
         trace = _Trace()
         monkeypatch.setattr(pot_ownership_service.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
         monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
+        monkeypatch.setattr(pot_ownership_service, "_lock_receiving_seat", trace.stub("seat", result=SEAT))
         monkeypatch.setattr(pot_ownership_service.pot_service, "require_contributable_holding", AsyncMock(return_value=object()))
         monkeypatch.setattr(pot_ownership_service.exchange_rate_service, "build_rate_lookup", AsyncMock())
         monkeypatch.setattr(pot_ownership_service, "_require_price", trace.stub("price", result=(Decimal("1.10"), {})))
@@ -154,6 +157,8 @@ class TestTheLockComesFirst:
 
         await pot_ownership_service.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
         assert trace.index_of("lock") < trace.index_of("price")
+        # The contributor's own seat is locked after the pot, the order every ledger write takes them in.
+        assert trace.index_of("lock") < trace.index_of("seat")
         assert trace.index_of("price") < trace.index_of("move")
         assert trace.index_of("value") < trace.index_of("move")
 

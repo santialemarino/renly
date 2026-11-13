@@ -71,19 +71,36 @@ async def delete(session: AsyncSession, group: Group) -> None:
 # nothing against the balances — an overpayment is legal and simply flips the bucket.
 #
 # RLS applies, and it is `groups_member_isolation`'s USING that governs a locking read, so any active
-# member may take it. When a transaction holds both a group and one of its pots, the group always comes
-# first: pot_repository.lock takes the group before the pot, which is what keeps the two lock orders from
-# ever meeting — and what makes this lock serialise a member's removal against every ledger write.
+# member may take it. Nothing in the app locks a group AND a pot in the same transaction, which is what
+# keeps the two lock orders from ever meeting.
 async def lock(session: AsyncSession, group_id: int) -> None:
     await session.execute(select(Group.id).where(Group.id == group_id).with_for_update())
 
 
-# The same lock on several groups at once, in id order, so two callers locking overlapping sets cannot
-# deadlock against each other.
-async def lock_many(session: AsyncSession, group_ids: list[int]) -> None:
-    if not group_ids:
+# Locks seats, in id order so two callers locking overlapping sets cannot deadlock against each other,
+# and re-reads them into whatever copies the session already holds.
+#
+# The SEAT is what a pot's ledger and a seat going inactive have in common, so it is what serialises
+# them. A path that makes a seat inactive or account-less (removing a member, leaving, deleting the
+# account) takes it EXCLUSIVELY before it counts the seat's units; a ledger write that hands a seat
+# units takes it SHARED (`shared=True`) after its pot's lock and then checks the seat is still there.
+# Whichever comes second waits for the first to commit and then sees what it did — so no write can hand
+# units to a seat between the check that it owns none and the moment it goes. Shared, so ledger writes
+# never wait on each other here; and nothing that holds a seat lock goes on to take a pot's, so the
+# pot-then-seat order the ledger takes cannot meet its reverse.
+#
+# `populate_existing` because the caller may hold these seats already, loaded before the lock waited:
+# the caller reads them again afterwards and must see what the lock waited for.
+async def lock_members(session: AsyncSession, member_ids: list[int], *, shared: bool = False) -> None:
+    if not member_ids:
         return
-    await session.execute(select(Group.id).where(Group.id.in_(group_ids)).order_by(Group.id).with_for_update())
+    await session.execute(
+        select(GroupMember)
+        .where(GroupMember.id.in_(sorted(set(member_ids))))
+        .order_by(GroupMember.id)
+        .with_for_update(read=shared)
+        .execution_options(populate_existing=True)
+    )
 
 
 # Ids of the groups that become unreachable once this user's account is gone: groups they hold a seat
@@ -219,7 +236,7 @@ class GroupRepository:
     list_orphaned_group_ids = staticmethod(list_orphaned_group_ids)
     list_visible = staticmethod(list_visible)
     lock = staticmethod(lock)
-    lock_many = staticmethod(lock_many)
+    lock_members = staticmethod(lock_members)
     save = staticmethod(save)
     save_member = staticmethod(save_member)
 

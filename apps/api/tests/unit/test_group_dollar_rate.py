@@ -5,18 +5,20 @@
 # blue 1500 — so each rate gives a different answer and a figure names the rate it was converted at. The
 # repositories are stubbed; the waterfall, the balance fold and the agreement rule all run for real.
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.domain import (
+    AccountOwnsPotError,
     GroupDollarRateAlreadyAgreedError,
     GroupDollarRateNotYoursError,
     GroupDollarRateProposalPendingError,
     GroupDollarRateUnchangedError,
     GroupMemberOwnsPotError,
+    GroupMemberPotChangePendingError,
     NotFoundError,
     dollar_rate_consent,
 )
@@ -27,7 +29,7 @@ from app.models.group_money_settings import GroupMoneySettings
 from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, PotOwnershipEvent
 from app.models.user import User
-from app.services import exchange_rate_service, group_money_service, group_service, group_settlement_service, pot_service
+from app.services import exchange_rate_service, group_money_service, group_service, group_settlement_service, pot_ownership_service, pot_service
 
 DAY = date(2026, 6, 1)
 RATES = {
@@ -412,13 +414,81 @@ class TestAPotOwnerCannotGoInactive:
 
     @pytest.mark.asyncio
     async def test_a_share_that_was_bought_out_no_longer_counts(self, monkeypatch):
-        self._wire(monkeypatch, {6: [_opening(6, 100, "40"), _opening(6, 101, "60"), _bought_out(6, 101, 100, "60")]})
+        bought_out = _bought_out(6, 101, 100, "60")
+        bought_out.confirmed_at = datetime(2026, 2, 2, tzinfo=UTC)
+        self._wire(monkeypatch, {6: [_opening(6, 100, "40"), _opening(6, 101, "60"), bought_out]})
         await pot_service.ensure_no_units(AsyncMock(), [BRUNO_SEAT])
 
     @pytest.mark.asyncio
     async def test_somebody_elses_units_are_not_this_seats(self, monkeypatch):
         self._wire(monkeypatch, {5: [_opening(5, 100, "100")]})
         await pot_service.ensure_no_units(AsyncMock(), [BRUNO_SEAT])
+
+    @pytest.mark.asyncio
+    async def test_a_buy_out_naming_the_seat_that_waits_for_confirmation_refuses_it_too(self, monkeypatch):
+        # Until it is confirmed it can be deleted, which would hand the units straight back.
+        pending = _bought_out(6, 101, 100, "60")
+        self._wire(monkeypatch, {6: [_opening(6, 100, "40"), _opening(6, 101, "60"), pending]})
+        with pytest.raises(GroupMemberPotChangePendingError):
+            await pot_service.ensure_no_units(AsyncMock(), [BRUNO_SEAT])
+        # Once confirmed, nothing is left to undo.
+        pending.confirmed_at = datetime(2026, 2, 2, tzinfo=UTC)
+        await pot_service.ensure_no_units(AsyncMock(), [BRUNO_SEAT])
+
+    @pytest.mark.asyncio
+    async def test_an_account_deletion_is_told_which_groups_still_hold_a_share(self, monkeypatch):
+        self._wire(monkeypatch, {5: [_opening(5, 101, "100")]})
+        monkeypatch.setattr(pot_service.group_repository, "get_by_ids", AsyncMock(return_value=[GROUP]))
+        with pytest.raises(AccountOwnsPotError) as refused:
+            await pot_service.ensure_no_units(AsyncMock(), [BRUNO_SEAT], for_account=True)
+        assert refused.value.extra == {"groups": "Casa"}
+
+    @pytest.mark.parametrize(
+        ("event", "regains"),
+        [
+            (_bought_out(6, 101, 100, "60"), 101),
+            (
+                PotOwnershipEvent(
+                    pot_id=6,
+                    type=OwnershipEventType.reagreement,
+                    date=date(2026, 2, 1),
+                    member_id=100,
+                    counterparty_member_id=101,
+                    units=Decimal("5"),
+                    unit_price=Decimal("1"),
+                ),
+                101,
+            ),
+            (
+                PotOwnershipEvent(
+                    pot_id=6, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=101, units=Decimal("-5"), unit_price=Decimal("1")
+                ),
+                101,
+            ),
+            (
+                PotOwnershipEvent(
+                    pot_id=6, type=OwnershipEventType.contribution, date=date(2026, 2, 1), member_id=101, units=Decimal("5"), unit_price=Decimal("1")
+                ),
+                None,
+            ),
+            (_opening(6, 101, "60"), None),
+        ],
+    )
+    def test_deleting_an_entry_gives_units_back_to_the_seat_it_took_them_from(self, event, regains):
+        assert pot_ownership_service._regaining_seat(event) == regains
+
+    @pytest.mark.parametrize(
+        ("seat", "gone"),
+        [
+            (_seat(101, 2, "Bruno"), False),
+            (_seat(101, 2, "Bruno", active=False), True),
+            (_seat(103, None, "Abuela"), False),
+            (GroupMember(id=101, group_id=GROUP_ID, user_id=None, display_name="Bruno", joined_at=datetime(2026, 1, 1, tzinfo=UTC)), True),
+        ],
+    )
+    def test_a_seat_has_gone_once_it_left_or_its_account_was_deleted(self, seat, gone):
+        # A placeholder nobody ever claimed has not gone: a name-only member may own a share.
+        assert pot_ownership_service._has_left(seat) is gone
 
     @pytest.mark.asyncio
     async def test_removing_or_leaving_asks_on_the_privileged_session_before_the_seat_goes(self, monkeypatch):

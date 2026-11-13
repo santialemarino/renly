@@ -1,4 +1,7 @@
+import asyncio
 import os
+from datetime import date
+from decimal import Decimal
 
 import pytest
 import pytest_asyncio
@@ -18,11 +21,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db import set_session_user
-from app.domain import GroupDollarRateAlreadyAgreedError, GroupMemberOwnsPotError
+from app.domain import (
+    GroupDollarRateAlreadyAgreedError,
+    GroupMemberOwnsPotError,
+    GroupMemberPotChangePendingError,
+    PotSeatDepartedError,
+)
 from app.models.exchange_rate import DollarRate
+from app.models.shared_audit import AuditAction
 from app.models.user import User
 from app.repositories import group_repository, pot_repository
-from app.services import group_money_service, group_service
+from app.services import group_money_service, group_service, pot_ownership_service, pot_service
 
 APP_URL = os.getenv("RLS_TEST_DATABASE_URL")
 ADMIN_URL = os.getenv("RLS_TEST_ADMIN_DATABASE_URL")
@@ -225,20 +234,28 @@ class TestAPotOwnerCannotLeaveTheirShareBehind:
 
 
 class TestARemovalAndALedgerWriteCannotInterleave:
-    # The window between counting a seat's units and deactivating it. Every ledger write takes its
-    # group's lock before its pot's (pot_repository.lock), and a removal holds the group's lock while it
-    # counts — so whichever comes second waits. Proved by holding one side open and watching the other
-    # time out on the lock rather than slip through.
+    # The window between counting a seat's units and deactivating it. A removal holds the SEAT's lock
+    # (exclusively) while it counts; a ledger write that hands the seat units takes the same lock (shared)
+    # after its pot's. So whichever comes second waits. Proved by holding one side open and watching the
+    # other time out on the lock rather than slip through.
 
     @pytest.mark.asyncio
-    async def test_a_ledger_write_waits_for_a_removal_holding_the_group(self, seeded):
+    async def test_a_buy_in_waits_for_a_removal_holding_the_seat(self, seeded):
         async with seeded["app"]() as removal, seeded["app"]() as writer:
             set_session_user(removal, seeded["users"]["admin"])
-            set_session_user(writer, seeded["users"]["owner"])
-            await group_repository.lock(removal, seeded["group"])
+            set_session_user(writer, seeded["users"]["third"])
+            await group_repository.lock_members(removal, [seeded["seats"]["owner"]])
             await writer.execute(text("SET LOCAL lock_timeout = '300ms'"))
             with pytest.raises(DBAPIError, match="lock timeout"):
-                await pot_repository.lock(writer, seeded["pot"])
+                await pot_ownership_service.record_reagreement(
+                    writer,
+                    seeded["pot"],
+                    _user(seeded, "third"),
+                    date=date(2026, 3, 1),
+                    from_member_id=seeded["seats"]["third"],
+                    to_member_id=seeded["seats"]["owner"],
+                    percentage=Decimal("10"),
+                )
             await writer.rollback()
             await removal.rollback()
 
@@ -248,11 +265,143 @@ class TestARemovalAndALedgerWriteCannotInterleave:
         async with seeded["app"]() as writer, seeded["app"]() as s, seeded["admin"]() as admin_session:
             set_session_user(writer, seeded["users"]["third"])
             set_session_user(s, seeded["users"]["admin"])
-            # A contribution for the owner, between its lock and its commit.
+            # A write handing the owner units, between its locks and its commit.
             await pot_repository.lock(writer, seeded["pot"])
+            await group_repository.lock_members(writer, [seeded["seats"]["owner"]], shared=True)
             await s.execute(text("SET LOCAL lock_timeout = '300ms'"))
             with pytest.raises(DBAPIError, match="lock timeout"):
                 await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "admin"))
             await s.rollback()
             await writer.rollback()
         assert await _is_active(seeded, "owner") is True
+
+    @pytest.mark.asyncio
+    async def test_a_removal_racing_a_buy_in_counts_the_units_it_waited_for(self, seeded):
+        # The race itself, end to end: the owner's share has gone, a buy-in handing them units is in
+        # flight, and an admin removes them meanwhile. The removal must see those units and refuse —
+        # not count an empty ledger, then wait out the write and deactivate a seat that owns part of
+        # the pot.
+        await _buy_out_owner(seeded)
+
+        # A ledger write handing the owner units, following the protocol every ledger write does (the
+        # pot's lock, then the receiving seat's, shared), held open between its insert and its commit so
+        # the removal arrives in between.
+        async def buy_in():
+            async with seeded["app"]() as writer:
+                set_session_user(writer, seeded["users"]["third"])
+                await pot_repository.lock(writer, seeded["pot"])
+                await group_repository.lock_members(writer, [seeded["seats"]["owner"]], shared=True)
+                await writer.execute(
+                    text(
+                        "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, counterparty_member_id, units, unit_price)"
+                        " VALUES (:p, 'reagreement', '2026-03-01', :m, :c, -10, 1)"
+                    ),
+                    {"p": seeded["pot"], "m": seeded["seats"]["third"], "c": seeded["seats"]["owner"]},
+                )
+                await asyncio.sleep(0.6)
+                await writer.commit()
+
+        async def remove():
+            await asyncio.sleep(0.2)
+            async with seeded["app"]() as s, seeded["admin"]() as admin_session:
+                set_session_user(s, seeded["users"]["admin"])
+                await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "admin"))
+
+        results = await asyncio.wait_for(asyncio.gather(buy_in(), remove(), return_exceptions=True), timeout=15)
+        assert isinstance(results[1], GroupMemberOwnsPotError), results
+        assert await _is_active(seeded, "owner") is True
+
+    @pytest.mark.asyncio
+    async def test_editing_a_pot_and_a_ledger_write_do_not_deadlock(self, seeded):
+        # The independent review's reproduction: an edit of the pot's row whose audit entry references
+        # the group, racing a ledger write that holds the pot. Both must finish, in some order.
+        async def edit():
+            async with seeded["app"]() as editor:
+                set_session_user(editor, seeded["users"]["owner"])
+                pot = await pot_repository.get_by_id(editor, seeded["pot"])
+                pot.name = "renamed"
+                await pot_repository.save(editor, pot)
+                await editor.flush()
+                await asyncio.sleep(0.3)
+                await pot_service._audit(editor, pot, _user(seeded, "owner"), AuditAction.updated)
+                await editor.commit()
+
+        async def write():
+            await asyncio.sleep(0.1)
+            async with seeded["app"]() as writer:
+                set_session_user(writer, seeded["users"]["third"])
+                await pot_repository.lock(writer, seeded["pot"])
+                await pot_service._audit(writer, await pot_repository.get_by_id(writer, seeded["pot"]), _user(seeded, "third"), AuditAction.updated)
+                await writer.commit()
+
+        async with seeded["app"]() as holder:
+            # Somebody holding the group the way a removal or a settle-up does, released mid-race.
+            set_session_user(holder, seeded["users"]["admin"])
+            await group_repository.lock(holder, seeded["group"])
+            results = await asyncio.wait_for(asyncio.gather(edit(), write(), _release(holder, 0.5), return_exceptions=True), timeout=10)
+        assert [type(r).__name__ for r in results if isinstance(r, Exception)] == []
+        async with seeded["admin"]() as s:
+            assert await _scalar(s, "SELECT name FROM pots WHERE id = :p", p=seeded["pot"]) == "renamed"
+
+
+async def _release(session: AsyncSession, after: float) -> None:
+    await asyncio.sleep(after)
+    await session.commit()
+
+
+class TestAShareCannotComeBackToASeatThatHasGone:
+    @pytest.mark.asyncio
+    async def test_leaving_is_refused_while_a_buy_out_naming_the_seat_waits_for_confirmation(self, seeded):
+        await _sell_owner_share_unconfirmed(seeded)
+        async with seeded["app"]() as s, seeded["admin"]() as admin_session:
+            set_session_user(s, seeded["users"]["owner"])
+            with pytest.raises(GroupMemberPotChangePendingError):
+                await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "owner"))
+        assert await _is_active(seeded, "owner") is True
+
+    @pytest.mark.asyncio
+    async def test_deleting_a_take_out_of_a_departed_seat_is_refused(self, seeded):
+        # The independent review's path, through a take-out, which has no confirmation to wait for: the
+        # owner's whole share leaves, they leave the group, and somebody deletes the entry.
+        async with seeded["admin"]() as s:
+            event = await _scalar(
+                s,
+                "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, units, unit_price, amount)"
+                " VALUES (:p, 'withdrawal', '2026-02-01', :m, -50, 1, 50) RETURNING id",
+                p=seeded["pot"],
+                m=seeded["seats"]["owner"],
+            )
+            await s.commit()
+        async with seeded["app"]() as s, seeded["admin"]() as admin_session:
+            set_session_user(s, seeded["users"]["owner"])
+            await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "owner"))
+        with pytest.raises(PotSeatDepartedError):
+            await _as(seeded, "third", lambda s, u: pot_ownership_service.delete_event(s, seeded["pot"], event, u))
+        async with seeded["admin"]() as s:
+            assert await _scalar(s, "SELECT count(*) FROM pot_ownership_events WHERE id = :e", e=event) == 1
+
+    @pytest.mark.asyncio
+    async def test_deleting_a_buy_out_after_its_seller_deleted_their_account_is_refused(self, seeded):
+        # The account-deletion half: the seat stays active but loses its account.
+        event = await _sell_owner_share_unconfirmed(seeded, confirmed=True)
+        async with seeded["admin"]() as s:
+            await s.execute(text("UPDATE pot_ownership_events SET confirmed_at = NULL WHERE id = :e"), {"e": event})
+            await s.execute(text("UPDATE group_members SET user_id = NULL, joined_at = NOW() WHERE id = :m"), {"m": seeded["seats"]["owner"]})
+            await s.commit()
+        with pytest.raises(PotSeatDepartedError):
+            await _as(seeded, "third", lambda s, u: pot_ownership_service.delete_event(s, seeded["pot"], event, u))
+
+
+# The owner sells their whole share to the third member, as a buy-out not yet confirmed.
+async def _sell_owner_share_unconfirmed(seeded, *, confirmed: bool = False) -> int:
+    async with seeded["admin"]() as s:
+        event = await _scalar(
+            s,
+            "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, counterparty_member_id, units, unit_price, confirmed_at)"
+            " VALUES (:p, 'reagreement', '2026-02-01', :m, :c, -50, 1, " + ("NOW()" if confirmed else "NULL") + ") RETURNING id",
+            p=seeded["pot"],
+            m=seeded["seats"]["owner"],
+            c=seeded["seats"]["third"],
+        )
+        await s.commit()
+    return event
