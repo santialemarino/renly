@@ -84,6 +84,9 @@ async def update_profile(session: AsyncSession, user: User, name: str, *, rename
         if name != user.name:
             renamed = [seat for seat in seats if seat.is_active and _carries_account_name(seat, user.name)]
     for seat in renamed:
+        # The entry names both names: the feed reads its actor from the live roster, which by then says
+        # the new one, so the old one would otherwise be lost from the sentence.
+        previous = seat.display_name
         seat.display_name = name
         await group_repository.save_member(session, seat)
         await shared_audit_service.record(
@@ -93,7 +96,7 @@ async def update_profile(session: AsyncSession, user: User, name: str, *, rename
             entity_type=AuditEntityType.group_member,
             action=AuditAction.updated,
             entity_id=seat.id,
-            payload={"member": name, "variant": "account_name"},
+            payload={"member": name, "from": previous, "variant": "account_name"},
         )
     user.name = name
     await user_repository.save(session, user)

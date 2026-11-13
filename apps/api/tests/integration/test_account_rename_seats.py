@@ -174,6 +174,17 @@ class TestWhichSeats:
         assert notified == 0
 
     @pytest.mark.asyncio
+    async def test_the_feed_entry_keeps_the_old_name_beside_the_live_actor(self, seeded):
+        # Read back through the real activity read: its actor comes from the live roster, which after the
+        # rename already says the new name, so only the payload can carry the old one.
+        await _rename(seeded, "Santiago")
+        async with seeded["app"]() as s:
+            user = await _request(seeded, s, "me")
+            entries = await shared_audit_service.list_activity(s, seeded["groups"]["shared"], user, limit=10)
+        renamed = [entry for entry in entries if entry.payload.get("variant") == "account_name"]
+        assert [(entry.actor_name, entry.payload["from"], entry.payload["member"]) for entry in renamed] == [("Santiago", "Santi", "Santiago")]
+
+    @pytest.mark.asyncio
     async def test_without_the_flag_only_the_account_is_renamed(self, seeded):
         assert await _rename(seeded, "Santiago", rename_group_seats=False) == 0
         assert await _names(seeded) == {"account": "Santiago", "mine": "Santi", "shared": "Santi"} | _UNTOUCHED

@@ -155,7 +155,7 @@ class TestRenameGroupSeats:
                 "entity_type": AuditEntityType.group_member,
                 "action": AuditAction.updated,
                 "entity_id": 11,
-                "payload": {"member": "Santiago", "variant": "account_name"},
+                "payload": {"member": "Santiago", "from": "Santi", "variant": "account_name"},
             }
         ]
 

@@ -3108,7 +3108,7 @@
           "joined": "{member} joined the group",
           "updated": {
             "base": "{actor} updated {member}",
-            "account_name": "{actor} changed their name in the group to {member}"
+            "account_name": "{actor} changed their name in the group from {from} to {member}"
           },
           "removed": {
             "base": "{member} is no longer in the group",
