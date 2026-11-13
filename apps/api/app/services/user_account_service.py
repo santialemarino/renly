@@ -82,6 +82,10 @@ async def update_profile(session: AsyncSession, user: User, name: str, *, rename
         await group_repository.lock_members(session, [seat.id for seat in seats])
         await user_repository.lock(session, user.id)
         if name != user.name:
+            # `is_active` is read again here, after the lock, on purpose: a removal or a leave that
+            # committed while this waited has deactivated the seat, and the membership policy now hides it
+            # from this session's UPDATE, which would fail on a row that silently matched nothing. The
+            # list above was read before the wait, so it cannot have known.
             renamed = [seat for seat in seats if seat.is_active and _carries_account_name(seat, user.name)]
     for seat in renamed:
         # The entry names both names: the feed reads its actor from the live roster, which by then says

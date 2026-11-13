@@ -274,3 +274,19 @@ class TestRaces:
             _, renamed = await user_account_service.update_profile(late, stale, "Sant", rename_group_seats=True)
         assert renamed == 2
         assert await _names(seeded) == {"account": "Sant", "mine": "Sant", "shared": "Sant"} | _UNTOUCHED
+
+    @pytest.mark.asyncio
+    async def test_a_member_removed_while_the_rename_waits_keeps_their_seat_as_it_was(self, seeded):
+        # The seat is read as active before the lock and is inactive once it is taken. The membership
+        # policy then hides it from the user's own UPDATE, so only the re-check after the lock keeps the
+        # rename from failing on it.
+        async with seeded["app"]() as admin_request:
+            set_session_user(admin_request, seeded["users"]["other"])
+            await admin_request.execute(text("UPDATE group_members SET is_active = FALSE WHERE id = :m"), {"m": seeded["seats"]["shared"]})
+            rename = asyncio.create_task(_rename(seeded, "Santiago"))
+            await asyncio.sleep(0.5)
+            assert not rename.done()
+            await admin_request.commit()
+            assert await rename == 1
+        names = await _names(seeded)
+        assert (names["account"], names["mine"], names["shared"]) == ("Santiago", "Santiago", "Santi")
