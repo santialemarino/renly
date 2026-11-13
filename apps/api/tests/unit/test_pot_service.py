@@ -24,7 +24,9 @@ from app.domain import (
     PotWriteRequiredError,
 )
 from app.models.account import Account, AccountType
+from app.models.exchange_rate import DollarRate
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
+from app.models.group_money_settings import GroupMoneySettings
 from app.models.investment import Investment, InvestmentCategory
 from app.models.pot import OwnershipEventType, Pot, PotCadence, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
@@ -173,7 +175,38 @@ class TestVisibilityGate:
             await pot_service.require_visible(AsyncMock(), 5, USER)
 
 
+# Every group has a money-settings row, and creating a pot reads the group's dollar rate from it when
+# the request names none. Stubbed for the whole module: create_pot is the only reader here.
+@pytest.fixture(autouse=True)
+def _group_settings(monkeypatch):
+    monkeypatch.setattr(
+        pot_service.group_money_settings_repository,
+        "get_by_group_id",
+        AsyncMock(return_value=GroupMoneySettings(group_id=10, dollar_rate=DollarRate.blue)),
+    )
+
+
 class TestPotCreation:
+    @pytest.mark.asyncio
+    async def test_a_pot_with_no_rate_named_starts_on_its_groups_rate(self, monkeypatch):
+        # The two figures members read side by side — what the pot is worth, what they owe each other —
+        # then convert alike. Asserted on the row the service BUILT; the group settles at blue above.
+        from app.services import group_service
+
+        monkeypatch.setattr(group_service, "require_admin", AsyncMock(return_value=(GROUP, SEAT)))
+        monkeypatch.setattr(pot_service.pot_repository, "list_by_group", AsyncMock(return_value=[]))
+        created = AsyncMock(side_effect=lambda _s, pot: pot)
+        monkeypatch.setattr(pot_service.pot_repository, "create", created)
+        monkeypatch.setattr(pot_service.pot_repository, "save_permission", AsyncMock(side_effect=lambda _s, p: p))
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value="built"))
+
+        await pot_service.create_pot(AsyncMock(), 10, USER, base_currency="USD")
+        assert created.await_args.args[1].dollar_rate == DollarRate.blue
+
+        # A rate the creator picked wins: the group's is only the starting point.
+        await pot_service.create_pot(AsyncMock(), 10, USER, base_currency="USD", dollar_rate=DollarRate.oficial)
+        assert created.await_args.args[1].dollar_rate == DollarRate.oficial
+
     @pytest.mark.asyncio
     async def test_the_creator_is_seated_with_full_access(self, monkeypatch):
         # Asserted on the row the service BUILT, not on what a mock handed back — a mock with a

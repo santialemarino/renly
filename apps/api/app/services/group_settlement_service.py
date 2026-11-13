@@ -52,6 +52,7 @@ from app.domain import (
 )
 from app.domain.money import MONEY_PLACES, quantize, spread_remainder
 from app.models.account import Account
+from app.models.exchange_rate import DollarRate
 from app.models.group import Group, GroupMember
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.notification import NotificationEvent
@@ -77,7 +78,7 @@ from app.schemas.group_settlement import (
     GroupSettleSuggestionResponse,
 )
 from app.services import exchange_rate_service, group_service, notification_service, shared_audit_service
-from app.utils.metrics import convert_optional
+from app.utils.metrics import RateLookup, convert_optional
 from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
@@ -102,13 +103,15 @@ async def get_balances(session: AsyncSession, group_id: int, user: User, *, curr
     _, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
     positions = await _positions_by_currency(session, group_id)
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    lookup = await _group_rate_lookup(session, group_id) if currency else None
     buckets: list[GroupCurrencyBalanceResponse] = []
     skipped: set[str] = set()
     for bucket_currency in sorted(positions):
         net = positions[bucket_currency]
         mine = net.get(viewer.id, ZERO)
-        # TODAY's rate, not the date of any contributing expense: a balance is a live position, and
+        # At the GROUP's dollar rate, not the viewer's: what a bucket comes to in another currency is what
+        # a payment in that currency would clear of it, and both sides of the debt must read the same
+        # figure for it. TODAY's rate, not the date of any contributing expense: a balance is a live position, and
         # the expenses behind it have already been reduced to one figure per bucket with no single
         # date to convert at. Passing None here instead reaches `bisect` inside the rate lookup and
         # raises TypeError — a 500 on every request that asks for a display currency.
@@ -307,7 +310,7 @@ async def preview_waterfall(
             buckets=[],
             leftover=leftover,
         )
-    candidates, costs, skipped = await _waterfall_candidates(session, user, owed, currency, date, spillover_currencies)
+    candidates, costs, skipped = await _waterfall_candidates(session, group_id, owed, currency, date, spillover_currencies)
     plan = plan_waterfall(excess, candidates)
     applied = {step.currency: step for step in plan.steps}
     return GroupSettlementPlanResponse(
@@ -373,7 +376,7 @@ async def record_waterfall(
     excess = amount - primary_outstanding
     plan = None
     if excess > ZERO and owed:
-        candidates, _, _ = await _waterfall_candidates(session, user, owed, currency, date, spillover_currencies)
+        candidates, _, _ = await _waterfall_candidates(session, group_id, owed, currency, date, spillover_currencies)
         plan = plan_waterfall(excess, candidates)
     steps = plan.steps if plan is not None else []
     leftover = plan.leftover if plan is not None else max(excess, ZERO)
@@ -731,6 +734,14 @@ async def _owed_between(session: AsyncSession, group_id: int, from_member_id: in
     return owed
 
 
+# The rates a group-level figure converts at: the stored rates read under the group's own dollar rate.
+# Every figure both sides of a debt must agree on goes through here — the waterfall and the "at today's
+# rate" balance — never through the reader's personal preference.
+async def _group_rate_lookup(session: AsyncSession, group_id: int) -> RateLookup:
+    settings = await group_money_settings_repository.get_by_group_id(session, group_id)
+    return await exchange_rate_service.build_rate_lookup(session, (settings.dollar_rate if settings is not None else DollarRate.mep).value)
+
+
 # Prices each open bucket in the currency being paid, so the pure allocator never needs a rate.
 #
 # Converted at the PAYMENT's date, not today: the rate that matters is the one in force when the money
@@ -738,17 +749,21 @@ async def _owed_between(session: AsyncSession, group_id: int, from_member_id: in
 # at today's for the opposite and equally deliberate reason — a displayed balance is a live position
 # with no single date behind it.)
 #
+# At the GROUP's dollar rate, whoever records the payment: how much peso debt a dollar clears is a
+# figure the payer and the payee must both stand behind, so it cannot follow one side's personal
+# preference. Rows already recorded keep the amounts they were written with; only new payments read it.
+#
 # A bucket with no rate is dropped and named, never guessed at: converting at 1:1 or at a neighbouring
 # day's rate would move real money at a number nobody agreed to.
 async def _waterfall_candidates(
     session: AsyncSession,
-    user: User,
+    group_id: int,
     owed: dict[str, Decimal],
     currency: str,
     date: date_type,
     spillover_currencies: list[str] | None,
 ) -> tuple[list[WaterfallCandidate], dict[str, Decimal], set[str]]:
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    lookup = await _group_rate_lookup(session, group_id)
     candidates: list[WaterfallCandidate] = []
     costs: dict[str, Decimal] = {}
     skipped: set[str] = set()

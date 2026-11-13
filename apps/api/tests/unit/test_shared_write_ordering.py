@@ -31,7 +31,7 @@ from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.pot import Pot, PotMemberPermission
 from app.models.user import User
 from app.schemas.pot import PotHoldingResponse
-from app.services import group_service, group_settlement_service, pot_ownership_service, pot_service, shared_audit_service
+from app.services import group_money_service, group_service, group_settlement_service, pot_ownership_service, pot_service, shared_audit_service
 
 USER = User(id=1, name="Santi", email="u@test", password_hash="x", session_epoch=0)
 GROUP = Group(id=10, name="Casa", kind=GroupKind.household, created_by=USER.id)
@@ -256,12 +256,17 @@ class TestTheAuditEntryComesBeforeARevocation:
         monkeypatch.setattr(group_service, "_ensure_admin_remains", AsyncMock())
         monkeypatch.setattr(group_service.group_repository, "lock", AsyncMock())
         monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", AsyncMock())
+        monkeypatch.setattr(pot_service, "ensure_no_units", AsyncMock())
+        monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", trace.stub("settle_rate"))
         monkeypatch.setattr(group_service.shared_audit_service, "record", trace.stub("audit"))
         monkeypatch.setattr(group_service.group_repository, "save_member", trace.stub("deactivate"))
         monkeypatch.setattr(group_service.group_invite_repository, "delete_by_member", AsyncMock())
 
-        await group_service.remove_member(AsyncMock(), 10, target.id, USER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), 10, target.id, USER)
         assert trace.index_of("audit") < trace.index_of("deactivate")
+        # Settling a pending change of the group's dollar rate writes the settings row and an entry of
+        # its own, so it runs while the leaver is still a member too.
+        assert trace.index_of("settle_rate") < trace.index_of("deactivate")
 
     @pytest.mark.asyncio
     async def test_removal_says_whether_the_member_left_or_was_removed(self, monkeypatch):
@@ -273,16 +278,18 @@ class TestTheAuditEntryComesBeforeARevocation:
         monkeypatch.setattr(group_service, "_ensure_admin_remains", AsyncMock())
         monkeypatch.setattr(group_service.group_repository, "lock", AsyncMock())
         monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", AsyncMock())
+        monkeypatch.setattr(pot_service, "ensure_no_units", AsyncMock())
+        monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", AsyncMock())
         monkeypatch.setattr(group_service.shared_audit_service, "record", recorded)
         monkeypatch.setattr(group_service.group_repository, "save_member", AsyncMock())
         monkeypatch.setattr(group_service.group_invite_repository, "delete_by_member", AsyncMock())
 
         monkeypatch.setattr(group_service, "require_member", AsyncMock(return_value=(GROUP, target)))
-        await group_service.remove_member(AsyncMock(), 10, target.id, USER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), 10, target.id, USER)
         assert recorded.await_args.kwargs["payload"]["variant"] == "self"
 
         monkeypatch.setattr(group_service, "require_member", AsyncMock(return_value=(GROUP, other)))
-        await group_service.remove_member(AsyncMock(), 10, target.id, USER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), 10, target.id, USER)
         assert recorded.await_args.kwargs["payload"]["variant"] == "by_admin"
 
     @pytest.mark.asyncio

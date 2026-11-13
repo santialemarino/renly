@@ -391,6 +391,49 @@ class GroupBalanceOutstandingError(DomainError):
         return {"groups": self.group_names}
 
 
+# A change of a group's dollar rate was proposed while another is still waiting for the members to
+# agree. One at a time, so every member is agreeing to the same thing. Mapped to 409.
+class GroupDollarRateProposalPendingError(DomainError):
+    code = "group_dollar_rate_proposal_pending"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A change of dollar rate is already waiting for the members to agree. Agree to it or withdraw it first."
+        super().__init__(self.message)
+
+
+# A change of a group's dollar rate named the rate the group already settles at. Refused rather than
+# recorded, so nobody is asked to agree to a change that changes nothing. Mapped to 400.
+class GroupDollarRateUnchangedError(DomainError):
+    code = "group_dollar_rate_unchanged"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "This group already settles at that dollar rate."
+        super().__init__(self.message)
+
+
+# A member agreed twice to the same change of a group's dollar rate. Mapped to 409.
+class GroupDollarRateAlreadyAgreedError(DomainError):
+    code = "group_dollar_rate_already_agreed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "You have already agreed to this change of dollar rate."
+        super().__init__(self.message)
+
+
+# Somebody other than its proposer tried to withdraw a change of a group's dollar rate — the proposer's
+# word to take back, as on a pot. Mapped to 403.
+class GroupDollarRateNotYoursError(DomainError):
+    code = "group_dollar_rate_not_yours"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only the member who proposed this change of dollar rate can withdraw it."
+        super().__init__(self.message)
+
+
 # Removing, deactivating or demoting the last active admin of a group. Someone must be able to manage
 # members and settings, and no other role can promote a replacement — so the group would be permanently
 # unadministrable, with no recovery path short of deleting it. Promote someone else first. Mapped to 409
@@ -404,9 +447,21 @@ class GroupLastAdminError(DomainError):
         super().__init__(self.message)
 
 
-# An account tried to claim a second seat in a group it already belongs to. One person is one member per
-# group, which is what makes a member id a usable counterparty for balances and ownership units — two
-# seats for one account would split their history in half. Mapped to 409 by the API.
+# A seat still owns part of a pot, and the operation would make it inactive — removing the member,
+# leaving the group, or deleting the account behind the seat. Its units would stay in the ledger with
+# nobody able to answer for them: every change of split and of the pot's dollar rate skips a seat that
+# cannot act, so the remaining owners could reshape a pot that is still partly theirs without them.
+# The share has to leave the pot first, through a buy-out or a take-out. Names no pot: the caller may
+# be an admin the pot is hidden from. Mapped to 409 by the API.
+class GroupMemberOwnsPotError(DomainError):
+    code = "group_member_owns_pot"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This seat still owns part of a pot. Settle that share first with a buy-out or a take-out."
+        super().__init__(self.message)
+
+
 class GroupMembershipExistsError(DomainError):
     code = "group_membership_exists"
     status_code = 409

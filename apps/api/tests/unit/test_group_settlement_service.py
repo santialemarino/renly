@@ -600,7 +600,7 @@ class TestBalances:
         rates = {ExchangeRatePair.USD_ARS_MEP: [ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("1500"))]}
         monkeypatch.setattr(
             group_settlement_service.exchange_rate_service,
-            "get_user_rate_lookup",
+            "build_rate_lookup",
             AsyncMock(return_value=RateLookup("mep", rates)),
         )
 
@@ -619,7 +619,7 @@ class TestBalances:
         _wire(monkeypatch, positions=self._POSITIONS)
         monkeypatch.setattr(
             group_settlement_service.exchange_rate_service,
-            "get_user_rate_lookup",
+            "build_rate_lookup",
             AsyncMock(return_value=RateLookup("mep", {})),
         )
 
@@ -839,7 +839,7 @@ class TestTheOverpayWaterfall:
             if available
             else {}
         )
-        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
 
     async def _preview(self, **overrides):
         body = dict(from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("30000.00"), currency="ARS")
@@ -1142,7 +1142,7 @@ class TestTwoBucketsAtOnce:
             ExchangeRatePair.USD_ARS_MEP: [ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("1037.50"))],
             ExchangeRatePair.USD_BRL: [ExchangeRate(pair=ExchangeRatePair.USD_BRL, date=date(2026, 1, 1), rate=Decimal("5.43"))],
         }
-        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
 
     @pytest.mark.asyncio
     async def test_the_costliest_bucket_is_listed_and_filled_first(self, monkeypatch):
@@ -1271,7 +1271,7 @@ class TestTheRateFollowsThePaymentDate:
                 ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 5, 1), rate=Decimal("1500.00")),
             ]
         }
-        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
 
     async def _preview(self, when: date):
         return await group_settlement_service.preview_waterfall(
@@ -1412,7 +1412,7 @@ class TestEveryRowMovesSomething:
 
     def _rates(self, monkeypatch):
         rates = {ExchangeRatePair.USD_ARS_MEP: [ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("1037.50"))]}
-        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
 
     async def _record(self, **overrides):
         body = dict(from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("45000.00"), currency="ARS")

@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import (
     AccountHasLinkedEntriesError,
     ExchangeRateUnavailableError,
+    GroupMemberOwnsPotError,
     NotFoundError,
     NotificationDispatch,
     PotAlreadyDividedError,
@@ -44,6 +45,7 @@ from app.domain import (
     PotHoldingUnvaluedError,
     PotValuation,
     PotWriteRequiredError,
+    dollar_rate_consent,
     is_valuation_overdue,
     ownership_percentages,
     period_ends,
@@ -67,6 +69,7 @@ from app.repositories import (
     account_repository,
     card_settlement_repository,
     expense_repository,
+    group_money_settings_repository,
     group_repository,
     group_settlement_repository,
     income_repository,
@@ -1215,6 +1218,11 @@ async def _audit(session: AsyncSession, pot: Pot, user: User, action: AuditActio
 # The creator always gets an explicit row rather than relying on the visibility default, because a
 # pot created with visibility='owners' would otherwise be immediately invisible to everyone including
 # the person who just made it, and there would be no one left able to grant access.
+#
+# With no dollar rate named, the pot starts on the rate its GROUP settles at: the two figures most
+# members read side by side — what the pot is worth and what they owe each other — then convert alike
+# until somebody deliberately sets them apart. Copied at creation only; each changes on its own
+# agreement afterwards, because a pot's owners and a group's members are different sets of people.
 async def create_pot(
     admin_session: AsyncSession,
     group_id: int,
@@ -1224,12 +1232,15 @@ async def create_pot(
     name: str | None = None,
     snapshot_cadence: PotCadence = PotCadence.monthly,
     visibility: PotVisibility = PotVisibility.members,
-    dollar_rate: DollarRate = DollarRate.mep,
+    dollar_rate: DollarRate | None = None,
 ) -> PotResponse:
     from app.services import group_service
 
     group, member = await group_service.require_admin(admin_session, group_id, user)
     existing = await pot_repository.list_by_group(admin_session, group.id)
+    if dollar_rate is None:
+        settings = await group_money_settings_repository.get_by_group_id(admin_session, group.id)
+        dollar_rate = settings.dollar_rate if settings is not None else DollarRate.mep
     pot = Pot(
         group_id=group.id,
         name=name,
@@ -1329,8 +1340,8 @@ def _proposal_response(
     return PotDollarRateProposalResponse(
         dollar_rate=pot.dollar_rate_proposal,
         proposed_by=proposer.display_name if proposer is not None else "",
-        waiting_on=sorted(members_by_id[member_id].display_name for member_id in agreers - agreed),
-        can_agree=viewer_member_id in agreers and (viewer_member_id not in agreed or agreers <= agreed),
+        waiting_on=sorted(members_by_id[member_id].display_name for member_id in dollar_rate_consent.waiting_on(agreers, agreed)),
+        can_agree=dollar_rate_consent.may_agree(viewer_member_id, agreers, agreed),
         can_withdraw=_may_withdraw_rate(pot, viewer_member_id, agreers, members_by_id),
     )
 
@@ -1344,13 +1355,13 @@ def _may_propose_rate(balances: dict[int, Decimal], members_by_id: dict[int, Gro
     return not agreers and viewer is not None and viewer.role == GroupMemberRole.admin
 
 
-# Whether a seat may withdraw the pending proposal: its proposer — or, once the proposer has left the
-# group and so can never withdraw it, any owner it waits for, so a stale proposal cannot block the pot.
+# Whether a seat may withdraw the pending proposal: its proposer — or, once the proposer can never
+# withdraw it (they left the group, or deleted the account behind their seat), any owner it waits for, so
+# a stale proposal cannot block the pot.
 def _may_withdraw_rate(pot: Pot, member_id: int, agreers: set[int], members_by_id: dict[int, GroupMember]) -> bool:
-    if member_id == pot.dollar_rate_proposed_by:
-        return True
     proposer = members_by_id.get(pot.dollar_rate_proposed_by)
-    return (proposer is None or not proposer.is_active) and member_id in agreers
+    proposer_can_act = proposer is not None and proposer.is_active and proposer.user_id is not None
+    return dollar_rate_consent.may_withdraw(member_id, pot.dollar_rate_proposed_by, agreers, proposer_can_act=proposer_can_act)
 
 
 # The pot's members and current balances, read under the pot's lock so nothing moves between the read
@@ -1470,7 +1481,7 @@ async def agree_dollar_rate(admin_session: AsyncSession, pot_id: int, user: User
     if member.id not in agreers:
         raise PotDollarRateOwnerRequiredError()
     agreed = set(pot.dollar_rate_agreed_by)
-    if member.id in agreed and not agreers <= agreed:
+    if not dollar_rate_consent.may_agree(member.id, agreers, agreed):
         raise PotDollarRateAlreadyAgreedError()
     if member.id not in agreed:
         pot.dollar_rate_agreed_by = [*pot.dollar_rate_agreed_by, member.id]
@@ -1483,7 +1494,7 @@ async def agree_dollar_rate(admin_session: AsyncSession, pot_id: int, user: User
             from_rate=pot.dollar_rate.value,
             to_rate=pot.dollar_rate_proposal.value,
         )
-    if agreers <= agreed:
+    if dollar_rate_consent.is_agreed(agreers, agreed):
         await _apply_proposal(admin_session, pot, user, agreers=agreers, members_by_id=party.members_by_id)
     else:
         await pot_repository.save(admin_session, pot)
@@ -1548,7 +1559,7 @@ async def _after_ledger_change(session: AsyncSession, pot: Pot, user: User, *, u
         return
     members_by_id, balances = await _rate_context(session, pot)
     agreers = _rate_agreers(balances, members_by_id)
-    if agreers <= set(pot.dollar_rate_agreed_by):
+    if dollar_rate_consent.is_agreed(agreers, set(pot.dollar_rate_agreed_by)):
         await _apply_proposal(session, pot, user, agreers=agreers, members_by_id=members_by_id)
         return
     joined = agreers - set(pot.dollar_rate_agreed_by) - _rate_agreers(units_before, members_by_id)
@@ -1947,6 +1958,26 @@ def _ensure_all_present(found: list, requested: list[int], pot: Pot, user: User,
         eligible = {h.id for h in found if h.pot_id == pot.id}
     if set(requested) - eligible:
         raise NotFoundError("Holding not found")
+
+
+# Refuses an operation that would make a seat inactive while it still owns part of a pot — removing a
+# member, leaving a group, deleting the account behind a seat. Inactive or account-less seats are
+# skipped by every agreement a pot asks for (a change of split, a change of dollar rate), so units left
+# on one would let the remaining owners reshape a pot that is still partly that person's, with no way
+# for them to object. The share leaves first, through a buy-out or a take-out.
+#
+# On the PRIVILEGED session: the caller may be an admin removing somebody, and a pot hidden from the
+# admin still holds the removed member's units. Two queries for any number of seats and pots.
+async def ensure_no_units(admin_session: AsyncSession, members: list[GroupMember]) -> None:
+    if not members:
+        return
+    pot_ids = await pot_repository.list_ids_by_groups(admin_session, sorted({member.group_id for member in members}))
+    events_by_pot = await pot_ownership_repository.list_by_pots(admin_session, pot_ids)
+    seat_ids = {member.id for member in members}
+    for events in events_by_pot.values():
+        balances = replay_units(_as_entries(events))
+        if any(balances.get(seat_id, ZERO) > ZERO for seat_id in seat_ids):
+            raise GroupMemberOwnsPotError()
 
 
 # Re-points every holding in a group's pots to one user as private. Called only from account deletion,

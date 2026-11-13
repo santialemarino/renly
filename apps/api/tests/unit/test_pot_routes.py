@@ -290,10 +290,10 @@ class TestRequestContract:
         assert response.status_code == 200
         assert propose.await_args.kwargs["dollar_rate"] == "blue"
 
-    def test_a_new_pot_is_valued_at_mep_unless_told_otherwise(self):
-        # The same default the column has, so an API client that never names a rate and a row that
-        # predates the setting agree.
-        assert PotCreate(group_id=1, base_currency="USD").dollar_rate == "mep"
+    def test_a_new_pot_names_no_rate_unless_told_otherwise(self):
+        # None rather than a fixed rate, so the service starts the pot on its group's rate: a body
+        # default of mep would pin every pot an API client creates to mep whatever its group settles at.
+        assert PotCreate(group_id=1, base_currency="USD").dollar_rate is None
 
 
 # A contribution names exactly ONE holding, and the boundary is what enforces it.

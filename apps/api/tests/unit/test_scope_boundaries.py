@@ -332,9 +332,22 @@ class TestAccountDeletionAcrossTheBoundary:
         monkeypatch.setattr(svc.group_repository, "list_active_members", AsyncMock(return_value=seats))
         guard = AsyncMock(side_effect=lambda *a, **k: calls.append("balance-guard"))
         monkeypatch.setattr(svc.group_settlement_service, "ensure_no_outstanding_balance", guard)
+        units_guard = AsyncMock(side_effect=lambda *a, **k: calls.append("units-guard"))
+        monkeypatch.setattr(svc.pot_service, "ensure_no_units", units_guard)
+        settle_rate = AsyncMock(side_effect=lambda *a, **k: calls.append("settle-rate"))
+        monkeypatch.setattr(svc.group_money_service, "settle_dollar_rate_proposal", settle_rate)
 
         user = User(id=1, name="S", email="u@test", password_hash="x", session_epoch=0)
         await svc.delete_account(AsyncMock(), AsyncMock(), user, "pw", "u@test")
+
+        # No pot share may be left on a seat that is about to lose its account: the same surviving
+        # seats, refused before the account goes.
+        assert units_guard.await_args.args[1] == [seats[1]]
+        assert calls.index("units-guard") < calls.index("delete_user"), calls
+        # A pending change of a surviving group's dollar rate is settled AFTER the delete — only then does
+        # the seat read as account-less — and never for the orphaned group, which is deleted outright.
+        assert [c.args[1] for c in settle_rate.await_args_list] == [11]
+        assert calls.index("delete_user") < calls.index("settle-rate") < calls.index("delete_groups"), calls
 
         assert "absorb" in calls, "an orphaned group's holdings were never absorbed"
         assert calls.index("absorb") < calls.index("delete_user"), calls

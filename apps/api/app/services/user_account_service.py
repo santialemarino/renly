@@ -1,6 +1,7 @@
 # Authenticated account self-service (AUTH-8 / AUTH-6): change password, change email, export data,
 # and delete the account. Each sensitive action re-verifies the current password.
 
+import logging
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +10,9 @@ from app.domain import InvalidCredentialsError, PasswordBreachedError
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import export_repository, group_repository, invite_repository, user_repository
-from app.services import auth_service, group_settlement_service, pot_service
+from app.services import auth_service, group_money_service, group_settlement_service, pot_service
+
+logger = logging.getLogger(__name__)
 
 
 # Changes the password after re-verifying the current one (AUTH-8). Rejects breached passwords
@@ -102,6 +105,12 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
         seat for seat in await group_repository.list_active_members(admin_session, user.id) if seat.group_id not in set(orphan_group_ids)
     ]
     await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
+    # And no pot share left behind in a surviving group. Deleting the account turns the seat into a
+    # name-only placeholder, which no change of split or of a pot's dollar rate waits for — so the other
+    # owners could reshape a pot that is still partly this person's, and nobody could ever buy the share
+    # out on their behalf. Settle it first, with a buy-out or a take-out. (An orphaned group's pots were
+    # absorbed above, so they are not asked about.)
+    await pot_service.ensure_no_units(admin_session, surviving_seats)
     await admin_session.commit()
     # Clear the invite first, on its own (privileged) transaction. The deletes span two connections so
     # they can't be atomic; ordering invite-first makes the only partial-failure state benign — an
@@ -111,6 +120,18 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     await admin_session.commit()
     await user_repository.delete(session, user)
     await session.commit()
+    # Each surviving group's pending change of dollar rate stops waiting for the seat that just lost its
+    # account, and applies if it was the last one it waited for. After the delete, because only then does
+    # the seat read as account-less; with no actor, because the account is gone. A failure here must not
+    # fail a deletion that has already happened: the proposal stays pending, and any member still waited
+    # on can apply it by agreeing (the backstop in agree_dollar_rate).
+    for group_id in sorted({seat.group_id for seat in surviving_seats}):
+        try:
+            await group_money_service.settle_dollar_rate_proposal(admin_session, group_id, None)
+            await admin_session.commit()
+        except Exception:
+            logger.exception("Settling the dollar-rate proposal of group %s after an account deletion failed.", group_id)
+            await admin_session.rollback()
     # The orphaned groups go LAST, for the same fail-benign reason inverted: dropping them before the
     # account and then failing the account delete would destroy a live user's groups, whereas failing
     # here leaves unreachable rows — which is precisely the state that existed before this cleanup.

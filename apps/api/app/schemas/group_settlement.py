@@ -7,6 +7,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.exchange_rate import DollarRate
 from app.models.group_money_settings import SplitMethod
 from app.models.group_settlement import GroupSettlementStatus
 from app.schemas.base import RequestBase, validate_supported_currency
@@ -227,7 +228,13 @@ class GroupSettlementPlanResponse(BaseModel):
     skipped_currencies: list[str] = Field(default_factory=list, description="Buckets left out because no rate reaches them.")
 
 
-# Body for PUT /groups/{group_id}/money-settings. Partial update; only provided fields are changed.
+# Body for POST /groups/{group_id}/money-settings/dollar-rate.
+class GroupDollarRateProposalCreate(RequestBase):
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate the group settles up at from now on: oficial, mep or blue.")
+
+
+# Body for PUT /groups/{group_id}/money-settings. Partial update; only provided fields are changed. The
+# dollar rate is deliberately not among them: changing it takes every member's agreement.
 class GroupMoneySettingsUpdate(RequestBase):
     default_split_method: SplitMethod | None = Field(default=None, description="The split a new shared expense starts on.")
     auto_finalise_settlements: bool | None = Field(
@@ -240,10 +247,25 @@ class GroupSettlementListResponse(PaginatedResponse):
     items: list[GroupSettlementResponse] = Field(description="Settlements on this page, newest first.")
 
 
-# The money settings a group holds in common.
+# A pending change of a group's dollar rate, as the reader sees it.
+class GroupDollarRateProposalResponse(BaseModel):
+    dollar_rate: DollarRate = Field(description="The rate proposed.")
+    proposed_by: str = Field(description="How the proposer is shown in the group.")
+    waiting_on: list[str] = Field(description="The members who have not agreed yet; empty once everyone has.")
+    can_agree: bool = Field(description="Whether the reader is a member whose agreement it waits for.")
+    can_withdraw: bool = Field(description="Whether the reader may withdraw it: its proposer.")
+
+
+# The money settings a group holds in common, including the dollar rate it settles at and any pending
+# change of it. Returned by GET /groups/{id}/money-settings and every write beside it.
 class GroupMoneySettingsResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     group_id: int = Field(description="Group these settings belong to.")
     default_split_method: SplitMethod = Field(description="The split a new shared expense starts on.")
     auto_finalise_settlements: bool = Field(description="Whether a recorded settlement is confirmed on the spot.")
+    dollar_rate: DollarRate = Field(description="The USD/ARS rate every member settles up at.")
+    dollar_rate_proposal: GroupDollarRateProposalResponse | None = Field(
+        default=None, description="A change of that rate waiting for the members to agree; null when none is."
+    )
+    can_change_dollar_rate: bool = Field(description="Whether the reader may propose a new dollar rate.")

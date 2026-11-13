@@ -451,6 +451,16 @@ class TestTheOwnersAgree:
         assert pot.dollar_rate_proposal is None
 
     @pytest.mark.asyncio
+    async def test_a_proposal_whose_proposer_deleted_their_account_can_be_withdrawn_by_an_owner(self, monkeypatch):
+        # The seat stays active but has no account behind it, so its proposer can never withdraw it
+        # either — the same stale proposal as one whose proposer left.
+        pot = _pot()
+        pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, NAME_ONLY_SEAT.id, [NAME_ONLY_SEAT.id]
+        self._wire(monkeypatch, pot, _units((101, "50"), (103, "50")), [BRUNO_SEAT, NAME_ONLY_SEAT])
+        await pot_service.withdraw_dollar_rate(AsyncMock(), 5, BRUNO)
+        assert pot.dollar_rate_proposal is None
+
+    @pytest.mark.asyncio
     async def test_one_proposal_at_a_time_and_never_to_the_rate_in_force(self, monkeypatch):
         pot = _pot()
         self._wire(monkeypatch, pot, _units((100, "50"), (101, "50")), [ANA_SEAT, BRUNO_SEAT])
