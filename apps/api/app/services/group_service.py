@@ -331,18 +331,16 @@ async def remove_member(session: AsyncSession, admin_session: AsyncSession, grou
     if member.id != viewer.id and viewer.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     await _ensure_admin_remains(session, group, member)
-    # The seat itself is locked first, and it is what keeps the pot units counted below true until the
-    # seat goes: every ledger write that hands a seat units takes that seat's lock (shared) after its
-    # pot's, so none can land between the count and the deactivation (group_repository.lock_members).
-    # Before the group's lock, never after: a ledger write holding the seat goes on to insert rows that
-    # reference the group, which wait on the group's lock — so taking the group first would let the two
-    # wait on each other.
-    await group_repository.lock_members(session, [member.id])
-    # Locked before the balances are read, because the answer is acted on: without it a shared expense
-    # recorded at the same moment lands a balance on a seat that has just been deactivated, and the
-    # membership policy is what makes that row readable — so the person on the other side of it loses
-    # the record of money they are owed.
+    # The group, then the seat — the app's one lock order (group_repository, "The row-lock order").
+    #
+    # The group before the balances are read, because the answer is acted on: a settle-up or a write-off
+    # deciding from the same balances waits for this one, and one that got there first is seen.
     await group_repository.lock(session, group.id)
+    # Then the seat, exclusively, which is what keeps both counts below true until it goes: a ledger
+    # write that hands a seat units takes that seat's lock (shared) after its pot's, and any row naming
+    # the seat — a shared expense's split, a settlement — waits on it too, so nothing can land between
+    # the counts and the deactivation.
+    await group_repository.lock_members(session, [member.id])
     # A seat with money still owed either way cannot simply be deactivated: the membership policy is
     # what makes the group's rows readable, so the moment the seat goes inactive the person on the
     # other side of that balance loses the record of it. Settle it or write it off first.

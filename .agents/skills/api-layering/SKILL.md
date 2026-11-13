@@ -41,6 +41,17 @@ rolls back any transaction that was never committed. So an error raised before t
 `session.rollback()` is only warranted when a service wants to recover mid-request and continue
 issuing queries on the same session after a failed write.
 
+### Row locks follow one order: group, pot, seat
+
+Shared-money writes serialise on three row locks, and a path that needs more than one takes them in
+this order and never the reverse: the **group** (`group_repository.lock`, FOR NO KEY UPDATE), then a
+**pot** (`pot_repository.lock`), then a **seat** (`group_repository.lock_members`, exclusive while a seat
+goes inactive or account-less, shared while a ledger write hands it units). Remember the implicit
+KEY SHARE lock a new row's foreign key takes on the row it points at: the group's lock lets those
+through, a seat's exclusive lock does not. The full reasoning is the comment above
+`group_repository.lock`; a new path that locks any of the three reads it first, and a change of the
+order needs a real-Postgres race test (see `tests/integration/test_group_dollar_rate.py`).
+
 ## Which session a route takes
 
 `app/deps/db.py` declares three, and the choice is a security decision, not a pooling detail:

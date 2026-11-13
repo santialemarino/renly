@@ -22,6 +22,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import set_session_user
 from app.domain import (
+    GroupBalanceOutstandingError,
     GroupDollarRateAlreadyAgreedError,
     GroupMemberOwnsPotError,
     GroupMemberPotChangePendingError,
@@ -405,3 +406,101 @@ async def _sell_owner_share_unconfirmed(seeded, *, confirmed: bool = False) -> i
         )
         await s.commit()
     return event
+
+
+class TestTheLockOrderHoldsAgainstEveryOtherWriter:
+    # The independent review's round-two reproductions: each pairs a removal with a path that takes the
+    # locks around it in some other combination, and each must finish rather than deadlock — group, pot,
+    # seat, in that order, with the group's lock letting rows that merely name the group through.
+
+    @staticmethod
+    async def _removal_racing_a_group_holder(seeded, write_sql: str) -> list:
+        # Somebody holding the group the way a settle-up or a rate proposal does, who then writes a row
+        # naming the leaving seat, while that seat's own removal runs.
+        await _buy_out_owner(seeded)
+        outcomes: list = []
+        async with seeded["app"]() as holder:
+            set_session_user(holder, seeded["users"]["admin"])
+            await group_repository.lock(holder, seeded["group"])
+
+            async def removal():
+                async with seeded["app"]() as s, seeded["admin"]() as admin_session:
+                    set_session_user(s, seeded["users"]["owner"])
+                    await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "owner"))
+
+            task = asyncio.create_task(removal())
+            await asyncio.sleep(0.5)
+            params = {"g": seeded["group"], "m": seeded["seats"]["owner"], "a": seeded["seats"]["admin"], "u": seeded["users"]["admin"]}
+            await holder.execute(text(write_sql), params)
+            await holder.commit()
+            try:
+                await asyncio.wait_for(task, timeout=10)
+                outcomes.append(None)
+            except Exception as error:  # noqa: BLE001 — the outcome IS the assertion
+                outcomes.append(error)
+        return outcomes
+
+    @pytest.mark.asyncio
+    async def test_a_settlement_naming_the_seat_finishes_and_the_removal_then_sees_its_balance(self, seeded):
+        [outcome] = await self._removal_racing_a_group_holder(
+            seeded,
+            "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency, created_by)"
+            " VALUES (:g, :m, :a, '2026-11-01', 1, 'USD', :u)",
+        )
+        # The settlement got there first and opened a balance, so the removal is refused for it.
+        assert isinstance(outcome, GroupBalanceOutstandingError), outcome
+        assert await _is_active(seeded, "owner") is True
+
+    @pytest.mark.asyncio
+    async def test_a_rate_proposal_naming_the_seat_finishes_and_so_does_the_removal(self, seeded):
+        [outcome] = await self._removal_racing_a_group_holder(
+            seeded,
+            "UPDATE group_money_settings SET dollar_rate_proposal = 'blue', dollar_rate_proposed_by = :m,"
+            " dollar_rate_agreed_by = ARRAY[:m]::bigint[] WHERE group_id = :g",
+        )
+        assert outcome is None
+        assert await _is_active(seeded, "owner") is False
+
+    @pytest.mark.asyncio
+    async def test_a_ledger_write_holding_the_seat_still_writes_its_audit_row_while_a_removal_waits(self, seeded):
+        await _buy_out_owner(seeded)
+        async with seeded["app"]() as writer:
+            set_session_user(writer, seeded["users"]["third"])
+            pot = await pot_repository.get_by_id(writer, seeded["pot"])
+            await pot_repository.lock(writer, pot.id)
+            await group_repository.lock_members(writer, [seeded["seats"]["owner"]], shared=True)
+
+            async def removal():
+                async with seeded["app"]() as s, seeded["admin"]() as admin_session:
+                    set_session_user(s, seeded["users"]["owner"])
+                    await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "owner"))
+
+            task = asyncio.create_task(removal())
+            await asyncio.sleep(0.5)
+            # The removal now holds the group and waits for the seat; the audit row names the group.
+            await pot_service._audit(writer, pot, _user(seeded, "third"), AuditAction.updated)
+            await writer.commit()
+            await asyncio.wait_for(task, timeout=10)
+        assert await _is_active(seeded, "owner") is False
+
+    @pytest.mark.asyncio
+    async def test_editing_a_pot_through_the_service_beside_a_ledger_write(self, seeded):
+        # Visible to the admin who edits it.
+        async with seeded["admin"]() as s:
+            await s.execute(text("UPDATE pots SET visibility = 'members' WHERE id = :p"), {"p": seeded["pot"]})
+            await s.commit()
+
+        async def edit():
+            await _as(seeded, "admin", lambda s, u: pot_service.update_pot(s, seeded["pot"], u, name="renamed"))
+
+        async def ledger():
+            async with seeded["app"]() as writer:
+                set_session_user(writer, seeded["users"]["owner"])
+                await pot_repository.lock(writer, seeded["pot"])
+                await group_repository.lock_members(writer, [seeded["seats"]["owner"]], shared=True)
+                await asyncio.sleep(0.4)
+                await pot_service._audit(writer, await pot_repository.get_by_id(writer, seeded["pot"]), _user(seeded, "owner"), AuditAction.updated)
+                await writer.commit()
+
+        results = await asyncio.wait_for(asyncio.gather(ledger(), edit(), return_exceptions=True), timeout=10)
+        assert [r for r in results if isinstance(r, Exception)] == []

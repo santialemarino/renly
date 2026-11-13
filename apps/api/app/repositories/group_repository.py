@@ -60,8 +60,27 @@ async def delete(session: AsyncSession, group: Group) -> None:
     await session.delete(group)
 
 
-# Takes an exclusive row lock on the group for the rest of the transaction, so two writers cannot
-# derive the same balances and both act on them.
+# --- The row-lock order, for the whole app ---
+#
+# Three row locks serialise the shared-money writes, and every path takes the ones it needs in ONE order,
+# which is what keeps any two of them from waiting on each other:
+#
+#   1. the GROUP  (`lock` below)      — balances, settle-ups, the group's dollar rate, removing a member;
+#   2. the POT    (pot_repository.lock) — every ledger write, a pot's dollar rate, editing a pot;
+#   3. the SEAT   (`lock_members`)    — exclusive while a seat goes inactive or account-less, shared
+#      while a ledger write hands that seat units.
+#
+# No path takes the group and a pot together, so 1 and 2 never meet; what makes the order hold is how
+# the locks combine with the KEY SHARE locks Postgres takes implicitly, on the row a new row's foreign
+# key points at. The group's lock is FOR NO KEY UPDATE, which those do NOT wait for, so a ledger write
+# holding a pot and a seat can still insert its audit row naming the group while somebody holds the
+# group. The seat's exclusive lock is FOR UPDATE, which they DO wait for, so a settlement or a shared
+# expense naming a seat that is going waits for it to go — and then finds what it did. Removing a
+# member takes the group THEN the seat; account deletion takes the seats only (it decides nothing from
+# a group's balances under the group's lock, and holding a seat it never waits on anything after it).
+#
+# Takes a row lock on the group for the rest of the transaction, so two writers cannot derive the same
+# balances and both act on them.
 #
 # The GROUP row rather than the rows the balance is summed from, because those span four tables and the
 # rows a writer must not miss are the ones the other writer is about to INSERT — nothing can lock a row
@@ -70,18 +89,21 @@ async def delete(session: AsyncSession, group: Group) -> None:
 # member whose position must be zero. Recording an ordinary settlement does not, because it checks
 # nothing against the balances — an overpayment is legal and simply flips the bucket.
 #
+# FOR NO KEY UPDATE (`key_share=True`) rather than FOR UPDATE: it excludes every other writer that
+# takes it, and lets a row that merely REFERENCES the group (an audit entry a ledger write inserts) in
+# without waiting — see the lock order above for why that is what keeps it deadlock-free.
+#
 # RLS applies, and it is `groups_member_isolation`'s USING that governs a locking read, so any active
-# member may take it. Nothing in the app locks a group AND a pot in the same transaction, which is what
-# keeps the two lock orders from ever meeting.
+# member may take it.
 async def lock(session: AsyncSession, group_id: int) -> None:
-    await session.execute(select(Group.id).where(Group.id == group_id).with_for_update())
+    await session.execute(select(Group.id).where(Group.id == group_id).with_for_update(key_share=True))
 
 
 # Locks seats, in id order so two callers locking overlapping sets cannot deadlock against each other,
 # and re-reads them into whatever copies the session already holds.
 #
 # The SEAT is what a pot's ledger and a seat going inactive have in common, so it is what serialises
-# them. A path that makes a seat inactive or account-less (removing a member, leaving, deleting the
+# them (third in the lock order above). A path that makes a seat inactive or account-less (removing a member, leaving, deleting the
 # account) takes it EXCLUSIVELY before it counts the seat's units; a ledger write that hands a seat
 # units takes it SHARED (`shared=True`) after its pot's lock and then checks the seat is still there.
 # Whichever comes second waits for the first to commit and then sees what it did — so no write can hand

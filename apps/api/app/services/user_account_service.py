@@ -108,7 +108,8 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # below: every ledger write that hands a seat units takes that seat's lock after its pot's
     # (group_repository.lock_members), so none can hand these seats units between the check that
     # follows and the moment they lose their account — and one that waited then finds them gone. Taken
-    # on that session because it is the one whose transaction ends with the deletion.
+    # on that session because it is the one whose transaction ends with the deletion. The seats only, no
+    # group lock: see group_repository ("The row-lock order") for why that keeps the order.
     await group_repository.lock_members(session, [seat.id for seat in surviving_seats])
     await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
     # And no pot share left behind in a surviving group. Deleting the account turns the seat into a

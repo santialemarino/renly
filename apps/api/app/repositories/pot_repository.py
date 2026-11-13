@@ -94,6 +94,9 @@ async def delete(session: AsyncSession, pot: Pot) -> None:
 # takeable by anyone the pot is visible AND whose group they belong to (`pots_scope_write`'s USING),
 # which deliberately includes a read-only seat: the widened re-agreement delete has no write access and
 # still has to serialise against the writer who recorded it.
+#
+# Second in the app's one row-lock order — group, pot, seat — stated once in group_repository ("The
+# row-lock order"): a path that needs a seat's lock as well takes it after this one, never before.
 async def lock(session: AsyncSession, pot_id: int) -> None:
     await session.execute(select(Pot).where(Pot.id == pot_id).with_for_update().execution_options(populate_existing=True))
 
