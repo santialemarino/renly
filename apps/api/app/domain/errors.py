@@ -721,6 +721,17 @@ class InvestmentCurrencyMismatchError(DomainError):
         return {"row_currency": self.row_currency, "base_currency": self.base_currency}
 
 
+# An investment with snapshots or transactions cannot be deleted: its history feeds returns, the
+# net-worth series and the dashboards, so it can only be archived. Mapped to 409 by the API.
+class InvestmentHasHistoryError(DomainError):
+    code = "investment_has_history"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This investment has snapshots or transactions, so it can only be archived."
+        super().__init__(self.message)
+
+
 # An admin tried to invite an email that already belongs to an account. Mapped to 409 by the API.
 class InviteEmailTakenError(DomainError):
     code = "invite_email_taken"

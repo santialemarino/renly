@@ -113,24 +113,36 @@ export function InvestorDashboardDistribution({
         )
       }
       footer={
-        /* Target color legend — only when collections have targets. */
+        /*
+         * By collection only: the target legend (when any collection has a target) and a note that the
+         * collections can overlap — an investment can sit in several, so their slices are not a split
+         * of the portfolio the way the categories are.
+         */
         <AnimatePresence initial={false}>
-          {hasTargets && (
+          {!isCategoryMode && (
             <motion.div
+              key="collection-footer"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: ANIMATION_DEFAULT }}
-              className="flex items-center justify-center gap-x-4 text-paragraph-xs text-muted-foreground"
+              className="flex flex-col items-center gap-y-1 text-paragraph-xs text-muted-foreground"
             >
-              <span className="inline-flex items-center gap-x-1">
-                <ArrowUp aria-hidden className="size-3 text-danger" />
-                {t('distribution.overAllocated')}
-              </span>
-              <span className="inline-flex items-center gap-x-1">
-                <ArrowDown aria-hidden className="size-3 text-warning" />
-                {t('distribution.underAllocated')}
-              </span>
+              {hasTargets && (
+                <div className="flex items-center justify-center gap-x-4">
+                  <span className="inline-flex items-center gap-x-1">
+                    <ArrowUp aria-hidden className="size-3 text-danger" />
+                    {t('distribution.overAllocated')}
+                  </span>
+                  <span className="inline-flex items-center gap-x-1">
+                    <ArrowDown aria-hidden className="size-3 text-warning" />
+                    {t('distribution.underAllocated')}
+                  </span>
+                </div>
+              )}
+              <p className="text-center" data-testid="collection-overlap-note">
+                {t('distribution.overlapNote')}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>

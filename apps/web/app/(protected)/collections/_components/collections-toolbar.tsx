@@ -8,12 +8,16 @@ import { CollectionFormDialog } from '@/app/(protected)/collections/_components/
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
+import { targetsExceedMax } from '@/lib/collection-targets';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface CollectionsToolbarProps {
   investments: { id: number; name: string }[];
   collectionCount: number;
   maxCollections: number;
   collectionWarningPct: number | null;
+  // Every collection's target added up, for the over-100% warning and the create form's.
+  targetsTotal: number;
 }
 
 export function CollectionsToolbar({
@@ -21,7 +25,9 @@ export function CollectionsToolbar({
   collectionCount,
   maxCollections,
   collectionWarningPct,
+  targetsTotal,
 }: CollectionsToolbarProps) {
+  const fmt = useFormatters();
   const t = useTranslations('collections');
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -44,6 +50,7 @@ export function CollectionsToolbar({
           open={createOpen}
           onOpenChange={setCreateOpen}
           investments={investments}
+          otherTargetsTotal={targetsTotal}
           onSuccess={() => router.refresh()}
         />
       </EntityListToolbar>
@@ -55,6 +62,13 @@ export function CollectionsToolbar({
       </WarningHint>
       <WarningHint show={atLimit} parentGap={8}>
         {t('softLimit.reached', { max: maxCollections })}
+      </WarningHint>
+      <WarningHint
+        show={targetsExceedMax(targetsTotal)}
+        parentGap={8}
+        testId="collection-targets-over"
+      >
+        {t('targets.overMax', { total: fmt.pct(targetsTotal) })}
       </WarningHint>
     </div>
   );

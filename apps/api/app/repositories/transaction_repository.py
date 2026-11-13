@@ -47,6 +47,14 @@ async def list_dedup_keys_by_user(
     return [tuple(row) for row in result.all()]
 
 
+# Returns the set of investment ids that have at least one transaction.
+async def get_ids_with_transactions(session: AsyncSession, investment_ids: list[int]) -> set[int]:
+    if not investment_ids:
+        return set()
+    result = await session.execute(select(Transaction.investment_id).where(Transaction.investment_id.in_(investment_ids)).distinct())
+    return {row[0] for row in result.all()}
+
+
 # Fetches a transaction by id. Returns None if not found.
 async def get_by_id(
     session: AsyncSession,
@@ -88,6 +96,7 @@ class TransactionRepository:
     create = staticmethod(create)
     delete = staticmethod(delete)
     get_by_id = staticmethod(get_by_id)
+    get_ids_with_transactions = staticmethod(get_ids_with_transactions)
     list_by_investment = staticmethod(list_by_investment)
     list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
     save = staticmethod(save)

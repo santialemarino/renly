@@ -528,6 +528,7 @@
     "health": {
       "savingsRate": "Tasa de Ahorro",
       "savingsRateHint": "Ingreso ahorrado después de gastos",
+      "savingsRateOffScale": "Los gastos superan por mucho a los ingresos, así que una tasa de ahorro no diría nada.",
       "incomeExpenseRatio": "Ingreso / Gasto",
       "incomeExpenseRatioHint": "Cuánto ganás por cada unidad gastada",
       "liquidity": "Liquidez",
@@ -1646,7 +1647,8 @@
       "byCollection": "Por colección",
       "unassigned": "Sin colección",
       "overAllocated": "Sobre el objetivo",
-      "underAllocated": "Bajo el objetivo"
+      "underAllocated": "Bajo el objetivo",
+      "overlapNote": "Una inversión puede estar en más de una colección."
     },
     "investmentsTable": {
       "title": "Inversiones",
@@ -1654,7 +1656,7 @@
       "value": "Valor",
       "invested": "Invertido",
       "gain": "Ganancia",
-      "monthChange": "Mes",
+      "monthChange": "Este mes",
       "hideInactive": "Ocultar inactivas"
     },
     "toolbar": {
@@ -1709,12 +1711,15 @@
       "emptyTitle": "Empezá a armar tu cartera de inversiones",
       "emptyDescription": "Agregá una inversión — acciones, cripto, fondos, inmuebles — para seguir su valor, rendimiento y asignación en el tiempo.",
       "total": "{total, plural, one {# inversión} other {# inversiones}}",
-      "sectionCount": "{count, plural, one {# tenencia} other {# tenencias}}"
+      "sectionCount": "{count, plural, one {# tenencia} other {# tenencias}}",
+      "archived": "Archivada"
     },
     "actions": {
       "edit": "Editar",
       "archive": "Archivar",
-      "unarchive": "Desarchivar"
+      "unarchive": "Desarchivar",
+      "delete": "Eliminar",
+      "archiveOnly": "Archivar (tiene snapshots o transacciones, así que no se puede eliminar)"
     },
     "form": {
       "titleCreate": "Agregar inversión",
@@ -1779,10 +1784,19 @@
         "loading": "Archivando..."
       },
       "success": "Inversión archivada.",
-      "error": "No se pudo archivar la inversión."
+      "error": "No se pudo archivar la inversión.",
+      "historyNote": "Tiene snapshots o transacciones, así que se puede archivar pero no eliminar. Archivarla conserva su historial y la saca del portfolio activo."
     },
     "unarchiveSuccess": "Inversión desarchivada.",
-    "unarchiveError": "No se pudo desarchivar la inversión."
+    "unarchiveError": "No se pudo desarchivar la inversión.",
+    "delete": {
+      "title": "Eliminar inversión",
+      "confirm": "¿Seguro querés eliminar \"{name}\"? No tiene snapshots ni transacciones, y se quitará de sus colecciones.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Inversión eliminada.",
+      "error": "No se pudo eliminar la inversión."
+    }
   },
   "collections": {
     "metadata": {
@@ -1850,6 +1864,9 @@
     "softLimit": {
       "approaching": "Tenés {count} de {max} colecciones. Considerá consolidar antes de crear más.",
       "reached": "Alcanzaste el máximo de {max} colecciones. Eliminá o consolidá colecciones existentes para crear nuevas."
+    },
+    "targets": {
+      "overMax": "Los objetivos de tus colecciones suman {total}%, más del 100% del portfolio. Podés guardar igual; ajustalos cuando rebalancees."
     }
   },
   "snapshots": {
@@ -3657,7 +3674,7 @@
       "description": "Administrá tu cuenta"
     },
     "title": "Cuenta",
-    "subtitle": "Administrá tu correo, contraseña y datos de la cuenta.",
+    "subtitle": "Administrá tu nombre, correo, contraseña y datos de la cuenta.",
     "password": {
       "title": "Contraseña",
       "description": "Cambiá la contraseña que usás para iniciar sesión.",
@@ -3718,6 +3735,19 @@
           "confirm": "Eliminar cuenta",
           "deleting": "Eliminando…"
         }
+      }
+    },
+    "name": {
+      "title": "Nombre",
+      "description": "El nombre de tu cuenta. Cada grupo nombra a sus miembros, así que un grupo mantiene el nombre que te dio.",
+      "label": "Nombre",
+      "cta": {
+        "label": "Guardar nombre",
+        "loading": "Guardando…"
+      },
+      "success": "Tu nombre se actualizó.",
+      "errors": {
+        "tooLong": "Usá como máximo {max} caracteres."
       }
     }
   },
@@ -4323,6 +4353,7 @@
     "invalid_refresh_token": "Tu sesión expiró. Iniciá sesión de nuevo.",
     "invalid_token": "Este enlace no es válido o expiró. Pedí uno nuevo.",
     "investment_currency_mismatch": "La moneda {row_currency} no coincide con la moneda base de la inversión ({base_currency}).",
+    "investment_has_history": "Esta inversión tiene snapshots o transacciones, así que solo se puede archivar.",
     "invite_email_taken": "Ya existe una cuenta con este correo.",
     "mutually_exclusive_link": "Asociá el gasto a exactamente un plan.",
     "not_found": "No se encontró el elemento solicitado.",

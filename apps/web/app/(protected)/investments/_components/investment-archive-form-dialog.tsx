@@ -52,7 +52,9 @@ export function InvestmentArchiveFormDialog({
         <DialogHeader>
           <DialogTitle>{t('archiveForm.title')}</DialogTitle>
         </DialogHeader>
-        <DialogDescription>{t('archiveForm.confirm', { name: investment.name })}</DialogDescription>
+        <DialogDescription>
+          {t('archiveForm.confirm', { name: investment.name })} {t('archiveForm.historyNote')}
+        </DialogDescription>
         <DialogFooter>
           <Button
             variant="outline"

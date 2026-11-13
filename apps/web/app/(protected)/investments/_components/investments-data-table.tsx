@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, ArchiveRestore, Lock, Pencil, Rows3 } from 'lucide-react';
+import { Archive, ArchiveRestore, Lock, Pencil, Rows3, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import { cn } from '@repo/ui/lib';
 import { InvestmentArchiveFormDialog } from '@/app/(protected)/investments/_components/investment-archive-form-dialog';
+import { InvestmentDeleteDialog } from '@/app/(protected)/investments/_components/investment-delete-dialog';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { unarchiveInvestment } from '@/app/(protected)/investments/investments-actions';
 import { RowActionButton } from '@/components/row-action-button';
@@ -26,6 +28,11 @@ import type {
 import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { bySectionPot, sectionedRows } from '@/lib/list-scope';
+
+// Whether the investment has any history: a snapshot or a transaction. Only one without can be deleted.
+function hasHistory(investment: Pick<Investment, 'hasSnapshots' | 'hasTransactions'>) {
+  return investment.hasSnapshots || investment.hasTransactions;
+}
 
 interface RowActionsProps {
   investment: Investment;
@@ -50,6 +57,7 @@ function RowActions({
   const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [unarchiving, setUnarchiving] = useState(false);
 
   async function handleUnarchive(e: React.MouseEvent) {
@@ -108,15 +116,32 @@ function RowActions({
             setEditOpen(true);
           }}
         />
-        <RowActionButton
-          icon={Archive}
-          tooltip={t('actions.archive')}
-          variant="muted"
-          onClick={(e) => {
-            e.stopPropagation();
-            setArchiveOpen(true);
-          }}
-        />
+        {/* The credit cards' rule: with no history the row can be deleted outright; once it has a
+            snapshot or a transaction, that history feeds returns and the net-worth series, so it can
+            only be archived, and the archive action's own name says why. */}
+        {hasHistory(investment) ? (
+          <RowActionButton
+            icon={Archive}
+            tooltip={t('actions.archiveOnly')}
+            variant="muted"
+            testId="investment-archive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setArchiveOpen(true);
+            }}
+          />
+        ) : (
+          <RowActionButton
+            icon={Trash2}
+            tooltip={t('actions.delete')}
+            variant="destructive"
+            testId="investment-delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteOpen(true);
+            }}
+          />
+        )}
       </div>
 
       <InvestmentFormDialog
@@ -132,6 +157,13 @@ function RowActions({
       <InvestmentArchiveFormDialog
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
+        investment={investment}
+        onSuccess={onSuccess}
+      />
+
+      <InvestmentDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
         investment={investment}
         onSuccess={onSuccess}
       />
@@ -300,12 +332,31 @@ function InvestmentRow({
   onRowClick,
   onSuccess,
 }: InvestmentRowProps) {
+  const t = useTranslations('investments');
   const tCommon = useTranslations('common');
 
   return (
-    <TableRow className="cursor-pointer" onClick={() => onRowClick(investment)}>
+    // Archived rows (under "Show archived") dim like the accounts' and cards', and say so in words
+    // beside the name, so the state is not carried by the dimming alone.
+    <TableRow
+      className={cn('cursor-pointer', !investment.isActive && 'opacity-60')}
+      data-archived={!investment.isActive || undefined}
+      onClick={() => onRowClick(investment)}
+    >
       <TableCell className="text-muted-foreground">{investment.id}</TableCell>
-      <TableCell className="text-paragraph-sm-medium">{investment.name}</TableCell>
+      <TableCell className="text-paragraph-sm-medium">
+        <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+          {investment.name}
+          {!investment.isActive && (
+            <span
+              data-testid="investment-archived-badge"
+              className="px-1.5 py-0.5 rounded border border-border bg-muted text-paragraph-xs text-muted-foreground"
+            >
+              {t('table.archived')}
+            </span>
+          )}
+        </span>
+      </TableCell>
       <TableCell>
         {investment.collections.length > 0 ? (
           <div className="flex flex-wrap gap-x-1 gap-y-1">

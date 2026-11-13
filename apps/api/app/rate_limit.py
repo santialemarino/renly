@@ -24,6 +24,8 @@ VERIFY_EMAIL_LIMIT = "5/hour"
 FORGOT_PASSWORD_LIMIT = "5/hour"
 RESET_PASSWORD_LIMIT = "10/hour"
 CHANGE_EMAIL_LIMIT = "5/hour"
+# Renaming the account; bounded per user at the email change's rate, like the other account writes.
+CHANGE_NAME_LIMIT = "5/hour"
 # Admin invite create/resend (each sends an email; bounded per admin to cap outbound volume).
 INVITE_LIMIT = "30/hour"
 # Import endpoints (file upload + parse + bulk insert); bounded per user.

@@ -10,6 +10,13 @@ export interface AccountActionResult {
   message?: string;
 }
 
+// Renames the account. The API trims and bounds the name too (422 past it).
+export async function changeNameAction(name: string): Promise<AccountActionResult> {
+  const res = await authenticatedFetch('/me', { method: 'PATCH', body: { name } });
+  if (!res.ok) return { error: 'server' };
+  return {};
+}
+
 // Changes the password (AUTH-8). 401 = wrong current password, 400 = new password rejected (breached).
 export async function changePasswordAction(
   currentPassword: string,

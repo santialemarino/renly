@@ -42,6 +42,7 @@ class TestBuildResponse:
             AsyncMock(return_value={7: [(37, "Tech"), (38, "Hola")]}),
         )
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value=set()))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         response = await investment_service.build_response(AsyncMock(), _investment())
         assert [(c.id, c.name) for c in response.collections] == [(37, "Tech"), (38, "Hola")]
 
@@ -53,6 +54,7 @@ class TestBuildResponse:
             AsyncMock(return_value={}),
         )
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value=set()))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         response = await investment_service.build_response(AsyncMock(), _investment())
         assert response.collections == []
 
@@ -64,9 +66,11 @@ class TestBuildResponse:
             AsyncMock(return_value={}),
         )
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value={7}))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         assert (await investment_service.build_response(AsyncMock(), _investment())).has_snapshots is True
 
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value=set()))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         assert (await investment_service.build_response(AsyncMock(), _investment())).has_snapshots is False
 
     @pytest.mark.asyncio
@@ -74,6 +78,7 @@ class TestBuildResponse:
         lookup = AsyncMock(return_value={})
         monkeypatch.setattr(investment_service.investment_repository, "get_collections_by_investment_ids", lookup)
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value=set()))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         await investment_service.build_response(AsyncMock(), _investment(7))
         assert lookup.await_count == 1
         assert lookup.await_args.args[1] == [7]
@@ -85,6 +90,7 @@ class TestBuildResponse:
         snapshots = AsyncMock(return_value=set())
         monkeypatch.setattr(investment_service.investment_repository, "get_collections_by_investment_ids", lookup)
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", snapshots)
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         response = await investment_service.build_response(AsyncMock(), _investment(None))
         assert lookup.await_args.args[1] == []
         assert snapshots.await_args.args[1] == []
@@ -107,6 +113,7 @@ class TestListResponseCarriesCollections:
             AsyncMock(return_value={7: [(37, "Tech")], 8: [(38, "Hola")]}),
         )
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value={8}))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         result = await investment_service.list_investments(AsyncMock(), USER)
         assert [(i.id, [(c.id, c.name) for c in i.collections]) for i in result.items] == [
             (7, [(37, "Tech")]),
@@ -124,6 +131,7 @@ class TestListResponseCarriesCollections:
         )
         monkeypatch.setattr(investment_service.investment_repository, "get_collections_by_investment_ids", lookup)
         monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value=set()))
+        monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
         await investment_service.list_investments(AsyncMock(), USER)
         assert lookup.await_count == 1
         assert lookup.await_args.args[1] == [7, 8, 9]
@@ -210,4 +218,5 @@ def _wire(monkeypatch, investments: list[Investment], *, scopes=None, counts=Non
     monkeypatch.setattr(investment_service.pot_service, "list_visible_scopes", AsyncMock(return_value=scopes or []))
     monkeypatch.setattr(investment_service.investment_repository, "get_collections_by_investment_ids", AsyncMock(return_value={}))
     monkeypatch.setattr(investment_service.snapshot_repository, "get_ids_with_snapshots", AsyncMock(return_value=set()))
+    monkeypatch.setattr(investment_service.transaction_repository, "get_ids_with_transactions", AsyncMock(return_value=set()))
     return rows

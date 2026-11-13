@@ -19,7 +19,7 @@ import {
   PopoverTrigger,
   Separator,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn, FIELD_CLEAR_RING } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
 import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import {
@@ -214,7 +214,13 @@ export function CurrencyCombobox({
   const clearable = !!onClear && !!value && !disabled;
 
   return (
-    <div className="relative w-full min-w-0">
+    // The `field` clear's ring is drawn here, around the trigger it sits over (FIELD_CLEAR_RING).
+    <div
+      className={cn(
+        'relative w-full min-w-0 rounded-lg transition-[box-shadow] duration-200',
+        FIELD_CLEAR_RING,
+      )}
+    >
       <Popover open={disabled ? false : open} onOpenChange={disabled ? undefined : setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -295,9 +301,10 @@ export function CurrencyCombobox({
             type="button"
             aria-label={tCommon('ui.clear')}
             onClick={handleClear}
-            className="group/currency-clear absolute right-8 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100"
+            data-close-kind="field"
+            className={cn(CLOSE_CONTROL.field.button, 'absolute right-8 top-1/2 -translate-y-1/2')}
           >
-            <X className="size-3.5 group-focus-visible/currency-clear:animate-focus-bump" />
+            <X className={CLOSE_CONTROL.field.icon} />
           </button>
         )}
         <PopoverContent

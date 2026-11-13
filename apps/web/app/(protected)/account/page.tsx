@@ -5,7 +5,9 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AccountDangerZone } from '@/app/(protected)/account/_components/account-danger-zone';
 import { AccountLegalSection } from '@/app/(protected)/account/_components/account-legal-section';
 import { ChangeEmailSection } from '@/app/(protected)/account/_components/change-email-section';
+import { ChangeNameSection } from '@/app/(protected)/account/_components/change-name-section';
 import { ChangePasswordSection } from '@/app/(protected)/account/_components/change-password-section';
+import { getCurrentUser } from '@/lib/api/me';
 import { getSession } from '@/lib/auth';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -15,13 +17,20 @@ export async function generateMetadata() {
 
 export default async function AccountPage() {
   const t = await getTranslations('account');
-  const session = await getSession();
+  // The name is read fresh from the API: the session holds the one from sign-in.
+  const [session, user] = await Promise.all([getSession(), getCurrentUser().catch(() => null)]);
   const email = session?.user?.email ?? '';
 
   return (
     <div className="flex flex-col flex-1 items-start p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <div className="flex flex-col w-full max-w-2xl gap-y-8">
+        {user && (
+          <>
+            <ChangeNameSection currentName={user.name} />
+            <Separator />
+          </>
+        )}
         <ChangeEmailSection currentEmail={email} />
         <Separator />
         <ChangePasswordSection />

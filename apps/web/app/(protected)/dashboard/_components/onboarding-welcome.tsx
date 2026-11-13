@@ -20,7 +20,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Button, Card } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn } from '@repo/ui/lib';
 import {
   completeOnboarding,
   completeTour,
@@ -221,9 +221,10 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
               onClick={handleDismiss}
               disabled={dismissed}
               aria-label={t('dismiss')}
-              className="group/dismiss flex p-1 rounded-md outline-none hover:text-foreground focus-visible:text-foreground absolute top-3 right-3 text-muted-foreground transition-colors duration-200 cursor-pointer"
+              data-close-kind="surface"
+              className={cn(CLOSE_CONTROL.surface.button, 'absolute top-3 right-3')}
             >
-              <X className="size-4 group-focus-visible/dismiss:animate-focus-bump" />
+              <X className={CLOSE_CONTROL.surface.icon} />
             </button>
 
             <div className="flex flex-col pr-8 gap-y-1">

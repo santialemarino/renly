@@ -28,3 +28,17 @@ export const changeEmailSchema = (t: ReturnType<typeof useTranslations>) =>
   });
 
 export type ChangeEmailData = z.infer<ReturnType<typeof changeEmailSchema>>;
+
+// The API's limit on a name (`users.name` is VARCHAR(255)).
+export const NAME_MAX_LENGTH = 255;
+
+export const changeNameSchema = (t: ReturnType<typeof useTranslations>, tooLongMsg: string) =>
+  z.object({
+    name: z
+      .string()
+      .trim()
+      .min(1, { message: t('form.errors.required') })
+      .max(NAME_MAX_LENGTH, { message: tooLongMsg }),
+  });
+
+export type ChangeNameData = z.infer<ReturnType<typeof changeNameSchema>>;

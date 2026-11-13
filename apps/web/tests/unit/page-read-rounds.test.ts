@@ -44,7 +44,7 @@ const SAMPLE = 'the first-run sample flag, read only when the list comes back em
 const LATER: Record<string, { rounds: number; reads?: Record<string, string> }> = {
   // The protected layout, which renders around every page.
   'layout.tsx': { rounds: 1 },
-  account: { rounds: 0 },
+  account: { rounds: 1 },
   accounts: { rounds: 1 },
   'accounts/[id]': { rounds: 1 },
   admin: { rounds: 1 },

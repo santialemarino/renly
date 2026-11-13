@@ -3,7 +3,7 @@
 import { TrendingUp, Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Card } from '@repo/ui/components';
+import { Card, Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { LinkCard } from '@/app/(protected)/dashboard/_components/link-card';
 import { ROUTES } from '@/config/routes';
@@ -72,7 +72,30 @@ export function DashboardFooter({
               savingsRateColor(overview.savingsRate, savingsRateHealthyPct, savingsRateModeratePct),
             )}
           >
-            {overview.savingsRate !== null ? fmt.ratePct(overview.savingsRate) : '—'}
+            {overview.savingsRateOffScale ? (
+              /* Withheld rather than printed: past ten times the income the rate is a number like
+                 -3,923,637% that says nothing. Focusable so the reason reaches a keyboard too. */
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    role="note"
+                    tabIndex={0}
+                    aria-label={t('health.savingsRateOffScale')}
+                    data-testid="savings-rate-off-scale"
+                    className="rounded-sm cursor-help outline-none focus-visible:ring-3 focus-visible:ring-ring"
+                  >
+                    —
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  {t('health.savingsRateOffScale')}
+                </TooltipContent>
+              </Tooltip>
+            ) : overview.savingsRate !== null ? (
+              fmt.ratePct(overview.savingsRate)
+            ) : (
+              '—'
+            )}
           </p>
           <span className="text-paragraph-xs text-muted-foreground">
             {t('health.savingsRateHint')}

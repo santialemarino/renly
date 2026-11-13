@@ -90,6 +90,7 @@ Authenticated; each sensitive action re-verifies the current password.
 
 | Method   | Path                  | Description                                                                                                                                                                                                             |
 | -------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH`  | `/me`                 | Rename the account. Body: `{ name }` (trimmed, 1–255 characters); nothing else is changed. Returns the user as `GET /auth/me` does. A group seat keeps the name the group gave it. Rate-limited per user.               |
 | `POST`   | `/me/change-password` | Change the password (verifies current). Bumps the session epoch.                                                                                                                                                        |
 | `POST`   | `/me/change-email`    | Request an email change; emails a confirmation link to the new address. Uniform `202`.                                                                                                                                  |
 | `GET`    | `/me/export`          | Download the user's full data set as a JSON file. Excludes password and API-key secrets. Rate-limited per user.                                                                                                         |
@@ -101,17 +102,18 @@ Registration requires a valid email address and a password of at least 12 charac
 
 ## Investments
 
-| Method  | Path                            | Description                                                                            |
-| ------- | ------------------------------- | -------------------------------------------------------------------------------------- |
-| `GET`   | `/investments`                  | List investments with filtering, search, and pagination.                               |
-| `POST`  | `/investments`                  | Create a new investment.                                                               |
-| `GET`   | `/investments/{id}`             | Get a single investment by ID.                                                         |
-| `PUT`   | `/investments/{id}`             | Update an investment. Only provided fields are changed.                                |
-| `PATCH` | `/investments/{id}/archive`     | Archive an investment (hides it from the active portfolio).                            |
-| `PATCH` | `/investments/{id}/unarchive`   | Restore an archived investment.                                                        |
-| `PUT`   | `/investments/{id}/collections` | Replace collection membership for this investment. Body: `{ collection_ids: [1, 3] }`. |
+| Method   | Path                            | Description                                                                                                                       |
+| -------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/investments`                  | List investments with filtering, search, and pagination.                                                                          |
+| `POST`   | `/investments`                  | Create a new investment.                                                                                                          |
+| `GET`    | `/investments/{id}`             | Get a single investment by ID.                                                                                                    |
+| `PUT`    | `/investments/{id}`             | Update an investment. Only provided fields are changed.                                                                           |
+| `DELETE` | `/investments/{id}`             | Delete an investment with no snapshots and no transactions. `409` (`investment_has_history`) when it has any: archive it instead. |
+| `PATCH`  | `/investments/{id}/archive`     | Archive an investment (hides it from the active portfolio).                                                                       |
+| `PATCH`  | `/investments/{id}/unarchive`   | Restore an archived investment.                                                                                                   |
+| `PUT`    | `/investments/{id}/collections` | Replace collection membership for this investment. Body: `{ collection_ids: [1, 3] }`.                                            |
 
-Every investment response — list, get-by-id, create and update — carries its `collections` as `{ id, name }` objects, plus `has_snapshots`.
+Every investment response — list, get-by-id, create and update — carries its `collections` as `{ id, name }` objects, plus `has_snapshots` and `has_transactions` (together they say whether it can be deleted or only archived).
 
 **List query parameters:**
 
@@ -680,7 +682,7 @@ Aggregated endpoints combining investment portfolio and finance data for the hom
 
 **Query parameters (composition + liquidity):** `currency` only (no date filtering — shows current snapshot).
 
-**Overview response:** `net_worth`, `private_net_worth`, `shared_net_worth`, `shared_pot_value`, `shared_receivable`, `shared_payable`, `has_shared`, `undivided_pots[]`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses), `has_holdings`, `skipped_currencies`. `net_worth_change` covers investments, cash, card debt and the shared side together; `investment_month_change` is the portfolio's gain since the end of last month (its value change less the money moved in), the same figure as `/metrics/portfolio`'s `month_change`. `has_holdings` reports whether the user holds anything at all — investment, account, card, or a shared side — i.e. whether the net-worth figure is derived from anything; it stays `true` when the figures happen to net to zero, so it is not a `net_worth != 0` test.
+**Overview response:** `net_worth`, `private_net_worth`, `shared_net_worth`, `shared_pot_value`, `shared_receivable`, `shared_payable`, `has_shared`, `undivided_pots[]`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income, or when expenses are more than 10 times the income), `savings_rate_off_scale` (true in that second case), `income_expense_ratio` (null when no expenses), `has_holdings`, `skipped_currencies`. `net_worth_change` covers investments, cash, card debt and the shared side together; `investment_month_change` is the portfolio's gain since the end of last month (its value change less the money moved in), the same figure as `/metrics/portfolio`'s `month_change`. `has_holdings` reports whether the user holds anything at all — investment, account, card, or a shared side — i.e. whether the net-worth figure is derived from anything; it stays `true` when the figures happen to net to zero, so it is not a `net_worth != 0` test.
 
 **What "shared" counts, and what it never counts.** `net_worth` is everything you are worth: your private holdings plus your share of everything you share. `private_net_worth` and `shared_net_worth` split it and always sum to it exactly. The shared half is your share of every pot you can see, plus what your groups owe you, less what you owe them — a receivable is an asset and a payable a liability, each on its own line and never blended into cash.
 

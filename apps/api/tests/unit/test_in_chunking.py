@@ -141,6 +141,7 @@ BOUNDED = {
     "shared_income_repository.list_splits_by_income_ids": _ONE_REQUEST,
     "snapshot_repository.get_ids_with_snapshots": _OWN_ROWS,
     "subscription_repository.count_by_credit_card_ids": _OWN_ROWS,
+    "transaction_repository.get_ids_with_transactions": _OWN_ROWS,
     "transfer_repository._sum_leg_monthly": _OWN_ROWS,
     "transfer_repository.linked_account_ids": _OWN_ROWS,
     "transfer_repository.linked_account_ids_any_scope": _OWN_ROWS,

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Hint, Separator } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn } from '@repo/ui/lib';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 export type HintVariant = 'warning' | 'info' | 'error';
@@ -86,14 +86,13 @@ export function StyledHint({
         <Hint className={cn(textColor, 'whitespace-pre-line')}>{children}</Hint>
         {onDismiss && (
           <button
+            type="button"
             onClick={onDismiss}
-            className={cn(
-              'group/hint-dismiss shrink-0 ml-auto p-0.5 rounded opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100',
-              textColor,
-            )}
+            data-close-kind="inline"
+            className={cn(CLOSE_CONTROL.inline.button, 'ml-auto', textColor)}
             aria-label={tCommon('dismiss')}
           >
-            <X className="size-3.5 group-focus-visible/hint-dismiss:animate-focus-bump" />
+            <X className={CLOSE_CONTROL.inline.icon} />
           </button>
         )}
       </div>

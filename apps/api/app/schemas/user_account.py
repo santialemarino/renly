@@ -24,3 +24,8 @@ class ChangeEmailRequest(RequestBase):
 class DeleteAccountRequest(RequestBase):
     password: PlainPassword = Field(description="Current plain password (re-authentication); 72 bytes UTF-8 maximum.")
     confirmation: str = Field(description="Must equal the account email to confirm deletion.", max_length=NAME_MAX_LENGTH)
+
+
+# Body for PATCH /me. The display name only; it is stripped, so a name of spaces alone is refused.
+class UpdateProfileRequest(RequestBase):
+    name: str = Field(min_length=1, max_length=NAME_MAX_LENGTH, description="New display name; 1 to 255 characters after trimming.")

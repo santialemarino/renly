@@ -6,6 +6,7 @@ import { CollectionsToolbar } from '@/app/(protected)/collections/_components/co
 import { getCollections } from '@/lib/api/collections';
 import { getInvestments } from '@/lib/api/investments';
 import { getSettings } from '@/lib/api/settings';
+import { sumCollectionTargets } from '@/lib/collection-targets';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { ENV_COLLECTION_WARNING_PCT, ENV_MAX_COLLECTIONS } from '@/lib/constants/collections';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -48,6 +49,10 @@ export default async function CollectionsPage({ searchParams }: CollectionsPageP
   const maxCollections = settings?.maxCollections ?? ENV_MAX_COLLECTIONS;
   const collectionWarningPct = settings?.collectionWarningPct ?? ENV_COLLECTION_WARNING_PCT;
 
+  // Every collection's target, not only the ones a search left on screen: the warning is about the goals
+  // as a whole.
+  const targetCollections = allCollections ?? collections;
+
   // Teach the empty state only during first-run and only when the user has no collections at all (the
   // unfiltered count) — a returning user or a filtered-empty search gets the plain message.
   const firstRun =
@@ -61,6 +66,7 @@ export default async function CollectionsPage({ searchParams }: CollectionsPageP
         collectionCount={(allCollections ?? collections).length}
         maxCollections={maxCollections}
         collectionWarningPct={collectionWarningPct}
+        targetsTotal={sumCollectionTargets(targetCollections)}
       />
       <CollectionsDataTable
         collections={collections}
@@ -68,6 +74,7 @@ export default async function CollectionsPage({ searchParams }: CollectionsPageP
         sortBy={params.sort_by}
         sortOrder={params.sort_order as 'asc' | 'desc' | undefined}
         firstRun={firstRun}
+        targetCollections={targetCollections}
       />
     </div>
   );

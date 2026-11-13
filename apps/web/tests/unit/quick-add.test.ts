@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Account } from '@/lib/api/accounts';
-import { quickAddCurrency, soleEligibleAccountId } from '@/lib/quick-add';
+import { methodMatchedAccountId, quickAddCurrency, soleEligibleAccountId } from '@/lib/quick-add';
 
 /*
  * The global quick-add's pre-fill rules (PR 9). §8.2 names four pre-filled fields and defines none of
@@ -108,5 +108,37 @@ describe('soleEligibleAccountId', () => {
    */
   it('picks nothing without a currency, even with a single account', () => {
     expect(soleEligibleAccountId([account({ id: 7 })], '')).toBeNull();
+  });
+});
+
+describe('methodMatchedAccountId', () => {
+  const bank = account({ id: 1, type: 'bank' });
+  const cash = account({ id: 2, type: 'cash', name: 'Efectivo' });
+  const accounts = [bank, cash];
+
+  it('pre-fills the cash account for a cash expense', () => {
+    expect(methodMatchedAccountId(accounts, 'ARS', 'cash')).toBe(2);
+  });
+
+  it('pre-fills the bank account for a debit or a transfer', () => {
+    expect(methodMatchedAccountId(accounts, 'ARS', 'debit')).toBe(1);
+    expect(methodMatchedAccountId(accounts, 'ARS', 'transfer')).toBe(1);
+  });
+
+  it('pre-fills nothing for a card, which never draws an account', () => {
+    expect(methodMatchedAccountId(accounts, 'ARS', 'credit_card')).toBeNull();
+  });
+
+  it('pre-fills nothing before a method is chosen', () => {
+    expect(methodMatchedAccountId(accounts, 'ARS', undefined)).toBeNull();
+  });
+
+  it('pre-fills nothing when the only account of the currency is of another type', () => {
+    // The defect: the sole ARS account went under any method, a bank account under a cash expense.
+    expect(methodMatchedAccountId([bank], 'ARS', 'cash')).toBeNull();
+  });
+
+  it('pre-fills nothing when two accounts of the type share the currency', () => {
+    expect(methodMatchedAccountId([bank, account({ id: 3 })], 'ARS', 'debit')).toBeNull();
   });
 });

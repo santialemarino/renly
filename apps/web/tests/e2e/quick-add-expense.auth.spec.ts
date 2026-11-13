@@ -39,7 +39,7 @@ const EXPENSE_AMOUNT = '1234.56';
  *
  * It drives the global quick-add because that is the one entry point reachable from every protected
  * route, which is what lets the round trip start on a page that has nothing to do with expenses — and
- * because the pre-fill it exercises (today's date, the primary currency, the single eligible account)
+ * because the pre-fill it exercises (today's date and the primary currency)
  * is invisible to every other kind of test: the form's rules live in `lib/` and are unit-tested there,
  * but whether the trigger actually hands them the right values only shows in a browser.
  *

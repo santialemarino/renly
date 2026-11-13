@@ -271,6 +271,18 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     session.add(investment)
 
 
+# Takes the investment's row lock until the transaction ends. A snapshot or transaction insert checks
+# its foreign key with FOR KEY SHARE on this row, so it waits for this lock — and this lock waits for any
+# such insert still in flight. What the caller reads after it is therefore everything that will exist.
+async def lock(session: AsyncSession, investment_id: int) -> None:
+    await session.execute(select(Investment.id).where(Investment.id == investment_id).with_for_update())
+
+
+# Deletes an investment. Its collection memberships go with it (ON DELETE CASCADE).
+async def delete(session: AsyncSession, investment: Investment) -> None:
+    await session.delete(investment)
+
+
 # Moves investments between scopes, returning how many moved. `pot_id=None` moves them back to the
 # caller as private, which is the only direction that needs a user id.
 #
@@ -316,6 +328,7 @@ class InvestmentRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     count_by_scope = staticmethod(count_by_scope)
+    delete = staticmethod(delete)
     exists_active_by_user = staticmethod(exists_active_by_user)
     exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
@@ -323,6 +336,7 @@ class InvestmentRepository:
     get_by_ids = staticmethod(get_by_ids)
     get_by_ids_any_scope = staticmethod(get_by_ids_any_scope)
     get_collections_by_investment_ids = staticmethod(get_collections_by_investment_ids)
+    lock = staticmethod(lock)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_identifiers_by_user = staticmethod(list_identifiers_by_user)
     list_ids_by_pots_for_update = staticmethod(list_ids_by_pots_for_update)

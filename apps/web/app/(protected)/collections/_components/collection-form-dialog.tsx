@@ -4,7 +4,7 @@ import { useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
@@ -27,13 +27,18 @@ import {
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { WarningHint } from '@/components/styled-hint';
 import type { InvestmentCollection } from '@/lib/api/collections';
+import { targetsExceedMax } from '@/lib/collection-targets';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface CollectionFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   collection?: InvestmentCollection;
   investments: { id: number; name: string }[];
+  // Every OTHER collection's target added up, so the form can warn when this one takes the sum past 100%.
+  otherTargetsTotal: number;
   onSuccess?: () => void;
 }
 
@@ -42,8 +47,10 @@ export function CollectionFormDialog({
   onOpenChange,
   collection,
   investments,
+  otherTargetsTotal,
   onSuccess,
 }: CollectionFormDialogProps) {
+  const fmt = useFormatters();
   const t = useTranslations('collections');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -77,6 +84,11 @@ export function CollectionFormDialog({
   }, [open, collection, form]);
 
   const selectedIds = form.watch('investmentIds') ?? [];
+  const watchedTarget = useWatch({ control: form.control, name: 'targetPercentage' });
+  // What the targets would add up to with this one saved. A warning, never a block: see
+  // lib/collection-targets.
+  const targetsTotal = otherTargetsTotal + (Number(watchedTarget) || 0);
+  const targetsOver = targetsExceedMax(targetsTotal);
 
   function toggleInvestment(id: number) {
     const current = form.getValues('investmentIds') ?? [];
@@ -96,6 +108,7 @@ export function CollectionFormDialog({
           await createCollection(values);
           toast.success(t('form.success.create'));
         }
+        if (targetsOver) toast.warning(t('targets.overMax', { total: fmt.pct(targetsTotal) }));
         if (onSuccess) {
           onSuccess();
         } else {
@@ -153,6 +166,13 @@ export function CollectionFormDialog({
                     />
                   </FormControl>
                   <FormMessage />
+                  <WarningHint
+                    show={targetsOver}
+                    parentGap={8}
+                    testId="collection-form-targets-over"
+                  >
+                    {t('targets.overMax', { total: fmt.pct(targetsTotal) })}
+                  </WarningHint>
                 </FormItem>
               )}
             />

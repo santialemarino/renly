@@ -380,3 +380,106 @@ test('the default ring clears 3:1 on the app’s controls (signed in)', async ({
   expect(await cancel.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
   expectRingContrast(await measureRing(cancel));
 });
+
+/*
+ * One of each KIND of ✕ (packages/ui/src/lib/close-control.ts), each reached by Tab: its icon plays the
+ * focus-bump, and a solid ring that clears 3:1 is painted — on the control itself, or, for a field's ✕,
+ * on the field it clears. `tests/unit/close-controls.test.ts` holds every ✕ in the code to one of these
+ * kinds; this is where the paint is measured.
+ */
+test.describe('every kind of ✕ shows a ring and a bump on keyboard focus (signed in)', () => {
+  async function expectCloseFocus(page: Page, control: Locator, ringOn: Locator = control) {
+    await tabTo(page, control);
+    expect(await control.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+    expect(
+      await control.locator('svg').evaluate((element) => getComputedStyle(element).animationName),
+    ).toBe('focus-bump');
+    // Let the control's own transitions (a hint's opacity, a panel still sliding in) come to rest
+    // before the ring is read; one can be cancelled mid-way, so wait for none to be running.
+    await expect.poll(() => ringOn.evaluate((element) => element.getAnimations().length)).toBe(0);
+    expectRingContrast(await measureRing(ringOn));
+  }
+
+  test('surface: a dialog’s ✕', async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await page.goto(EXPENSES);
+    const add = page.getByTestId('entity-list-add');
+    await waitForHydration(add);
+    await add.click();
+    const close = page.getByRole('dialog').locator('[data-close-kind="surface"]');
+    await expect(close).toBeVisible();
+    await expectCloseFocus(page, close);
+  });
+
+  // The nav sheet hides its ✕ (the sidebar closes on navigation); the notification panel is the sheet
+  // whose ✕ shows.
+  test('surface: the phone notification panel’s ✕', async ({ page }) => {
+    await page.setViewportSize(PHONE);
+    await page.goto(EXPENSES);
+    // Below `md` the bell lives in the nav sheet.
+    const hamburger = page.locator('[data-sidebar="trigger"]');
+    await waitForHydration(hamburger);
+    await hamburger.click();
+    // Opened from the keyboard, so the focus the panel moves inside it is a keyboard focus.
+    const bell = page.getByTestId('notification-bell');
+    await bell.focus();
+    await page.keyboard.press('Enter');
+    const close = page.getByTestId('notification-panel').locator('[data-close-kind="surface"]');
+    await expect(close).toBeVisible();
+    await expectCloseFocus(page, close);
+  });
+
+  test('inline: a hint’s dismiss', async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await page.goto('/dashboard');
+    const dismiss = page
+      .getByTestId('hint-currency-hint-dismissed')
+      .locator('[data-close-kind="inline"]');
+    await waitForHydration(dismiss);
+    await expectCloseFocus(page, dismiss);
+  });
+
+  test('field: the search box’s clear, ringed by the field', async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await page.goto(EXPENSES);
+    const search = page.locator('main [data-slot="input"]').first();
+    await waitForHydration(search);
+    await search.focus();
+    await page.keyboard.type('x');
+    const clear = search.locator('xpath=..').locator('[data-close-kind="field"]');
+    await expect(clear).toHaveAttribute('tabindex', '0');
+    await search.focus();
+    await expectCloseFocus(page, clear, search.locator('xpath=..'));
+  });
+
+  test('chip: a selected item’s remove', async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    const marker = testMarker('focus-chip');
+    const token = await apiToken();
+    const api = await request.newContext({
+      baseURL: API_BASE,
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+    const created = await api.post('/investments', {
+      data: { name: marker, category: 'stocks', base_currency: 'USD' },
+    });
+    expect(created.ok(), `seeding an investment failed with ${created.status()}`).toBe(true);
+    const { id } = (await created.json()) as { id: number };
+    try {
+      await page.goto('/collections');
+      const add = page.getByTestId('entity-list-add');
+      await waitForHydration(add);
+      await add.click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByRole('button', { name: /Search investments/ }).click();
+      await page.getByRole('option', { name: marker }).click();
+      await page.keyboard.press('Escape');
+      const remove = dialog.locator('[data-close-kind="chip"]');
+      await expect(remove).toBeVisible();
+      await expectCloseFocus(page, remove);
+    } finally {
+      await api.delete(`/investments/${id}`);
+      await api.dispose();
+    }
+  });
+});
