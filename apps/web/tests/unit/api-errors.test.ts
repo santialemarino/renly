@@ -130,6 +130,19 @@ describe('a refused removal reads as its own sentence, in both locales', () => {
     ],
     ['en', en, { code: 'group_member_owns_pot', detail: 'x' }, 'buy it out or take it out'],
     ['es', es, { code: 'group_member_owns_pot', detail: 'x' }, 'comprá esa parte o sacala'],
+    // Someone deleting their OWN account is told which of their groups, not "this member".
+    [
+      'en',
+      en,
+      { code: 'account_owns_pot', detail: 'x', groups: 'Casa, Viaje' },
+      'You still own part of a pot in Casa, Viaje',
+    ],
+    [
+      'es',
+      es,
+      { code: 'account_owns_pot', detail: 'x', groups: 'Casa, Viaje' },
+      'Todavía tenés una parte de un fondo en Casa, Viaje',
+    ],
   ] as const)('%s: %j', async (locale, messages, body, expected) => {
     const t = createTranslator({ locale, messages, namespace: 'apiErrors', onError: () => {} });
     const resolved = resolveApiError(

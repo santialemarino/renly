@@ -4343,6 +4343,7 @@
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "account_has_linked_entries": "That account already has expenses, income or transfers on it, so it cannot be shared — its balance would read differently for each person. Create a fresh account for the group instead.",
     "account_opening_date_change_blocked": "The opening date cannot be changed because expenses, income or transfers already link to this account.",
+    "account_owns_pot": "You still own part of a pot in {groups}. Settle your share first: buy it out or take it out, and confirm any change of split that is still pending.",
     "account_reconciliation_before_last": "This account is already reconciled up to {last_reconciled_date}. Pick that date or later, or delete the later reconciliation first.",
     "account_reconciliation_before_opening": "The reconciliation date must be on or after the account's opening date ({opening_date}).",
     "account_reconciliation_future_date": "The reconciliation date can't be in the future.",
@@ -4365,6 +4366,7 @@
     "group_dollar_rate_already_agreed": "You have already agreed to this change of dollar rate.",
     "group_last_admin": "A group needs at least one admin. Make someone else an admin first.",
     "group_member_owns_pot": "This member still owns part of a pot. Settle that share first: buy it out or take it out.",
+    "group_member_pot_change_pending": "A change of a pot's split naming this member is still waiting to be confirmed. Confirm it or delete it first.",
     "group_membership_exists": "You are already a member of this group.",
     "group_seat_taken": "This person has already joined, so there is nothing to invite.",
     "group_settlement_before_account_opened": "A settlement must be dated on or after its account's opening date ({opening_date}).",
@@ -4453,6 +4455,7 @@
     "pot_dollar_rate_proposal_pending": "A change of dollar rate is already waiting for the owners to agree. Agree to it or withdraw it first.",
     "pot_dollar_rate_unchanged": "This pot already uses that dollar rate.",
     "pot_dollar_rate_already_agreed": "You have already agreed to this change of dollar rate.",
-    "pot_dollar_rate_not_yours": "Only the owner who proposed this change of dollar rate can withdraw it."
+    "pot_dollar_rate_not_yours": "Only the owner who proposed this change of dollar rate can withdraw it.",
+    "pot_seat_departed": "This would give part of the pot back to someone who has left the group or deleted their account."
   }
 }
