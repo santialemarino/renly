@@ -3673,7 +3673,7 @@
       "description": "Manage your account"
     },
     "title": "Account",
-    "subtitle": "Manage your email, password, and account data.",
+    "subtitle": "Manage your name, email, password, and account data.",
     "password": {
       "title": "Password",
       "description": "Change the password you use to log in.",
@@ -3734,6 +3734,19 @@
           "confirm": "Delete account",
           "deleting": "Deleting…"
         }
+      }
+    },
+    "name": {
+      "title": "Name",
+      "description": "The name your account goes by. Each group names its members itself, so a group keeps the name it gave you.",
+      "label": "Name",
+      "cta": {
+        "label": "Save name",
+        "loading": "Saving…"
+      },
+      "success": "Your name has been updated.",
+      "errors": {
+        "tooLong": "Use at most {max} characters."
       }
     }
   },

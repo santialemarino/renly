@@ -25,6 +25,16 @@ async def change_password(session: AsyncSession, user: User, current_password: s
     await session.commit()
 
 
+# Renames the user. Read live wherever the account name shows (the account page, group invites, the
+# data export), so nothing else is rewritten. A group seat's display name is the group's own and stays.
+async def update_profile(session: AsyncSession, user: User, name: str) -> User:
+    user.name = name
+    await user_repository.save(session, user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
 # Starts an email change after re-verifying the current password (AUTH-8); the address only switches
 # once the new one is confirmed via the emailed link. Runs the change request on the privileged
 # session so the target-address availability check can see every account (bypasses RLS).

@@ -5,8 +5,8 @@ from fastapi import APIRouter, Request, Response, status
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.rate_limit import CHANGE_EMAIL_LIMIT, EXPORT_LIMIT, limiter
-from app.schemas.auth import MessageResponse
-from app.schemas.user_account import ChangeEmailRequest, ChangePasswordRequest, DeleteAccountRequest
+from app.schemas.auth import MeResponse, MessageResponse
+from app.schemas.user_account import ChangeEmailRequest, ChangePasswordRequest, DeleteAccountRequest, UpdateProfileRequest
 from app.services import user_account_service
 
 router = APIRouter(prefix="/me", tags=["account"])
@@ -45,6 +45,20 @@ async def export_data(request: Request, response: Response, current_user: Curren
     data = await user_account_service.export_user_data(session, current_user)
     response.headers["Content-Disposition"] = 'attachment; filename="renly-export.json"'
     return data
+
+
+# Updates the current user's profile: the display name only. Returns the user as GET /auth/me does.
+@router.patch("", response_model=MeResponse)
+async def update_profile(body: UpdateProfileRequest, current_user: CurrentUser, session: SessionDep) -> MeResponse:
+    user = await user_account_service.update_profile(session, current_user, body.name)
+    return MeResponse(
+        uid=user.id,
+        email=user.email,
+        name=user.name,
+        plan=user.plan,
+        email_verified=user.email_verified_at is not None,
+        is_admin=user.is_admin,
+    )
 
 
 # Permanently deletes the current user's account after re-verifying the password and a typed email

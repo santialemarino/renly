@@ -3673,7 +3673,7 @@
       "description": "Administrá tu cuenta"
     },
     "title": "Cuenta",
-    "subtitle": "Administrá tu correo, contraseña y datos de la cuenta.",
+    "subtitle": "Administrá tu nombre, correo, contraseña y datos de la cuenta.",
     "password": {
       "title": "Contraseña",
       "description": "Cambiá la contraseña que usás para iniciar sesión.",
@@ -3734,6 +3734,19 @@
           "confirm": "Eliminar cuenta",
           "deleting": "Eliminando…"
         }
+      }
+    },
+    "name": {
+      "title": "Nombre",
+      "description": "El nombre de tu cuenta. Cada grupo nombra a sus miembros, así que un grupo mantiene el nombre que te dio.",
+      "label": "Nombre",
+      "cta": {
+        "label": "Guardar nombre",
+        "loading": "Guardando…"
+      },
+      "success": "Tu nombre se actualizó.",
+      "errors": {
+        "tooLong": "Usá como máximo {max} caracteres."
       }
     }
   },
