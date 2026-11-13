@@ -50,6 +50,7 @@ async def create_group(
         name=body.name,
         kind=body.kind,
         display_name=body.display_name,
+        dollar_rate=body.dollar_rate,
     )
 
 
@@ -101,15 +102,19 @@ async def update_group_member(
 
 
 # Removes a member: deactivates the seat and drops its pending invite. A member may remove themselves
-# (leaving the group); removing anyone else is admin only (403). Returns 409 for the last active admin.
+# (leaving the group); removing anyone else is admin only (403). Returns 409 for the last active admin,
+# for a seat with an open balance, and for a seat that still owns part of a pot (group_member_owns_pot).
+# Takes the privileged session too, for that last check alone: a pot hidden from the remover can still
+# hold the removed member's units.
 @router.delete("/{group_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_group_member(
     group_id: int,
     member_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    admin_session: AdminSessionDep,
 ) -> None:
-    await group_service.remove_member(session, group_id, member_id, current_user)
+    await group_service.remove_member(session, admin_session, group_id, member_id, current_user)
 
 
 # Creates or rotates the invite for one seat and emails the link when an address is given. Admin only

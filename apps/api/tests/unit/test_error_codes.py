@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.deps.api_key_auth import get_jwt_or_api_key_user
-from app.domain import InstallmentLockedFieldError, InvestmentCurrencyMismatchError
+from app.domain import GroupBalanceOutstandingError, InstallmentLockedFieldError, InvestmentCurrencyMismatchError
 from app.domain.errors import DomainError
 from app.http_errors import CodedHTTPException
 from app.main import domain_error_handler, http_exception_handler
@@ -39,6 +39,10 @@ class TestDomainErrorCodes:
     def test_base_defines_a_message_so_the_handler_never_attributeerrors(self):
         # The app/main.py handler reads exc.message; the base must always expose one.
         assert isinstance(DomainError.message, str) and DomainError.message
+
+    def test_an_open_balance_prejoins_the_groups_for_a_scalar_placeholder(self):
+        # A list there renders the raw message key on the web instead of the sentence.
+        assert GroupBalanceOutstandingError(["Viaje", "Casa"]).extra == {"groups": "Casa, Viaje"}
 
     def test_installment_locked_field_prejoins_fields_for_scalar_placeholder(self):
         # extra["fields"] is a display-ready string so the frontend's scalar {fields} renders cleanly.

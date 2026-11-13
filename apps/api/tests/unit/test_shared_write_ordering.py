@@ -31,7 +31,7 @@ from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.pot import Pot, PotMemberPermission
 from app.models.user import User
 from app.schemas.pot import PotHoldingResponse
-from app.services import group_service, group_settlement_service, pot_ownership_service, pot_service, shared_audit_service
+from app.services import group_money_service, group_service, group_settlement_service, pot_ownership_service, pot_service, shared_audit_service
 
 USER = User(id=1, name="Santi", email="u@test", password_hash="x", session_epoch=0)
 GROUP = Group(id=10, name="Casa", kind=GroupKind.household, created_by=USER.id)
@@ -91,6 +91,7 @@ class TestTheLockComesFirst:
         monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
         monkeypatch.setattr(pot_ownership_service, "_require_price", trace.stub("price", result=(Decimal("1"), {SEAT.id: Decimal("100")})))
         monkeypatch.setattr(pot_ownership_service, "_require_seat", AsyncMock(return_value=SEAT))
+        monkeypatch.setattr(pot_ownership_service, "_lock_receiving_seat", trace.stub("seat", result=SEAT))
         monkeypatch.setattr(pot_ownership_service, "_require_leg", AsyncMock(return_value=None))
         monkeypatch.setattr(pot_ownership_service.pot_ownership_repository, "create", AsyncMock(return_value=MagicMock(id=1)))
         monkeypatch.setattr(pot_ownership_service.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[]))
@@ -105,6 +106,7 @@ class TestTheLockComesFirst:
             AsyncMock(), 5, USER, type=OwnershipEventType.contribution, date=None, member_id=SEAT.id, amount=Decimal("10")
         )
         assert trace.index_of("lock") < trace.index_of("price")
+        assert trace.index_of("lock") < trace.index_of("seat")
 
     @pytest.mark.asyncio
     async def test_moving_holdings_locks_the_pot_before_reading_the_ledger(self, monkeypatch):
@@ -136,6 +138,7 @@ class TestTheLockComesFirst:
         trace = _Trace()
         monkeypatch.setattr(pot_ownership_service.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
         monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
+        monkeypatch.setattr(pot_ownership_service, "_lock_receiving_seat", trace.stub("seat", result=SEAT))
         monkeypatch.setattr(pot_ownership_service.pot_service, "require_contributable_holding", AsyncMock(return_value=object()))
         monkeypatch.setattr(pot_ownership_service.exchange_rate_service, "build_rate_lookup", AsyncMock())
         monkeypatch.setattr(pot_ownership_service, "_require_price", trace.stub("price", result=(Decimal("1.10"), {})))
@@ -154,6 +157,8 @@ class TestTheLockComesFirst:
 
         await pot_ownership_service.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
         assert trace.index_of("lock") < trace.index_of("price")
+        # The contributor's own seat is locked after the pot, the order every ledger write takes them in.
+        assert trace.index_of("lock") < trace.index_of("seat")
         assert trace.index_of("price") < trace.index_of("move")
         assert trace.index_of("value") < trace.index_of("move")
 
@@ -256,12 +261,23 @@ class TestTheAuditEntryComesBeforeARevocation:
         monkeypatch.setattr(group_service, "_ensure_admin_remains", AsyncMock())
         monkeypatch.setattr(group_service.group_repository, "lock", AsyncMock())
         monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", AsyncMock())
+        monkeypatch.setattr(pot_service, "ensure_no_units", AsyncMock())
+        applied = object()
+        monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", trace.stub("settle_rate", result=applied))
+        announce = trace.stub("announce_rate")
+        monkeypatch.setattr(group_money_service, "announce_dollar_rate_applied", announce)
         monkeypatch.setattr(group_service.shared_audit_service, "record", trace.stub("audit"))
         monkeypatch.setattr(group_service.group_repository, "save_member", trace.stub("deactivate"))
         monkeypatch.setattr(group_service.group_invite_repository, "delete_by_member", AsyncMock())
 
-        await group_service.remove_member(AsyncMock(), 10, target.id, USER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), 10, target.id, USER)
         assert trace.index_of("audit") < trace.index_of("deactivate")
+        # Settling a pending change of the group's dollar rate writes the settings row and an entry of
+        # its own, so it runs while the leaver is still a member too.
+        assert trace.index_of("settle_rate") < trace.index_of("deactivate")
+        # And a change the leave applied is announced — after everything else, once it has committed.
+        assert trace.index_of("announce_rate") > trace.index_of("deactivate")
+        assert announce.await_args.args == (applied,)
 
     @pytest.mark.asyncio
     async def test_removal_says_whether_the_member_left_or_was_removed(self, monkeypatch):
@@ -273,16 +289,18 @@ class TestTheAuditEntryComesBeforeARevocation:
         monkeypatch.setattr(group_service, "_ensure_admin_remains", AsyncMock())
         monkeypatch.setattr(group_service.group_repository, "lock", AsyncMock())
         monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", AsyncMock())
+        monkeypatch.setattr(pot_service, "ensure_no_units", AsyncMock())
+        monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", AsyncMock())
         monkeypatch.setattr(group_service.shared_audit_service, "record", recorded)
         monkeypatch.setattr(group_service.group_repository, "save_member", AsyncMock())
         monkeypatch.setattr(group_service.group_invite_repository, "delete_by_member", AsyncMock())
 
         monkeypatch.setattr(group_service, "require_member", AsyncMock(return_value=(GROUP, target)))
-        await group_service.remove_member(AsyncMock(), 10, target.id, USER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), 10, target.id, USER)
         assert recorded.await_args.kwargs["payload"]["variant"] == "self"
 
         monkeypatch.setattr(group_service, "require_member", AsyncMock(return_value=(GROUP, other)))
-        await group_service.remove_member(AsyncMock(), 10, target.id, USER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), 10, target.id, USER)
         assert recorded.await_args.kwargs["payload"]["variant"] == "by_admin"
 
     @pytest.mark.asyncio

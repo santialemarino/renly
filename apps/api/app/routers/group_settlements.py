@@ -6,6 +6,7 @@ from app.deps.db import SessionDep
 from app.deps.pagination import PageQuery
 from app.schemas.group_settlement import (
     GroupBalancesResponse,
+    GroupDollarRateProposalCreate,
     GroupMoneySettingsResponse,
     GroupMoneySettingsUpdate,
     GroupSettlementCreate,
@@ -231,3 +232,29 @@ async def update_group_money_settings(
         default_split_method=body.default_split_method,
         auto_finalise_settlements=body.auto_finalise_settlements,
     )
+
+
+# Proposes a new dollar rate for settling up. Any member may; it applies at once when they are the
+# group's only active member, and otherwise waits for every other active member to agree
+# (409 group_dollar_rate_proposal_pending while one already does).
+@router.post("/money-settings/dollar-rate", response_model=GroupMoneySettingsResponse)
+async def propose_group_dollar_rate(
+    group_id: int,
+    body: GroupDollarRateProposalCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> GroupMoneySettingsResponse:
+    return await group_money_service.propose_dollar_rate(session, group_id, current_user, dollar_rate=body.dollar_rate)
+
+
+# Agrees to the pending dollar-rate change; it applies once every active member has. 404 when none is
+# pending.
+@router.post("/money-settings/dollar-rate/agree", response_model=GroupMoneySettingsResponse)
+async def agree_group_dollar_rate(group_id: int, current_user: CurrentUser, session: SessionDep) -> GroupMoneySettingsResponse:
+    return await group_money_service.agree_dollar_rate(session, group_id, current_user)
+
+
+# Withdraws the pending dollar-rate change. Its proposer only (403 group_dollar_rate_not_yours).
+@router.delete("/money-settings/dollar-rate", response_model=GroupMoneySettingsResponse)
+async def withdraw_group_dollar_rate(group_id: int, current_user: CurrentUser, session: SessionDep) -> GroupMoneySettingsResponse:
+    return await group_money_service.withdraw_dollar_rate(session, group_id, current_user)

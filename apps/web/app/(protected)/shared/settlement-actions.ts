@@ -13,8 +13,15 @@ import type {
   WriteOffFormValues,
 } from '@/app/(protected)/shared/settlement-form-schema';
 import { legCrossesCurrency } from '@/app/(protected)/shared/settlement-rules';
-import { mapSettlementPlan, type GroupSettlementPlan } from '@/lib/api/group-settlements';
+import {
+  mapMoneySettings,
+  mapSettlementPlan,
+  type GroupMoneySettings,
+  type GroupMoneySettingsRaw,
+  type GroupSettlementPlan,
+} from '@/lib/api/group-settlements';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import type { SharedDollarRate } from '@/lib/constants/dollar-rates';
 
 /*
  * Mutations on a group's settlements and on the money settings it holds in common.
@@ -261,4 +268,41 @@ export async function updateGroupMoneySettings(
     },
   });
   return toResult(res, 'Failed to update money settings');
+}
+
+/*
+ * The group's dollar rate changes by every active member's agreement, not through the admin's settings
+ * form: any member proposes (applied at once when they are the only one), the others agree, and the
+ * proposer may withdraw it meanwhile. The proposal comes back with the settings, so the caller can say
+ * whether it applied or now waits.
+ */
+export async function proposeGroupDollarRate(
+  groupId: number,
+  dollarRate: SharedDollarRate,
+): Promise<SharedDataResult<GroupMoneySettings>> {
+  const res = await authenticatedFetch(`/groups/${groupId}/money-settings/dollar-rate`, {
+    method: 'POST',
+    body: { dollar_rate: dollarRate },
+  });
+  return toDataResult<GroupMoneySettingsRaw, GroupMoneySettings>(
+    res,
+    mapMoneySettings,
+    'Failed to propose a dollar rate',
+  );
+}
+
+// Agrees to the pending change; it applies once every active member has.
+export async function agreeGroupDollarRate(groupId: number): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/groups/${groupId}/money-settings/dollar-rate/agree`, {
+    method: 'POST',
+  });
+  return toResult(res, 'Failed to agree to the dollar rate');
+}
+
+// Withdraws the pending change. Its proposer only.
+export async function withdrawGroupDollarRate(groupId: number): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/groups/${groupId}/money-settings/dollar-rate`, {
+    method: 'DELETE',
+  });
+  return toResult(res, 'Failed to withdraw the dollar rate');
 }

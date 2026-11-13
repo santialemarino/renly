@@ -2005,6 +2005,11 @@
         "label": "Tu nombre en este grupo",
         "placeholder": "Por defecto, el nombre de tu cuenta"
       },
+      "dollarRate": {
+        "label": "Tipo de dólar",
+        "placeholder": "Seleccioná un tipo de dólar",
+        "hint": "Todos en este grupo saldan a este tipo de dólar."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -2973,6 +2978,11 @@
         "error": "No se pudo registrar el pago.",
         "sameMember": "Un pago mueve dinero entre dos personas distintas."
       },
+      "dollarRate": {
+        "oficial": "Este grupo salda al dólar oficial.",
+        "mep": "Este grupo salda al dólar MEP (financiero).",
+        "blue": "Este grupo salda al dólar blue (paralelo)."
+      },
       "plan": {
         "title": "A dónde va lo que sobra",
         "description": "Este pago es más grande que el saldo que cancela. Elegí a cuáles de los otros saldos va lo que sobra.",
@@ -3033,6 +3043,34 @@
         "label": "Confirmar los pagos automáticamente",
         "hint": "Un pago registrado cuenta al instante, sin esperar la confirmación de quien lo recibió. Pensado para grupos que se tienen confianza."
       },
+      "dollarRate": {
+        "notice": {
+          "oficial": "Todos en este grupo saldan al dólar oficial.",
+          "mep": "Todos en este grupo saldan al dólar MEP (financiero).",
+          "blue": "Todos en este grupo saldan al dólar blue (paralelo)."
+        },
+        "change": "Cambiar",
+        "proposal": {
+          "oficial": "{proposer} propuso saldar al dólar oficial.",
+          "mep": "{proposer} propuso saldar al dólar MEP (financiero).",
+          "blue": "{proposer} propuso saldar al dólar blue (paralelo)."
+        },
+        "waitingOn": "Cambia cuando {count, plural, one {lo acepte {names}} other {lo acepten {names}}}.",
+        "nobodyLeft": "Todos los miembros lo aceptaron; aceptalo para aplicarlo.",
+        "agree": "Aceptar",
+        "withdraw": "Retirar",
+        "agreeSuccess": "Aceptado.",
+        "withdrawSuccess": "Propuesta retirada.",
+        "changedSuccess": "Tipo de dólar cambiado.",
+        "proposedSuccess": "Propuesto. Cambia cuando lo acepten todos los miembros.",
+        "error": "No se pudo guardar.",
+        "dialog": {
+          "title": "Cambiar el tipo de dólar",
+          "description": "Todos en este grupo saldan a este tipo de dólar. Si el grupo tiene otros miembros, el cambio espera a que todos lo acepten; los pagos ya registrados quedan como están.",
+          "submit": "Proponer",
+          "loading": "Guardando..."
+        }
+      },
       "success": "Ajustes guardados.",
       "error": "No se pudieron guardar los ajustes."
     },
@@ -3076,7 +3114,13 @@
           }
         },
         "group_money_settings": {
-          "updated": "{actor} cambió cómo este grupo divide y salda"
+          "updated": {
+            "base": "{actor} cambió cómo este grupo divide y salda",
+            "dollar_rate": "{actor} cambió el tipo de dólar del grupo de {from_rate} a {to_rate}",
+            "dollar_rate_proposed": "{actor} propuso cambiar el tipo de dólar del grupo de {from_rate} a {to_rate}",
+            "dollar_rate_withdrawn": "{actor} retiró la propuesta de cambiar el tipo de dólar del grupo a {to_rate}"
+          },
+          "confirmed": "{actor} aceptó cambiar el tipo de dólar del grupo de {from_rate} a {to_rate}"
         },
         "ownership_event": {
           "created": {
@@ -3436,6 +3480,22 @@
       "balance_written_off": {
         "label": "Alguien da por perdido lo que le debías",
         "title": "{creditor} dio por perdidos {amount} {currency} que le debías en {group}"
+      },
+      "settle_rate_changed": {
+        "label": "Cambia el tipo de dólar del grupo",
+        "title": "Está cambiando el tipo de dólar al que salda {group}",
+        "dollar_rate_proposed_to_you": {
+          "title": "{actor} propuso un nuevo tipo de dólar para {group}"
+        },
+        "dollar_rate_applied_from_you": {
+          "title": "Todos aceptaron tu nuevo tipo de dólar para {group}"
+        },
+        "dollar_rate_applied_to_you": {
+          "title": "{group} ahora salda al tipo de dólar que propuso {actor}"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} retiró el nuevo tipo de dólar para {group}"
+        }
       },
       "shared_expense_added": {
         "label": "Se agrega un gasto compartido",
@@ -4099,6 +4159,7 @@
           "La otra mitad de un grupo es la plata del día a día: el alquiler, el supermercado, el viaje que pagó alguien. Lo registrás como un gasto compartido, decís cómo se divide — en partes iguales, por porcentaje, por montos explícitos o por partes — y Renly lo convierte en dos cosas a la vez. Tu parte aparece en tus gastos como cualquier otro, así que tu registro de consumo queda completo. El resto se convierte en un saldo entre vos y los demás integrantes: lo que te deben, o lo que debés.",
           "Ese saldo es plata, no una categoría, así que cuenta en tu patrimonio como algo por cobrar o por pagar en lugar de desaparecer en un total con el que no se puede hacer nada. Los ingresos compartidos funcionan igual pero al revés: un cobro que llega para varias personas se divide en la parte de cada una.",
           "Los saldos se llevan por moneda y nunca se mezclan. Si te deben 50.000 pesos y debés 200 dólares, Renly te muestra los dos y no compensa ninguno, porque convertir uno en el otro sería elegir un tipo de cambio en tu nombre y decidir por lo bajo cuánto vale una deuda entre dos personas.",
+          "Cuando un pago sí cruza monedas — dólares para saldar una deuda en pesos, por ejemplo — se convierte al tipo de dólar del grupo (oficial, MEP o blue), elegido al crearlo, así salda lo mismo sin importar quién lo registre. Cambiarlo requiere que acepten todos los miembros, y los pagos ya registrados conservan sus montos. Quien todavía debe o tiene plata por cobrar, o tiene una parte de un fondo, no puede salir ni ser quitado hasta saldarlo.",
           "Cuando llega el momento de saldar, Renly calcula el conjunto más chico de pagos que deja a todos en cero — no un pago por gasto, solo los pocos que realmente cierran el grupo. Vos registrás el pago y la persona que lo recibió lo confirma, así una liquidación es algo que las dos partes acordaron que pasó y no la versión de una sola. Cada lado puede además apuntar su tramo a una de sus propias cuentas, para que la plata salga de un saldo y entre en el otro. Y si todos están de acuerdo en que un resto chico no vale la pena perseguir, se puede dar de baja en lugar de quedar ahí para siempre."
         ]
       }
@@ -4312,6 +4373,7 @@
     "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
     "account_has_linked_entries": "Esa cuenta ya tiene gastos, ingresos o transferencias, así que no se puede compartir — su saldo se leería distinto para cada persona. Creá una cuenta nueva para el grupo.",
     "account_opening_date_change_blocked": "La fecha de apertura no se puede cambiar porque ya hay gastos, ingresos o transferencias vinculados a esta cuenta.",
+    "account_owns_pot": "Todavía tenés una parte de un fondo en {groups}. Saldala primero: comprá esa parte o sacala, y confirmá cualquier cambio de división pendiente.",
     "account_reconciliation_before_last": "Esta cuenta ya está conciliada hasta el {last_reconciled_date}. Elegí esa fecha o una posterior, o eliminá primero la conciliación posterior.",
     "account_reconciliation_before_opening": "La fecha de conciliación debe ser igual o posterior a la fecha de apertura de la cuenta ({opening_date}).",
     "account_reconciliation_future_date": "La fecha de conciliación no puede ser futura.",
@@ -4328,7 +4390,13 @@
     "expense_cycles_out_of_range": "Podés pre-pagar entre 1 y {max_cycles} ciclos a la vez.",
     "group_admin_required": "Solo un administrador del grupo puede hacer esto.",
     "group_balance_outstanding": "Todavía hay un saldo pendiente en {groups}. Saldalo o dalo por perdido primero.",
+    "group_dollar_rate_unchanged": "Este grupo ya salda a ese tipo de dólar.",
+    "group_dollar_rate_proposal_pending": "Ya hay un cambio de tipo de dólar esperando que lo acepten los miembros. Aceptalo o retiralo primero.",
+    "group_dollar_rate_not_yours": "Solo quien propuso este cambio de tipo de dólar puede retirarlo.",
+    "group_dollar_rate_already_agreed": "Ya aceptaste este cambio de tipo de dólar.",
     "group_last_admin": "Un grupo necesita al menos un administrador. Primero hacé administrador a otra persona.",
+    "group_member_owns_pot": "Este miembro todavía tiene una parte de un fondo. Saldala primero: comprá esa parte o sacala.",
+    "group_member_pot_change_pending": "Hay un cambio de división de un fondo que nombra a este miembro y todavía espera confirmación. Confirmalo o eliminalo primero.",
     "group_membership_exists": "Ya sos miembro de este grupo.",
     "group_seat_taken": "Esta persona ya se unió, así que no hay nada que invitar.",
     "group_settlement_before_account_opened": "Un pago tiene que tener fecha igual o posterior a la de apertura de la cuenta ({opening_date}).",
@@ -4418,6 +4486,7 @@
     "pot_dollar_rate_proposal_pending": "Ya hay un cambio de tipo de dólar esperando que lo acepten los dueños. Aceptalo o retiralo primero.",
     "pot_dollar_rate_unchanged": "Este fondo ya usa ese tipo de dólar.",
     "pot_dollar_rate_already_agreed": "Ya aceptaste este cambio de tipo de dólar.",
-    "pot_dollar_rate_not_yours": "Solo quien propuso este cambio de tipo de dólar puede retirarlo."
+    "pot_dollar_rate_not_yours": "Solo quien propuso este cambio de tipo de dólar puede retirarlo.",
+    "pot_seat_departed": "Esto le devolvería parte del fondo a alguien que dejó el grupo o eliminó su cuenta."
   }
 }

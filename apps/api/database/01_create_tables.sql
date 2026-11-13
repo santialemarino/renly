@@ -251,6 +251,7 @@ CREATE TYPE notification_event AS ENUM (
   'settle_marked_paid',
   'settle_confirmed',
   'balance_written_off',
+  'settle_rate_changed',
   'shared_expense_added',
   'shared_income_added'
 );
@@ -1270,12 +1271,23 @@ ALTER TABLE transfers
 -- per-currency buckets that never net across currencies, the unified figure beside them converts to
 -- each VIEWER's own display currency, and a cross-currency settlement names the currency it was
 -- actually paid in. There is no question a group-level one would answer.
+-- dollar_rate IS group-level, because it answers one: how much of one currency's debt a payment in
+-- another clears, and what a balance comes to "at today's rate". Both sides of a debt must agree on
+-- that, so the group settles at one USD/ARS quote; only the last step into a reader's own display
+-- currency follows their personal preference. Changing it takes every active member's agreement:
+-- dollar_rate_proposal is the one pending change, with the seat that proposed it and the seats that
+-- have agreed so far. Recorded settlements keep the amounts they were recorded at.
 CREATE TABLE group_money_settings (
   group_id                  BIGINT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
   default_split_method      split_method NOT NULL DEFAULT 'equal',
   auto_finalise_settlements BOOLEAN NOT NULL DEFAULT FALSE,
+  dollar_rate               dollar_rate NOT NULL DEFAULT 'mep',
+  dollar_rate_proposal      dollar_rate,
+  dollar_rate_proposed_by   BIGINT REFERENCES group_members(id),
+  dollar_rate_agreed_by     BIGINT[] NOT NULL DEFAULT '{}',
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT group_money_settings_dollar_rate_proposal_whole CHECK ((dollar_rate_proposal IS NULL) = (dollar_rate_proposed_by IS NULL))
 );
 
 -- One expense a group shares. It is deliberately NOT a scoped expense_entries row: an expense with one

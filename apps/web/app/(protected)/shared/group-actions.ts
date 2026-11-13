@@ -22,6 +22,7 @@ export async function createGroup(values: GroupFormValues): Promise<SharedMutati
       name: values.name,
       kind: values.kind,
       display_name: values.displayName || null,
+      dollar_rate: values.dollarRate,
     },
   });
   return toResult(res, 'Failed to create group');

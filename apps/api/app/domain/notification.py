@@ -27,6 +27,8 @@ from app.models.notification import NotificationChannel, NotificationEvent
 #   * settle_marked_paid — somebody says they paid you, and confirming it is your move.
 #   * settle_confirmed   — your own payment being acknowledged closes the loop you opened.
 #   * balance_written_off — somebody gave up a claim against you; it changes what you owe.
+#   * settle_rate_changed — the dollar rate your group settles at is changing: a proposal waits on your
+#     own agreement, and an applied one changes what your payments clear.
 #   * obligation_due     — a bill you declared is coming up and nothing pays it for you, so it is
 #     waiting on your own action; the same argument snapshot_due makes, and a reminder that only ever
 #     appears in a feed you were not looking at is the one kind of reminder that cannot work.
@@ -49,6 +51,7 @@ _OUTSIDE_APP_BY_DEFAULT = frozenset(
         NotificationEvent.ownership_changed,
         NotificationEvent.settle_confirmed,
         NotificationEvent.settle_marked_paid,
+        NotificationEvent.settle_rate_changed,
         NotificationEvent.snapshot_due,
     }
 )

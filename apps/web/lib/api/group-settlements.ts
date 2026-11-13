@@ -23,6 +23,7 @@ import 'server-only';
 
 import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import type { SharedDollarRate } from '@/lib/constants/dollar-rates';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -100,10 +101,21 @@ interface GroupSettlementPlanRaw {
   skipped_currencies: string[];
 }
 
-interface GroupMoneySettingsRaw {
+interface GroupDollarRateProposalRaw {
+  dollar_rate: SharedDollarRate;
+  proposed_by: string;
+  waiting_on: string[];
+  can_agree: boolean;
+  can_withdraw: boolean;
+}
+
+export interface GroupMoneySettingsRaw {
   group_id: number;
   default_split_method: SplitMethod;
   auto_finalise_settlements: boolean;
+  dollar_rate: SharedDollarRate;
+  dollar_rate_proposal: GroupDollarRateProposalRaw | null;
+  can_change_dollar_rate: boolean;
 }
 
 // --- Frontend types (camelCase) ---
@@ -222,10 +234,24 @@ export interface GroupSettlement {
   updatedAt: string;
 }
 
+// A pending change of the group's dollar rate, resolved for the reader.
+export interface GroupDollarRateProposal {
+  dollarRate: SharedDollarRate;
+  proposedBy: string;
+  // The members who have not agreed yet; empty once everyone has.
+  waitingOn: string[];
+  canAgree: boolean;
+  canWithdraw: boolean;
+}
+
 export interface GroupMoneySettings {
   groupId: number;
   defaultSplitMethod: SplitMethod;
   autoFinaliseSettlements: boolean;
+  // The rate everyone in the group settles at, and any change of it waiting for the members to agree.
+  dollarRate: SharedDollarRate;
+  dollarRateProposal: GroupDollarRateProposal | null;
+  canChangeDollarRate: boolean;
 }
 
 // --- Mappers ---
@@ -320,11 +346,21 @@ export function mapSettlementPlan(raw: GroupSettlementPlanRaw): GroupSettlementP
   };
 }
 
-function mapMoneySettings(raw: GroupMoneySettingsRaw): GroupMoneySettings {
+export function mapMoneySettings(raw: GroupMoneySettingsRaw): GroupMoneySettings {
+  const proposal = raw.dollar_rate_proposal;
   return {
     groupId: raw.group_id,
     defaultSplitMethod: raw.default_split_method,
     autoFinaliseSettlements: raw.auto_finalise_settlements,
+    dollarRate: raw.dollar_rate,
+    dollarRateProposal: proposal && {
+      dollarRate: proposal.dollar_rate,
+      proposedBy: proposal.proposed_by,
+      waitingOn: proposal.waiting_on,
+      canAgree: proposal.can_agree,
+      canWithdraw: proposal.can_withdraw,
+    },
+    canChangeDollarRate: raw.can_change_dollar_rate,
   };
 }
 

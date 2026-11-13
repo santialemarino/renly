@@ -19,10 +19,10 @@ import 'server-only';
 
 import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import type { SharedDollarRate } from '@/lib/constants/dollar-rates';
 import type {
   OwnershipEventType,
   PotCadence,
-  PotDollarRate,
   PotSeriesInterval,
   PotVisibility,
 } from '@/lib/constants/pots';
@@ -46,7 +46,7 @@ interface PotPermissionRaw {
 }
 
 interface PotDollarRateProposalRaw {
-  dollar_rate: PotDollarRate;
+  dollar_rate: SharedDollarRate;
   proposed_by: string;
   waiting_on: string[];
   can_agree: boolean;
@@ -58,7 +58,7 @@ export interface PotDollarRateStateRaw {
   name: string | null;
   group_id: number;
   group_name: string;
-  dollar_rate: PotDollarRate;
+  dollar_rate: SharedDollarRate;
   dollar_rate_proposal: PotDollarRateProposalRaw | null;
   can_change_dollar_rate: boolean;
 }
@@ -70,7 +70,7 @@ export interface PotRaw {
   base_currency: string;
   snapshot_cadence: PotCadence;
   visibility: PotVisibility;
-  dollar_rate: PotDollarRate;
+  dollar_rate: SharedDollarRate;
   dollar_rate_proposal: PotDollarRateProposalRaw | null;
   can_change_dollar_rate: boolean;
   is_default: boolean;
@@ -162,7 +162,7 @@ export interface PotPermission {
  * gives cannot disagree.
  */
 export interface PotDollarRateProposal {
-  dollarRate: PotDollarRate;
+  dollarRate: SharedDollarRate;
   proposedBy: string;
   // The owners who have not agreed yet; empty once everyone has.
   waitingOn: string[];
@@ -179,7 +179,7 @@ export interface PotDollarRateState {
   name: string | null;
   groupId: number;
   groupName: string;
-  dollarRate: PotDollarRate;
+  dollarRate: SharedDollarRate;
   dollarRateProposal: PotDollarRateProposal | null;
   canChangeDollarRate: boolean;
 }
@@ -196,7 +196,7 @@ export interface Pot {
   snapshotCadence: PotCadence;
   visibility: PotVisibility;
   // The USD/ARS rate every figure here converts at, the same for every member.
-  dollarRate: PotDollarRate;
+  dollarRate: SharedDollarRate;
   dollarRateProposal: PotDollarRateProposal | null;
   // Whether the reader may propose a new rate: an owner, or an admin while nobody owns any.
   canChangeDollarRate: boolean;

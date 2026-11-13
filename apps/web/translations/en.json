@@ -2005,6 +2005,11 @@
         "label": "Your name in this group",
         "placeholder": "Defaults to your account name"
       },
+      "dollarRate": {
+        "label": "Dollar rate",
+        "placeholder": "Select a dollar rate",
+        "hint": "Everyone in this group settles at this rate."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -2973,6 +2978,11 @@
         "error": "Failed to record the payment.",
         "sameMember": "A payment moves money between two different people."
       },
+      "dollarRate": {
+        "oficial": "This group settles at the official dollar rate.",
+        "mep": "This group settles at the MEP (financial) dollar rate.",
+        "blue": "This group settles at the blue (parallel) dollar rate."
+      },
       "plan": {
         "title": "Where the extra goes",
         "description": "This payment is bigger than the balance it clears. Choose which of the other balances the extra should go to.",
@@ -3033,6 +3043,34 @@
         "label": "Confirm payments automatically",
         "hint": "A recorded payment counts straight away instead of waiting for the person who received it to confirm. Meant for groups that trust each other."
       },
+      "dollarRate": {
+        "notice": {
+          "oficial": "Everyone in this group settles at the official dollar rate.",
+          "mep": "Everyone in this group settles at the MEP (financial) dollar rate.",
+          "blue": "Everyone in this group settles at the blue (parallel) dollar rate."
+        },
+        "change": "Change",
+        "proposal": {
+          "oficial": "{proposer} proposed settling at the official rate instead.",
+          "mep": "{proposer} proposed settling at the MEP (financial) rate instead.",
+          "blue": "{proposer} proposed settling at the blue (parallel) rate instead."
+        },
+        "waitingOn": "It changes once {count, plural, one {{names} agrees} other {{names} agree}}.",
+        "nobodyLeft": "Every member has agreed; agree to apply it.",
+        "agree": "Agree",
+        "withdraw": "Withdraw",
+        "agreeSuccess": "Agreed.",
+        "withdrawSuccess": "Proposal withdrawn.",
+        "changedSuccess": "Dollar rate changed.",
+        "proposedSuccess": "Proposed. It changes once every member agrees.",
+        "error": "Failed to save.",
+        "dialog": {
+          "title": "Change the dollar rate",
+          "description": "Everyone in this group settles at this rate. When the group has other members, the change waits until all of them agree; payments already recorded stay as they were.",
+          "submit": "Propose",
+          "loading": "Saving..."
+        }
+      },
       "success": "Settings saved.",
       "error": "Failed to save the settings."
     },
@@ -3076,7 +3114,13 @@
           }
         },
         "group_money_settings": {
-          "updated": "{actor} changed how this group splits and settles"
+          "updated": {
+            "base": "{actor} changed how this group splits and settles",
+            "dollar_rate": "{actor} changed the group's dollar rate from {from_rate} to {to_rate}",
+            "dollar_rate_proposed": "{actor} proposed changing the group's dollar rate from {from_rate} to {to_rate}",
+            "dollar_rate_withdrawn": "{actor} withdrew the proposal to change the group's dollar rate to {to_rate}"
+          },
+          "confirmed": "{actor} agreed to change the group's dollar rate from {from_rate} to {to_rate}"
         },
         "ownership_event": {
           "created": {
@@ -3436,6 +3480,22 @@
       "balance_written_off": {
         "label": "Someone writes off what you owed",
         "title": "{creditor} wrote off {amount} {currency} you owed in {group}"
+      },
+      "settle_rate_changed": {
+        "label": "The group's dollar rate changes",
+        "title": "The dollar rate {group} settles at is changing",
+        "dollar_rate_proposed_to_you": {
+          "title": "{actor} proposed a new dollar rate for {group}"
+        },
+        "dollar_rate_applied_from_you": {
+          "title": "Everyone agreed to your new dollar rate for {group}"
+        },
+        "dollar_rate_applied_to_you": {
+          "title": "{group} now settles at the dollar rate {actor} proposed"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} withdrew the new dollar rate for {group}"
+        }
       },
       "shared_expense_added": {
         "label": "A shared expense is added",
@@ -4099,6 +4159,7 @@
           "The other half of a group is day-to-day money: the rent, the groceries, the trip somebody paid for. Record it as a shared expense, say how it divides — equally, by percentage, by explicit amounts, or by shares — and Renly turns it into two things at once. Your own part of it appears in your expenses like any other, so your spending is complete. The rest becomes a balance between you and the other members: what you are owed, or what you owe.",
           "That balance is money, not a category, so it counts in your net worth as a receivable or a payable rather than disappearing into a total nobody can act on. Shared income works the same way in reverse — a payment that arrives for several people divides into each person's part.",
           "Balances are kept per currency and never mixed. If you are owed 50,000 pesos and owe 200 dollars, Renly shows you both and nets neither, because turning one into the other would mean picking an exchange rate on your behalf and quietly deciding what a debt between two people is worth.",
+          "When one payment does cross currencies — dollars to clear a peso balance, say — it converts at the group's own dollar rate (official, MEP or blue), chosen when the group is created, so it clears the same amount whoever records it. Changing that rate takes every member's agreement, and payments already recorded keep their amounts. A member who still owes or is owed, or who still owns part of a pot, cannot leave or be removed until that is settled.",
           "When it is time to square up, Renly works out the smallest set of payments that clears everybody — not one payment per expense, just the few that actually settle the group. You record a payment, and the person who received it confirms it, so a settlement is something both sides agreed happened rather than one person's claim. Each side can also point their leg at one of their own accounts, so the cash leaves one balance and arrives in the other. And if everyone agrees a small remainder is not worth chasing, it can be written off instead of lingering forever."
         ]
       }
@@ -4312,6 +4373,7 @@
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "account_has_linked_entries": "That account already has expenses, income or transfers on it, so it cannot be shared — its balance would read differently for each person. Create a fresh account for the group instead.",
     "account_opening_date_change_blocked": "The opening date cannot be changed because expenses, income or transfers already link to this account.",
+    "account_owns_pot": "You still own part of a pot in {groups}. Settle your share first: buy it out or take it out, and confirm any change of split that is still pending.",
     "account_reconciliation_before_last": "This account is already reconciled up to {last_reconciled_date}. Pick that date or later, or delete the later reconciliation first.",
     "account_reconciliation_before_opening": "The reconciliation date must be on or after the account's opening date ({opening_date}).",
     "account_reconciliation_future_date": "The reconciliation date can't be in the future.",
@@ -4328,7 +4390,13 @@
     "expense_cycles_out_of_range": "You can pre-pay between 1 and {max_cycles} cycles at once.",
     "group_admin_required": "Only a group admin can do this.",
     "group_balance_outstanding": "There is still an unsettled balance in {groups}. Settle it or write it off first.",
+    "group_dollar_rate_unchanged": "This group already settles at that dollar rate.",
+    "group_dollar_rate_proposal_pending": "A change of dollar rate is already waiting for the members to agree. Agree to it or withdraw it first.",
+    "group_dollar_rate_not_yours": "Only the member who proposed this change of dollar rate can withdraw it.",
+    "group_dollar_rate_already_agreed": "You have already agreed to this change of dollar rate.",
     "group_last_admin": "A group needs at least one admin. Make someone else an admin first.",
+    "group_member_owns_pot": "This member still owns part of a pot. Settle that share first: buy it out or take it out.",
+    "group_member_pot_change_pending": "A change of a pot's split naming this member is still waiting to be confirmed. Confirm it or delete it first.",
     "group_membership_exists": "You are already a member of this group.",
     "group_seat_taken": "This person has already joined, so there is nothing to invite.",
     "group_settlement_before_account_opened": "A settlement must be dated on or after its account's opening date ({opening_date}).",
@@ -4418,6 +4486,7 @@
     "pot_dollar_rate_proposal_pending": "A change of dollar rate is already waiting for the owners to agree. Agree to it or withdraw it first.",
     "pot_dollar_rate_unchanged": "This pot already uses that dollar rate.",
     "pot_dollar_rate_already_agreed": "You have already agreed to this change of dollar rate.",
-    "pot_dollar_rate_not_yours": "Only the owner who proposed this change of dollar rate can withdraw it."
+    "pot_dollar_rate_not_yours": "Only the owner who proposed this change of dollar rate can withdraw it.",
+    "pot_seat_departed": "This would give part of the pot back to someone who has left the group or deleted their account."
   }
 }

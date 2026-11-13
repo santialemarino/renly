@@ -360,6 +360,25 @@ class ExpenseCyclesOutOfRangeError(DomainError):
         return {"max_cycles": self.max_cycles}
 
 
+# Somebody asked to delete their account while they still own part of a pot in a group that outlives
+# them, or a change of a pot's split naming them is still waiting to be confirmed. Deleting the account
+# would leave that share on a name-only seat nobody can act for. Names the groups, pre-joined into one
+# display-ready string for the message's scalar placeholder. Mapped to 409 by the API.
+class AccountOwnsPotError(DomainError):
+    code = "account_owns_pot"
+    status_code = 409
+
+    def __init__(self, group_names: list[str]) -> None:
+        self.group_names = sorted(group_names)
+        joined = ", ".join(self.group_names)
+        self.message = f"You still own part of a pot in {joined}. Settle your share first: buy it out or take it out, and confirm any pending change."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"groups": ", ".join(self.group_names)}
+
+
 # A group operation that only an admin may perform was attempted by a plain member. Group
 # administration is management, not access — this gates WRITES to membership, settings and invites, and
 # never widens what anyone can read. Mapped to 403 by the API.
@@ -386,9 +405,54 @@ class GroupBalanceOutstandingError(DomainError):
         self.message = f"There is still an unsettled balance in {joined}. Settle it or write it off first."
         super().__init__(self.message)
 
+    # Pre-joined into one display-ready string, as InstallmentLockedFieldError's fields are: the web
+    # interpolates `{groups}` as a scalar, and a list there renders the raw message key instead.
     @property
     def extra(self) -> dict:
-        return {"groups": self.group_names}
+        return {"groups": ", ".join(self.group_names)}
+
+
+# A change of a group's dollar rate was proposed while another is still waiting for the members to
+# agree. One at a time, so every member is agreeing to the same thing. Mapped to 409.
+class GroupDollarRateProposalPendingError(DomainError):
+    code = "group_dollar_rate_proposal_pending"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A change of dollar rate is already waiting for the members to agree. Agree to it or withdraw it first."
+        super().__init__(self.message)
+
+
+# A change of a group's dollar rate named the rate the group already settles at. Refused rather than
+# recorded, so nobody is asked to agree to a change that changes nothing. Mapped to 400.
+class GroupDollarRateUnchangedError(DomainError):
+    code = "group_dollar_rate_unchanged"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "This group already settles at that dollar rate."
+        super().__init__(self.message)
+
+
+# A member agreed twice to the same change of a group's dollar rate. Mapped to 409.
+class GroupDollarRateAlreadyAgreedError(DomainError):
+    code = "group_dollar_rate_already_agreed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "You have already agreed to this change of dollar rate."
+        super().__init__(self.message)
+
+
+# Somebody other than its proposer tried to withdraw a change of a group's dollar rate — the proposer's
+# word to take back, as on a pot. Mapped to 403.
+class GroupDollarRateNotYoursError(DomainError):
+    code = "group_dollar_rate_not_yours"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only the member who proposed this change of dollar rate can withdraw it."
+        super().__init__(self.message)
 
 
 # Removing, deactivating or demoting the last active admin of a group. Someone must be able to manage
@@ -404,9 +468,33 @@ class GroupLastAdminError(DomainError):
         super().__init__(self.message)
 
 
-# An account tried to claim a second seat in a group it already belongs to. One person is one member per
-# group, which is what makes a member id a usable counterparty for balances and ownership units — two
-# seats for one account would split their history in half. Mapped to 409 by the API.
+# A seat still owns part of a pot, and the operation would make it inactive — removing the member,
+# leaving the group, or deleting the account behind the seat. Its units would stay in the ledger with
+# nobody able to answer for them: every change of split and of the pot's dollar rate skips a seat that
+# cannot act, so the remaining owners could reshape a pot that is still partly theirs without them.
+# The share has to leave the pot first, through a buy-out or a take-out. Names no pot: the caller may
+# be an admin the pot is hidden from. Mapped to 409 by the API.
+class GroupMemberOwnsPotError(DomainError):
+    code = "group_member_owns_pot"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This seat still owns part of a pot. Settle that share first with a buy-out or a take-out."
+        super().__init__(self.message)
+
+
+# A seat is named by a change of a pot's split that is still waiting to be confirmed, and the operation
+# would make it inactive. Until it is confirmed the change can still be deleted, which would hand the
+# units back to a seat that has gone. Confirm it or delete it first. Mapped to 409 by the API.
+class GroupMemberPotChangePendingError(DomainError):
+    code = "group_member_pot_change_pending"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A change of a pot's split naming this seat is still waiting to be confirmed. Confirm it or delete it first."
+        super().__init__(self.message)
+
+
 class GroupMembershipExistsError(DomainError):
     code = "group_membership_exists"
     status_code = 409
@@ -964,6 +1052,19 @@ class PotReagreementNotYoursError(DomainError):
             "Only the member giving up part of their share can agree to this change of split "
             "— or, when they recorded it themselves, the member receiving it."
         )
+        super().__init__(self.message)
+
+
+# A ledger write would hand units to a seat that has gone — one that left the group, or whose account
+# was deleted — most often by deleting an entry that had taken that seat's share out of the pot. Every
+# agreement a pot asks for skips such a seat, so units on it are a share nobody can answer for. Mapped
+# to 409.
+class PotSeatDepartedError(DomainError):
+    code = "pot_seat_departed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This would give part of the pot to someone who has left the group or deleted their account."
         super().__init__(self.message)
 
 

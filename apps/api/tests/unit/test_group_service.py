@@ -17,7 +17,7 @@ from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_invite import GroupInvite
 from app.models.user import User
 from app.models.utils import utcnow
-from app.services import group_money_service, group_service, group_settlement_service
+from app.services import group_money_service, group_service, group_settlement_service, pot_service
 
 ADMIN = User(id=1, name="Santi", email="admin@test", password_hash="x", session_epoch=0)
 MEMBER = User(id=2, name="Ana", email="ana@test", password_hash="x", session_epoch=0)
@@ -92,9 +92,14 @@ def _patch_invite_repo(monkeypatch, **methods):
 # rather than through group_service, because group_service imports it INSIDE the function to break the
 # cycle between the two — an attribute patched on group_service would never be looked at.
 # Returns the mock so a test can assert the guard was actually consulted rather than assumed.
+#
+# The pot-units guard and the dollar-rate settling step removal also runs are stubbed with it, on their
+# own modules for the same reason; `ensure_no_units` and `settle_dollar_rate_proposal` override them.
 def _patch_balance_guard(monkeypatch, **methods) -> AsyncMock:
     guard = methods.get("ensure_no_outstanding_balance", AsyncMock())
     monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", guard)
+    monkeypatch.setattr(pot_service, "ensure_no_units", methods.get("ensure_no_units", AsyncMock()))
+    monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", methods.get("settle_dollar_rate_proposal", AsyncMock(return_value=None)))
     return guard
 
 
@@ -457,7 +462,7 @@ class TestLastAdminGuard:
         )
         _patch_invite_repo(monkeypatch)
         with pytest.raises(GroupLastAdminError):
-            await group_service.remove_member(AsyncMock(), _GROUP_ID, 1, ADMIN)
+            await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 1, ADMIN)
 
     @pytest.mark.asyncio
     async def test_one_of_two_admins_may_be_demoted(self, monkeypatch):
@@ -489,7 +494,7 @@ class TestLastAdminGuard:
         )
         _patch_invite_repo(monkeypatch)
         _patch_balance_guard(monkeypatch)
-        await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 3, ADMIN)
         count.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -529,7 +534,7 @@ class TestRemoveMember:
         )
         _patch_invite_repo(monkeypatch)
         _patch_balance_guard(monkeypatch)
-        await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 3, ADMIN)
         assert target.is_active is False
         save_member.assert_awaited_once()
 
@@ -547,7 +552,7 @@ class TestRemoveMember:
         )
         _patch_invite_repo(monkeypatch, delete_by_member=delete_invite)
         _patch_balance_guard(monkeypatch)
-        await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 3, ADMIN)
         assert delete_invite.await_count == 1
         assert delete_invite.await_args.args[1] == 3
 
@@ -570,7 +575,7 @@ class TestRemoveMember:
         guard = _patch_balance_guard(monkeypatch, ensure_no_outstanding_balance=AsyncMock(side_effect=GroupBalanceOutstandingError(["Casa"])))
 
         with pytest.raises(GroupBalanceOutstandingError):
-            await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
+            await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 3, ADMIN)
 
         assert guard.await_args.args[1] == [target]
         # And nothing was written: the refusal has to land before the seat is deactivated, or the
@@ -610,7 +615,7 @@ class TestRemoveMember:
         )
         _patch_invite_repo(monkeypatch)
         _patch_balance_guard(monkeypatch)
-        await group_service.remove_member(AsyncMock(), _GROUP_ID, 2, MEMBER)
+        await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 2, MEMBER)
         assert seat.is_active is False
 
     @pytest.mark.asyncio
@@ -624,7 +629,7 @@ class TestRemoveMember:
         )
         _patch_invite_repo(monkeypatch)
         with pytest.raises(GroupAdminRequiredError):
-            await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, MEMBER)
+            await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 3, MEMBER)
 
     @pytest.mark.asyncio
     async def test_a_member_id_from_another_group_is_not_found(self, monkeypatch):
@@ -640,5 +645,5 @@ class TestRemoveMember:
         )
         _patch_invite_repo(monkeypatch)
         with pytest.raises(NotFoundError):
-            await group_service.remove_member(AsyncMock(), _GROUP_ID, 999, ADMIN)
+            await group_service.remove_member(AsyncMock(), AsyncMock(), _GROUP_ID, 999, ADMIN)
         assert get_member.await_args.args[1] == _GROUP_ID

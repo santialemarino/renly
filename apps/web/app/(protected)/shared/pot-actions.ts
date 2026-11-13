@@ -25,7 +25,7 @@ import {
   type PotRaw,
 } from '@/lib/api/pots';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import type { PotDollarRate } from '@/lib/constants/pots';
+import type { SharedDollarRate } from '@/lib/constants/dollar-rates';
 
 /*
  * Mutations on a pot and its ownership ledger. Every one returns its refusal as data through
@@ -86,7 +86,7 @@ export async function updatePot(
 // The pot comes back so the caller can tell the two outcomes apart: applied, or waiting.
 export async function proposePotDollarRate(
   potId: number,
-  dollarRate: PotDollarRate,
+  dollarRate: SharedDollarRate,
 ): Promise<SharedDataResult<PotDollarRateState>> {
   const res = await authenticatedFetch(`/pots/${potId}/dollar-rate`, {
     method: 'POST',

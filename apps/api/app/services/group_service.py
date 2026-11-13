@@ -23,6 +23,7 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import GroupAdminRequiredError, GroupLastAdminError, NotFoundError
+from app.models.exchange_rate import DollarRate
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
@@ -161,8 +162,9 @@ async def get_group(session: AsyncSession, group_id: int, user: User) -> GroupRe
     return _build_response(group, members, invited, viewer)
 
 
-# Creates a group and seats its creator as the first admin, in one transaction. Runs on the PRIVILEGED
-# session — see the module comment: the membership row this needs is the one the RLS policy reads.
+# Creates a group and seats its creator as the first admin, in one transaction, settling up at the dollar
+# rate the creator chose. Runs on the PRIVILEGED session — see the module comment: the membership row
+# this needs is the one the RLS policy reads.
 async def create_group(
     admin_session: AsyncSession,
     user: User,
@@ -170,6 +172,7 @@ async def create_group(
     name: str,
     kind: GroupKind,
     display_name: str | None = None,
+    dollar_rate: DollarRate = DollarRate.mep,
 ) -> GroupResponse:
     group = Group(name=name, kind=kind, created_by=user.id)
     group = await group_repository.create(admin_session, group)
@@ -188,7 +191,7 @@ async def create_group(
     # cycle pot_service breaks the same way.
     from app.services import group_money_service
 
-    await group_money_service.seed_settings(admin_session, group.id)
+    await group_money_service.seed_settings(admin_session, group.id, dollar_rate=dollar_rate)
     await shared_audit_service.record(
         admin_session,
         group_id=group.id,
@@ -315,8 +318,12 @@ async def update_member(
 # Removes a member: deactivates the seat and drops any invite outstanding for it. The seat itself stays,
 # so the rows that reference it keep a real counterparty and the group's history stays readable.
 # A member may always remove THEMSELVES (leaving the group); removing anyone else needs admin rights.
-# Either way the last active admin cannot go, or nobody could manage the group afterwards.
-async def remove_member(session: AsyncSession, group_id: int, member_id: int, user: User) -> None:
+# Either way the last active admin cannot go, or nobody could manage the group afterwards, and neither
+# can a seat that still owes, is owed, or owns part of a pot.
+#
+# `admin_session` is for the pot check alone: an admin removing somebody may not see every pot that
+# person owns part of, and the check must not pass because the row policies hid the pot from the remover.
+async def remove_member(session: AsyncSession, admin_session: AsyncSession, group_id: int, member_id: int, user: User) -> None:
     group, viewer = await require_member(session, group_id, user)
     member = await group_repository.get_member(session, group.id, member_id)
     if member is None:
@@ -324,17 +331,29 @@ async def remove_member(session: AsyncSession, group_id: int, member_id: int, us
     if member.id != viewer.id and viewer.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     await _ensure_admin_remains(session, group, member)
-    # Locked before the balances are read, because the answer is acted on: without it a shared expense
-    # recorded at the same moment lands a balance on a seat that has just been deactivated, and the
-    # membership policy is what makes that row readable — so the person on the other side of it loses
-    # the record of money they are owed.
+    # The group, then the seat — the app's one lock order (group_repository, "The row-lock order").
+    #
+    # The group before the balances are read, because the answer is acted on: a settle-up or a write-off
+    # deciding from the same balances waits for this one, and one that got there first is seen.
     await group_repository.lock(session, group.id)
+    # Then the seat, exclusively, which is what keeps both counts below true until it goes: a ledger
+    # write that hands a seat units takes that seat's lock (shared) after its pot's, and any row naming
+    # the seat — a shared expense's split, a settlement — waits on it too, so nothing can land between
+    # the counts and the deactivation.
+    await group_repository.lock_members(session, [member.id])
     # A seat with money still owed either way cannot simply be deactivated: the membership policy is
     # what makes the group's rows readable, so the moment the seat goes inactive the person on the
     # other side of that balance loses the record of it. Settle it or write it off first.
     from app.services import group_settlement_service
 
     await group_settlement_service.ensure_no_outstanding_balance(session, [member])
+    # A pot owner cannot go either: every agreement a pot asks for skips an inactive seat, so the other
+    # owners could change the split or the pot's dollar rate around a share nobody is left to defend —
+    # and an admin could deactivate an owner, push such a change through, and reactivate them. The share
+    # leaves the pot first, through a buy-out or a take-out, and a buy-out naming the seat is confirmed.
+    from app.services import group_money_service, pot_service
+
+    await pot_service.ensure_no_units(admin_session, [member])
     # Recorded BEFORE the seat goes inactive, per the audit service's one ordering rule. A member may
     # remove THEMSELVES — that is what leaving a group is — and the entry's own policy asks whether the
     # writer is still a member, so an entry written afterwards would be refused and leaving would fail
@@ -350,9 +369,15 @@ async def remove_member(session: AsyncSession, group_id: int, member_id: int, us
         # seat was the actor's, and "Ana left" and "Ana was removed" are different sentences.
         payload={"member": member.display_name, "variant": "self" if member.id == viewer.id else "by_admin"},
     )
+    # A pending change of the group's dollar rate stops waiting for this seat; if it was the last one
+    # it waited for, it applies now. Before the seat goes inactive, for the same reason the entry above
+    # is: a member who leaves can no longer write to the group's rows afterwards.
+    applied = await group_money_service.settle_dollar_rate_proposal(session, group.id, user, leaving=frozenset({member.id}))
     member.is_active = False
     await group_repository.save_member(session, member)
     # Dropped in the same transaction: leaving a live link on the seat of someone who was just removed
     # would let it re-seat them, and is_active is what the RLS predicate reads.
     await group_invite_repository.delete_by_member(session, member.id)
     await session.commit()
+    if applied is not None:
+        await group_money_service.announce_dollar_rate_applied(applied)

@@ -63,9 +63,9 @@ _TWINS: tuple[Twin, ...] = (
     Twin("AuditEntityType", "lib/constants/shared-activity.ts", "ACTIVITY_ENTITY_TYPES"),
     # The confirm endpoint answers only the two email flows; a password reset has its own route.
     Twin("AuthTokenType", "lib/auth-api.ts", "ConfirmEmailKind", web_omits=frozenset({"password_reset"})),
-    # The same three a person picks for their own figures and a pot stores for everyone's.
+    # The same three a person picks for their own figures and a pot or a group stores for everyone's.
     Twin("DollarRate", "lib/constants/currency.ts", "DOLLAR_RATE_OPTIONS"),
-    Twin("DollarRate", _POTS, "POT_DOLLAR_RATES"),
+    Twin("DollarRate", "lib/constants/dollar-rates.ts", "SHARED_DOLLAR_RATES"),
     Twin("EmailCadence", "lib/constants/notifications.ts", "NOTIFICATION_EMAIL_CADENCES"),
     # The picker's set: the system categories are written by a reconciliation, never chosen by a person.
     Twin("ExpenseCategory", _CATEGORIES, "EXPENSE_CATEGORIES", web_omits=frozenset(c.value for c in SYSTEM_EXPENSE_CATEGORIES)),

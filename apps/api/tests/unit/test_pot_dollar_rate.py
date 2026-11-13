@@ -184,6 +184,7 @@ class TestUnitsAreIssuedAtThePotsRate:
         _holdings(monkeypatch, {5: [_investment(1, "USD")]}, {1: _snapshot(1, "1000", "USD"), 12: _snapshot(12, "600000", "ARS")})
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(pot, ANA_SEAT)))
         monkeypatch.setattr(pot_service.pot_repository, "lock", AsyncMock())
+        monkeypatch.setattr(pot_ownership_service.group_repository, "get_member", AsyncMock(return_value=ANA_SEAT))
         holding = _investment(12, "ARS", pot_id=None, user_id=ANA.id)
         monkeypatch.setattr(pot_service, "require_contributable_holding", AsyncMock(return_value=holding))
         monkeypatch.setattr(pot_service, "attach_holding", AsyncMock())
@@ -447,6 +448,16 @@ class TestTheOwnersAgree:
         pot = _pot()
         pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, LEFT_SEAT.id, [LEFT_SEAT.id]
         self._wire(monkeypatch, pot, _units((101, "50"), (104, "50")), [BRUNO_SEAT, LEFT_SEAT])
+        await pot_service.withdraw_dollar_rate(AsyncMock(), 5, BRUNO)
+        assert pot.dollar_rate_proposal is None
+
+    @pytest.mark.asyncio
+    async def test_a_proposal_whose_proposer_deleted_their_account_can_be_withdrawn_by_an_owner(self, monkeypatch):
+        # The seat stays active but has no account behind it, so its proposer can never withdraw it
+        # either — the same stale proposal as one whose proposer left.
+        pot = _pot()
+        pot.dollar_rate_proposal, pot.dollar_rate_proposed_by, pot.dollar_rate_agreed_by = DollarRate.blue, NAME_ONLY_SEAT.id, [NAME_ONLY_SEAT.id]
+        self._wire(monkeypatch, pot, _units((101, "50"), (103, "50")), [BRUNO_SEAT, NAME_ONLY_SEAT])
         await pot_service.withdraw_dollar_rate(AsyncMock(), 5, BRUNO)
         assert pot.dollar_rate_proposal is None
 

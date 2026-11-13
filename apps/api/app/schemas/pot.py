@@ -22,7 +22,10 @@ class PotCreate(RequestBase):
     visibility: PotVisibility = Field(
         default=PotVisibility.members, description="Who sees it by default: every member, or only those granted access."
     )
-    dollar_rate: DollarRate = Field(default=DollarRate.mep, description="The USD/ARS rate every member values the pot at: oficial, mep or blue.")
+    dollar_rate: DollarRate | None = Field(
+        default=None,
+        description="The USD/ARS rate every member values the pot at: oficial, mep or blue. Defaults to the rate its group settles at.",
+    )
 
     _validate_currency = field_validator("base_currency")(validate_supported_currency)
 

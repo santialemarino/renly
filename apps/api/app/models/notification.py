@@ -40,6 +40,7 @@ class NotificationEvent(StrEnum):
     pot_movement = "pot_movement"
     settle_confirmed = "settle_confirmed"
     settle_marked_paid = "settle_marked_paid"
+    settle_rate_changed = "settle_rate_changed"
     shared_expense_added = "shared_expense_added"
     shared_income_added = "shared_income_added"
     snapshot_due = "snapshot_due"

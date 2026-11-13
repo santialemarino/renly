@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.exchange_rate import DollarRate
 from app.models.group import GroupKind, GroupMemberRole
 from app.schemas.base import RequestBase
 
@@ -18,6 +19,7 @@ class GroupCreate(RequestBase):
         description="How the creator is shown in the group. Defaults to their account name.",
         max_length=255,
     )
+    dollar_rate: DollarRate = Field(default=DollarRate.mep, description="The USD/ARS rate every member settles up at: oficial, mep or blue.")
 
 
 # Body for PUT /groups/{id}. Partial update; only provided fields are updated. Admin only.

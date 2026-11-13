@@ -308,6 +308,32 @@ describe('resolving one entry', () => {
     ]);
   });
 
+  it("names a step of the group's dollar rate, and keeps the old settings sentence for entries without one", () => {
+    // The settings entry carried no variant before the group had a rate, and those rows are permanent.
+    const step = activityRow(
+      entry({
+        entityType: 'group_money_settings',
+        action: 'updated',
+        payload: { variant: 'dollar_rate_proposed', from_rate: 'mep', to_rate: 'oficial' },
+      }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(step.textKey).toBe('group_money_settings.updated.dollar_rate_proposed');
+    const older = activityRow(
+      entry({ entityType: 'group_money_settings', action: 'updated', payload: {} }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(older.textKey).toBe('group_money_settings.updated.base');
+    const agreed = activityRow(
+      entry({ entityType: 'group_money_settings', action: 'confirmed', payload: {} }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(agreed.textKey).toBe('group_money_settings.confirmed');
+  });
+
   it('formats the amount with its currency code', () => {
     // Every currency a group has used sits side by side and unconverted in one trail, so a bare figure
     // leaves the reader to guess which one it is.

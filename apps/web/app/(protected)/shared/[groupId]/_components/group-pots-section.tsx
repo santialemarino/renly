@@ -25,12 +25,16 @@ import { StatList } from '@/components/stat-list';
 import { HELP_ANCHORS, sharedPotPath, sharedSharePath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
+import type { SharedDollarRate } from '@/lib/constants/dollar-rates';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { potLabel } from '@/lib/pots';
 
 interface GroupPotsSectionProps {
   group: Group;
   pots: Pot[];
+  // The rate the group settles at, which a new pot starts on. Undefined when the group's settings
+  // could not be read; the form then falls back to the API's own default.
+  groupDollarRate?: SharedDollarRate;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
 }
@@ -53,6 +57,7 @@ interface GroupPotsSectionProps {
 export function GroupPotsSection({
   group,
   pots,
+  groupDollarRate,
   preferredCurrencies,
   supportedCurrencies,
 }: GroupPotsSectionProps) {
@@ -112,6 +117,7 @@ export function GroupPotsSection({
         open={createOpen}
         onOpenChange={setCreateOpen}
         groupId={group.id}
+        groupDollarRate={groupDollarRate}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}

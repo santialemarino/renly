@@ -36,12 +36,14 @@ import type { Group } from '@/lib/api/groups';
 import type { Investment } from '@/lib/api/investments';
 import type { Pot } from '@/lib/api/pots';
 import {
+  DEFAULT_SHARED_DOLLAR_RATE,
+  SHARED_DOLLAR_RATES,
+  type SharedDollarRate,
+} from '@/lib/constants/dollar-rates';
+import {
   DEFAULT_POT_CADENCE,
-  DEFAULT_POT_DOLLAR_RATE,
-  POT_DOLLAR_RATES,
   POT_PERCENTAGE_TOTAL,
   POT_VISIBILITIES,
-  type PotDollarRate,
   type PotVisibility,
 } from '@/lib/constants/pots';
 import { usePendingRouter } from '@/lib/hooks/use-pending-router';
@@ -61,6 +63,8 @@ interface ShareWizardProps {
   entryStage: SharePotStage;
   privateAccounts: Account[];
   privateInvestments: Investment[];
+  // The rate the group settles at, which the new pot starts on. Undefined when it could not be read.
+  groupDollarRate?: SharedDollarRate;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   timeZone?: string;
@@ -91,6 +95,7 @@ export function ShareWizard({
   entryStage,
   privateAccounts,
   privateInvestments,
+  groupDollarRate,
   preferredCurrencies,
   supportedCurrencies,
   timeZone,
@@ -114,7 +119,9 @@ export function ShareWizard({
   const [name, setName] = useState('');
   const [baseCurrency, setBaseCurrency] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PotVisibility>('members');
-  const [dollarRate, setDollarRate] = useState<PotDollarRate>(DEFAULT_POT_DOLLAR_RATE);
+  const [dollarRate, setDollarRate] = useState<SharedDollarRate>(
+    groupDollarRate ?? DEFAULT_SHARED_DOLLAR_RATE,
+  );
   const [pending, setPending] = useState(false);
   const [sharesAttempted, setSharesAttempted] = useState(false);
   const [valuePrefilled, setValuePrefilled] = useState(pot?.nav !== null && pot?.nav !== undefined);
@@ -485,8 +492,8 @@ export function ShareWizard({
                 <FormCombobox
                   id={`${fieldId}-dollar-rate`}
                   value={dollarRate}
-                  onValueChange={(value) => setDollarRate(value as PotDollarRate)}
-                  options={POT_DOLLAR_RATES.map((option) => ({
+                  onValueChange={(value) => setDollarRate(value as SharedDollarRate)}
+                  options={SHARED_DOLLAR_RATES.map((option) => ({
                     value: option,
                     label: t(`pots.dollarRate.options.${option}`),
                   }))}

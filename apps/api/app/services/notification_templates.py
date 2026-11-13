@@ -304,6 +304,42 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{creditor} wrote off what you owed",
         },
+        "settle_rate_changed.dollar_rate_proposed_to_you": {
+            "subject": "{actor} proposed a new dollar rate for {group}",
+            "body": (
+                '{actor} proposed settling up at a different dollar rate in the group "{group}". '
+                "Nothing changes until every member agrees, and yours is one of the agreements it waits for.\n\n"
+                "See it and agree here:\n{link}"
+            ),
+            "push": "{actor} proposed a new dollar rate for {group}",
+        },
+        "settle_rate_changed.dollar_rate_applied_from_you": {
+            "subject": "Everyone agreed to your new dollar rate for {group}",
+            "body": (
+                'Every member of the group "{group}" agreed to the dollar rate you proposed. '
+                "Payments settle at it from now on; what was already recorded stays as it was.\n\n"
+                "See the group's balances here:\n{link}"
+            ),
+            "push": "Everyone agreed to your new dollar rate for {group}",
+        },
+        "settle_rate_changed.dollar_rate_applied_to_you": {
+            "subject": "{group} now settles at the dollar rate {actor} proposed",
+            "body": (
+                'Every member of the group "{group}" agreed to the dollar rate {actor} proposed. '
+                "Payments settle at it from now on; what was already recorded stays as it was.\n\n"
+                "See the group's balances here:\n{link}"
+            ),
+            "push": "{group} now settles at the dollar rate {actor} proposed",
+        },
+        "settle_rate_changed.dollar_rate_withdrawn_to_you": {
+            "subject": "{actor} withdrew the new dollar rate for {group}",
+            "body": (
+                '{actor} withdrew the proposed change of dollar rate for the group "{group}". '
+                "There is nothing left to agree to, and the group keeps the rate it had.\n\n"
+                "See the group's balances here:\n{link}"
+            ),
+            "push": "{actor} withdrew the new dollar rate for {group}",
+        },
         "shared_expense_added": {
             "subject": "{actor} added a shared expense to {group}",
             "body": ('{actor} added a shared expense of {amount} {currency} to the group "{group}".\n\nSee it and your share here:\n{link}'),
@@ -628,6 +664,42 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "Podés ver los saldos del grupo acá:\n{link}"
             ),
             "push": "{creditor} dio por perdido lo que le debías",
+        },
+        "settle_rate_changed.dollar_rate_proposed_to_you": {
+            "subject": "{actor} propuso un nuevo tipo de dólar para {group}",
+            "body": (
+                '{actor} propuso saldar a otro tipo de dólar en el grupo "{group}". '
+                "No cambia nada hasta que lo acepten todos los miembros, y tu aceptación es una de las que espera.\n\n"
+                "Podés verlo y aceptarlo acá:\n{link}"
+            ),
+            "push": "{actor} propuso un nuevo tipo de dólar para {group}",
+        },
+        "settle_rate_changed.dollar_rate_applied_from_you": {
+            "subject": "Todos aceptaron tu nuevo tipo de dólar para {group}",
+            "body": (
+                'Todos los miembros del grupo "{group}" aceptaron el tipo de dólar que propusiste. '
+                "Los pagos se saldan a ese tipo desde ahora; lo ya registrado queda como estaba.\n\n"
+                "Podés ver los saldos del grupo acá:\n{link}"
+            ),
+            "push": "Todos aceptaron tu nuevo tipo de dólar para {group}",
+        },
+        "settle_rate_changed.dollar_rate_applied_to_you": {
+            "subject": "{group} ahora salda al tipo de dólar que propuso {actor}",
+            "body": (
+                'Todos los miembros del grupo "{group}" aceptaron el tipo de dólar que propuso {actor}. '
+                "Los pagos se saldan a ese tipo desde ahora; lo ya registrado queda como estaba.\n\n"
+                "Podés ver los saldos del grupo acá:\n{link}"
+            ),
+            "push": "{group} ahora salda al tipo de dólar que propuso {actor}",
+        },
+        "settle_rate_changed.dollar_rate_withdrawn_to_you": {
+            "subject": "{actor} retiró el nuevo tipo de dólar para {group}",
+            "body": (
+                '{actor} retiró el cambio de tipo de dólar propuesto para el grupo "{group}". '
+                "No queda nada por aceptar, y el grupo conserva el tipo que tenía.\n\n"
+                "Podés ver los saldos del grupo acá:\n{link}"
+            ),
+            "push": "{actor} retiró el nuevo tipo de dólar para {group}",
         },
         "shared_expense_added": {
             "subject": "{actor} agregó un gasto compartido a {group}",

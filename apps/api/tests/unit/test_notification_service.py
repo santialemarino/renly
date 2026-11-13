@@ -23,7 +23,8 @@ from app.services import notification_service as svc
 USER = User(id=1, name="Santi", email="santi@test.local", password_hash="x", session_epoch=0)
 OTHER = User(id=2, name="Ana", email="ana@test.local", password_hash="x", session_epoch=0)
 
-# The six events that reach a person outside the app out of the box, per §7's decision plus PR 16's.
+# The seven events that reach a person outside the app out of the box. `settle_rate_changed` joined
+# them with the group's dollar rate: a proposal waits on the reader's own agreement.
 # Restated here as a literal rather than imported from the domain, so a change to the shipped behaviour
 # has to be made twice on purpose instead of once by accident.
 #
@@ -36,6 +37,7 @@ _OUTSIDE_APP = {
     NotificationEvent.ownership_changed,
     NotificationEvent.settle_confirmed,
     NotificationEvent.settle_marked_paid,
+    NotificationEvent.settle_rate_changed,
     NotificationEvent.snapshot_due,
 }
 

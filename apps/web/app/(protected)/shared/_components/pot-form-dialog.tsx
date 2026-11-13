@@ -22,12 +22,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { FormCombobox } from '@/components/form-combobox';
 import type { Pot } from '@/lib/api/pots';
 import {
-  DEFAULT_POT_CADENCE,
-  DEFAULT_POT_DOLLAR_RATE,
-  POT_CADENCES,
-  POT_DOLLAR_RATES,
-  POT_VISIBILITIES,
-} from '@/lib/constants/pots';
+  DEFAULT_SHARED_DOLLAR_RATE,
+  SHARED_DOLLAR_RATES,
+  type SharedDollarRate,
+} from '@/lib/constants/dollar-rates';
+import { DEFAULT_POT_CADENCE, POT_CADENCES, POT_VISIBILITIES } from '@/lib/constants/pots';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface PotFormDialogProps {
@@ -35,6 +34,9 @@ interface PotFormDialogProps {
   onOpenChange: (open: boolean) => void;
   groupId: number;
   pot?: Pot;
+  // The rate the group settles at: a new pot starts on it, so what the pot is worth and what the
+  // members owe each other convert alike until somebody chooses otherwise.
+  groupDollarRate?: SharedDollarRate;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   onSuccess: () => void;
@@ -54,6 +56,7 @@ export function PotFormDialog({
   onOpenChange,
   groupId,
   pot,
+  groupDollarRate,
   preferredCurrencies,
   supportedCurrencies,
   onSuccess,
@@ -70,7 +73,7 @@ export function PotFormDialog({
       baseCurrency: '',
       snapshotCadence: DEFAULT_POT_CADENCE,
       visibility: 'members',
-      dollarRate: DEFAULT_POT_DOLLAR_RATE,
+      dollarRate: groupDollarRate ?? DEFAULT_SHARED_DOLLAR_RATE,
     },
   });
 
@@ -86,7 +89,7 @@ export function PotFormDialog({
       baseCurrency: p?.baseCurrency ?? '',
       snapshotCadence: p?.snapshotCadence ?? DEFAULT_POT_CADENCE,
       visibility: p?.visibility ?? 'members',
-      dollarRate: p?.dollarRate ?? DEFAULT_POT_DOLLAR_RATE,
+      dollarRate: p?.dollarRate ?? groupDollarRate ?? DEFAULT_SHARED_DOLLAR_RATE,
     }),
     onSuccess,
   });
@@ -103,7 +106,7 @@ export function PotFormDialog({
     label: t(`pots.visibility.${visibility}`),
   }));
 
-  const dollarRateOptions = POT_DOLLAR_RATES.map((rate) => ({
+  const dollarRateOptions = SHARED_DOLLAR_RATES.map((rate) => ({
     value: rate,
     label: t(`pots.dollarRate.options.${rate}`),
   }));
