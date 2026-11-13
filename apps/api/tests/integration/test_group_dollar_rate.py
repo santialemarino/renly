@@ -3,8 +3,6 @@ import os
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
 # A group's dollar rate and the pot-owner removal guard, run through the real services on the
 # RESTRICTED role with a real user context — the shape a request has.
@@ -15,10 +13,15 @@ from sqlalchemy.orm import sessionmaker
 # request, and that only works if it is written before their seat goes inactive. And the removal guard
 # reads pot ledgers an admin may not be allowed to see: a pot hidden from the remover still holds the
 # removed member's units, which only the privileged session can count.
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
 from app.db import set_session_user
 from app.domain import GroupDollarRateAlreadyAgreedError, GroupMemberOwnsPotError
 from app.models.exchange_rate import DollarRate
 from app.models.user import User
+from app.repositories import group_repository, pot_repository
 from app.services import group_money_service, group_service
 
 APP_URL = os.getenv("RLS_TEST_DATABASE_URL")
@@ -219,3 +222,37 @@ class TestAPotOwnerCannotLeaveTheirShareBehind:
             set_session_user(s, seeded["users"]["admin"])
             await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "admin"))
         assert await _is_active(seeded, "owner") is False
+
+
+class TestARemovalAndALedgerWriteCannotInterleave:
+    # The window between counting a seat's units and deactivating it. Every ledger write takes its
+    # group's lock before its pot's (pot_repository.lock), and a removal holds the group's lock while it
+    # counts — so whichever comes second waits. Proved by holding one side open and watching the other
+    # time out on the lock rather than slip through.
+
+    @pytest.mark.asyncio
+    async def test_a_ledger_write_waits_for_a_removal_holding_the_group(self, seeded):
+        async with seeded["app"]() as removal, seeded["app"]() as writer:
+            set_session_user(removal, seeded["users"]["admin"])
+            set_session_user(writer, seeded["users"]["owner"])
+            await group_repository.lock(removal, seeded["group"])
+            await writer.execute(text("SET LOCAL lock_timeout = '300ms'"))
+            with pytest.raises(DBAPIError, match="lock timeout"):
+                await pot_repository.lock(writer, seeded["pot"])
+            await writer.rollback()
+            await removal.rollback()
+
+    @pytest.mark.asyncio
+    async def test_a_removal_waits_for_a_ledger_write_in_flight(self, seeded):
+        await _buy_out_owner(seeded)
+        async with seeded["app"]() as writer, seeded["app"]() as s, seeded["admin"]() as admin_session:
+            set_session_user(writer, seeded["users"]["third"])
+            set_session_user(s, seeded["users"]["admin"])
+            # A contribution for the owner, between its lock and its commit.
+            await pot_repository.lock(writer, seeded["pot"])
+            await s.execute(text("SET LOCAL lock_timeout = '300ms'"))
+            with pytest.raises(DBAPIError, match="lock timeout"):
+                await group_service.remove_member(s, admin_session, seeded["group"], seeded["seats"]["owner"], _user(seeded, "admin"))
+            await s.rollback()
+            await writer.rollback()
+        assert await _is_active(seeded, "owner") is True

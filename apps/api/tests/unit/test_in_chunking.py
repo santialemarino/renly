@@ -105,6 +105,7 @@ BOUNDED = {
     "group_invite_repository.list_by_groups": _OWN_GROUPS,
     "group_money_settings_repository.get_by_group_ids": _OWN_GROUPS,
     "group_repository.delete_by_ids": _ONE_ENTITY,
+    "group_repository.lock_many": _OWN_GROUPS,
     "group_settlement_repository.group_ids_with_settlements": _OWN_GROUPS,
     "group_settlement_repository.linked_account_ids": _OWN_ROWS,
     "group_settlement_repository.list_movements_by_groups": _OWN_GROUPS,

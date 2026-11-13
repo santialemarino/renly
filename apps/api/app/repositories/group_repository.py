@@ -71,10 +71,19 @@ async def delete(session: AsyncSession, group: Group) -> None:
 # nothing against the balances — an overpayment is legal and simply flips the bucket.
 #
 # RLS applies, and it is `groups_member_isolation`'s USING that governs a locking read, so any active
-# member may take it. Nothing in the app locks a group AND a pot in the same transaction, which is what
-# keeps the two lock orders from ever meeting.
+# member may take it. When a transaction holds both a group and one of its pots, the group always comes
+# first: pot_repository.lock takes the group before the pot, which is what keeps the two lock orders from
+# ever meeting — and what makes this lock serialise a member's removal against every ledger write.
 async def lock(session: AsyncSession, group_id: int) -> None:
     await session.execute(select(Group.id).where(Group.id == group_id).with_for_update())
+
+
+# The same lock on several groups at once, in id order, so two callers locking overlapping sets cannot
+# deadlock against each other.
+async def lock_many(session: AsyncSession, group_ids: list[int]) -> None:
+    if not group_ids:
+        return
+    await session.execute(select(Group.id).where(Group.id.in_(group_ids)).order_by(Group.id).with_for_update())
 
 
 # Ids of the groups that become unreachable once this user's account is gone: groups they hold a seat
@@ -210,6 +219,7 @@ class GroupRepository:
     list_orphaned_group_ids = staticmethod(list_orphaned_group_ids)
     list_visible = staticmethod(list_visible)
     lock = staticmethod(lock)
+    lock_many = staticmethod(lock_many)
     save = staticmethod(save)
     save_member = staticmethod(save_member)
 

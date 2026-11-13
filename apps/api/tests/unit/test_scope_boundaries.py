@@ -335,10 +335,19 @@ class TestAccountDeletionAcrossTheBoundary:
         units_guard = AsyncMock(side_effect=lambda *a, **k: calls.append("units-guard"))
         monkeypatch.setattr(svc.pot_service, "ensure_no_units", units_guard)
         settle_rate = AsyncMock(side_effect=lambda *a, **k: calls.append("settle-rate"))
+        lock_groups = AsyncMock(side_effect=lambda *a, **k: calls.append("lock-groups"))
+        monkeypatch.setattr(svc.group_repository, "lock_many", lock_groups)
         monkeypatch.setattr(svc.group_money_service, "settle_dollar_rate_proposal", settle_rate)
 
         user = User(id=1, name="S", email="u@test", password_hash="x", session_epoch=0)
-        await svc.delete_account(AsyncMock(), AsyncMock(), user, "pw", "u@test")
+        session = AsyncMock()
+        await svc.delete_account(session, AsyncMock(), user, "pw", "u@test")
+
+        # The surviving groups are locked BEFORE their seats are checked, and on the account's own
+        # session — the one whose transaction ends with the deletion — so no ledger write can hand the
+        # seat units between the check and the moment it loses its account.
+        assert lock_groups.await_args.args == (session, [11])
+        assert calls.index("lock-groups") < calls.index("units-guard"), calls
 
         # No pot share may be left on a seat that is about to lose its account: the same surviving
         # seats, refused before the account goes.

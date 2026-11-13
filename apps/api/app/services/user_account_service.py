@@ -104,6 +104,11 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     surviving_seats = [
         seat for seat in await group_repository.list_active_members(admin_session, user.id) if seat.group_id not in set(orphan_group_ids)
     ]
+    # The surviving groups are locked on the account's OWN session, and held until its deletion commits
+    # below: every ledger write takes its group's lock before its pot's (pot_repository.lock), so none
+    # can hand these seats new units between the check that follows and the moment they lose their
+    # account. Taken on that session because it is the one whose transaction ends with the deletion.
+    await group_repository.lock_many(session, sorted({seat.group_id for seat in surviving_seats}))
     await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
     # And no pot share left behind in a surviving group. Deleting the account turns the seat into a
     # name-only placeholder, which no change of split or of a pot's dollar rate waits for — so the other
@@ -127,8 +132,10 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # on can apply it by agreeing (the backstop in agree_dollar_rate).
     for group_id in sorted({seat.group_id for seat in surviving_seats}):
         try:
-            await group_money_service.settle_dollar_rate_proposal(admin_session, group_id, None)
+            applied = await group_money_service.settle_dollar_rate_proposal(admin_session, group_id, None)
             await admin_session.commit()
+            if applied is not None:
+                await group_money_service.announce_dollar_rate_applied(applied)
         except Exception:
             logger.exception("Settling the dollar-rate proposal of group %s after an account deletion failed.", group_id)
             await admin_session.rollback()
