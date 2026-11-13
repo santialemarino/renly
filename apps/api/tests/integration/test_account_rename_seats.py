@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 # tests/unit/test_profile_update.py.
 from app.db import set_session_user
 from app.models.user import User
-from app.services import shared_audit_service, user_account_service
+from app.services import auth_service, shared_audit_service, user_account_service
 
 APP_URL = os.getenv("RLS_TEST_DATABASE_URL")
 ADMIN_URL = os.getenv("RLS_TEST_ADMIN_DATABASE_URL")
@@ -290,3 +290,50 @@ class TestRaces:
             assert await rename == 1
         names = await _names(seeded)
         assert (names["account"], names["mine"], names["shared"]) == ("Santiago", "Santiago", "Santi")
+
+    @pytest.mark.asyncio
+    async def test_deleting_the_account_while_it_is_renamed_does_not_deadlock(self, seeded, monkeypatch):
+        # The deletion's cascade writes EVERY active seat of the account, including those in the groups
+        # that go with it ("mine" and "nickname" here, where nobody else is), and the rename locks those
+        # same seats before the user row. A deletion holding only the surviving seats met the rename the
+        # other way round: the rename held "mine" and waited on "shared", the cascade waited on "mine".
+        password = "a long enough password 1"
+        async with seeded["admin"]() as s:
+            await s.execute(
+                text("UPDATE users SET password_hash = :h WHERE id = :u"),
+                {"h": await auth_service.hash_password(password), "u": seeded["users"]["me"]},
+            )
+            await s.commit()
+
+        # Holds the deletion between taking its locks and deleting the account, so the rename starts in
+        # between, every time.
+        checked = user_account_service.group_settlement_service.ensure_no_outstanding_balance
+
+        async def check_then_pause(session, seats):
+            await checked(session, seats)
+            await asyncio.sleep(1.5)
+
+        monkeypatch.setattr(user_account_service.group_settlement_service, "ensure_no_outstanding_balance", check_then_pause)
+
+        async def delete() -> None:
+            async with seeded["app"]() as s, seeded["admin"]() as admin_session:
+                user = await _request(seeded, s, "me")
+                await user_account_service.delete_account(s, admin_session, user, password, _EMAILS["me"])
+
+        deletion = asyncio.create_task(delete())
+        await asyncio.sleep(0.5)
+        rename = asyncio.create_task(_rename(seeded, "Santiago"))
+        await asyncio.sleep(0.3)
+        # Waiting on the seats the deletion holds, before it has taken anything of its own.
+        assert not rename.done()
+        await deletion
+        # The account is gone by the time the rename gets its locks, so it has nothing left to rename and
+        # fails on that — but not on a deadlock, which is what either side got before.
+        outcome = (await asyncio.gather(rename, return_exceptions=True))[0]
+        assert "deadlock" not in str(outcome).lower()
+        async with seeded["admin"]() as s:
+            gone = await _scalar(s, "SELECT count(*) FROM users WHERE id = :u", u=seeded["users"]["me"])
+            renamed = await _scalar(
+                s, "SELECT count(*) FROM group_members WHERE id = ANY(:ids) AND display_name = 'Santiago'", ids=list(seeded["seats"].values())
+            )
+        assert (gone, renamed) == (0, 0)

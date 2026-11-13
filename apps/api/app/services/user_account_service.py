@@ -161,6 +161,20 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     if confirmation.strip().lower() != user.email.lower():
         raise InvalidCredentialsError("Confirmation does not match your email.")
     email = user.email
+    # Every ACTIVE seat the account holds is locked first, on the account's OWN session, and held until
+    # its deletion commits below — in the groups that survive it AND in the ones that go with it. The
+    # deletion's cascade (`user_id` SET NULL) writes every one of those seats, so each must be held
+    # before the user row is touched: a rename of this account takes the same seats first and the user
+    # row after (update_profile), and a deletion holding only some of them met it the other way round —
+    # the rename holding a seat in a dying group, waiting on a surviving one, while the cascade waited on
+    # the dying one. Taken in id order, as every seat lock is (group_repository, "The row-lock order").
+    # It also stops every ledger write that hands a seat units (they take that seat's lock after their
+    # pot's, group_repository.lock_members) between the checks below and the moment the seats lose their
+    # account; one that waited then finds them gone. The seats only, no group lock.
+    # Read on the privileged session because everything else in this flow is; the account still exists,
+    # so the request session would see the same rows.
+    active_seats = await group_repository.list_active_members(admin_session, user.id)
+    await group_repository.lock_members(session, [seat.id for seat in active_seats])
     # Resolved BEFORE the account goes: once the user row is deleted their seats read user_id NULL, and
     # "was this the group's only account-holder" stops being answerable.
     orphan_group_ids = await group_repository.list_orphaned_group_ids(admin_session, user.id)
@@ -180,18 +194,7 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # A surviving group is the case that matters — deleting the account would revert the seat to a
     # name-only placeholder while the person on the other side still holds a real claim against it, and
     # no settlement could ever clear it. Settle or write it off first.
-    # Runs on the privileged session because the user's own seats are being read while their account is
-    # still present, and because everything else in this flow already does.
-    surviving_seats = [
-        seat for seat in await group_repository.list_active_members(admin_session, user.id) if seat.group_id not in set(orphan_group_ids)
-    ]
-    # The surviving seats are locked on the account's OWN session, and held until its deletion commits
-    # below: every ledger write that hands a seat units takes that seat's lock after its pot's
-    # (group_repository.lock_members), so none can hand these seats units between the check that
-    # follows and the moment they lose their account — and one that waited then finds them gone. Taken
-    # on that session because it is the one whose transaction ends with the deletion. The seats only, no
-    # group lock: see group_repository ("The row-lock order") for why that keeps the order.
-    await group_repository.lock_members(session, [seat.id for seat in surviving_seats])
+    surviving_seats = [seat for seat in active_seats if seat.group_id not in set(orphan_group_ids)]
     await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
     # And no pot share left behind in a surviving group. Deleting the account turns the seat into a
     # name-only placeholder, which no change of split or of a pot's dollar rate waits for — so the other

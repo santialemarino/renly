@@ -76,11 +76,12 @@ async def delete(session: AsyncSession, group: Group) -> None:
 # holding a pot and a seat can still insert its audit row naming the group while somebody holds the
 # group. The seat's exclusive lock is FOR UPDATE, which they DO wait for, so a settlement or a shared
 # expense naming a seat that is going waits for it to go — and then finds what it did. Removing a
-# member takes the group THEN the seat; account deletion takes the seats only (it decides nothing from
-# a group's balances under the group's lock, and holding a seat it never waits on anything after it).
-# Renaming the account into its seats takes the seats and then the user row (user_repository.lock), the
-# order account deletion meets them in; no group lock, because a seat's name decides nothing from a
-# balance and moves no money.
+# member takes the group THEN the seat. Account deletion takes EVERY active seat of the account (in the
+# groups that outlive it and the ones that go with it) and only then the user row, which its delete
+# locks and whose cascade writes those same seats; it takes no group lock, deciding nothing from a
+# group's balances under one. Renaming the account into its seats takes the same two in the same order,
+# the seats and then the user row (user_repository.lock), and no group lock either, because a seat's
+# name decides nothing from a balance and moves no money.
 #
 # Takes a row lock on the group for the rest of the transaction, so two writers cannot derive the same
 # balances and both act on them.
