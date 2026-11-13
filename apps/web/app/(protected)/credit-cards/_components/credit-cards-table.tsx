@@ -59,8 +59,12 @@ import { useFormatters } from '@/lib/i18n/formatters';
  */
 const WIDE_ONLY = 'hidden md:table-cell';
 
+interface CardBalancesProps {
+  card: CreditCard;
+}
+
 // A card's balance, one line per currency bucket: in its own column from `md` up, under the name below.
-function CardBalances({ card }: { card: CreditCard }) {
+function CardBalances({ card }: CardBalancesProps) {
   const fmt = useFormatters();
   return (
     <div className="flex flex-col gap-y-0.5 text-paragraph-sm tabular-nums">
