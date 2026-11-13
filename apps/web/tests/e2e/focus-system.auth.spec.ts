@@ -394,6 +394,9 @@ test.describe('every kind of ✕ shows a ring and a bump on keyboard focus (sign
     expect(
       await control.locator('svg').evaluate((element) => getComputedStyle(element).animationName),
     ).toBe('focus-bump');
+    // Let the control's own transitions (a hint's opacity, a panel still sliding in) come to rest
+    // before the ring is read; one can be cancelled mid-way, so wait for none to be running.
+    await expect.poll(() => ringOn.evaluate((element) => element.getAnimations().length)).toBe(0);
     expectRingContrast(await measureRing(ringOn));
   }
 
@@ -408,13 +411,20 @@ test.describe('every kind of ✕ shows a ring and a bump on keyboard focus (sign
     await expectCloseFocus(page, close);
   });
 
-  test('surface: the phone nav sheet’s ✕', async ({ page }) => {
+  // The nav sheet hides its ✕ (the sidebar closes on navigation); the notification panel is the sheet
+  // whose ✕ shows.
+  test('surface: the phone notification panel’s ✕', async ({ page }) => {
     await page.setViewportSize(PHONE);
     await page.goto(EXPENSES);
+    // Below `md` the bell lives in the nav sheet.
     const hamburger = page.locator('[data-sidebar="trigger"]');
     await waitForHydration(hamburger);
     await hamburger.click();
-    const close = page.getByRole('dialog').locator('[data-close-kind="surface"]');
+    // Opened from the keyboard, so the focus the panel moves inside it is a keyboard focus.
+    const bell = page.getByTestId('notification-bell');
+    await bell.focus();
+    await page.keyboard.press('Enter');
+    const close = page.getByTestId('notification-panel').locator('[data-close-kind="surface"]');
     await expect(close).toBeVisible();
     await expectCloseFocus(page, close);
   });

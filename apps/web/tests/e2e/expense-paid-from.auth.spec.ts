@@ -100,7 +100,7 @@ test.describe('an expense’s "Paid from" follows its payment method (signed in)
     await pick(page, method, 'Debit');
     await expect(paidFrom).not.toContainText(marker);
 
-    await page.keyboard.press('Escape');
+    await dialog.locator('[data-slot="dialog-close"]').click();
     await expect(dialog).toHaveCount(0);
   }
 
