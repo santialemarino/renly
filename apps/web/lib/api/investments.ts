@@ -22,6 +22,7 @@ interface InvestmentRaw {
   notes: string | null;
   is_active: boolean;
   has_snapshots: boolean;
+  has_transactions?: boolean;
   scope: string;
   pot_id: number | null;
   created_at: string;
@@ -49,6 +50,8 @@ export interface Investment {
   notes: string | null;
   isActive: boolean;
   hasSnapshots: boolean;
+  // With `hasSnapshots`, whether the investment has history: one with history can only be archived.
+  hasTransactions: boolean;
   // 'shared' when a pot the caller co-owns holds it. `potId` joins the row to its section, which is
   // where the pot's label and the caller's write access are stated — once, not per row.
   scope: 'private' | 'shared';
@@ -95,6 +98,7 @@ function mapInvestment(raw: InvestmentRaw): Investment {
     notes: raw.notes,
     isActive: raw.is_active,
     hasSnapshots: raw.has_snapshots,
+    hasTransactions: raw.has_transactions === true,
     scope: raw.scope === 'shared' ? 'shared' : 'private',
     potId: raw.pot_id,
     createdAt: raw.created_at,

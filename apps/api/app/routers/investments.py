@@ -102,6 +102,17 @@ async def update_investment(
     return await investment_service.build_response(session, investment)
 
 
+# Deletes an investment with no snapshots and no transactions. Returns 204; 409 when it has history
+# (archive it instead), 404 if not found.
+@router.delete("/{investment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_investment(
+    investment_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> None:
+    await investment_service.delete_investment(session, investment_id, current_user)
+
+
 # Archives an investment (sets is_active = false). Returns 204.
 @router.patch("/{investment_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
 async def archive_investment(

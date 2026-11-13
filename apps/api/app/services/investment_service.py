@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CurrencyChangeBlockedError, InvestmentCurrencyMismatchError, NotFoundError
+from app.domain import CurrencyChangeBlockedError, InvestmentCurrencyMismatchError, InvestmentHasHistoryError, NotFoundError
 from app.domain.list_scope import SCOPE_PRIVATE, SCOPE_SHARED, ListScope, build_sections
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
@@ -23,11 +23,12 @@ from app.services.utils import pot_sections
 from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 
-# Assembles InvestmentResponse, enriching it with collection info and snapshot presence.
+# Assembles InvestmentResponse, enriching it with collection info and snapshot and transaction presence.
 def _build_response(
     inv: Investment,
     collections_map: dict[int, list[tuple[int, str]]],
     snapshots_set: set[int],
+    transactions_set: set[int],
 ) -> InvestmentResponse:
     collections = [InvestmentCollectionInfo(id=cid, name=cname) for cid, cname in collections_map.get(inv.id or 0, [])]
     return InvestmentResponse(
@@ -40,6 +41,7 @@ def _build_response(
         notes=inv.notes,
         is_active=inv.is_active,
         has_snapshots=(inv.id or 0) in snapshots_set,
+        has_transactions=(inv.id or 0) in transactions_set,
         scope=SCOPE_PRIVATE if inv.pot_id is None else SCOPE_SHARED,
         pot_id=inv.pot_id,
         created_at=inv.created_at,
@@ -54,18 +56,19 @@ def _build_response(
 async def _load_response_context(
     session: AsyncSession,
     investment_ids: list[int],
-) -> tuple[dict[int, list[tuple[int, str]]], set[int]]:
+) -> tuple[dict[int, list[tuple[int, str]]], set[int], set[int]]:
     collections_map = await investment_repository.get_collections_by_investment_ids(session, investment_ids)
     snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, investment_ids)
-    return collections_map, snapshots_set
+    transactions_set = await transaction_repository.get_ids_with_transactions(session, investment_ids)
+    return collections_map, snapshots_set, transactions_set
 
 
 # Assembles the response for a single investment. An unpersisted model queries no ids at all rather
 # than id 0, which would match a different row.
 async def build_response(session: AsyncSession, investment: Investment) -> InvestmentResponse:
     inv_ids = [investment.id] if investment.id is not None else []
-    collections_map, snapshots_set = await _load_response_context(session, inv_ids)
-    return _build_response(investment, collections_map, snapshots_set)
+    collections_map, snapshots_set, transactions_set = await _load_response_context(session, inv_ids)
+    return _build_response(investment, collections_map, snapshots_set, transactions_set)
 
 
 # Lists investments for the user with filters and pagination. Returns InvestmentListResponse.
@@ -123,9 +126,9 @@ async def list_investments(
         counts = await investment_repository.count_by_scope(session, user.id, pot_ids, **filters)
         sections = pot_sections(build_sections(counts), scopes)
     inv_ids = [inv.id for inv in items if inv.id is not None]
-    collections_map, snapshots_set = await _load_response_context(session, inv_ids)
+    collections_map, snapshots_set, transactions_set = await _load_response_context(session, inv_ids)
     return InvestmentListResponse(
-        items=[_build_response(inv, collections_map, snapshots_set) for inv in items],
+        items=[_build_response(inv, collections_map, snapshots_set, transactions_set) for inv in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -220,6 +223,23 @@ async def update_investment(
     await session.commit()
     await session.refresh(inv)
     return inv
+
+
+# Deletes an investment that has no history: no snapshot and no transaction. One with history is only
+# ever archived (InvestmentHasHistoryError), since returns, the net-worth series and the dashboards are
+# built from it. Collection memberships go with the row.
+async def delete_investment(
+    session: AsyncSession,
+    investment_id: int,
+    user: User,
+) -> None:
+    inv = await get_investment(session, investment_id, user)
+    if await snapshot_repository.has_snapshots(session, investment_id):
+        raise InvestmentHasHistoryError()
+    if await transaction_repository.get_ids_with_transactions(session, [investment_id]):
+        raise InvestmentHasHistoryError()
+    await investment_repository.delete(session, inv)
+    await session.commit()
 
 
 # Archives an investment (sets is_active = False).

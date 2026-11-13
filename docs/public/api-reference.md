@@ -101,17 +101,18 @@ Registration requires a valid email address and a password of at least 12 charac
 
 ## Investments
 
-| Method  | Path                            | Description                                                                            |
-| ------- | ------------------------------- | -------------------------------------------------------------------------------------- |
-| `GET`   | `/investments`                  | List investments with filtering, search, and pagination.                               |
-| `POST`  | `/investments`                  | Create a new investment.                                                               |
-| `GET`   | `/investments/{id}`             | Get a single investment by ID.                                                         |
-| `PUT`   | `/investments/{id}`             | Update an investment. Only provided fields are changed.                                |
-| `PATCH` | `/investments/{id}/archive`     | Archive an investment (hides it from the active portfolio).                            |
-| `PATCH` | `/investments/{id}/unarchive`   | Restore an archived investment.                                                        |
-| `PUT`   | `/investments/{id}/collections` | Replace collection membership for this investment. Body: `{ collection_ids: [1, 3] }`. |
+| Method   | Path                            | Description                                                                                                                       |
+| -------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/investments`                  | List investments with filtering, search, and pagination.                                                                          |
+| `POST`   | `/investments`                  | Create a new investment.                                                                                                          |
+| `GET`    | `/investments/{id}`             | Get a single investment by ID.                                                                                                    |
+| `PUT`    | `/investments/{id}`             | Update an investment. Only provided fields are changed.                                                                           |
+| `DELETE` | `/investments/{id}`             | Delete an investment with no snapshots and no transactions. `409` (`investment_has_history`) when it has any: archive it instead. |
+| `PATCH`  | `/investments/{id}/archive`     | Archive an investment (hides it from the active portfolio).                                                                       |
+| `PATCH`  | `/investments/{id}/unarchive`   | Restore an archived investment.                                                                                                   |
+| `PUT`    | `/investments/{id}/collections` | Replace collection membership for this investment. Body: `{ collection_ids: [1, 3] }`.                                            |
 
-Every investment response — list, get-by-id, create and update — carries its `collections` as `{ id, name }` objects, plus `has_snapshots`.
+Every investment response — list, get-by-id, create and update — carries its `collections` as `{ id, name }` objects, plus `has_snapshots` and `has_transactions` (together they say whether it can be deleted or only archived).
 
 **List query parameters:**
 

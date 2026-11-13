@@ -1710,12 +1710,15 @@
       "emptyTitle": "Start building your portfolio",
       "emptyDescription": "Add an investment — stocks, crypto, funds, real estate — to track its value, returns, and allocation over time.",
       "total": "{total, plural, one {# investment} other {# investments}}",
-      "sectionCount": "{count, plural, one {# holding} other {# holdings}}"
+      "sectionCount": "{count, plural, one {# holding} other {# holdings}}",
+      "archived": "Archived"
     },
     "actions": {
       "edit": "Edit",
       "archive": "Archive",
-      "unarchive": "Unarchive"
+      "unarchive": "Unarchive",
+      "delete": "Delete",
+      "archiveOnly": "Archive (it has snapshots or transactions, so it can't be deleted)"
     },
     "form": {
       "titleCreate": "Add investment",
@@ -1780,10 +1783,19 @@
         "loading": "Archiving..."
       },
       "success": "Investment archived.",
-      "error": "Failed to archive investment."
+      "error": "Failed to archive investment.",
+      "historyNote": "It has snapshots or transactions, so it can be archived but not deleted. Archiving keeps its history and takes it out of the active portfolio."
     },
     "unarchiveSuccess": "Investment unarchived.",
-    "unarchiveError": "Failed to unarchive investment."
+    "unarchiveError": "Failed to unarchive investment.",
+    "delete": {
+      "title": "Delete investment",
+      "confirm": "Are you sure you want to delete \"{name}\"? It has no snapshots or transactions, and it will be removed from its collections.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Investment deleted.",
+      "error": "Failed to delete investment."
+    }
   },
   "collections": {
     "metadata": {
@@ -4324,6 +4336,7 @@
     "invalid_refresh_token": "Your session has expired. Please log in again.",
     "invalid_token": "This link is invalid or has expired. Please request a new one.",
     "investment_currency_mismatch": "Currency {row_currency} doesn't match the investment's base currency ({base_currency}).",
+    "investment_has_history": "This investment has snapshots or transactions, so it can only be archived.",
     "invite_email_taken": "An account with this email already exists.",
     "mutually_exclusive_link": "Link the expense to exactly one plan.",
     "not_found": "The requested item could not be found.",

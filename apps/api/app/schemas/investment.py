@@ -60,6 +60,9 @@ class InvestmentResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     is_active: bool = Field(description="Whether included in portfolio.")
     has_snapshots: bool = Field(description="Whether the investment has any snapshots. Used to lock currency changes.")
+    has_transactions: bool = Field(
+        default=False, description="Whether the investment has any transactions; with has_snapshots, whether it may be deleted."
+    )
     scope: str = Field(default="private", description="'private' when the caller owns it, 'shared' when a pot they co-own does.")
     pot_id: int | None = Field(
         default=None,

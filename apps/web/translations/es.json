@@ -1710,12 +1710,15 @@
       "emptyTitle": "Empezá a armar tu cartera de inversiones",
       "emptyDescription": "Agregá una inversión — acciones, cripto, fondos, inmuebles — para seguir su valor, rendimiento y asignación en el tiempo.",
       "total": "{total, plural, one {# inversión} other {# inversiones}}",
-      "sectionCount": "{count, plural, one {# tenencia} other {# tenencias}}"
+      "sectionCount": "{count, plural, one {# tenencia} other {# tenencias}}",
+      "archived": "Archivada"
     },
     "actions": {
       "edit": "Editar",
       "archive": "Archivar",
-      "unarchive": "Desarchivar"
+      "unarchive": "Desarchivar",
+      "delete": "Eliminar",
+      "archiveOnly": "Archivar (tiene snapshots o transacciones, así que no se puede eliminar)"
     },
     "form": {
       "titleCreate": "Agregar inversión",
@@ -1780,10 +1783,19 @@
         "loading": "Archivando..."
       },
       "success": "Inversión archivada.",
-      "error": "No se pudo archivar la inversión."
+      "error": "No se pudo archivar la inversión.",
+      "historyNote": "Tiene snapshots o transacciones, así que se puede archivar pero no eliminar. Archivarla conserva su historial y la saca del portfolio activo."
     },
     "unarchiveSuccess": "Inversión desarchivada.",
-    "unarchiveError": "No se pudo desarchivar la inversión."
+    "unarchiveError": "No se pudo desarchivar la inversión.",
+    "delete": {
+      "title": "Eliminar inversión",
+      "confirm": "¿Seguro querés eliminar \"{name}\"? No tiene snapshots ni transacciones, y se quitará de sus colecciones.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Inversión eliminada.",
+      "error": "No se pudo eliminar la inversión."
+    }
   },
   "collections": {
     "metadata": {
@@ -4324,6 +4336,7 @@
     "invalid_refresh_token": "Tu sesión expiró. Iniciá sesión de nuevo.",
     "invalid_token": "Este enlace no es válido o expiró. Pedí uno nuevo.",
     "investment_currency_mismatch": "La moneda {row_currency} no coincide con la moneda base de la inversión ({base_currency}).",
+    "investment_has_history": "Esta inversión tiene snapshots o transacciones, así que solo se puede archivar.",
     "invite_email_taken": "Ya existe una cuenta con este correo.",
     "mutually_exclusive_link": "Asociá el gasto a exactamente un plan.",
     "not_found": "No se encontró el elemento solicitado.",

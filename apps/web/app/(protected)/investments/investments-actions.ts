@@ -2,6 +2,7 @@
 
 import type { InvestmentFormValues } from '@/app/(protected)/investments/investments-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 export async function createInvestment(values: InvestmentFormValues): Promise<void> {
   const { collectionIds, baseCurrency, ...rest } = values;
@@ -24,6 +25,20 @@ export async function updateInvestment(id: number, values: InvestmentFormValues)
   });
   if (!res.ok) throw new Error('Failed to update investment');
   await setInvestmentCollections(id, collectionIds ?? []);
+}
+
+export type DeleteInvestmentResult = { ok: true } | { ok: false; conflictDetail: string };
+
+// Deletes an investment with no history. One with snapshots or transactions comes back as a refusal
+// whose localized detail the dialog shows, rather than as a thrown error.
+export async function deleteInvestment(id: number): Promise<DeleteInvestmentResult> {
+  const res = await authenticatedFetch(`/investments/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to delete investment');
+  }
+  return { ok: true };
 }
 
 export async function archiveInvestment(id: number): Promise<void> {

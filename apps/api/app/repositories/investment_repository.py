@@ -271,6 +271,11 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     session.add(investment)
 
 
+# Deletes an investment. Its collection memberships go with it (ON DELETE CASCADE).
+async def delete(session: AsyncSession, investment: Investment) -> None:
+    await session.delete(investment)
+
+
 # Moves investments between scopes, returning how many moved. `pot_id=None` moves them back to the
 # caller as private, which is the only direction that needs a user id.
 #
@@ -316,6 +321,7 @@ class InvestmentRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     count_by_scope = staticmethod(count_by_scope)
+    delete = staticmethod(delete)
     exists_active_by_user = staticmethod(exists_active_by_user)
     exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
