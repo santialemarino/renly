@@ -1647,7 +1647,8 @@
       "byCollection": "Por colección",
       "unassigned": "Sin colección",
       "overAllocated": "Sobre el objetivo",
-      "underAllocated": "Bajo el objetivo"
+      "underAllocated": "Bajo el objetivo",
+      "overlapNote": "Una inversión puede estar en más de una colección."
     },
     "investmentsTable": {
       "title": "Inversiones",
@@ -1655,7 +1656,7 @@
       "value": "Valor",
       "invested": "Invertido",
       "gain": "Ganancia",
-      "monthChange": "Mes",
+      "monthChange": "Este mes",
       "hideInactive": "Ocultar inactivas"
     },
     "toolbar": {
