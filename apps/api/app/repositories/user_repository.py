@@ -56,6 +56,18 @@ async def delete(session: AsyncSession, user: User) -> None:
     await session.delete(user)
 
 
+# Takes a row lock on the user for the rest of the transaction and re-reads the row into the copy the
+# session already holds. The caller's copy was loaded when the request authenticated, before any lock,
+# so a rename that committed since would otherwise be invisible to it.
+#
+# FOR NO KEY UPDATE (`key_share=True`), the lock a name change takes anyway: a row that merely
+# references the user (an audit entry naming its actor) goes in without waiting for it. Account
+# deletion's FOR UPDATE still waits, and the seats come before this lock on every path that takes both
+# (see group_repository, "The row-lock order").
+async def lock(session: AsyncSession, user_id: int) -> None:
+    await session.execute(select(User).where(User.id == user_id).with_for_update(key_share=True).execution_options(populate_existing=True))
+
+
 # Namespace to call repository functions (e.g. user_repository.get_by_email).
 class UserRepository:
     create = staticmethod(create)
@@ -64,6 +76,7 @@ class UserRepository:
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     list_admins = staticmethod(list_admins)
+    lock = staticmethod(lock)
     save = staticmethod(save)
 
 
