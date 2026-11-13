@@ -158,6 +158,20 @@ async def get_investment(
     return inv
 
 
+# Fetches an investment the caller may CHANGE: their own private one, or a co-owned one whose pot granted
+# them write access (PotWriteRequiredError otherwise). Reading is not enough — RLS would let the write
+# through as zero rows, so a delete answered 204 having done nothing and an archive failed with a 500.
+async def get_writable_investment(
+    session: AsyncSession,
+    investment_id: int,
+    user: User,
+) -> Investment:
+    inv = await get_investment(session, investment_id, user)
+    if inv.pot_id is not None:
+        await pot_service.require_writable(session, inv.pot_id, user)
+    return inv
+
+
 # Creates a new investment for the user.
 async def create_investment(
     session: AsyncSession,
@@ -200,7 +214,7 @@ async def update_investment(
     notes: str | None = None,
     is_active: bool | None = None,
 ) -> Investment:
-    inv = await get_investment(session, investment_id, user)
+    inv = await get_writable_investment(session, investment_id, user)
     # Prevent currency change when snapshots exist — would corrupt stored values.
     if base_currency is not None and base_currency != inv.base_currency:
         if await snapshot_repository.has_snapshots(session, investment_id):
@@ -228,12 +242,16 @@ async def update_investment(
 # Deletes an investment that has no history: no snapshot and no transaction. One with history is only
 # ever archived (InvestmentHasHistoryError), since returns, the net-worth series and the dashboards are
 # built from it. Collection memberships go with the row.
+#
+# The row is locked BEFORE the history is read: snapshots and transactions cascade with the investment,
+# so a snapshot committed between an unlocked check and the DELETE would be removed with it, silently.
 async def delete_investment(
     session: AsyncSession,
     investment_id: int,
     user: User,
 ) -> None:
-    inv = await get_investment(session, investment_id, user)
+    inv = await get_writable_investment(session, investment_id, user)
+    await investment_repository.lock(session, investment_id)
     if await snapshot_repository.has_snapshots(session, investment_id):
         raise InvestmentHasHistoryError()
     if await transaction_repository.get_ids_with_transactions(session, [investment_id]):
