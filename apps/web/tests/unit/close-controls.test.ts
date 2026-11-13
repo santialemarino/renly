@@ -17,6 +17,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const WEB = join(here, '..', '..');
 const REPO = join(WEB, '..', '..');
 
+// Every .tsx under `root`, skipping dependencies, build output and dot-folders.
 function readSources(root: string): [string, string][] {
   const out: [string, string][] = [];
   const walk = (dir: string) => {
@@ -29,6 +30,22 @@ function readSources(root: string): [string, string][] {
   };
   walk(root);
   return out;
+}
+
+/*
+ * The local names a file gives lucide's ✕ (`X`, `XIcon`), aliases included: `import { X as Close }`
+ * renders `<Close />`, which a search for `<X` would never see.
+ */
+function lucideXNames(source: string): string[] {
+  return [
+    ...source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]lucide-react['"]/g),
+  ].flatMap(([, specifiers = '']) =>
+    specifiers
+      .split(',')
+      .map((specifier) => specifier.trim().split(/\s+as\s+/))
+      .filter(([imported]) => imported === 'X' || imported === 'XIcon')
+      .map(([imported, local]) => local ?? imported ?? ''),
+  );
 }
 
 // Each JSX opening tag matching `start`, up to its closing `>` (brace depth tracked for `=>` in props).
@@ -45,16 +62,29 @@ function openingTags(source: string, start: RegExp): string[] {
   });
 }
 
+/*
+ * The whole web app (not only `app/` and `components/`: a ✕ in `lib/` or a new top-level folder renders
+ * just the same) and `packages/ui/src`. The tests themselves are left out — they render nothing.
+ */
 const SOURCES = [
-  ...readSources(join(WEB, 'app')),
-  ...readSources(join(WEB, 'components')),
+  ...readSources(WEB).filter(([path]) => !path.startsWith(join('apps', 'web', 'tests'))),
   ...readSources(join(REPO, 'packages', 'ui', 'src')),
 ];
 const KINDS = Object.keys(CLOSE_CONTROL);
-const LUCIDE_X = /import\s*\{[^}]*\b(X|XIcon)\b[^}]*\}\s*from\s*'lucide-react'/;
+// A JSX element or an `icon={…}` prop rendering one of these names.
+const tagOf = (names: string[]) => new RegExp(`<(?:${names.join('|')})\\b`, 'g');
+const iconPropOf = (names: string[]) => new RegExp(`icon=\\{(?:${names.join('|')})\\}`, 'g');
 
 describe('every ✕ is one of the close-control kinds', () => {
-  const withX = SOURCES.filter(([, source]) => LUCIDE_X.test(source));
+  const withX = SOURCES.map(
+    ([path, source]) => [path, source, lucideXNames(source)] as const,
+  ).filter(([, , names]) => names.length > 0);
+
+  it('sees a ✕ imported under another name', () => {
+    expect(lucideXNames("import { Check, X as Close } from 'lucide-react';")).toEqual(['Close']);
+    expect(lucideXNames("import {\n  XIcon,\n  Plus,\n} from 'lucide-react';")).toEqual(['XIcon']);
+    expect(lucideXNames("import { XCircle } from 'lucide-react';")).toEqual([]);
+  });
 
   it('finds the ✕s', () => {
     // Dialog, sheet, search clear, hint dismiss, chip remove, currency clear, the onboarding card's
@@ -63,8 +93,8 @@ describe('every ✕ is one of the close-control kinds', () => {
   });
 
   it('styles each rendered ✕ icon with its kind’s icon classes', () => {
-    const offenders = withX.flatMap(([path, source]) =>
-      openingTags(source, /<(?:X|XIcon)\b/g)
+    const offenders = withX.flatMap(([path, source, names]) =>
+      openingTags(source, tagOf(names))
         .filter((tag) => !/className=\{CLOSE_CONTROL\.(\w+)\.icon\}/.test(tag))
         .map((tag) => `${path}: ${tag}`),
     );
@@ -84,7 +114,7 @@ describe('every ✕ is one of the close-control kinds', () => {
     );
     // One control per rendered ✕ icon: none styled as a ✕ without saying which kind it is.
     const icons = withX.reduce(
-      (count, [, source]) => count + openingTags(source, /<(?:X|XIcon)\b/g).length,
+      (count, [, source, names]) => count + openingTags(source, tagOf(names)).length,
       0,
     );
     expect(controls).toHaveLength(icons);
@@ -101,8 +131,8 @@ describe('every ✕ is one of the close-control kinds', () => {
   it('leaves a ✕ used as a row action to the row action button', () => {
     // A row action (the group invite's revoke) is a RowActionButton like its siblings — a ghost icon
     // button with the default ring — not a close control.
-    const offenders = withX.flatMap(([path, source]) =>
-      [...source.matchAll(/icon=\{(?:X|XIcon)\}/g)]
+    const offenders = withX.flatMap(([path, source, names]) =>
+      [...source.matchAll(iconPropOf(names))]
         .filter((match) => {
           const before = source.slice(0, match.index);
           return !/<RowActionButton\b[^<]*$/.test(before);
