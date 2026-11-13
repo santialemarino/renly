@@ -23,6 +23,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import type { Group } from '@/lib/api/groups';
+import { DEFAULT_SHARED_DOLLAR_RATE, SHARED_DOLLAR_RATES } from '@/lib/constants/dollar-rates';
 import { GROUP_KINDS } from '@/lib/constants/groups';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
@@ -41,7 +42,12 @@ export function GroupFormDialog({ open, onOpenChange, group, onSuccess }: GroupF
 
   const form = useForm<GroupFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', kind: undefined, displayName: '' },
+    defaultValues: {
+      name: '',
+      kind: undefined,
+      displayName: '',
+      dollarRate: DEFAULT_SHARED_DOLLAR_RATE,
+    },
   });
 
   const isEdit = !!group;
@@ -55,6 +61,7 @@ export function GroupFormDialog({ open, onOpenChange, group, onSuccess }: GroupF
       name: g?.name ?? '',
       kind: (g?.kind ?? undefined) as GroupFormValues['kind'],
       displayName: '',
+      dollarRate: DEFAULT_SHARED_DOLLAR_RATE,
     }),
     onSuccess,
   });
@@ -62,6 +69,11 @@ export function GroupFormDialog({ open, onOpenChange, group, onSuccess }: GroupF
   const kindOptions = GROUP_KINDS.map((kind) => ({
     value: kind,
     label: tCommon(`groupKinds.${kind}`),
+  }));
+
+  const dollarRateOptions = SHARED_DOLLAR_RATES.map((rate) => ({
+    value: rate,
+    label: t(`pots.dollarRate.options.${rate}`),
   }));
 
   async function onSubmit(values: GroupFormValues) {
@@ -135,6 +147,33 @@ export function GroupFormDialog({ open, onOpenChange, group, onSuccess }: GroupF
                     <FormControl>
                       <Input {...field} placeholder={t('form.displayName.placeholder')} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Only on create, like the seat name: afterwards the rate changes by every member's
+                agreement from the group's money settings, never by whoever edits the group. */}
+            {!isEdit && (
+              <FormField
+                control={form.control}
+                name="dollarRate"
+                render={({ field }) => (
+                  <FormItem required>
+                    <FormLabel>{t('form.dollarRate.label')}</FormLabel>
+                    <FormControl>
+                      <FormCombobox
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={dollarRateOptions}
+                        placeholder={t('form.dollarRate.placeholder')}
+                        className="w-full"
+                      />
+                    </FormControl>
+                    <p className="text-paragraph-xs text-muted-foreground">
+                      {t('form.dollarRate.hint')}
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

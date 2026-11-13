@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { DollarSign } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -41,6 +42,7 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { Account } from '@/lib/api/accounts';
 import type { GroupSettlementPlan, GroupSettleSuggestion } from '@/lib/api/group-settlements';
 import type { Group } from '@/lib/api/groups';
+import type { SharedDollarRate } from '@/lib/constants/dollar-rates';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { todayInTimezone } from '@/lib/utils/dates';
 
@@ -59,6 +61,10 @@ interface SettlementFormDialogProps {
   // The caller's own accounts. The other party's are not merely absent — the row-level policies hide
   // them, which is the whole reason each side records its own leg.
   accounts: Account[];
+  // The rate the group settles at, which prices any part of the payment that spills into another
+  // currency. Null when the group's settings could not be read: the line is then left out rather than
+  // naming a rate the payment may not use.
+  dollarRate: SharedDollarRate | null;
   timeZone?: string;
   onSuccess: () => void;
 }
@@ -86,6 +92,7 @@ export function SettlementFormDialog({
   suggestion,
   currency,
   accounts,
+  dollarRate,
   timeZone,
   onSuccess,
 }: SettlementFormDialogProps) {
@@ -309,6 +316,15 @@ export function SettlementFormDialog({
                 })
               : ''}
         </DialogDescription>
+
+        {/* Said on both steps: it is the rate the plan prices other currencies' buckets at, and it is
+            the group's rather than the payer's, so either side recording the payment clears the same. */}
+        {dollarRate && (
+          <p className="flex items-center gap-x-2 text-paragraph-xs text-muted-foreground">
+            <DollarSign className="size-3.5 shrink-0" />
+            {t(`settlements.dollarRate.${dollarRate}`)}
+          </p>
+        )}
 
         {plan && (
           <SettlementPlanStep plan={plan} onToggle={onTogglePlanBucket} pending={planPending} />

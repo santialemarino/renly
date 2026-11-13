@@ -6,9 +6,15 @@ import { HandCoins, Scale, SlidersHorizontal, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Badge, Button } from '@repo/ui/components';
+import { DollarRateConsent } from '@/app/(protected)/shared/_components/dollar-rate-consent';
 import { GroupMoneySettingsDialog } from '@/app/(protected)/shared/[groupId]/_components/group-money-settings-dialog';
 import { SettlementFormDialog } from '@/app/(protected)/shared/[groupId]/_components/settlement-form-dialog';
 import { WriteOffDialog } from '@/app/(protected)/shared/[groupId]/_components/write-off-dialog';
+import {
+  agreeGroupDollarRate,
+  proposeGroupDollarRate,
+  withdrawGroupDollarRate,
+} from '@/app/(protected)/shared/settlement-actions';
 import {
   balanceMagnitude,
   balancesEmptyState,
@@ -106,6 +112,26 @@ export function GroupBalancesSection({
       </div>
 
       {/*
+       * The rate the group settles at, and the way to change it, beside the balances it converts.
+       * Every member's, not the admin's: it decides what a payment in one currency clears in another,
+       * so it changes only when every active member agrees.
+       */}
+      {moneySettings && (
+        <DollarRateConsent
+          idPrefix={`group-${group.id}`}
+          copy="moneySettings.dollarRate"
+          fieldLabel={t('form.dollarRate.label')}
+          fieldPlaceholder={t('form.dollarRate.placeholder')}
+          dollarRate={moneySettings.dollarRate}
+          proposal={moneySettings.dollarRateProposal}
+          canChange={moneySettings.canChangeDollarRate}
+          onPropose={(rate) => proposeGroupDollarRate(group.id, rate)}
+          onAgree={() => agreeGroupDollarRate(group.id)}
+          onWithdraw={() => withdrawGroupDollarRate(group.id)}
+        />
+      )}
+
+      {/*
        * Teaches what a balance IS — the counterpart of a share that already sits in your own expenses,
        * money rather than a category — and only once there is a balance for it to be about. The
        * currency rule is in the section's description instead, because that one has to be readable
@@ -166,6 +192,7 @@ export function GroupBalancesSection({
         suggestion={settling?.suggestion}
         currency={settling?.currency ?? ''}
         accounts={accounts}
+        dollarRate={moneySettings?.dollarRate ?? null}
         timeZone={timeZone}
         onSuccess={refresh}
       />

@@ -4,6 +4,7 @@ import { ShareWizard } from '@/app/(protected)/shared/[groupId]/share/_component
 import { shareWizardEntry } from '@/app/(protected)/shared/pot-rules';
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
+import { getGroupMoneySettings } from '@/lib/api/group-settlements';
 import { getGroup } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
 import { getPot, getPotHoldings, getPotOwnershipEvents } from '@/lib/api/pots';
@@ -65,6 +66,8 @@ export default async function SharePage({ params, searchParams }: SharePageProps
       // The new pot's currency picker offers only the convertible set; on a fetch error it degrades to
       // the full list and the API's 422 still guards.
       getSupportedCurrencies().catch(() => undefined),
+      // The rate the group settles at, which a new pot starts on; unreadable falls back to the default.
+      getGroupMoneySettings(id).catch(() => null),
     ]),
   );
   // The pot this run fills, when it is filling one.
@@ -77,7 +80,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
 
   const group = await groupRead;
   if (!group) notFound();
-  const [accounts, investments, settings, supportedCurrencies] = await listsRead;
+  const [accounts, investments, settings, supportedCurrencies, moneySettings] = await listsRead;
 
   if (potReads === null) {
     // Nothing to fill yet, so this run has to create it — which the API allows group admins only.
@@ -90,6 +93,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
         entryStage={shareWizardEntry(null)}
         privateAccounts={accounts}
         privateInvestments={investments.items}
+        groupDollarRate={moneySettings?.dollarRate}
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
         supportedCurrencies={supportedCurrencies}
         timeZone={settings?.timezone ?? undefined}

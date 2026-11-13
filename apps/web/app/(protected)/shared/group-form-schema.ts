@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { GROUP_NAME_MAX } from '@/lib/constants/api-constants';
+import { SHARED_DOLLAR_RATES } from '@/lib/constants/dollar-rates';
 import { EMAIL_REGEX } from '@/lib/constants/form';
 import { GROUP_KINDS, GROUP_ROLES } from '@/lib/constants/groups';
 
@@ -10,6 +11,9 @@ export function buildGroupFormSchema(requiredMsg: string) {
     kind: z.enum(GROUP_KINDS, { message: requiredMsg }),
     // How the creator is shown in the group; blank falls back to their account name server-side.
     displayName: z.string().max(GROUP_NAME_MAX).optional(),
+    // The rate everyone in the group settles at. Sent on create only: changing it afterwards takes
+    // every member's agreement, through the group's money settings.
+    dollarRate: z.enum(SHARED_DOLLAR_RATES, { message: requiredMsg }),
   });
 }
 
