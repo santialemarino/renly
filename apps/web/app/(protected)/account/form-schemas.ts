@@ -39,6 +39,8 @@ export const changeNameSchema = (t: ReturnType<typeof useTranslations>, tooLongM
       .trim()
       .min(1, { message: t('form.errors.required') })
       .max(NAME_MAX_LENGTH, { message: tooLongMsg }),
+    // Only on screen while the name differs and some group still uses it, so it may be absent.
+    renameGroupSeats: z.boolean().optional(),
   });
 
 export type ChangeNameData = z.infer<ReturnType<typeof changeNameSchema>>;

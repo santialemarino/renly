@@ -7,7 +7,7 @@ import { AccountLegalSection } from '@/app/(protected)/account/_components/accou
 import { ChangeEmailSection } from '@/app/(protected)/account/_components/change-email-section';
 import { ChangeNameSection } from '@/app/(protected)/account/_components/change-name-section';
 import { ChangePasswordSection } from '@/app/(protected)/account/_components/change-password-section';
-import { getCurrentUser } from '@/lib/api/me';
+import { getCurrentUser, getGroupsUsingAccountName } from '@/lib/api/me';
 import { getSession } from '@/lib/auth';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -17,8 +17,13 @@ export async function generateMetadata() {
 
 export default async function AccountPage() {
   const t = await getTranslations('account');
-  // The name is read fresh from the API: the session holds the one from sign-in.
-  const [session, user] = await Promise.all([getSession(), getCurrentUser().catch(() => null)]);
+  // The name is read fresh from the API: the session holds the one from sign-in. The groups that would
+  // follow a rename come with it; without them the rename is offered for the account alone.
+  const [session, user, groupsUsingName] = await Promise.all([
+    getSession(),
+    getCurrentUser().catch(() => null),
+    getGroupsUsingAccountName().catch(() => []),
+  ]);
   const email = session?.user?.email ?? '';
 
   return (
@@ -27,7 +32,7 @@ export default async function AccountPage() {
       <div className="flex flex-col w-full max-w-2xl gap-y-8">
         {user && (
           <>
-            <ChangeNameSection currentName={user.name} />
+            <ChangeNameSection currentName={user.name} groupsUsingName={groupsUsingName} />
             <Separator />
           </>
         )}

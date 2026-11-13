@@ -80,6 +80,7 @@ export const ACTIVITY_VARIANTS = {
   'account_reconciliation.created': ['matched', 'surplus', 'shortfall'],
   'account_reconciliation.deleted': ['matched', 'surplus', 'shortfall'],
   'group_member.removed': ['self', 'by_admin'],
+  'group_member.updated': ['account_name'],
   'group_money_settings.updated': ['dollar_rate', 'dollar_rate_proposed', 'dollar_rate_withdrawn'],
   'ownership_event.created': ['opening', 'contribution', 'withdrawal', 'reagreement'],
   'ownership_event.deleted': ['opening', 'contribution', 'withdrawal', 'reagreement'],

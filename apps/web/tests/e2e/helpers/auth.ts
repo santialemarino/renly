@@ -52,3 +52,28 @@ export function e2eAdminCredentials(): E2ECredentials | null {
   if (!email || !password) return null;
   return { email, password };
 }
+
+/*
+ * The RENAME session, a third saved state. The account-name spec renames its account, and PATCH /me
+ * allows five renames an hour, counted in the API's memory per account: on the harness account a CI
+ * retry could run past that, and a refused restore would leave the account every other spec reads
+ * renamed. Its own account takes both risks off the harness. It signs in once in globalSetup like the
+ * other two, so no spec spends a login on it.
+ */
+export const RENAME_AUTH_STATE_PATH = join(
+  import.meta.dirname,
+  '../.auth/rename-storage-state.json',
+);
+
+/*
+ * The rename account, from E2E_RENAME_EMAIL / E2E_RENAME_PASSWORD, or null when either is unset — the
+ * same gating as the admin one: unset, the account-name spec skips (a local run); CI sets both.
+ */
+export function e2eRenameCredentials(): E2ECredentials | null {
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  const email = process.env.E2E_RENAME_EMAIL;
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  const password = process.env.E2E_RENAME_PASSWORD;
+  if (!email || !password) return null;
+  return { email, password };
+}

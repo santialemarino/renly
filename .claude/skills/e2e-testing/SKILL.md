@@ -224,6 +224,14 @@ not-found page fails setup by name). A spec that needs it loads it with
 `e2eAdminCredentials()` is null. It is a separate account rather than the harness one made admin, so
 every other spec keeps seeing a regular user.
 
+**A third saved session, for the spec that renames its account.** With `E2E_RENAME_EMAIL` /
+`E2E_RENAME_PASSWORD` set, globalSetup signs that account in too and saves
+`tests/e2e/.auth/rename-storage-state.json` (`RENAME_AUTH_STATE_PATH`); `account-name.auth.spec.ts`
+loads it and skips when `e2eRenameCredentials()` is null. `PATCH /me` allows five renames an hour per
+account, counted in the API's memory, so the spec makes ONE rename an attempt, never restores it, and
+runs on an account nothing else reads: a retry can then neither hit the limit nor leave the harness
+account renamed.
+
 Login flow tests are the exception to reusing the state — they exercise the UI auth path.
 
 ### Seed data
@@ -506,6 +514,7 @@ web sources), as `ci-web` does.
    it to this step.** The same step registers the ADMIN account (`E2E_ADMIN_EMAIL`, per-run
    `E2E_ADMIN_PASSWORD`), verifies it and sets `is_admin` in SQL, and inserts one feedback row per
    category so `/admin/feedback` renders its table; the signup invite it seeds is what `/admin` lists.
+   It also registers and verifies the RENAME account (`E2E_RENAME_EMAIL`, per-run `E2E_RENAME_PASSWORD`).
 5. **Readiness** is `/health` on the API and `/api/auth/providers` on the web, both 200. Locally,
    `globalSetup` makes the same check first and fails at once with "start the web and API servers"
    when either is not running (a port that refuses the connection); a server that is up but slow — a

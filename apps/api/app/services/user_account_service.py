@@ -7,10 +7,12 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import InvalidCredentialsError, PasswordBreachedError
+from app.models.group import Group, GroupMember
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import export_repository, group_repository, invite_repository, user_repository
-from app.services import auth_service, group_money_service, group_settlement_service, pot_service
+from app.services import auth_service, group_money_service, group_settlement_service, pot_service, shared_audit_service
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +30,83 @@ async def change_password(session: AsyncSession, user: User, current_password: s
     await session.commit()
 
 
-# Renames the user. Read live wherever the account name shows (the account page, group invites, the
-# data export), so nothing else is rewritten. A group seat's display name is the group's own and stays.
-async def update_profile(session: AsyncSession, user: User, name: str) -> User:
+# Whether a seat still carries the account's name: the same text after the trimming every name gets on
+# the way in (RequestBase strips both), compared exactly.
+#   * Case-sensitive, because a seat reading "SANTI" beside an account called "Santi" was most likely
+#     spelled that way on purpose, by the user or by whoever named the seat.
+#   * Not Unicode-normalised, matching how both names are stored: neither is NFC-folded nor stripped of
+#     invisible characters anywhere. The seat this looks for started as a copy of the account name
+#     (creating a group seats its creator under it), so it is equal already; a lookalike in another
+#     normal form, or with a zero-width character in it, was typed separately and is left alone.
+def _carries_account_name(seat: GroupMember, account_name: str) -> bool:
+    return seat.display_name.strip() == account_name.strip()
+
+
+# The groups where the user's seat still carries their account name — what renaming the account with
+# `rename_group_seats` would rename. Active seats only: a former member's seat is in a group they can no
+# longer see, and its name is the group's record of them. Read on the request session, where the
+# membership policy already limits the rows to groups the user is in. Sorted by group name.
+async def list_groups_using_account_name(session: AsyncSession, user: User) -> list[Group]:
+    seats = [seat for seat in await group_repository.list_active_members(session, user.id) if _carries_account_name(seat, user.name)]
+    groups = await group_repository.get_by_ids(session, [seat.group_id for seat in seats])
+    return sorted(groups, key=lambda group: (group.name.casefold(), group.id))
+
+
+# Renames the user, and with `rename_group_seats` also every seat of theirs that still carries the OLD
+# name, in one transaction. Returns the user and how many seats were renamed.
+#
+# The account name is read live wherever it shows (the account page, group invites, the export), so
+# nothing else follows it. A seat's display name is the group's own, which is why following it is
+# opt-in, and limited to the seats nobody renamed: a nickname, a name an admin chose, or a placeholder
+# name the seat had before the account claimed it all stay. Past notifications keep the name they were
+# sent with.
+#
+# The seats are locked before anything is decided (group_repository, "The row-lock order": the seats,
+# then the user row). Both locks re-read their rows, so the match is made against what is committed
+# now rather than what the request loaded:
+#   * an admin renaming one of these seats at the same moment either commits first — the seat no longer
+#     matches and keeps the admin's name — or waits for this rename and then applies theirs on top;
+#   * two renames of the same account serialise, and the second matches against the name the first
+#     left, so the seats never stop agreeing with the account they followed.
+# Nothing can collide: a seat's name is not unique in its group (an admin can already give two members
+# the same one) and shares the account name's 255-character limit, so every seat that matches is renamed.
+# The flag is ignored when the name does not change. Any failure rolls back everything, the account
+# name included: the request either did what the user asked or nothing.
+#
+# Each renamed seat leaves an entry in its group's activity feed, as an admin's rename does; nobody is
+# notified.
+async def update_profile(session: AsyncSession, user: User, name: str, *, rename_group_seats: bool = False) -> tuple[User, int]:
+    renamed: list[GroupMember] = []
+    if rename_group_seats:
+        seats = await group_repository.list_active_members(session, user.id)
+        await group_repository.lock_members(session, [seat.id for seat in seats])
+        await user_repository.lock(session, user.id)
+        if name != user.name:
+            # `is_active` is read again here, after the lock, on purpose: a removal or a leave that
+            # committed while this waited has deactivated the seat, and the membership policy now hides it
+            # from this session's UPDATE, which would fail on a row that silently matched nothing. The
+            # list above was read before the wait, so it cannot have known.
+            renamed = [seat for seat in seats if seat.is_active and _carries_account_name(seat, user.name)]
+    for seat in renamed:
+        # The entry names both names: the feed reads its actor from the live roster, which by then says
+        # the new one, so the old one would otherwise be lost from the sentence.
+        previous = seat.display_name
+        seat.display_name = name
+        await group_repository.save_member(session, seat)
+        await shared_audit_service.record(
+            session,
+            group_id=seat.group_id,
+            actor=user,
+            entity_type=AuditEntityType.group_member,
+            action=AuditAction.updated,
+            entity_id=seat.id,
+            payload={"member": name, "from": previous, "variant": "account_name"},
+        )
     user.name = name
     await user_repository.save(session, user)
     await session.commit()
     await session.refresh(user)
-    return user
+    return user, len(renamed)
 
 
 # Starts an email change after re-verifying the current password (AUTH-8); the address only switches
@@ -90,6 +161,20 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     if confirmation.strip().lower() != user.email.lower():
         raise InvalidCredentialsError("Confirmation does not match your email.")
     email = user.email
+    # Every ACTIVE seat the account holds is locked first, on the account's OWN session, and held until
+    # its deletion commits below — in the groups that survive it AND in the ones that go with it. The
+    # deletion's cascade (`user_id` SET NULL) writes every one of those seats, so each must be held
+    # before the user row is touched: a rename of this account takes the same seats first and the user
+    # row after (update_profile), and a deletion holding only some of them met it the other way round —
+    # the rename holding a seat in a dying group, waiting on a surviving one, while the cascade waited on
+    # the dying one. Taken in id order, as every seat lock is (group_repository, "The row-lock order").
+    # It also stops every ledger write that hands a seat units (they take that seat's lock after their
+    # pot's, group_repository.lock_members) between the checks below and the moment the seats lose their
+    # account; one that waited then finds them gone. The seats only, no group lock.
+    # Read on the privileged session because everything else in this flow is; the account still exists,
+    # so the request session would see the same rows.
+    active_seats = await group_repository.list_active_members(admin_session, user.id)
+    await group_repository.lock_members(session, [seat.id for seat in active_seats])
     # Resolved BEFORE the account goes: once the user row is deleted their seats read user_id NULL, and
     # "was this the group's only account-holder" stops being answerable.
     orphan_group_ids = await group_repository.list_orphaned_group_ids(admin_session, user.id)
@@ -109,18 +194,7 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # A surviving group is the case that matters — deleting the account would revert the seat to a
     # name-only placeholder while the person on the other side still holds a real claim against it, and
     # no settlement could ever clear it. Settle or write it off first.
-    # Runs on the privileged session because the user's own seats are being read while their account is
-    # still present, and because everything else in this flow already does.
-    surviving_seats = [
-        seat for seat in await group_repository.list_active_members(admin_session, user.id) if seat.group_id not in set(orphan_group_ids)
-    ]
-    # The surviving seats are locked on the account's OWN session, and held until its deletion commits
-    # below: every ledger write that hands a seat units takes that seat's lock after its pot's
-    # (group_repository.lock_members), so none can hand these seats units between the check that
-    # follows and the moment they lose their account — and one that waited then finds them gone. Taken
-    # on that session because it is the one whose transaction ends with the deletion. The seats only, no
-    # group lock: see group_repository ("The row-lock order") for why that keeps the order.
-    await group_repository.lock_members(session, [seat.id for seat in surviving_seats])
+    surviving_seats = [seat for seat in active_seats if seat.group_id not in set(orphan_group_ids)]
     await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
     # And no pot share left behind in a surviving group. Deleting the account turns the seat into a
     # name-only placeholder, which no change of split or of a pot's dollar rate waits for — so the other

@@ -62,10 +62,12 @@ env:
   NEXTAUTH_URL: http://localhost:3000
   PLAYWRIGHT_BASE_URL: http://localhost:3000
   E2E_API_URL: http://localhost:8000
-  # Throwaway accounts that exist only inside this job's database: the harness account, and an admin
-  # one for the admin pages, which show anyone else the not-found page.
+  # Throwaway accounts that exist only inside this job's database: the harness account, an admin one
+  # for the admin pages, which show anyone else the not-found page, and one the account-name spec
+  # renames, so a retry past the rename limit can never leave the harness account renamed.
   E2E_EMAIL: e2e-ci@example.com
   E2E_ADMIN_EMAIL: e2e-ci-admin@example.com
+  E2E_RENAME_EMAIL: e2e-ci-rename@example.com
 
 jobs:
   changes:
@@ -228,14 +230,17 @@ jobs:
           secret="$(openssl rand -hex 32)"
           password="$(openssl rand -hex 16)"
           admin_password="$(openssl rand -hex 16)"
+          rename_password="$(openssl rand -hex 16)"
           echo "::add-mask::$secret"
           echo "::add-mask::$password"
           echo "::add-mask::$admin_password"
+          echo "::add-mask::$rename_password"
           {
             echo "JWT_SECRET=$secret"
             echo "NEXTAUTH_SECRET=$secret"
             echo "E2E_PASSWORD=$password"
             echo "E2E_ADMIN_PASSWORD=$admin_password"
+            echo "E2E_RENAME_PASSWORD=$rename_password"
           } >> "$GITHUB_ENV"
 
       - name: Install web dependencies
@@ -360,6 +365,13 @@ jobs:
             select id, category::feedback_category, 'E2E seeded ' || category || ' feedback'
             from users, unnest(array['bug', 'idea', 'question', 'other']) as category
             where email = '$E2E_EMAIL'"
+
+          # The rename account, for the account-name spec: registered and verified like the harness
+          # one, and given nothing else — the spec seeds the groups it needs.
+          api POST /auth/register -d "$(jq -n --arg e "$E2E_RENAME_EMAIL" --arg p "$E2E_RENAME_PASSWORD" \
+            '{name: "E2E CI rename", email: $e, password: $p, language: "en"}')" > /dev/null
+          docker exec renly-postgres psql -v ON_ERROR_STOP=1 -U renly -d renly \
+            -c "update users set email_verified_at = now() where email = '$E2E_RENAME_EMAIL'"
 
           # Notifications, so /notifications renders rows (read and unread) rather than its empty state:
           # the accessibility sweep scans the row text. Inserted directly — the API writes them only as

@@ -343,11 +343,12 @@ class TestAccountDeletionAcrossTheBoundary:
         session = AsyncMock()
         await svc.delete_account(session, AsyncMock(), user, "pw", "u@test")
 
-        # The surviving seats are locked BEFORE they are checked, and on the account's own session — the
-        # one whose transaction ends with the deletion — so no ledger write can hand a seat units between
-        # the check and the moment it loses its account.
-        assert lock_seats.await_args.args == (session, [2])
-        assert calls.index("lock-seats") < calls.index("units-guard"), calls
+        # EVERY active seat is locked first, the orphaned group's too, on the account's own session — the
+        # one whose transaction ends with the deletion. Its cascade writes all of them, so a rename that
+        # held the orphaned one would otherwise deadlock against it; and no ledger write can hand a seat
+        # units between the checks and the moment it loses its account.
+        assert lock_seats.await_args.args == (session, [1, 2])
+        assert calls.index("lock-seats") < calls.index("absorb") < calls.index("units-guard"), calls
         # And the refusal names the person's groups rather than "this member".
         assert units_guard.await_args.kwargs == {"for_account": True}
 

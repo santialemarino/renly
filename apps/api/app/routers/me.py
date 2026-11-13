@@ -5,8 +5,16 @@ from fastapi import APIRouter, Request, Response, status
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.rate_limit import CHANGE_EMAIL_LIMIT, CHANGE_NAME_LIMIT, EXPORT_LIMIT, limiter
-from app.schemas.auth import MeResponse, MessageResponse
-from app.schemas.user_account import ChangeEmailRequest, ChangePasswordRequest, DeleteAccountRequest, UpdateProfileRequest
+from app.schemas.auth import MessageResponse
+from app.schemas.user_account import (
+    ChangeEmailRequest,
+    ChangePasswordRequest,
+    DeleteAccountRequest,
+    GroupsUsingAccountNameResponse,
+    GroupUsingAccountNameResponse,
+    UpdateProfileRequest,
+    UpdateProfileResponse,
+)
 from app.services import user_account_service
 
 router = APIRouter(prefix="/me", tags=["account"])
@@ -47,21 +55,33 @@ async def export_data(request: Request, response: Response, current_user: Curren
     return data
 
 
-# Updates the current user's profile: the display name only. Returns the user as GET /auth/me does.
-# Rate-limited per user (CHANGE_NAME_LIMIT).
-@router.patch("", response_model=MeResponse)
+# Lists the groups where the user's seat is still named exactly as their account: the ones renaming the
+# account with rename_group_seats would reach. On the request session — the user's own seats, in groups
+# the membership policy already shows them.
+@router.get("/name/groups", response_model=GroupsUsingAccountNameResponse)
+async def list_groups_using_account_name(current_user: CurrentUser, session: SessionDep) -> GroupsUsingAccountNameResponse:
+    groups = await user_account_service.list_groups_using_account_name(session, current_user)
+    return GroupsUsingAccountNameResponse(groups=[GroupUsingAccountNameResponse.model_validate(group) for group in groups])
+
+
+# Updates the current user's profile: the display name, and optionally the group seats still carrying
+# the old one. Returns the user as GET /auth/me does, plus the number of seats renamed. Rate-limited per
+# user (CHANGE_NAME_LIMIT). On the request session: the seats renamed are the caller's own, in groups
+# they are an active member of, which is exactly what the membership policy lets them write.
+@router.patch("", response_model=UpdateProfileResponse)
 @limiter.limit(CHANGE_NAME_LIMIT)
 async def update_profile(
     request: Request, response: Response, body: UpdateProfileRequest, current_user: CurrentUser, session: SessionDep
-) -> MeResponse:
-    user = await user_account_service.update_profile(session, current_user, body.name)
-    return MeResponse(
+) -> UpdateProfileResponse:
+    user, seats_renamed = await user_account_service.update_profile(session, current_user, body.name, rename_group_seats=body.rename_group_seats)
+    return UpdateProfileResponse(
         uid=user.id,
         email=user.email,
         name=user.name,
         plan=user.plan,
         email_verified=user.email_verified_at is not None,
         is_admin=user.is_admin,
+        group_seats_renamed=seats_renamed,
     )
 
 

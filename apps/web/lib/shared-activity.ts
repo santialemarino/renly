@@ -103,6 +103,8 @@ export function activityRow(
       // leaves a group's default pot unnamed, and a null interpolated into copy fails by PRINTING.
       pot: text(payload, 'pot') || potFallback,
       member: text(payload, 'member'),
+      // A rename's old name. The new one is `member`; the actor is read live, so it is the new one too.
+      from: text(payload, 'from'),
       account: text(payload, 'account'),
       counterparty: text(payload, 'counterparty'),
       from_member: text(payload, 'from_member'),

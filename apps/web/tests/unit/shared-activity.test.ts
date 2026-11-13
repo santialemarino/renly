@@ -69,6 +69,7 @@ const RENDER_PARAMS = {
   member: 'Ana',
   account: 'Caja compartida',
   counterparty: 'Nico',
+  from: 'Santi',
   from_member: 'Santi',
   to_member: 'Ana',
   from_rate: 'MEP',
@@ -332,6 +333,40 @@ describe('resolving one entry', () => {
       RENDER,
     );
     expect(agreed.textKey).toBe('group_money_settings.confirmed');
+  });
+
+  it('says a member took their account name, naming the old one, which the live actor no longer shows', () => {
+    // The actor is read from the roster when the feed is read, so after the rename it already IS the
+    // new name: the sentence takes the old one from the payload.
+    const followed = activityRow(
+      entry({
+        entityType: 'group_member',
+        action: 'updated',
+        actorName: 'Santiago',
+        payload: { member: 'Santiago', from: 'Santi', variant: 'account_name' },
+      }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(followed.textKey).toBe('group_member.updated.account_name');
+    const t = {
+      en: createTranslator({ locale: 'en', messages: en, namespace: 'shared.activity.entries' }),
+      es: createTranslator({ locale: 'es', messages: es, namespace: 'shared.activity.entries' }),
+    };
+    expect(t.en('group_member.updated.account_name', followed.params)).toBe(
+      'Santiago changed their name in the group from Santi to Santiago',
+    );
+    expect(t.es('group_member.updated.account_name', followed.params)).toBe(
+      'Santiago cambió su nombre en el grupo de Santi a Santiago',
+    );
+    // Every seat update before the account rename carried no variant, and those rows are permanent.
+    const older = activityRow(
+      entry({ entityType: 'group_member', action: 'updated', payload: { member: 'Nick' } }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(older.textKey).toBe('group_member.updated.base');
+    expect(t.en('group_member.updated.base', older.params)).toBe('Santi updated Nick');
   });
 
   it('formats the amount with its currency code', () => {

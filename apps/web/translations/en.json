@@ -3106,7 +3106,10 @@
         "group_member": {
           "added": "{actor} added {member} to the group",
           "joined": "{member} joined the group",
-          "updated": "{actor} updated {member}",
+          "updated": {
+            "base": "{actor} updated {member}",
+            "account_name": "{actor} changed their name in the group from {from} to {member}"
+          },
           "removed": {
             "base": "{member} is no longer in the group",
             "self": "{member} left the group",
@@ -3799,13 +3802,19 @@
     },
     "name": {
       "title": "Name",
-      "description": "The name your account goes by. Each group names its members itself, so a group keeps the name it gave you.",
+      "description": "The name your account goes by. Each group names its members itself, so a group keeps the name it gave you unless you bring it along below.",
       "label": "Name",
+      "groups": {
+        "label": "{count, plural, one {Also use this name in my group (#)} other {Also use this name in my groups (#)}}",
+        "helper": "Only groups where you're still called {name}. Names a group chose for you stay as they are.",
+        "which": "{count, plural, one {Group: {groups}} other {Groups: {groups}}}"
+      },
       "cta": {
         "label": "Save name",
         "loading": "Saving…"
       },
       "success": "Your name has been updated.",
+      "successWithGroups": "{count, plural, =0 {Your name has been updated. None of your groups still used the old one, so they kept theirs.} one {Your name has been updated, here and in # group.} other {Your name has been updated, here and in # groups.}}",
       "errors": {
         "tooLong": "Use at most {max} characters."
       }

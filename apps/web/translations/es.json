@@ -3106,7 +3106,10 @@
         "group_member": {
           "added": "{actor} agregó a {member} al grupo",
           "joined": "{member} se unió al grupo",
-          "updated": "{actor} actualizó a {member}",
+          "updated": {
+            "base": "{actor} actualizó a {member}",
+            "account_name": "{actor} cambió su nombre en el grupo de {from} a {member}"
+          },
           "removed": {
             "base": "{member} ya no está en el grupo",
             "self": "{member} dejó el grupo",
@@ -3799,13 +3802,19 @@
     },
     "name": {
       "title": "Nombre",
-      "description": "El nombre de tu cuenta. Cada grupo nombra a sus miembros, así que un grupo mantiene el nombre que te dio.",
+      "description": "El nombre de tu cuenta. Cada grupo nombra a sus miembros, así que un grupo mantiene el nombre que te dio, salvo que lo actualices abajo.",
       "label": "Nombre",
+      "groups": {
+        "label": "{count, plural, one {Usar este nombre también en mi grupo (#)} other {Usar este nombre también en mis grupos (#)}}",
+        "helper": "Solo en los grupos donde todavía te llamás {name}. Los nombres que un grupo eligió para vos se mantienen.",
+        "which": "{count, plural, one {Grupo: {groups}} other {Grupos: {groups}}}"
+      },
       "cta": {
         "label": "Guardar nombre",
         "loading": "Guardando…"
       },
       "success": "Tu nombre se actualizó.",
+      "successWithGroups": "{count, plural, =0 {Tu nombre se actualizó. Ninguno de tus grupos usaba todavía el anterior, así que mantuvieron el suyo.} one {Tu nombre se actualizó, acá y en # grupo.} other {Tu nombre se actualizó, acá y en # grupos.}}",
       "errors": {
         "tooLong": "Usá como máximo {max} caracteres."
       }
