@@ -63,6 +63,7 @@ import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import type { EntryType } from '@/lib/constants/entries';
 import { toHandover, type ExpenseHandover } from '@/lib/entry-handover';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { methodMatchedAccountId } from '@/lib/quick-add';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
@@ -109,15 +110,6 @@ interface ExpenseFormDialogProps {
   // Values carried in from a scope swap the other way, so switching back from the shared form loses
   // nothing either. Ignored in edit mode and on the Mark-Paid path, which both seed themselves.
   prefill?: ExpenseHandover;
-  /*
-   * A funding account to open a BLANK entry on — the quick-add's "the account" pre-fill, which it only
-   * supplies when the entry's currency leaves exactly one to choose from (see soleEligibleAccountId).
-   *
-   * Separate from `prefill` and not part of it on purpose: a handover crosses the scope swap, and a
-   * private entry's account can never fund a shared one (400 private_entry_from_shared_account). Two
-   * producers writing one slot would be two things that can disagree about that.
-   */
-  prefillAccountId?: number | null;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
@@ -206,7 +198,6 @@ export function ExpenseFormDialog({
   onScopeChange,
   onEntryTypeChange,
   prefill,
-  prefillAccountId,
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
@@ -330,6 +321,11 @@ export function ExpenseFormDialog({
 
   const sortedCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), fmt.locale);
 
+  // The "Paid from" account the method-matching effect below filled in, if it is still the one shown,
+  // and whether the user has picked one themselves (None included) since the form opened.
+  const autoAccountId = useRef<number | null>(null);
+  const accountPicked = useRef(false);
+
   // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
   // cyclesToAdvance defaults to '1' only on a recurring-obligation prefill (Phase 3,
   // follow-up Item 2); stays undefined elsewhere so the action sends 1 implicitly.
@@ -380,7 +376,7 @@ export function ExpenseFormDialog({
           notes: prefill?.notes ?? '',
           paymentMethod: undefined,
           creditCardId: undefined,
-          accountId: prefillAccountId ?? undefined,
+          accountId: undefined,
           paymentObligationId: undefined,
           subscriptionId: undefined,
           installmentId: undefined,
@@ -388,7 +384,39 @@ export function ExpenseFormDialog({
         });
       }
     }
-  }, [open, expense, prefillFromObligation, prefill, prefillAccountId, form]);
+    autoAccountId.current = null;
+    accountPicked.current = false;
+  }, [open, expense, prefillFromObligation, prefill, form]);
+
+  // A change event is the user's own pick; setValue (the pre-fills, a currency clearing the field) is not.
+  useEffect(() => {
+    const subscription = form.watch((_, { name, type }) => {
+      if (name === 'accountId' && type === 'change') accountPicked.current = true;
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  /*
+   * "Paid from" on a NEW entry follows the payment method: the one active account of the type the method
+   * draws from, in the entry's currency (methodMatchedAccountId) — cash from a cash account, debit and
+   * transfer from a bank account, a card from none. Re-derived as the method and currency change, but
+   * only over a value this effect put there itself: once the user picks (None included), or a plan's
+   * funding account is copied in (prefillFundingAccount), the field is left alone. Edits and the Mark-Paid path keep what they
+   * were opened with. Every door that opens a blank expense — the quick-add and the /expenses Add
+   * button — gets this from the form itself, so they cannot drift apart.
+   */
+  useEffect(() => {
+    if (!open || expense || prefillFromObligation || accountPicked.current) return;
+    const current = form.getValues('accountId') ?? null;
+    if (current !== null && current !== autoAccountId.current) return;
+    const next = methodMatchedAccountId(
+      accounts ?? [],
+      watchedCurrency ?? '',
+      watchedPaymentMethod,
+    );
+    autoAccountId.current = next;
+    if (next !== current) form.setValue('accountId', next ?? undefined);
+  }, [open, expense, prefillFromObligation, accounts, watchedCurrency, watchedPaymentMethod, form]);
 
   // Soft confirmation when a credit-card expense uses a currency the card
   // hasn't seen before. Catches typos that would otherwise create a phantom
@@ -637,6 +665,7 @@ export function ExpenseFormDialog({
                         value={field.value || undefined}
                         onChange={field.onChange}
                         placeholder={t('form.date.placeholder')}
+                        data-testid="expense-form-date"
                       />
                     </FormControl>
                     <FormMessage />
@@ -653,6 +682,7 @@ export function ExpenseFormDialog({
                       <FormLabel>{t('form.currency.label')}</FormLabel>
                       <FormControl>
                         <CurrencyCombobox
+                          data-testid="expense-form-currency"
                           compact
                           value={field.value || null}
                           exclude={[]}

@@ -39,7 +39,7 @@ export function expenseRow(page: Page, marker: string) {
  * anywhere in the app, and returns nothing the caller has to remember — the marker is the handle.
  *
  * Only the amount and the notes are typed. Everything else the form needs is pre-filled by the
- * quick-add itself (today's date, the primary currency, the sole eligible account when there is one),
+ * quick-add itself (today's date and the primary currency; "Paid from" waits for a payment method),
  * which is precisely the behaviour worth pinning: a spec that filled every field would still pass if
  * the pre-fill stopped working.
  */

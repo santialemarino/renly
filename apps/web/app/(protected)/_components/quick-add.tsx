@@ -179,8 +179,10 @@ export function QuickAddProvider({
   const expensePrefill = draft.type === 'expense' ? draft.prefill : undefined;
   const incomePrefill = draft.type === 'income' ? draft.prefill : undefined;
   /*
-   * The account to open a PRIVATE entry on, re-derived from whatever currency the draft carries — so a
-   * swap out to the shared form and back opens on the same state the first door did.
+   * The account to open a PRIVATE income on, re-derived from whatever currency the draft carries — so a
+   * swap out to the shared form and back opens on the same state the first door did. An EXPENSE gets
+   * none from here: its "Paid from" depends on the payment method, which the form itself applies
+   * (methodMatchedAccountId), so the /expenses Add button and this door agree.
    *
    * The shared forms get no such default. Their account is one leg of a PAYER's instrument, gated on
    * the funding shape and on whose seat it is, so pre-filling it would pre-answer "who fronted this" —
@@ -192,8 +194,8 @@ export function QuickAddProvider({
    * Reads the caller's pickers, THEN opens the form — deliberately in that order, and the reason is
    * data loss rather than a flicker.
    *
-   * `prefillAccountId` is derived from the loaded accounts, and it is a dependency of the entry form's
-   * own reset effect. So a dialog opened BEFORE the read landed would reset itself the moment the
+   * `prefillAccountId` is derived from the loaded accounts, and it is a dependency of the income form's
+   * own reset effect (as the accounts are of the expense form's account pre-fill). So a dialog opened BEFORE the read landed would reset itself the moment the
    * accounts arrived — wiping whatever the user had already typed into it. Everything else about
    * opening early is merely ugly by comparison: `AccountField` renders nothing at all until it has an
    * account to offer, and `PaymentMethodFields` shows its zero-cards "Add a card" empty state, which
@@ -271,7 +273,6 @@ export function QuickAddProvider({
             onScopeChange={(scope, values) => swapTo({ type: 'expense', scope, prefill: values })}
             onEntryTypeChange={swapEntryType}
             prefill={expensePrefill}
-            prefillAccountId={prefillAccountId}
             onSuccess={() => router.refresh()}
             onLinkedPlanSave={(values, plan) =>
               setMismatch({

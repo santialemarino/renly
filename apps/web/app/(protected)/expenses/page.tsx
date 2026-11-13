@@ -16,6 +16,7 @@ import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getPageSettings, getSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
+import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 import { resolveListScope, resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -164,6 +165,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
         timeZone={settings?.timezone ?? undefined}
+        primaryCurrency={settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY}
       />
       {showSample ? (
         <SampleExpensesTable />

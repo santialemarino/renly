@@ -28,6 +28,8 @@ import type { ExpenseHandover } from '@/lib/entry-handover';
 import { useDeferredDialogSwap } from '@/lib/hooks/use-deferred-dialog-swap';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveListScope } from '@/lib/list-scope';
+import { quickAddCurrency } from '@/lib/quick-add';
+import { todayInTimezone } from '@/lib/utils/dates';
 
 interface ExpensesToolbarProps {
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
@@ -52,6 +54,9 @@ interface ExpensesToolbarProps {
    * whose stored zone is not the machine's.
    */
   timeZone?: string;
+  // The user's primary currency, which a new expense opens on (when the picker offers it), as the
+  // quick-add's does.
+  primaryCurrency: string;
 }
 
 export function ExpensesToolbar({
@@ -65,6 +70,7 @@ export function ExpensesToolbar({
   activeSubscriptions,
   activeInstallments,
   timeZone,
+  primaryCurrency,
 }: ExpensesToolbarProps) {
   const t = useTranslations('expenses');
   const router = useRouter();
@@ -103,10 +109,19 @@ export function ExpensesToolbar({
     navigate({ payment_method: method === CATEGORY_ALL ? null : method });
   }
 
-  // The Add button always starts a NEW entry, so it opens the private form carrying nothing: values
-  // left over from a previous swap must not seed it.
+  /*
+   * The Add button always starts a NEW entry, so nothing left over from a previous swap seeds it — only
+   * the two defaults the quick-add opens on too: today in the user's timezone and their primary
+   * currency. The two doors open one form, and now on one state.
+   */
   function handleAdd() {
-    start({ scope: PRIVATE_SCOPE });
+    start({
+      scope: PRIVATE_SCOPE,
+      prefill: {
+        date: todayInTimezone(timeZone),
+        currency: quickAddCurrency(primaryCurrency, supportedCurrencies),
+      },
+    });
   }
 
   /*

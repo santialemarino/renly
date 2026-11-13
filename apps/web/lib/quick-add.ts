@@ -2,6 +2,8 @@
 // reached from a client component. A type import is erased at compile time, so it carries nothing into
 // the client bundle; turning it into a value import would break the build.
 import type { Account } from '@/lib/api/accounts';
+import type { AccountType } from '@/lib/constants/accounts';
+import type { PaymentMethod } from '@/lib/constants/categories';
 
 /*
  * What the global quick-add can honestly pre-fill — §8.2 asks for "date, currency, account and scope
@@ -65,4 +67,39 @@ export function soleEligibleAccountId(accounts: Account[], currency: string): nu
     (account) => account.isActive && account.currency === currency,
   );
   return only && rest.length === 0 ? only.id : null;
+}
+
+/*
+ * The account type each payment method draws from. Cash comes out of a cash account; a debit card and a
+ * transfer move money out of a bank account. A credit-card charge has no entry here on purpose: it
+ * raises the card's balance and only draws cash later, at settlement, so it never names an account (the
+ * API refuses the pairing).
+ */
+const ACCOUNT_TYPE_BY_METHOD: Partial<Record<PaymentMethod, AccountType>> = {
+  cash: 'cash',
+  debit: 'bank',
+  transfer: 'bank',
+};
+
+/*
+ * The account an expense's "Paid from" opens on: the one active account of the type its payment method
+ * draws from, in its currency — and nothing when there is no method yet, when the method is a card, or
+ * when the type and currency leave anything other than exactly one account.
+ *
+ * The method matters as much as the currency. Pre-filling the only ARS account whatever the method put
+ * a bank account under a cash expense, which then moved the bank balance for money that left a wallet.
+ * Both the quick-add and the /expenses Add button open the same form, which applies this rule itself, so
+ * the two doors agree.
+ */
+export function methodMatchedAccountId(
+  accounts: Account[],
+  currency: string,
+  paymentMethod: PaymentMethod | undefined,
+): number | null {
+  const type = paymentMethod ? ACCOUNT_TYPE_BY_METHOD[paymentMethod] : undefined;
+  if (!type) return null;
+  return soleEligibleAccountId(
+    accounts.filter((account) => account.type === type),
+    currency,
+  );
 }
