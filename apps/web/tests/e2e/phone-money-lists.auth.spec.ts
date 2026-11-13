@@ -90,6 +90,32 @@ test.describe('money lists at a phone’s width (signed in)', () => {
       await expectFits(page, marker);
     });
 
+    /*
+     * The two tables share one phone shape: the balance under the name, in the name's own cell, with no
+     * balance column of its own. The cards table once kept a balance column beside the name while the
+     * accounts table moved it under, so the two lists read differently on the same phone.
+     */
+    test(`${label}: the balance sits under the name at 390px`, async ({ page }) => {
+      await page.setViewportSize(PHONE);
+      await page.goto(`${route}?search=${encodeURIComponent(marker)}`);
+      const row = page.getByRole('row').filter({ hasText: marker }).first();
+      await expect(row).toBeVisible();
+      const nameCell = row.locator('td').filter({ hasText: marker }).first();
+      const balance = nameCell.locator('[data-money]:visible').first();
+      await expect(balance).toBeVisible();
+      // Under the name, not beside it: the figure starts below the name's first line.
+      const [cellBox, balanceBox] = await Promise.all([
+        nameCell.boundingBox(),
+        balance.boundingBox(),
+      ]);
+      expect(balanceBox && cellBox && balanceBox.y).toBeGreaterThan((cellBox?.y ?? 0) + 8);
+      // The money in the row is the name cell's and nobody else's.
+      await expect(row.locator('[data-money]:visible')).toHaveCount(
+        await nameCell.locator('[data-money]:visible').count(),
+      );
+      await expect(page.locator('thead th:visible')).toHaveCount(3);
+    });
+
     test(`${label}: every column is back from md up`, async ({ page }) => {
       await page.setViewportSize(DESKTOP);
       await page.goto(`${route}?search=${encodeURIComponent(marker)}`);

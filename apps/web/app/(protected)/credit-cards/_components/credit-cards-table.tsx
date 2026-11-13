@@ -52,12 +52,29 @@ import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 /*
- * Columns shown from `md` up. Below it — a phone — the row keeps the name, the BALANCE and the actions,
- * the balance-first shape the other money lists have at that width, with the days and the currency
- * moved under the name, which wraps (breaking a long word if it must) rather than pushing the row
- * wider. Otherwise the table scrolled sideways at 390px with the balance off-screen.
+ * Columns shown from `md` up. Below it — a phone — the row keeps the name and the actions, with the
+ * BALANCE under the name and the days and the currency under that: the accounts table's shape at that
+ * width, so the two money lists read alike. The name wraps (breaking a long word if it must) rather
+ * than pushing the row wider. Otherwise the table scrolled sideways at 390px with the balance off-screen.
  */
 const WIDE_ONLY = 'hidden md:table-cell';
+
+// A card's balance, one line per currency bucket: in its own column from `md` up, under the name below.
+function CardBalances({ card }: { card: CreditCard }) {
+  const fmt = useFormatters();
+  return (
+    <div className="flex flex-col gap-y-0.5 text-paragraph-sm tabular-nums">
+      {card.balances.map((bucket) => (
+        <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
+          <MoneyFigure className="flex items-baseline gap-x-1.5">
+            {fmt.amount(bucket.balance, bucket.currency)}
+            <span className="text-paragraph-xs text-muted-foreground">{bucket.currency}</span>
+          </MoneyFigure>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 interface SettlementsSectionProps {
   cardId: number;
@@ -321,7 +338,6 @@ export function CreditCardsTable({
   oficialRateDate,
   firstRun,
 }: CreditCardsTableProps) {
-  const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -387,7 +403,7 @@ export function CreditCardsTable({
                 onSort={handleSortChange}
                 className={WIDE_ONLY}
               />
-              <TableHead>{t('table.balance')}</TableHead>
+              <TableHead className={WIDE_ONLY}>{t('table.balance')}</TableHead>
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>
@@ -438,28 +454,21 @@ export function CreditCardsTable({
                       </TableCell>
                       <TableCell className="whitespace-normal wrap-anywhere md:whitespace-nowrap md:wrap-normal text-paragraph-sm-medium">
                         {card.name}
-                        {/* Below `md` the day and currency columns are hidden; they ride here. */}
-                        <span className="block md:hidden text-paragraph-xs text-muted-foreground">
-                          {t('table.closingDay')} {card.closingDay} · {t('table.dueDay')}{' '}
-                          {card.dueDay} · {card.currency}
+                        {/* Below `md` the balance, day and currency columns are hidden; they ride
+                            here, the balance first, as on the accounts table. */}
+                        <span className="flex flex-col md:hidden">
+                          <CardBalances card={card} />
+                          <span className="text-paragraph-xs text-muted-foreground">
+                            {t('table.closingDay')} {card.closingDay} · {t('table.dueDay')}{' '}
+                            {card.dueDay} · {card.currency}
+                          </span>
                         </span>
                       </TableCell>
                       <TableCell className={WIDE_ONLY}>{card.closingDay}</TableCell>
                       <TableCell className={WIDE_ONLY}>{card.dueDay}</TableCell>
                       <TableCell className={WIDE_ONLY}>{card.currency}</TableCell>
-                      <TableCell className="text-paragraph-sm tabular-nums">
-                        <div className="flex flex-col gap-y-0.5">
-                          {card.balances.map((bucket) => (
-                            <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
-                              <MoneyFigure className="flex items-baseline gap-x-1.5">
-                                {fmt.amount(bucket.balance, bucket.currency)}
-                                <span className="text-paragraph-xs text-muted-foreground">
-                                  {bucket.currency}
-                                </span>
-                              </MoneyFigure>
-                            </span>
-                          ))}
-                        </div>
+                      <TableCell className={WIDE_ONLY}>
+                        <CardBalances card={card} />
                       </TableCell>
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         {!card.isActive ? (
