@@ -8,6 +8,7 @@ from app.db import get_admin_session, get_auth_session, get_session
 from app.deps.auth import get_current_user
 from app.main import create_app
 from app.models.user import User, UserPlan
+from app.rate_limit import CHANGE_NAME_LIMIT, limiter
 from app.services import user_account_service
 
 # PATCH /me renames the account: the name only, trimmed, 1 to 255 characters. It runs on the request
@@ -34,6 +35,14 @@ def _client(sessions: dict, user: User) -> TestClient:
     app.dependency_overrides[get_auth_session] = _admin_session
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app, raise_server_exceptions=False)
+
+
+# The limiter's counts are shared in memory; each test starts from zero.
+@pytest.fixture(autouse=True)
+def _reset_limiter():
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 class TestUpdateProfile:
@@ -65,3 +74,11 @@ class TestUpdateProfile:
         response = _client({}, user).patch("/me", json={"name": "Santi", "email": "other@test"})
         assert response.status_code == 200
         assert user.email == "u@test"
+
+    def test_is_rate_limited_per_user(self, monkeypatch):
+        # The same bound as the other account writes: five an hour, then 429.
+        monkeypatch.setattr(user_account_service.user_repository, "save", AsyncMock())
+        assert CHANGE_NAME_LIMIT == "5/hour"
+        client = _client({}, _user())
+        statuses = [client.patch("/me", json={"name": f"Santi {n}"}).status_code for n in range(6)]
+        assert statuses == [200] * 5 + [429]
