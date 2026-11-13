@@ -334,6 +334,35 @@ describe('resolving one entry', () => {
     expect(agreed.textKey).toBe('group_money_settings.confirmed');
   });
 
+  it('says a member took their account name, and keeps the plain sentence for older updates', () => {
+    // Every seat update before the account rename carried no variant, and those rows are permanent.
+    const followed = activityRow(
+      entry({
+        entityType: 'group_member',
+        action: 'updated',
+        payload: { member: 'Santiago', variant: 'account_name' },
+      }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(followed.textKey).toBe('group_member.updated.account_name');
+    const t = createTranslator({
+      locale: 'en',
+      messages: en,
+      namespace: 'shared.activity.entries',
+    });
+    expect(t('group_member.updated.account_name', followed.params)).toBe(
+      'Santi changed their name in the group to Santiago',
+    );
+    const older = activityRow(
+      entry({ entityType: 'group_member', action: 'updated', payload: { member: 'Nick' } }),
+      GROUP_ID,
+      RENDER,
+    );
+    expect(older.textKey).toBe('group_member.updated.base');
+    expect(t('group_member.updated.base', older.params)).toBe('Santi updated Nick');
+  });
+
   it('formats the amount with its currency code', () => {
     // Every currency a group has used sits side by side and unconverted in one trail, so a bare figure
     // leaves the reader to guess which one it is.

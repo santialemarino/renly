@@ -10,11 +10,24 @@ export interface AccountActionResult {
   message?: string;
 }
 
-// Renames the account. The API trims and bounds the name too (422 past it).
-export async function changeNameAction(name: string): Promise<AccountActionResult> {
-  const res = await authenticatedFetch('/me', { method: 'PATCH', body: { name } });
+// Result of a rename: how many group seats took the new name on success.
+export interface ChangeNameResult extends AccountActionResult {
+  groupSeatsRenamed?: number;
+}
+
+// Renames the account, and with `renameGroupSeats` the user's group seats still named as the account.
+// The API trims and bounds the name too (422 past it), and renames the seats in the same transaction.
+export async function changeNameAction(
+  name: string,
+  renameGroupSeats: boolean,
+): Promise<ChangeNameResult> {
+  const res = await authenticatedFetch('/me', {
+    method: 'PATCH',
+    body: { name, rename_group_seats: renameGroupSeats },
+  });
   if (!res.ok) return { error: 'server' };
-  return {};
+  const raw = (await res.json()) as { group_seats_renamed: number };
+  return { groupSeatsRenamed: raw.group_seats_renamed };
 }
 
 // Changes the password (AUTH-8). 401 = wrong current password, 400 = new password rejected (breached).
