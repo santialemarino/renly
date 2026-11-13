@@ -3464,6 +3464,22 @@
         "label": "Alguien da por perdido lo que le debías",
         "title": "{creditor} dio por perdidos {amount} {currency} que le debías en {group}"
       },
+      "settle_rate_changed": {
+        "label": "Cambia el tipo de dólar del grupo",
+        "title": "Está cambiando el tipo de dólar al que salda {group}",
+        "dollar_rate_proposed_to_you": {
+          "title": "{actor} propuso un nuevo tipo de dólar para {group}"
+        },
+        "dollar_rate_applied_from_you": {
+          "title": "Todos aceptaron tu nuevo tipo de dólar para {group}"
+        },
+        "dollar_rate_applied_to_you": {
+          "title": "{group} ahora salda al tipo de dólar que propuso {actor}"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} retiró el nuevo tipo de dólar para {group}"
+        }
+      },
       "shared_expense_added": {
         "label": "Se agrega un gasto compartido",
         "title": "{actor} agregó un gasto compartido de {amount} {currency} a {group}"

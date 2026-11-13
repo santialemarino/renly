@@ -334,7 +334,9 @@ async def remove_member(session: AsyncSession, admin_session: AsyncSession, grou
     # Locked before the balances are read, because the answer is acted on: without it a shared expense
     # recorded at the same moment lands a balance on a seat that has just been deactivated, and the
     # membership policy is what makes that row readable — so the person on the other side of it loses
-    # the record of money they are owed.
+    # the record of money they are owed. The same lock covers the pot units counted below: every ledger
+    # write takes its group's lock before its pot's (pot_repository.lock), so none can hand this seat new
+    # units between the count and the deactivation.
     await group_repository.lock(session, group.id)
     # A seat with money still owed either way cannot simply be deactivated: the membership policy is
     # what makes the group's rows readable, so the moment the seat goes inactive the person on the
@@ -367,10 +369,12 @@ async def remove_member(session: AsyncSession, admin_session: AsyncSession, grou
     # A pending change of the group's dollar rate stops waiting for this seat; if it was the last one
     # it waited for, it applies now. Before the seat goes inactive, for the same reason the entry above
     # is: a member who leaves can no longer write to the group's rows afterwards.
-    await group_money_service.settle_dollar_rate_proposal(session, group.id, user, leaving=frozenset({member.id}))
+    applied = await group_money_service.settle_dollar_rate_proposal(session, group.id, user, leaving=frozenset({member.id}))
     member.is_active = False
     await group_repository.save_member(session, member)
     # Dropped in the same transaction: leaving a live link on the seat of someone who was just removed
     # would let it re-seat them, and is_active is what the RLS predicate reads.
     await group_invite_repository.delete_by_member(session, member.id)
     await session.commit()
+    if applied is not None:
+        await group_money_service.announce_dollar_rate_applied(applied)

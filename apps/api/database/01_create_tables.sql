@@ -251,6 +251,7 @@ CREATE TYPE notification_event AS ENUM (
   'settle_marked_paid',
   'settle_confirmed',
   'balance_written_off',
+  'settle_rate_changed',
   'shared_expense_added',
   'shared_income_added'
 );

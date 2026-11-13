@@ -24,7 +24,13 @@ depends_on = None
 #
 # Changing it afterwards takes every active member's agreement, so the row also carries at most ONE
 # pending proposal — the same three columns and CHECK a pot's rate has (0034).
+#
+# The members hear about each step — proposed, applied, withdrawn — through a notification event of its
+# own, `settle_rate_changed`, declared BEFORE 'shared_expense_added' — right after 'balance_written_off' — so it sits with the other settling-up
+# events in the preferences grid, matching the fresh-build order in 01_create_tables.sql. Declaring a
+# value is safe inside Alembic's transaction on PostgreSQL 12+ because nothing writes a row using it here.
 def upgrade() -> None:
+    op.execute("ALTER TYPE notification_event ADD VALUE IF NOT EXISTS 'settle_rate_changed' BEFORE 'shared_expense_added'")
     op.execute("ALTER TABLE group_money_settings ADD COLUMN dollar_rate dollar_rate NOT NULL DEFAULT 'mep'")
     op.execute("ALTER TABLE group_money_settings ADD COLUMN dollar_rate_proposal dollar_rate")
     op.execute("ALTER TABLE group_money_settings ADD COLUMN dollar_rate_proposed_by BIGINT REFERENCES group_members(id)")
@@ -37,7 +43,9 @@ def upgrade() -> None:
 
 # Drops the columns. Settling up converts at the payer's own preference again and a pending proposal is
 # forgotten; no stored figure changes, because no settlement ever depended on them. The `dollar_rate`
-# type stays: pots still use it.
+# type stays: pots still use it. So does the 'settle_rate_changed' event value, the posture 0009, 0012,
+# 0013 and 0027 take: PostgreSQL cannot drop a value from an enum without recreating the type and
+# rewriting every dependent column, and a declared value nothing writes is harmless.
 def downgrade() -> None:
     op.execute("ALTER TABLE group_money_settings DROP CONSTRAINT group_money_settings_dollar_rate_proposal_whole")
     op.execute("ALTER TABLE group_money_settings DROP COLUMN dollar_rate_agreed_by")

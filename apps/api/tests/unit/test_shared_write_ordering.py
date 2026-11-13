@@ -257,7 +257,10 @@ class TestTheAuditEntryComesBeforeARevocation:
         monkeypatch.setattr(group_service.group_repository, "lock", AsyncMock())
         monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", AsyncMock())
         monkeypatch.setattr(pot_service, "ensure_no_units", AsyncMock())
-        monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", trace.stub("settle_rate"))
+        applied = object()
+        monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", trace.stub("settle_rate", result=applied))
+        announce = trace.stub("announce_rate")
+        monkeypatch.setattr(group_money_service, "announce_dollar_rate_applied", announce)
         monkeypatch.setattr(group_service.shared_audit_service, "record", trace.stub("audit"))
         monkeypatch.setattr(group_service.group_repository, "save_member", trace.stub("deactivate"))
         monkeypatch.setattr(group_service.group_invite_repository, "delete_by_member", AsyncMock())
@@ -267,6 +270,9 @@ class TestTheAuditEntryComesBeforeARevocation:
         # Settling a pending change of the group's dollar rate writes the settings row and an entry of
         # its own, so it runs while the leaver is still a member too.
         assert trace.index_of("settle_rate") < trace.index_of("deactivate")
+        # And a change the leave applied is announced — after everything else, once it has committed.
+        assert trace.index_of("announce_rate") > trace.index_of("deactivate")
+        assert announce.await_args.args == (applied,)
 
     @pytest.mark.asyncio
     async def test_removal_says_whether_the_member_left_or_was_removed(self, monkeypatch):

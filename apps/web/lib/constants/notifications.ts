@@ -32,6 +32,7 @@ export const NOTIFICATION_EVENTS = [
   'settle_marked_paid',
   'settle_confirmed',
   'balance_written_off',
+  'settle_rate_changed',
   'shared_expense_added',
   'shared_income_added',
 ] as const;
@@ -91,6 +92,12 @@ export const NOTIFICATION_VARIANTS = {
     'reconciliation_removed',
   ],
   settle_marked_paid: ['payee', 'payer'],
+  settle_rate_changed: [
+    'dollar_rate_proposed_to_you',
+    'dollar_rate_applied_from_you',
+    'dollar_rate_applied_to_you',
+    'dollar_rate_withdrawn_to_you',
+  ],
 } as const satisfies Partial<Record<NotificationEvent, readonly string[]>>;
 
 /*

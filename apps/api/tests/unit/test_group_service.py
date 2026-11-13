@@ -99,7 +99,7 @@ def _patch_balance_guard(monkeypatch, **methods) -> AsyncMock:
     guard = methods.get("ensure_no_outstanding_balance", AsyncMock())
     monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", guard)
     monkeypatch.setattr(pot_service, "ensure_no_units", methods.get("ensure_no_units", AsyncMock()))
-    monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", methods.get("settle_dollar_rate_proposal", AsyncMock()))
+    monkeypatch.setattr(group_money_service, "settle_dollar_rate_proposal", methods.get("settle_dollar_rate_proposal", AsyncMock(return_value=None)))
     return guard
 
 

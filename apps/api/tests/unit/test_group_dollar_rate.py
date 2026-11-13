@@ -24,6 +24,7 @@ from app.domain.currency import RatePoint
 from app.models.exchange_rate import DollarRate, ExchangeRatePair
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_money_settings import GroupMoneySettings
+from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, PotOwnershipEvent
 from app.models.user import User
 from app.services import exchange_rate_service, group_money_service, group_service, group_settlement_service, pot_service
@@ -167,6 +168,10 @@ class TestTheMembersAgree:
         monkeypatch.setattr(group_money_service.group_repository, "list_members", AsyncMock(return_value=seats))
         monkeypatch.setattr(group_money_service.group_money_settings_repository, "get_by_group_id", AsyncMock(return_value=settings))
         monkeypatch.setattr(group_money_service.group_money_settings_repository, "save", AsyncMock())
+        monkeypatch.setattr(group_money_service.group_repository, "get_by_id", AsyncMock(return_value=GROUP))
+        # The announcements, read back through group_money_service.notification_service.
+        monkeypatch.setattr(group_money_service.notification_service, "dispatch", AsyncMock())
+        monkeypatch.setattr(group_money_service.notification_service, "dispatch_many", AsyncMock())
         audit = AsyncMock()
         monkeypatch.setattr(group_money_service.shared_audit_service, "record", audit)
         return (settings, audit)
@@ -253,6 +258,60 @@ class TestTheMembersAgree:
 
         theirs = await group_money_service.get_settings(AsyncMock(), GROUP_ID, BRUNO)
         assert (theirs.dollar_rate_proposal.can_agree, theirs.dollar_rate_proposal.can_withdraw) == (True, False)
+
+
+class TestTheMembersAreTold:
+    # Each step reaches the members it concerns, through `settle_rate_changed`, the way a pot's owners
+    # hear about a change of a pot's rate.
+
+    @staticmethod
+    def _sent() -> tuple[AsyncMock, AsyncMock]:
+        return (group_money_service.notification_service.dispatch, group_money_service.notification_service.dispatch_many)
+
+    @staticmethod
+    def _fan_out(dispatch_many: AsyncMock) -> dict[str, list[int]]:
+        return {item.payload["variant"]: item.user_ids for item in dispatch_many.await_args.args[1]}
+
+    @pytest.mark.asyncio
+    async def test_a_proposal_asks_every_other_member_and_its_application_tells_them(self, monkeypatch):
+        TestTheMembersAgree._wire(monkeypatch, [ANA_SEAT, BRUNO_SEAT, CARLA_SEAT, NAME_ONLY_SEAT])
+        dispatch, dispatch_many = self._sent()
+
+        await group_money_service.propose_dollar_rate(AsyncMock(), GROUP_ID, ANA, dollar_rate=DollarRate.blue)
+        event, recipients, payload = dispatch.await_args.args
+        assert event == NotificationEvent.settle_rate_changed
+        assert recipients == [BRUNO.id, CARLA.id]
+        assert payload == {"group_id": GROUP_ID, "group": "Casa", "actor": "Ana", "variant": "dollar_rate_proposed_to_you"}
+
+        await group_money_service.agree_dollar_rate(AsyncMock(), GROUP_ID, BRUNO)
+        dispatch_many.assert_not_awaited()
+        await group_money_service.agree_dollar_rate(AsyncMock(), GROUP_ID, CARLA)
+        # The proposer reads that everyone agreed to theirs, the others that the group settles at it now;
+        # Carla gave the last agreement, so she is not told about her own act.
+        assert dispatch_many.await_args.args[0] == NotificationEvent.settle_rate_changed
+        assert self._fan_out(dispatch_many) == {"dollar_rate_applied_from_you": [ANA.id], "dollar_rate_applied_to_you": [BRUNO.id]}
+        assert {item.payload["actor"] for item in dispatch_many.await_args.args[1]} == {"Ana"}
+
+    @pytest.mark.asyncio
+    async def test_a_withdrawal_tells_the_members_who_were_asked(self, monkeypatch):
+        TestTheMembersAgree._wire(monkeypatch, [ANA_SEAT, BRUNO_SEAT, CARLA_SEAT])
+        dispatch, _ = self._sent()
+        await group_money_service.propose_dollar_rate(AsyncMock(), GROUP_ID, ANA, dollar_rate=DollarRate.blue)
+        await group_money_service.withdraw_dollar_rate(AsyncMock(), GROUP_ID, ANA)
+        _, recipients, payload = dispatch.await_args.args
+        assert recipients == [BRUNO.id, CARLA.id]
+        assert payload["variant"] == "dollar_rate_withdrawn_to_you"
+
+    @pytest.mark.asyncio
+    async def test_a_change_the_last_holdout_leaving_applied_is_announced_to_who_is_left(self, monkeypatch):
+        pending = GroupMoneySettings(
+            group_id=GROUP_ID, dollar_rate_proposal=DollarRate.blue, dollar_rate_proposed_by=ANA_SEAT.id, dollar_rate_agreed_by=[ANA_SEAT.id, 102]
+        )
+        TestTheMembersAgree._wire(monkeypatch, [ANA_SEAT, BRUNO_SEAT, CARLA_SEAT], pending)
+        _, dispatch_many = self._sent()
+        applied = await group_money_service.settle_dollar_rate_proposal(AsyncMock(), GROUP_ID, BRUNO, leaving=frozenset({BRUNO_SEAT.id}))
+        await group_money_service.announce_dollar_rate_applied(applied)
+        assert self._fan_out(dispatch_many) == {"dollar_rate_applied_from_you": [ANA.id], "dollar_rate_applied_to_you": [CARLA.id]}
 
 
 class TestTheRosterMovesWhileAChangeWaits:

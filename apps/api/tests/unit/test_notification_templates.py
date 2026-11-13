@@ -255,6 +255,22 @@ class TestRendering:
         assert web, "parsed no variants out of the web's NOTIFICATION_VARIANTS"
         assert api - web == set()
 
+    def test_every_step_of_the_groups_dollar_rate_reaches_the_feed_and_every_channel(self):
+        # Named rather than left to the derived comparison above: these four are the whole announcement
+        # of a change of the group's dollar rate, and each needs an email, a push AND a feed row, in both
+        # languages, or a member waited on for their agreement is never asked.
+        from pathlib import Path
+
+        steps = {f"settle_rate_changed.dollar_rate_{step}" for step in ("proposed_to_you", "applied_from_you", "applied_to_you", "withdrawn_to_you")}
+        assert steps <= set(_template_keys())
+        for locale in ("en", "es"):
+            for key in steps:
+                assert set(templates._STRINGS[locale][key]) == {"subject", "body", "push"}, (locale, key)
+        source = (Path(__file__).resolve().parents[3] / "web" / "lib" / "constants" / "notifications.ts").read_text()
+        block = re.search(r"settle_rate_changed: \[(.*?)\]", source, re.S)
+        assert block is not None, "settle_rate_changed has no variants on the web"
+        assert {f"settle_rate_changed.{variant}" for variant in re.findall(r"'(\w+)'", block.group(1))} == steps
+
 
 class TestDateFormatting:
     # The other value the backend renders for a person to read, and it exists because `obligation_due`

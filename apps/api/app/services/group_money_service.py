@@ -10,6 +10,8 @@
 # currency's debt a payment in another clears, so it moves money between members, and changing it takes
 # every active member's agreement (see the section below).
 
+from dataclasses import dataclass
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
@@ -18,16 +20,30 @@ from app.domain import (
     GroupDollarRateProposalPendingError,
     GroupDollarRateUnchangedError,
     NotFoundError,
+    NotificationDispatch,
     dollar_rate_consent,
 )
 from app.models.exchange_rate import DollarRate
 from app.models.group import GroupMember
 from app.models.group_money_settings import GroupMoneySettings, SplitMethod
+from app.models.notification import NotificationEvent
 from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.repositories import group_money_settings_repository, group_repository
 from app.schemas.group_settlement import GroupDollarRateProposalResponse, GroupMoneySettingsResponse
-from app.services import group_service, shared_audit_service
+from app.services import group_service, notification_service, shared_audit_service
+
+
+# A change of the group's dollar rate that just applied, and who to tell about it once it has committed.
+@dataclass(frozen=True)
+class AppliedDollarRate:
+    group_id: int
+    group: str
+    proposer_name: str | None
+    # The proposer's account, when the proposer is among those to tell; everyone else below.
+    proposer_user_ids: list[int]
+    other_user_ids: list[int]
+
 
 # How an audit entry names each step of a dollar-rate change — the same variants a pot's use, so the
 # activity feed phrases both alike. Translation keys on the other side.
@@ -149,7 +165,7 @@ async def _settings_response(session: AsyncSession, settings: GroupMoneySettings
 # Any active member may propose: each of them settles at it. The group row is locked first, so two
 # proposals cannot both find nothing pending, and the roster is read under the lock.
 async def propose_dollar_rate(session: AsyncSession, group_id: int, user: User, *, dollar_rate: DollarRate) -> GroupMoneySettingsResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     await group_repository.lock(session, group_id)
     settings = await _require_settings(session, group_id)
     if settings.dollar_rate_proposal is not None:
@@ -157,15 +173,26 @@ async def propose_dollar_rate(session: AsyncSession, group_id: int, user: User, 
     if dollar_rate == settings.dollar_rate:
         raise GroupDollarRateUnchangedError()
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
-    if _rate_agreers(members_by_id) <= {viewer.id}:
-        await _apply_dollar_rate(session, settings, user, rate=dollar_rate)
+    agreers = _rate_agreers(members_by_id)
+    if agreers <= {viewer.id}:
+        applied = await _apply_dollar_rate(
+            session, settings, user, rate=dollar_rate, proposer_id=viewer.id, agreers=agreers, members_by_id=members_by_id, group_name=group.name
+        )
+        await session.commit()
+        await announce_dollar_rate_applied(applied)
     else:
         settings.dollar_rate_proposal = dollar_rate
         settings.dollar_rate_proposed_by = viewer.id
         settings.dollar_rate_agreed_by = [viewer.id]
         await group_money_settings_repository.save(session, settings)
         await _audit(session, group_id, user, AuditAction.updated, variant=_RATE_PROPOSED, from_rate=settings.dollar_rate, to_rate=dollar_rate)
-    await session.commit()
+        await session.commit()
+        # Every other member is told it needs their agreement.
+        await notification_service.dispatch(
+            NotificationEvent.settle_rate_changed,
+            _user_ids(agreers - {viewer.id}, members_by_id),
+            {"group_id": group_id, "group": group.name, "actor": viewer.display_name, "variant": "dollar_rate_proposed_to_you"},
+        )
     await session.refresh(settings)
     return await _settings_response(session, settings, viewer)
 
@@ -175,7 +202,7 @@ async def propose_dollar_rate(session: AsyncSession, group_id: int, user: User, 
 # A member who already agreed may still call this when nobody is left to wait for — the backstop for a
 # proposal whose last holdout went away without settle_dollar_rate_proposal applying it.
 async def agree_dollar_rate(session: AsyncSession, group_id: int, user: User) -> GroupMoneySettingsResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     await group_repository.lock(session, group_id)
     settings = await _require_settings(session, group_id)
     if settings.dollar_rate_proposal is None:
@@ -189,25 +216,38 @@ async def agree_dollar_rate(session: AsyncSession, group_id: int, user: User) ->
         settings.dollar_rate_agreed_by = [*settings.dollar_rate_agreed_by, viewer.id]
         agreed.add(viewer.id)
         await _audit(session, group_id, user, AuditAction.confirmed, from_rate=settings.dollar_rate, to_rate=settings.dollar_rate_proposal)
+    applied = None
     if dollar_rate_consent.is_agreed(agreers, agreed):
-        await _apply_dollar_rate(session, settings, user, rate=settings.dollar_rate_proposal)
+        applied = await _apply_dollar_rate(
+            session,
+            settings,
+            user,
+            rate=settings.dollar_rate_proposal,
+            proposer_id=settings.dollar_rate_proposed_by,
+            agreers=agreers,
+            members_by_id=members_by_id,
+            group_name=group.name,
+        )
     else:
         await group_money_settings_repository.save(session, settings)
     await session.commit()
+    if applied is not None:
+        await announce_dollar_rate_applied(applied)
     await session.refresh(settings)
     return await _settings_response(session, settings, viewer)
 
 
 # Withdraws the pending change. Nothing had changed, so nothing is undone.
 async def withdraw_dollar_rate(session: AsyncSession, group_id: int, user: User) -> GroupMoneySettingsResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     await group_repository.lock(session, group_id)
     settings = await _require_settings(session, group_id)
     if settings.dollar_rate_proposal is None:
         raise NotFoundError("Dollar rate proposal not found")
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
+    agreers = _rate_agreers(members_by_id)
     if not dollar_rate_consent.may_withdraw(
-        viewer.id, settings.dollar_rate_proposed_by, _rate_agreers(members_by_id), proposer_can_act=_proposer_can_act(settings, members_by_id)
+        viewer.id, settings.dollar_rate_proposed_by, agreers, proposer_can_act=_proposer_can_act(settings, members_by_id)
     ):
         raise GroupDollarRateNotYoursError()
     proposed = settings.dollar_rate_proposal
@@ -215,6 +255,12 @@ async def withdraw_dollar_rate(session: AsyncSession, group_id: int, user: User)
     await group_money_settings_repository.save(session, settings)
     await _audit(session, group_id, user, AuditAction.updated, variant=_RATE_WITHDRAWN, from_rate=settings.dollar_rate, to_rate=proposed)
     await session.commit()
+    # The members who were asked to agree are told there is nothing left to agree to.
+    await notification_service.dispatch(
+        NotificationEvent.settle_rate_changed,
+        _user_ids(agreers - {viewer.id}, members_by_id),
+        {"group_id": group_id, "group": group.name, "actor": viewer.display_name, "variant": "dollar_rate_withdrawn_to_you"},
+    )
     await session.refresh(settings)
     return await _settings_response(session, settings, viewer)
 
@@ -230,13 +276,45 @@ async def withdraw_dollar_rate(session: AsyncSession, group_id: int, user: User)
 #
 # A seat JOINING needs nothing here: agreers are read from the roster on every act, so a member who
 # joins while a proposal waits is simply waited for too.
-async def settle_dollar_rate_proposal(session: AsyncSession, group_id: int, actor: User | None, *, leaving: frozenset[int] = frozenset()) -> None:
+#
+# Returns who to tell when it applied, for the caller to announce AFTER its commit
+# (announce_dollar_rate_applied); None when nothing changed.
+async def settle_dollar_rate_proposal(
+    session: AsyncSession, group_id: int, actor: User | None, *, leaving: frozenset[int] = frozenset()
+) -> AppliedDollarRate | None:
     settings = await group_money_settings_repository.get_by_group_id(session, group_id)
     if settings is None or settings.dollar_rate_proposal is None:
-        return
+        return None
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
-    if dollar_rate_consent.is_agreed(_rate_agreers(members_by_id) - leaving, set(settings.dollar_rate_agreed_by)):
-        await _apply_dollar_rate(session, settings, actor, rate=settings.dollar_rate_proposal)
+    agreers = _rate_agreers(members_by_id) - leaving
+    if not dollar_rate_consent.is_agreed(agreers, set(settings.dollar_rate_agreed_by)):
+        return None
+    group = await group_repository.get_by_id(session, group_id)
+    return await _apply_dollar_rate(
+        session,
+        settings,
+        actor,
+        rate=settings.dollar_rate_proposal,
+        proposer_id=settings.dollar_rate_proposed_by,
+        agreers=agreers,
+        members_by_id=members_by_id,
+        group_name=group.name if group is not None else "",
+    )
+
+
+# Tells the members a change of the group's dollar rate applied: its proposer that everyone agreed to
+# theirs, the others that the group now settles at it. Never the member whose act applied it — nobody
+# needs to be told what they just did. Called after the commit that applied it: a notification is a
+# side effect of something that already happened.
+async def announce_dollar_rate_applied(applied: AppliedDollarRate) -> None:
+    base = {"group_id": applied.group_id, "group": applied.group, "actor": applied.proposer_name}
+    await notification_service.dispatch_many(
+        NotificationEvent.settle_rate_changed,
+        [
+            NotificationDispatch(applied.proposer_user_ids, {**base, "variant": "dollar_rate_applied_from_you"}),
+            NotificationDispatch(applied.other_user_ids, {**base, "variant": "dollar_rate_applied_to_you"}),
+        ],
+    )
 
 
 # --- Internal ---
@@ -252,13 +330,38 @@ async def _require_settings(session: AsyncSession, group_id: int) -> GroupMoneyS
 
 # Applies a new dollar rate: records the change from the old rate to the new one and clears any
 # proposal. FUTURE figures only — every recorded settlement keeps the amounts it was written with. The
-# caller commits.
-async def _apply_dollar_rate(session: AsyncSession, settings: GroupMoneySettings, actor: User | None, *, rate: DollarRate) -> None:
+# caller commits, then announces what this returns.
+async def _apply_dollar_rate(
+    session: AsyncSession,
+    settings: GroupMoneySettings,
+    actor: User | None,
+    *,
+    rate: DollarRate,
+    proposer_id: int | None,
+    agreers: set[int],
+    members_by_id: dict[int, GroupMember],
+    group_name: str,
+) -> AppliedDollarRate:
     previous = settings.dollar_rate
     settings.dollar_rate = rate
     _clear_rate_proposal(settings)
     await group_money_settings_repository.save(session, settings)
     await _audit(session, settings.group_id, actor, AuditAction.updated, variant=_RATE_APPLIED, from_rate=previous, to_rate=rate)
+    recipients = [user_id for user_id in _user_ids(agreers, members_by_id) if actor is None or user_id != actor.id]
+    proposer = members_by_id.get(proposer_id)
+    proposer_user_id = proposer.user_id if proposer is not None else None
+    return AppliedDollarRate(
+        group_id=settings.group_id,
+        group=group_name,
+        proposer_name=proposer.display_name if proposer is not None else None,
+        proposer_user_ids=[user_id for user_id in recipients if user_id == proposer_user_id],
+        other_user_ids=[user_id for user_id in recipients if user_id != proposer_user_id],
+    )
+
+
+# The accounts behind a set of seats, in seat order.
+def _user_ids(member_ids: set[int], members_by_id: dict[int, GroupMember]) -> list[int]:
+    return [members_by_id[member_id].user_id for member_id in sorted(member_ids) if members_by_id[member_id].user_id is not None]
 
 
 # Forgets the pending proposal, whole: the CHECK on the table refuses a rate without its proposer.

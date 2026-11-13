@@ -3464,6 +3464,22 @@
         "label": "Someone writes off what you owed",
         "title": "{creditor} wrote off {amount} {currency} you owed in {group}"
       },
+      "settle_rate_changed": {
+        "label": "The group's dollar rate changes",
+        "title": "The dollar rate {group} settles at is changing",
+        "dollar_rate_proposed_to_you": {
+          "title": "{actor} proposed a new dollar rate for {group}"
+        },
+        "dollar_rate_applied_from_you": {
+          "title": "Everyone agreed to your new dollar rate for {group}"
+        },
+        "dollar_rate_applied_to_you": {
+          "title": "{group} now settles at the dollar rate {actor} proposed"
+        },
+        "dollar_rate_withdrawn_to_you": {
+          "title": "{actor} withdrew the new dollar rate for {group}"
+        }
+      },
       "shared_expense_added": {
         "label": "A shared expense is added",
         "title": "{actor} added a shared expense of {amount} {currency} to {group}"
