@@ -4,7 +4,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { XIcon } from 'lucide-react';
 
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn } from '@repo/ui/lib';
 import { useReturnFocus } from '../hooks/use-return-focus';
 import { useUiLabels } from './ui-labels';
 
@@ -90,15 +90,15 @@ function DialogContent({
         onCloseAutoFocus={returnFocus.onCloseAutoFocus}
       >
         {children}
-        {/* Close affordance follows the repo's icon-button focus convention (see ux-motion): no
-            browser/rectangular ring — outline-none + a muted→foreground hover/focus color transition
-            + the focus-bump on the icon via a focusable group. */}
+        {/* The `surface` close (lib/close-control): the blue ring and the icon's focus-bump on keyboard
+            focus, like every other button. Placed so the icon sits where it always has. */}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="group/dialog-close absolute top-4 right-4 flex p-0.5 rounded-md text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            data-close-kind="surface"
+            className={cn(CLOSE_CONTROL.surface.button, 'absolute top-3.5 right-3.5')}
           >
-            <XIcon className="group-focus-visible/dialog-close:animate-focus-bump" />
+            <XIcon className={CLOSE_CONTROL.surface.icon} />
             <span className="sr-only">{labels.close}</span>
           </DialogPrimitive.Close>
         )}

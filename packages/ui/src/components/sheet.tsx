@@ -5,7 +5,7 @@ import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn } from '@repo/ui/lib';
 import { useReturnFocus } from '../hooks/use-return-focus';
 import { useUiLabels } from './ui-labels';
 
@@ -75,10 +75,12 @@ const SheetContent = React.forwardRef<
         onCloseAutoFocus={returnFocus.onCloseAutoFocus}
       >
         {children}
-        {/* The dialog's ✕, treated the same way: an icon button, so focus bumps the icon rather than
-            drawing a ring around it. */}
-        <SheetPrimitive.Close className="group/sheet-close absolute top-4 right-4 flex p-0.5 rounded-md text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none">
-          <X className="size-4 group-focus-visible/sheet-close:animate-focus-bump" />
+        {/* The dialog's ✕: the same `surface` close (lib/close-control). */}
+        <SheetPrimitive.Close
+          data-close-kind="surface"
+          className={cn(CLOSE_CONTROL.surface.button, 'absolute top-3.5 right-3.5')}
+        >
+          <X className={CLOSE_CONTROL.surface.icon} />
           <span className="sr-only">{labels.close}</span>
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>

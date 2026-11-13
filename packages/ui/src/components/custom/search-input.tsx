@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Search, X } from 'lucide-react';
 
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn } from '@repo/ui/lib';
 import { Input } from '../input';
 import { useUiLabels } from '../ui-labels';
 
@@ -40,14 +40,16 @@ function SearchInput({ className, containerClassName, onClear, ...props }: Searc
               (container?.querySelector('input') as HTMLInputElement | null)?.focus();
             }}
             tabIndex={hasValue ? 0 : -1}
+            data-close-kind="field"
+            // The `field` clear (lib/close-control): the Input's own focus-within ring is its ring. The
+            // negative margin keeps the icon where it sat before the box grew to 24px.
             className={cn(
-              'group/search-clear p-0.5 rounded text-muted-foreground transition-[opacity,transform] duration-150 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100',
-              hasValue
-                ? 'opacity-50 hover:opacity-100 scale-100'
-                : 'opacity-0 scale-75 pointer-events-none',
+              CLOSE_CONTROL.field.button,
+              '-mr-0.75',
+              hasValue ? 'scale-100' : 'opacity-0 scale-75 pointer-events-none',
             )}
           >
-            <X className="size-3.5 group-focus-visible/search-clear:animate-focus-bump" />
+            <X className={CLOSE_CONTROL.field.icon} />
           </button>
         ) : undefined
       }

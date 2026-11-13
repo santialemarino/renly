@@ -17,7 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { CLOSE_CONTROL, cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
 import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
@@ -88,9 +88,10 @@ export function ComboboxMultiSelect({
                           label: itemMap.get(id) ?? `#${id}`,
                         })}
                         onClick={() => onToggle(id)}
-                        className="group/chip-remove rounded-full p-0.5 text-muted-foreground transition-[opacity,transform,color] duration-150 hover:scale-110 hover:text-destructive focus-visible:outline-none"
+                        data-close-kind="chip"
+                        className={CLOSE_CONTROL.chip.button}
                       >
-                        <X className="size-3 group-focus-visible/chip-remove:animate-focus-bump" />
+                        <X className={CLOSE_CONTROL.chip.icon} />
                       </button>
                     </motion.span>
                   ))}
