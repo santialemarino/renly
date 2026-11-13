@@ -51,10 +51,18 @@ export async function parseApiError(res: Response): Promise<ApiError> {
   try {
     const body = (await res.json()) as Record<string, unknown>;
     const { detail, code, ...rest } = body;
+    // A list extra (the groups a balance is still open in) is joined into one string: a message
+    // interpolates scalars only, and next-intl answers a list by rendering the raw key instead.
+    const params = Object.fromEntries(
+      Object.entries(rest).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? value.join(', ') : value,
+      ]),
+    ) as Record<string, string | number>;
     return {
       code: typeof code === 'string' ? code : undefined,
       detail: typeof detail === 'string' ? detail : undefined,
-      params: { ...(rest as Record<string, string | number>), ...fromHeaders },
+      params: { ...params, ...fromHeaders },
     };
   } catch {
     return { params: fromHeaders };

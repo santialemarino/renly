@@ -99,6 +99,50 @@ describe('a rate-limited response reads as itself, in both locales', () => {
   });
 });
 
+describe('a refused removal reads as its own sentence, in both locales', () => {
+  // The two codes removing a member, leaving or deleting an account can answer with. Asserted on the
+  // raw key NOT appearing, since next-intl renders `apiErrors.<code>` for a message it cannot format.
+  it.each([
+    [
+      'en',
+      en,
+      { code: 'group_balance_outstanding', detail: 'x', groups: 'Casa, Viaje' },
+      'Casa, Viaje',
+    ],
+    [
+      'es',
+      es,
+      { code: 'group_balance_outstanding', detail: 'x', groups: 'Casa, Viaje' },
+      'Casa, Viaje',
+    ],
+    // A list, as the API sent it before joining it: still one sentence naming both groups.
+    [
+      'en',
+      en,
+      { code: 'group_balance_outstanding', detail: 'x', groups: ['Casa', 'Viaje'] },
+      'Casa, Viaje',
+    ],
+    [
+      'es',
+      es,
+      { code: 'group_balance_outstanding', detail: 'x', groups: ['Casa', 'Viaje'] },
+      'Casa, Viaje',
+    ],
+    ['en', en, { code: 'group_member_owns_pot', detail: 'x' }, 'buy it out or take it out'],
+    ['es', es, { code: 'group_member_owns_pot', detail: 'x' }, 'comprá esa parte o sacala'],
+  ] as const)('%s: %j', async (locale, messages, body, expected) => {
+    const t = createTranslator({ locale, messages, namespace: 'apiErrors', onError: () => {} });
+    const resolved = resolveApiError(
+      t as never,
+      await parseApiError(fakeResponse(body)),
+      'fallback',
+    );
+    expect(resolved).not.toContain('apiErrors.');
+    expect(resolved).not.toBe('x');
+    expect(resolved).toContain(expected);
+  });
+});
+
 describe('encodeApiError / decodeApiError', () => {
   it('round-trips a coded error, numeric params staying numbers', () => {
     const error = {

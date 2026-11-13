@@ -386,9 +386,11 @@ class GroupBalanceOutstandingError(DomainError):
         self.message = f"There is still an unsettled balance in {joined}. Settle it or write it off first."
         super().__init__(self.message)
 
+    # Pre-joined into one display-ready string, as InstallmentLockedFieldError's fields are: the web
+    # interpolates `{groups}` as a scalar, and a list there renders the raw message key instead.
     @property
     def extra(self) -> dict:
-        return {"groups": self.group_names}
+        return {"groups": ", ".join(self.group_names)}
 
 
 # A change of a group's dollar rate was proposed while another is still waiting for the members to
