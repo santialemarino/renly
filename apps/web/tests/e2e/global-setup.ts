@@ -8,6 +8,8 @@ import {
   AUTH_STATE_PATH,
   e2eAdminCredentials,
   e2eCredentials,
+  e2eRenameCredentials,
+  RENAME_AUTH_STATE_PATH,
   type E2ECredentials,
 } from './helpers/auth';
 
@@ -87,7 +89,8 @@ async function preflight(baseURL: string) {
  * is skipped by the config and this stops after the preflight — the same env-gating the API's
  * integration suites use, so a fresh clone's `pnpm test:e2e` still passes on the logged-out specs.
  * E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD add a second session, for the admin pages (see
- * `ADMIN_AUTH_STATE_PATH`); unset, only the admin scans skip.
+ * `ADMIN_AUTH_STATE_PATH`); unset, only the admin scans skip. E2E_RENAME_EMAIL / E2E_RENAME_PASSWORD add a
+ * third, for the spec that renames its account (`RENAME_AUTH_STATE_PATH`); unset, only that spec skips.
  */
 async function globalSetup(config: FullConfig) {
   const use = config.projects[0]?.use;
@@ -96,8 +99,8 @@ async function globalSetup(config: FullConfig) {
 
   const credentials = e2eCredentials();
   // A stale state file from a previous run must never survive a failed setup: a spec would load it
-  // and fail against whatever session it happens to hold. Both go, whichever accounts are set now.
-  for (const path of [AUTH_STATE_PATH, ADMIN_AUTH_STATE_PATH]) {
+  // and fail against whatever session it happens to hold. All go, whichever accounts are set now.
+  for (const path of [AUTH_STATE_PATH, ADMIN_AUTH_STATE_PATH, RENAME_AUTH_STATE_PATH]) {
     if (existsSync(path)) rmSync(path);
   }
   if (!credentials) return;
@@ -120,6 +123,16 @@ async function globalSetup(config: FullConfig) {
         {
           mustBeAdmin: true,
         },
+      );
+    }
+    const rename = e2eRenameCredentials();
+    if (rename) {
+      await signIn(
+        browser,
+        contextOptions,
+        rename,
+        RENAME_AUTH_STATE_PATH,
+        'E2E_RENAME_EMAIL / E2E_RENAME_PASSWORD',
       );
     }
   } finally {
