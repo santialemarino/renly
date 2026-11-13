@@ -1863,6 +1863,9 @@
     "softLimit": {
       "approaching": "Tenés {count} de {max} colecciones. Considerá consolidar antes de crear más.",
       "reached": "Alcanzaste el máximo de {max} colecciones. Eliminá o consolidá colecciones existentes para crear nuevas."
+    },
+    "targets": {
+      "overMax": "Los objetivos de tus colecciones suman {total}%, más del 100% del portfolio. Podés guardar igual; ajustalos cuando rebalancees."
     }
   },
   "snapshots": {

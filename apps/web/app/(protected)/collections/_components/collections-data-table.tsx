@@ -15,6 +15,7 @@ import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SortOrder } from '@/lib/api/types';
+import { sumCollectionTargets } from '@/lib/collection-targets';
 import { usePendingRouter } from '@/lib/hooks/use-pending-router';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -26,6 +27,8 @@ interface CollectionsDataTableProps {
   sortBy?: string;
   sortOrder?: SortOrder;
   firstRun?: boolean;
+  // Every collection, unfiltered, whose targets an edit form adds its own to.
+  targetCollections: InvestmentCollection[];
 }
 
 export function CollectionsDataTable({
@@ -34,6 +37,7 @@ export function CollectionsDataTable({
   sortBy,
   sortOrder,
   firstRun,
+  targetCollections,
 }: CollectionsDataTableProps) {
   const t = useTranslations('collections');
   const router = useRouter();
@@ -96,6 +100,7 @@ export function CollectionsDataTable({
               collection={collection}
               investmentMap={investmentMap}
               investments={investments}
+              otherTargetsTotal={sumCollectionTargets(targetCollections, collection.id)}
               onSuccess={() => router.refresh()}
             />
           ))
@@ -109,10 +114,17 @@ interface CollectionRowProps {
   collection: InvestmentCollection;
   investmentMap: Map<number, string>;
   investments: { id: number; name: string }[];
+  otherTargetsTotal: number;
   onSuccess: () => void;
 }
 
-function CollectionRow({ collection, investmentMap, investments, onSuccess }: CollectionRowProps) {
+function CollectionRow({
+  collection,
+  investmentMap,
+  investments,
+  otherTargetsTotal,
+  onSuccess,
+}: CollectionRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('collections');
   const [editOpen, setEditOpen] = useState(false);
@@ -162,6 +174,7 @@ function CollectionRow({ collection, investmentMap, investments, onSuccess }: Co
         onOpenChange={setEditOpen}
         collection={collection}
         investments={investments}
+        otherTargetsTotal={otherTargetsTotal}
         onSuccess={onSuccess}
       />
       <CollectionDeleteFormDialog

@@ -1863,6 +1863,9 @@
     "softLimit": {
       "approaching": "You have {count} of {max} collections. Consider consolidating before creating more.",
       "reached": "You've reached the maximum of {max} collections. Delete or consolidate existing collections to create new ones."
+    },
+    "targets": {
+      "overMax": "Your collection targets add up to {total}%, more than 100% of the portfolio. You can still save; adjust them when you rebalance."
     }
   },
   "snapshots": {
